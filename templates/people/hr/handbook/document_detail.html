@@ -1,42 +1,35 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}{{ document.title }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">HR</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/handbook" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Handbook</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ document.document_code }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">HR</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/handbook" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Handbook</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ document.document_code }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <div class="flex items-center gap-3">
     <a href="/people/hr/handbook/{{ document.document_id }}/download" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-        </svg>
+        {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
         Download
     </a>
     <a href="/people/hr/handbook/{{ document.document_id }}/edit" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
         Edit
     </a>
     {% if document.status.value == 'DRAFT' %}
     <form method="post" action="/people/hr/handbook/{{ document.document_id }}/activate" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
             Activate
         </button>
     </form>
@@ -44,9 +37,7 @@
     <form method="post" action="/people/hr/handbook/{{ document.document_id }}/archive" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-secondary text-amber-600 hover:text-amber-700">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-            </svg>
+            {{ icon_svg("archive", "h-4 w-4 mr-1.5") }}
             Archive
         </button>
     </form>
@@ -69,9 +60,7 @@
                         {% elif document.category.value == 'CODE_OF_CONDUCT' %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400
                         {% elif document.category.value == 'SAFETY' %}bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400
                         {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+                        {{ icon_svg("document", "h-8 w-8") }}
                     </div>
                     <div>
                         <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
@@ -81,13 +70,7 @@
                             {{ document.document_code }} &middot; Version {{ document.version }}
                         </p>
                         <div class="flex items-center gap-3 mt-2">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                {% if document.status.value == 'ACTIVE' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
-                                {% elif document.status.value == 'DRAFT' %}bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
-                                {% elif document.status.value == 'SUPERSEDED' %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
-                                {% else %}bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300{% endif %}">
-                                {{ document.status.value | replace('_', ' ') | title }}
-                            </span>
+                            {{ status_badge(document.status.value, 'sm') }}
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                 {% if document.category.value == 'HANDBOOK' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
                                 {% elif document.category.value == 'POLICY' %}bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300
@@ -150,13 +133,13 @@
                 <div>
                     <dt class="text-slate-500 dark:text-slate-400">Effective Date</dt>
                     <dd class="font-medium text-slate-900 dark:text-white">
-                        {{ document.effective_date.strftime('%b %d, %Y') if document.effective_date else 'Not set' }}
+                        {{ document.effective_date | format_date if document.effective_date else 'Not set' }}
                     </dd>
                 </div>
                 <div>
                     <dt class="text-slate-500 dark:text-slate-400">Expiry Date</dt>
                     <dd class="font-medium text-slate-900 dark:text-white">
-                        {{ document.expiry_date.strftime('%b %d, %Y') if document.expiry_date else 'No expiry' }}
+                        {{ document.expiry_date | format_date if document.expiry_date else 'No expiry' }}
                     </dd>
                 </div>
                 <div>
@@ -191,7 +174,7 @@
                             {{ ack.employee.first_name if ack.employee else 'Unknown' }} {{ ack.employee.last_name if ack.employee else '' }}
                         </p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
-                            {{ ack.acknowledged_at.strftime('%b %d, %Y at %H:%M') if ack.acknowledged_at else '' }}
+                            {{ ack.acknowledged_at | format_datetime if ack.acknowledged_at else '' }}
                         </p>
                     </div>
                     <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
@@ -228,9 +211,7 @@
                             {{ emp.job_title if emp.job_title else '' }}
                         </p>
                     </div>
-                    <svg class="h-5 w-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-5 w-5 text-amber-400") }}
                 </div>
                 {% endfor %}
                 {% if stats.pending_count > 20 %}
@@ -240,9 +221,7 @@
                 {% endif %}
                 {% else %}
                 <div class="p-8 text-center">
-                    <svg class="mx-auto h-12 w-12 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "mx-auto h-12 w-12 text-emerald-400") }}
                     <p class="mt-2 text-slate-500 dark:text-slate-400">All employees have acknowledged!</p>
                 </div>
                 {% endif %}

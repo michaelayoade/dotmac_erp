@@ -104,7 +104,7 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
         if self._supplier_names is None:
             from app.models.finance.ap.supplier import Supplier
 
-            rows = (
+            rows: list[tuple[UUID, str | None, str | None]] = (
                 Query(
                     [
                         Supplier.supplier_id,

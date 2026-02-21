@@ -1,17 +1,16 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg %}
 
 {% block page_title %}Leave Types{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Leave Types</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Leave Types</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -19,16 +18,14 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Types</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Types</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Configure leave policies and rules.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <a href="/people/leave/allocations" class="btn btn-secondary">Allocations</a>
             <a href="/people/leave/applications" class="btn btn-secondary">Applications</a>
             <a href="/people/leave/types/new" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                 New Leave Type
             </a>
         </div>

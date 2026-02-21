@@ -1,15 +1,14 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import empty_state, live_search, pagination %}
+{% from "components/macros.html" import empty_state, live_search, pagination, icon_svg %}
 {% block page_title %}Expense Claims{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Claims</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Claims</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -88,10 +87,7 @@
                         <td class="text-right">
                             <div class="inline-flex items-center gap-2">
                                 <a href="/expense/claims/{{ claim.claim_id }}" class="table-action-btn" title="View" aria-label="View">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
+                                    {{ icon_svg("eye", "h-4 w-4") }}
                                 </a>
                                 {% if can_delete_claim and claim.status and claim.status.value == 'DRAFT' %}
                                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/delete" onsubmit="return confirm('Delete this draft claim permanently? This cannot be undone.');">

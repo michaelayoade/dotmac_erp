@@ -393,7 +393,6 @@ async def create_exchange_rate(
             request, "finance/settings/exchange_rates.html", context
         )
 
-    db.commit()
     return RedirectResponse(
         url="/settings/exchange-rates?saved=Rate+saved+successfully", status_code=303
     )
@@ -410,8 +409,6 @@ async def fetch_exchange_rates(
 
     ws = FXSettingsWebService(db)
     fetch_result = ws.fetch_latest(auth.organization_id, auth.person_id)
-
-    db.commit()
 
     context = base_context(request, auth, "Exchange Rates", "settings", db=db)
     context.update(ws.rates_list_context(auth.organization_id))
@@ -443,7 +440,6 @@ async def delete_exchange_rate(
             request, "finance/settings/exchange_rates.html", context
         )
 
-    db.commit()
     return RedirectResponse(
         url="/settings/exchange-rates?saved=Rate+deleted", status_code=303
     )

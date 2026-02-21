@@ -16,13 +16,12 @@ from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.models.finance.rpt.disclosure_checklist import DisclosureStatus
 from app.models.finance.rpt.financial_statement_line import StatementType
-from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
+from app.models.finance.rpt.report_definition import ReportType
 from app.models.finance.rpt.report_instance import ReportStatus
 from app.models.finance.rpt.report_schedule import ScheduleFrequency
 from app.schemas.finance.common import ListResponse
 from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.rpt import (
-    DisclosureCompletionInput,
     DisclosureItemInput,
     ReportDefinitionInput,
     ReportGenerationRequest,
@@ -46,6 +45,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -53,16 +56,17 @@ def get_db():
 def _resolve_statement_type(
     db: Session, organization_id: UUID, report_id: UUID
 ) -> StatementType:
-    definition = db.get(ReportDefinition, report_id)
-    if not definition or definition.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Report definition not found")
+    """Resolve report definition to StatementType via service."""
     try:
-        return StatementType(definition.report_type.value)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Report type {definition.report_type} does not support statement lines",
-        ) from exc
+        return report_definition_service.resolve_statement_type(
+            db=db,
+            organization_id=organization_id,
+            report_id=report_id,
+        )
+    except ValueError as e:
+        detail = str(e)
+        status_code = 400 if "does not support" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail)
 
 
 # =============================================================================
@@ -740,24 +744,14 @@ def record_disclosure_completion(
     db: Session = Depends(get_db),
 ):
     """Record disclosure item completion."""
-    input_data = DisclosureCompletionInput(
-        disclosure_location=payload.evidence_reference,
-        notes=payload.notes,
-    )
-    if payload.is_complete:
-        return disclosure_checklist_service.complete_item(
-            db=db,
-            organization_id=organization_id,
-            checklist_id=payload.disclosure_item_id,
-            completed_by_user_id=recorded_by_user_id,
-            input=input_data,
-        )
-    return disclosure_checklist_service.mark_not_applicable(
+    return disclosure_checklist_service.record_completion(
         db=db,
         organization_id=organization_id,
         checklist_id=payload.disclosure_item_id,
-        reason=payload.notes or "Not applicable",
-        marked_by_user_id=recorded_by_user_id,
+        user_id=recorded_by_user_id,
+        is_complete=payload.is_complete,
+        evidence_reference=payload.evidence_reference,
+        notes=payload.notes,
     )
 
 

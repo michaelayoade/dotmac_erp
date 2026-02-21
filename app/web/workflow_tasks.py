@@ -197,10 +197,8 @@ async def complete_task(
     svc = WorkflowTaskService(db)
     try:
         svc.complete_task(auth.organization_id, UUID(task_id))
-        db.commit()
     except Exception:
-        db.rollback()
-
+        pass
     # Return to list or HTMX response
     if request.headers.get("HX-Request"):
         return HTMLResponse(
@@ -225,10 +223,8 @@ async def snooze_task(
     svc = WorkflowTaskService(db)
     try:
         svc.snooze_task(auth.organization_id, UUID(task_id), days=days)
-        db.commit()
     except Exception:
-        db.rollback()
-
+        pass
     # Return to list or HTMX response
     if request.headers.get("HX-Request"):
         return HTMLResponse(
@@ -254,8 +250,6 @@ async def update_task_status(
     try:
         status_enum = WorkflowTaskStatus(status)
         svc.update_status(auth.organization_id, UUID(task_id), status_enum)
-        db.commit()
     except Exception:
-        db.rollback()
-
+        pass
     return RedirectResponse(url="/tasks", status_code=302)

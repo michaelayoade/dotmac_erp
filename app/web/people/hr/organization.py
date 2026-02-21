@@ -179,7 +179,6 @@ async def create_department(
     )
 
     svc.create_department(data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/departments?success=Record+saved+successfully", status_code=303
@@ -258,7 +257,6 @@ async def update_department(
     )
 
     svc.update_department(coerce_uuid(department_id), data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/departments?success=Record+saved+successfully", status_code=303
@@ -351,7 +349,6 @@ async def create_designation(
     )
 
     svc.create_designation(data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/designations?success=Record+created+successfully",
@@ -412,7 +409,6 @@ async def update_designation(
     )
 
     svc.update_designation(coerce_uuid(designation_id), data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/designations?success=Record+saved+successfully", status_code=303
@@ -509,7 +505,6 @@ async def create_employment_type(
     )
 
     svc.create_employment_type(data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/employment-types?success=Record+created+successfully",
@@ -570,7 +565,6 @@ async def update_employment_type(
     )
 
     svc.update_employment_type(coerce_uuid(employment_type_id), data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/employment-types?success=Record+saved+successfully",
@@ -707,7 +701,6 @@ async def create_grade(
     )
 
     svc.create_employee_grade(data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/grades?success=Record+saved+successfully", status_code=303
@@ -810,7 +803,6 @@ async def update_grade(
     )
 
     svc.update_employee_grade(coerce_uuid(grade_id), data)
-    db.commit()
 
     return RedirectResponse(
         url="/people/hr/grades?success=Record+saved+successfully", status_code=303

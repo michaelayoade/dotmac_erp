@@ -1,17 +1,16 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import compact_filters, filter_date_field, empty_state %}
+{% from "components/macros.html" import compact_filters, filter_date_field, empty_state, icon_svg, status_badge, pagination %}
 {% block page_title %}Payroll Runs{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Runs</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Runs</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -19,7 +18,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll Runs</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll Runs</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Batch payroll processing for multiple employees.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -27,13 +26,9 @@
             <a href="/people/payroll/structures" class="btn btn-secondary">Structures</a>
             <div class="relative" x-data="{ open: false }">
                 <button @click="open = !open" type="button" class="btn btn-secondary">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                    </svg>
+                    {{ icon_svg("chart", "h-4 w-4 mr-1") }}
                     Reports
-                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-down", "h-4 w-4 ml-1") }}
                 </button>
                 <div x-show="open" @click.away="open = false" x-cloak
                      class="absolute right-0 z-10 mt-2 w-48 rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
@@ -46,9 +41,7 @@
                 </div>
             </div>
             <a href="/people/payroll/runs/new" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                 New Payroll Run
             </a>
         </div>
@@ -108,7 +101,7 @@
                             </a>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ run.start_date.strftime('%d %b') if run.start_date else '' }} - {{ run.end_date.strftime('%d %b %Y') if run.end_date else '' }}
+                            {{ run.start_date.strftime('%d %b') if run.start_date else '' }} - {{ run.end_date | format_date if run.end_date else '' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ run.employee_count }}
@@ -120,19 +113,7 @@
                             {{ "{:,.2f}".format(run.total_net_pay) }}
                         </td>
                         <td class="px-4 py-3">
-                            {% if run.status.value == "DRAFT" %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>
-                            {% elif run.status.value == "SLIPS_CREATED" %}
-                            <span class="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Slips Created</span>
-                            {% elif run.status.value == "SUBMITTED" %}
-                            <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Submitted</span>
-                            {% elif run.status.value == "APPROVED" %}
-                            <span class="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">Approved</span>
-                            {% elif run.status.value == "POSTED" %}
-                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Posted</span>
-                            {% elif run.status.value == "CANCELLED" %}
-                            <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">Cancelled</span>
-                            {% endif %}
+                            {{ status_badge(run.status.value, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-right">
                             <div class="flex items-center justify-end gap-3">
@@ -158,21 +139,15 @@
             </table>
         </div>
 
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 px-4 py-3">
-            <div class="text-sm text-slate-600 dark:text-slate-400">
-                Showing {{ (page - 1) * 20 + 1 }} to {{ [page * 20, total] | min }} of {{ total }} runs
-            </div>
-            <div class="flex gap-2">
-                {% if has_prev %}
-                <a href="?page={{ page - 1 }}{% if status %}&status={{ status }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}" class="btn btn-secondary btn-sm">Previous</a>
-                {% endif %}
-                {% if has_next %}
-                <a href="?page={{ page + 1 }}{% if status %}&status={{ status }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}" class="btn btn-secondary btn-sm">Next</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total | default(0),
+            limit=20,
+            show_size_selector=false,
+            filters={"from_date": from_date, "status": status, "to_date": to_date}
+        ) }}
+
     </div>
     {% else %}
     <div class="card p-8 text-center">

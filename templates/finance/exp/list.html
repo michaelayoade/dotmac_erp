@@ -1,24 +1,21 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state, compact_filters %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters, icon_svg %}
 
 {% block page_title %}Expenses{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Expenses</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Expenses</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/expense/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
     New Expense
 </a>
 {% endblock %}
@@ -117,10 +114,7 @@
                         <td>
                             <div class="table-actions">
                                 <a href="/expense/{{ exp.expense_id }}" class="table-action-btn" title="View" aria-label="View">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
+                                    {{ icon_svg("eye", "h-4 w-4") }}
                                 </a>
                             </div>
                         </td>
@@ -138,16 +132,12 @@
         {% else %}
         <div class="empty-state p-12">
             <div class="empty-state-icon">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
-                </svg>
+                {{ icon_svg("banknotes", "h-8 w-8") }}
             </div>
             <h3 class="empty-state-title">No Expenses</h3>
             <p class="empty-state-description">Get started by creating your first expense entry.</p>
             <a href="/expense/new" class="btn btn-primary mt-4">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
                 New Expense
             </a>
         </div>

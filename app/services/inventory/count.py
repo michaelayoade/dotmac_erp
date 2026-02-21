@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.models.inventory.inventory_count import CountStatus, InventoryCount
@@ -130,13 +130,15 @@ class InventoryCountService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Check for duplicate count number
-        existing = db.scalar(
-            select(InventoryCount).where(
+        existing = (
+            db.query(InventoryCount)
+            .filter(
                 and_(
                     InventoryCount.organization_id == org_id,
                     InventoryCount.count_number == input.count_number,
                 )
             )
+            .first()
         )
 
         if existing:
@@ -167,7 +169,7 @@ class InventoryCountService(ListResponseMixin):
         db.flush()  # Get count_id
 
         # Build query for items in scope
-        items_query = select(Item).where(
+        items_query = db.query(Item).filter(
             and_(
                 Item.organization_id == org_id,
                 Item.is_active == True,
@@ -176,11 +178,11 @@ class InventoryCountService(ListResponseMixin):
         )
 
         if input.category_id:
-            items_query = items_query.where(
+            items_query = items_query.filter(
                 Item.category_id == coerce_uuid(input.category_id)
             )
 
-        items = db.scalars(items_query).all()
+        items = items_query.all()
 
         # Create count lines for each item
         total_items = 0
@@ -191,14 +193,16 @@ class InventoryCountService(ListResponseMixin):
             if wh:
                 warehouses = [wh]
         else:
-            warehouses = db.scalars(
-                select(Warehouse).where(
+            warehouses = (
+                db.query(Warehouse)
+                .filter(
                     and_(
                         Warehouse.organization_id == org_id,
                         Warehouse.is_active == True,
                     )
                 )
-            ).all()
+                .all()
+            )
 
         for item in items:
             for warehouse in warehouses:
@@ -271,8 +275,9 @@ class InventoryCountService(ListResponseMixin):
             )
 
         # Find or create line
-        line = db.scalar(
-            select(InventoryCountLine).where(
+        line = (
+            db.query(InventoryCountLine)
+            .filter(
                 and_(
                     InventoryCountLine.count_id == cnt_id,
                     InventoryCountLine.item_id == itm_id,
@@ -281,6 +286,7 @@ class InventoryCountService(ListResponseMixin):
                     == (coerce_uuid(input.lot_id) if input.lot_id else None),
                 )
             )
+            .first()
         )
 
         if not line:
@@ -336,14 +342,16 @@ class InventoryCountService(ListResponseMixin):
         # Update count stats
         if line.variance_quantity != 0:
             # Recalculate items with variance
-            variance_count = db.scalar(
-                select(func.count(InventoryCountLine.line_id)).where(
+            variance_count = (
+                db.query(func.count(InventoryCountLine.line_id))
+                .filter(
                     and_(
                         InventoryCountLine.count_id == cnt_id,
                         InventoryCountLine.variance_quantity != 0,
                         InventoryCountLine.variance_quantity.isnot(None),
                     )
                 )
+                .scalar()
             )
             count.items_with_variance = variance_count or 0
 
@@ -477,15 +485,17 @@ class InventoryCountService(ListResponseMixin):
             )
 
         # Get lines with variances
-        lines = db.scalars(
-            select(InventoryCountLine).where(
+        lines = (
+            db.query(InventoryCountLine)
+            .filter(
                 and_(
                     InventoryCountLine.count_id == cnt_id,
                     InventoryCountLine.variance_quantity != 0,
                     InventoryCountLine.variance_quantity.isnot(None),
                 )
             )
-        ).all()
+            .all()
+        )
 
         # Create adjustment transactions
         for line in lines:
@@ -546,11 +556,11 @@ class InventoryCountService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Count not found")
 
         # Calculate variance totals
-        variance_stats = db.execute(
-            select(
+        variance_stats = (
+            db.query(
                 func.sum(InventoryCountLine.variance_value).label("total"),
                 func.sum(
-                    func.case(
+                    case(
                         (
                             InventoryCountLine.variance_value > 0,
                             InventoryCountLine.variance_value,
@@ -559,7 +569,7 @@ class InventoryCountService(ListResponseMixin):
                     )
                 ).label("positive"),
                 func.sum(
-                    func.case(
+                    case(
                         (
                             InventoryCountLine.variance_value < 0,
                             InventoryCountLine.variance_value,
@@ -567,8 +577,10 @@ class InventoryCountService(ListResponseMixin):
                         else_=Decimal("0"),
                     )
                 ).label("negative"),
-            ).where(InventoryCountLine.count_id == cnt_id)
-        ).first()
+            )
+            .filter(InventoryCountLine.count_id == cnt_id)
+            .first()
+        )
 
         total_variance = Decimal("0")
         positive_variance = Decimal("0")
@@ -611,23 +623,23 @@ class InventoryCountService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[InventoryCount]:
         """List inventory counts with optional filters."""
-        query = select(InventoryCount)
+        query = db.query(InventoryCount)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 InventoryCount.organization_id == coerce_uuid(organization_id)
             )
 
         if warehouse_id:
-            query = query.where(
+            query = query.filter(
                 InventoryCount.warehouse_id == coerce_uuid(warehouse_id)
             )
 
         if status:
-            query = query.where(InventoryCount.status == status)
+            query = query.filter(InventoryCount.status == status)
 
         query = query.order_by(InventoryCount.count_date.desc())
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return query.limit(limit).offset(offset).all()
 
     @staticmethod
     def list_lines(
@@ -641,27 +653,29 @@ class InventoryCountService(ListResponseMixin):
         """List count lines with optional filters."""
         cnt_id = coerce_uuid(count_id)
 
-        query = select(InventoryCountLine).where(InventoryCountLine.count_id == cnt_id)
+        query = db.query(InventoryCountLine).filter(
+            InventoryCountLine.count_id == cnt_id
+        )
 
         if has_variance is True:
-            query = query.where(
+            query = query.filter(
                 and_(
                     InventoryCountLine.variance_quantity != 0,
                     InventoryCountLine.variance_quantity.isnot(None),
                 )
             )
         elif has_variance is False:
-            query = query.where(
+            query = query.filter(
                 (InventoryCountLine.variance_quantity == 0)
                 | (InventoryCountLine.variance_quantity.is_(None))
             )
 
         if is_counted is True:
-            query = query.where(InventoryCountLine.counted_quantity.isnot(None))
+            query = query.filter(InventoryCountLine.counted_quantity.isnot(None))
         elif is_counted is False:
-            query = query.where(InventoryCountLine.counted_quantity.is_(None))
+            query = query.filter(InventoryCountLine.counted_quantity.is_(None))
 
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return query.limit(limit).offset(offset).all()
 
 
 # Module-level singleton instance

@@ -1,27 +1,21 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import live_search, empty_state, pagination %}
+{% from "components/macros.html" import live_search, empty_state, pagination, icon_svg %}
 
 {% block page_title %}Archived Tickets{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support Tickets</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Archived</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support Tickets</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Archived</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/support/tickets" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-    </svg>
+    {{ icon_svg("arrow-left", "h-4 w-4 mr-1.5") }}
     Back to Active Tickets
 </a>
 {% endblock %}
@@ -32,9 +26,7 @@
     <div class="card p-4 bg-slate-50 dark:bg-slate-800/50 border-l-4 border-slate-400">
         <div class="flex items-start gap-3">
             <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-                </svg>
+                {{ icon_svg("archive", "h-4 w-4") }}
             </div>
             <div>
                 <h3 class="font-medium text-slate-900 dark:text-white">Archived Tickets</h3>
@@ -102,9 +94,7 @@
                             <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/restore" class="inline">
                                 {{ request.state.csrf_form | safe }}
                                 <button type="submit" class="btn btn-sm btn-success">
-                                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                    </svg>
+                                    {{ icon_svg("refresh", "h-4 w-4 mr-1") }}
                                     Restore
                                 </button>
                             </form>
@@ -134,9 +124,7 @@
         {# Empty State #}
         <div class="px-6 py-16 text-center">
             <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center mb-6">
-                <svg class="h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-                </svg>
+                {{ icon_svg("archive", "h-12 w-12 text-slate-400 dark:text-slate-500", stroke_width="1.5") }}
             </div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No archived tickets</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
@@ -147,9 +135,7 @@
                 {% endif %}
             </p>
             <a href="/support/tickets" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                </svg>
+                {{ icon_svg("arrow-left", "h-4 w-4 mr-1.5") }}
                 Back to Active Tickets
             </a>
         </div>

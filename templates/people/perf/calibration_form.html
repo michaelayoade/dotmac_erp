@@ -1,19 +1,17 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}Calibration{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Appraisals</a>
-    <span class="mx-2">/</span>
-    <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ appraisal.employee.full_name if appraisal.employee else 'Detail' }}</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Calibration</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Appraisals</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ appraisal.employee.full_name if appraisal.employee else 'Detail' }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Calibration</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -22,9 +20,7 @@
     {% if error %}
     <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
         <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
-            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0") }}
             <span>{{ error }}</span>
         </div>
     </div>
@@ -218,9 +214,7 @@
         {# Warning if big adjustment #}
         <div class="p-4 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-800" x-data x-show="false">
             <div class="flex items-start gap-3">
-                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5") }}
                 <div>
                     <h4 class="font-medium text-amber-800 dark:text-amber-300">Significant Rating Adjustment</h4>
                     <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">Please document the rationale for the calibration adjustment in the notes above.</p>
@@ -234,9 +228,7 @@
                 Cancel
             </a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
                 Complete Appraisal
             </button>
         </div>

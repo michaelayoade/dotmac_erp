@@ -367,7 +367,7 @@
                 <div class="document-title">Salary Slip</div>
                 <div class="document-number">{{ slip.slip_number }}</div>
                 <div class="document-period">
-                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ pay_period_end.strftime('%B %d, %Y') }}
+                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ pay_period_end | format_date }}
                 </div>
             </div>
         </div>
@@ -520,7 +520,7 @@
                 </div>
                 <div class="payment-row">
                     <span class="payment-label">Paid On</span>
-                    <span class="payment-value">{{ slip.paid_at.strftime('%B %d, %Y') }}</span>
+                    <span class="payment-value">{{ slip.paid_at | format_date }}</span>
                 </div>
                 {% if slip.payment_reference %}
                 <div class="payment-row">

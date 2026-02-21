@@ -1,15 +1,15 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}Leave Usage Report{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Usage Report</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Usage Report</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,13 +18,11 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Usage Report</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Usage Report</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Breakdown of approved leave by type</p>
         </div>
         <a href="/people/leave" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
             Back
         </a>
     </div>
@@ -53,9 +51,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
-                    <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                    </svg>
+                    {{ icon_svg("tag", "h-6 w-6 text-teal-600 dark:text-teal-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Leave Types Used</p>
@@ -67,9 +63,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
-                    <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-6 w-6 text-blue-600 dark:text-blue-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Total Applications</p>
@@ -81,9 +75,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
-                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calendar", "h-6 w-6 text-amber-600 dark:text-amber-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Total Leave Days</p>

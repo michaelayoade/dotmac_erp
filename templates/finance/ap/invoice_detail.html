@@ -1,19 +1,16 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge %}
+{% from "components/macros.html" import empty_state, status_badge, icon_svg %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block page_title %}AP Invoice{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/ap/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AP Invoices</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ invoice.invoice_number if invoice else "Invoice" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AP Invoices</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ invoice.invoice_number if invoice else "Invoice" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -22,34 +19,26 @@
 <div class="flex flex-wrap items-center gap-2">
     <a href="/finance/remita/generate?source_type=ap_invoice&source_id={{ invoice.invoice_id }}&amount={{ invoice.balance_raw }}&description={{ ('Remita payment for ' ~ invoice.invoice_number) | urlencode }}"
        class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4") }}
         Generate RRR
     </a>
     {# Print button - always available #}
     <button type="button" onclick="window.print()" class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-        </svg>
+        {{ icon_svg("printer", "h-4 w-4") }}
         Print
     </button>
 
     {# DRAFT status actions #}
     {% if invoice.status == 'DRAFT' %}
     <a href="/finance/ap/invoices/{{ invoice.invoice_id }}/edit" class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4") }}
         Edit
     </a>
     <form method="POST" action="/finance/ap/invoices/{{ invoice.invoice_id }}/submit" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Submit for Approval</span>
         </button>
     </form>
@@ -58,9 +47,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-danger-outline">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-            </svg>
+            {{ icon_svg("trash", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Delete</span>
         </button>
     </form>
@@ -72,9 +59,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-success">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Approve</span>
         </button>
     </form>
@@ -82,9 +67,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+            {{ icon_svg("x-mark", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Reject</span>
         </button>
     </form>
@@ -104,9 +87,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-success">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            {{ icon_svg("document", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Post to Ledger</span>
         </button>
     </form>
@@ -123,18 +104,14 @@
     {# APPROVED/POSTED/PARTIALLY_PAID/OVERDUE status actions #}
     {% if invoice.status in ['APPROVED', 'POSTED', 'PARTIALLY_PAID', 'OVERDUE'] %}
     <a href="/finance/ap/payments/new?invoice_id={{ invoice.invoice_id }}" class="btn btn-success">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("currency", "h-4 w-4") }}
         Record Payment
     </a>
     {% endif %}
 
     {# Always show New Invoice button #}
     <a href="/finance/ap/invoices/new" class="btn btn-primary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4") }}
         New Invoice
     </a>
 </div>
@@ -145,9 +122,7 @@
 {% if error %}
 <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
     <div class="flex items-center gap-3">
-        <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500") }}
         <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ error }}</p>
     </div>
 </div>
@@ -176,9 +151,7 @@
     <div class="workflow-step {% if is_complete %}workflow-step-complete{% elif is_current and not is_voided %}workflow-step-current{% endif %}">
         <div class="workflow-step-number">
             {% if is_complete %}
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-4 w-4") }}
             {% else %}
             {{ loop.index }}
             {% endif %}
@@ -195,9 +168,7 @@
 {% if invoice.status in ['VOIDED', 'CANCELLED'] %}
 <div class="mb-6 rounded-xl border-2 border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20 print:border print:border-red-400">
     <div class="flex items-center gap-3">
-        <svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-        </svg>
+        {{ icon_svg("ban", "h-6 w-6 text-red-500") }}
         <div>
             <p class="font-semibold text-red-700 dark:text-red-400">Invoice {{ invoice.status | replace('_', ' ') | title }}</p>
             <p class="text-sm text-red-600 dark:text-red-500">This invoice has been {{ invoice.status|lower }} and cannot be modified.</p>
@@ -338,7 +309,7 @@
                                     -
                                     {% endif %}
                                 </td>
-                                <td class="table-cell-amount font-medium text-slate-900 dark:text-white">{{ line.line_amount }}</td>
+                                <td class="table-cell-amount font-medium text-slate-900 dark:text-white">{{ line.display_line_amount or line.line_amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
@@ -357,7 +328,7 @@
                 <div class="ml-auto max-w-xs space-y-2">
                     <div class="document-row">
                         <span class="document-row-label">Subtotal</span>
-                        <span class="document-row-value font-mono">{{ invoice.subtotal | default("0.00") }}</span>
+                        <span class="document-row-value font-mono">{{ invoice.display_subtotal | default(invoice.subtotal) | default("0.00") }}</span>
                     </div>
                     {% if invoice.discount_amount and invoice.discount_amount != 0 %}
                     <div class="document-row">
@@ -367,7 +338,7 @@
                     {% endif %}
                     <div class="document-row">
                         <span class="document-row-label">Tax (VAT)</span>
-                        <span class="document-row-value font-mono">{{ invoice.tax_amount | default("0.00") }}</span>
+                        <span class="document-row-value font-mono">{{ invoice.display_tax_added | default(invoice.display_tax_amount) | default(invoice.tax_amount) | default("0.00") }}</span>
                     </div>
                     {% if invoice.withholding_tax and invoice.withholding_tax != 0 %}
                     <div class="document-row">
@@ -379,10 +350,10 @@
                         <span class="document-total-label">Total Amount</span>
                         <span class="document-total-value font-mono">{{ invoice.total_amount | default("0.00") }}</span>
                     </div>
-                    {% if invoice.amount_paid and invoice.amount_paid != 0 %}
+                    {% if invoice.amount_paid_raw and invoice.amount_paid_raw > 0 %}
                     <div class="document-row">
                         <span class="document-row-label text-emerald-600 dark:text-emerald-400">Amount Paid</span>
-                        <span class="document-row-value font-mono text-emerald-600 dark:text-emerald-400">-{{ invoice.amount_paid }}</span>
+                        <span class="document-row-value font-mono text-emerald-600 dark:text-emerald-400">{{ invoice.amount_paid }}</span>
                     </div>
                     {% endif %}
                 </div>
@@ -399,9 +370,7 @@
             </div>
             {% if invoice.status == 'PAID' %}
             <div class="mt-2 text-center text-sm text-emerald-600 dark:text-emerald-400">
-                <svg class="mr-1 inline h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "mr-1 inline h-4 w-4") }}
                 Paid in Full
             </div>
             {% endif %}
@@ -414,9 +383,7 @@
         {% if invoice.notes %}
         <div class="card">
             <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-                </svg>
+                {{ icon_svg("chat", "h-4 w-4") }}
                 Notes
             </h3>
             <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ invoice.notes }}</p>
@@ -425,9 +392,7 @@
         {% if invoice.internal_notes %}
         <div class="card print:hidden">
             <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                </svg>
+                {{ icon_svg("lock-closed", "h-4 w-4") }}
                 Internal Notes
             </h3>
             <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ invoice.internal_notes }}</p>
@@ -484,9 +449,7 @@
     {% if payments and payments|length > 0 %}
     <div class="card print:break-inside-avoid">
         <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+            {{ icon_svg("cash", "h-4 w-4") }}
             Payment History
         </h3>
         <div class="table-container">
@@ -528,18 +491,14 @@
     <div class="card print:hidden" x-data="{ showUpload: false }">
         <div class="flex items-center justify-between mb-4">
             <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                </svg>
+                {{ icon_svg("paperclip", "h-4 w-4") }}
                 Attachments
                 <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
                     {{ attachments | length if attachments else 0 }}
                 </span>
             </h3>
             <button type="button" @click="showUpload = !showUpload" class="btn btn-secondary btn-sm">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4") }}
                 Upload
             </button>
         </div>
@@ -551,11 +510,13 @@
                 {{ request.state.csrf_form | safe }}
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">File <span class="text-rose-500">*</span></label>
-                        <input type="file" name="file" required
-                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-                               accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.csv">
-                        <p class="mt-1 text-xs text-slate-500">PDF, images, Office documents up to 10MB</p>
+                        {{ file_upload_zone(
+                            name="file",
+                            label="File",
+                            accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.txt,.csv",
+                            max_size_mb=10,
+                            hint="PDF, images, Office documents up to 10MB"
+                        ) }}
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Description (optional)</label>
@@ -581,24 +542,18 @@
                 <div class="flex items-center gap-3">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
                         {% if 'pdf' in (att.content_type | default('', true)) %}
-                        <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                        </svg>
+                        {{ icon_svg("document-text", "h-5 w-5 text-red-500") }}
                         {% elif 'image' in (att.content_type | default('', true)) %}
-                        <svg class="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                        </svg>
+                        {{ icon_svg("photograph", "h-5 w-5 text-green-500") }}
                         {% else %}
-                        <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+                        {{ icon_svg("document", "h-5 w-5 text-slate-400") }}
                         {% endif %}
                     </div>
                     <div>
                         <p class="text-sm font-medium text-slate-900 dark:text-white">{{ att.file_name }}</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
                             {{ att.file_size_display | default("-") }}
-                            {% if att.uploaded_at %}&middot; {{ att.uploaded_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+                            {% if att.uploaded_at %}&middot; {{ att.uploaded_at | format_datetime }}{% endif %}
                         </p>
                     </div>
                 </div>
@@ -606,9 +561,7 @@
                     <a href="{{ att.download_url }}"
                        class="rounded p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                        title="Download" aria-label="Download">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                        </svg>
+                        {{ icon_svg("download", "h-4 w-4") }}
                     </a>
                     <form action="/finance/ap/attachments/{{ att.attachment_id }}/delete" method="POST" class="inline"
                           onsubmit="return confirm('Delete this attachment?');">
@@ -616,9 +569,7 @@
                         <button type="submit"
                                 class="rounded p-2 text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
                                 title="Delete" aria-label="Delete">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
+                            {{ icon_svg("trash", "h-4 w-4") }}
                         </button>
                     </form>
                 </div>
@@ -635,6 +586,8 @@
         {% endif %}
     </div>
 
+    {% include "finance/ap/_recent_activity.html" %}
+
     {# Audit Trail - Collapsible #}
     {% if invoice.created_at or invoice.updated_at or invoice.posted_at %}
     <div class="card print:hidden" x-data="{ expanded: false }">
@@ -642,9 +595,7 @@
                 @click="expanded = !expanded"
                 class="flex w-full items-center justify-between text-left">
             <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "h-4 w-4") }}
                 Audit Trail
             </h3>
             <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -655,9 +606,7 @@
             {% if invoice.created_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-3 w-3") }}
                 </span>
                 <span>Created {{ invoice.created_at }}{% if invoice.created_by %} by {{ invoice.created_by }}{% endif %}</span>
             </div>
@@ -665,9 +614,7 @@
             {% if invoice.submitted_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-                    <svg class="h-3 w-3 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
+                    {{ icon_svg("paper-airplane", "h-3 w-3 text-blue-600 dark:text-blue-400") }}
                 </span>
                 <span>Submitted {{ invoice.submitted_at }}{% if invoice.submitted_by %} by {{ invoice.submitted_by }}{% endif %}</span>
             </div>
@@ -675,9 +622,7 @@
             {% if invoice.approved_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                    <svg class="h-3 w-3 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-3 w-3 text-emerald-600 dark:text-emerald-400") }}
                 </span>
                 <span>Approved {{ invoice.approved_at }}{% if invoice.approved_by %} by {{ invoice.approved_by }}{% endif %}</span>
             </div>
@@ -685,9 +630,7 @@
             {% if invoice.posted_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-                    <svg class="h-3 w-3 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-3 w-3 text-purple-600 dark:text-purple-400") }}
                 </span>
                 <span>Posted {{ invoice.posted_at }}{% if invoice.posted_by %} by {{ invoice.posted_by }}{% endif %}</span>
             </div>
@@ -695,9 +638,7 @@
             {% if invoice.updated_at and invoice.updated_at != invoice.created_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                    </svg>
+                    {{ icon_svg("edit", "h-3 w-3") }}
                 </span>
                 <span>Last updated {{ invoice.updated_at }}</span>
             </div>

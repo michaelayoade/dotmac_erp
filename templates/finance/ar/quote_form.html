@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}{{ "Edit Quote" if quote else "New Quote" }}{% endblock %}
 
 {% block page_styles %}
@@ -233,16 +233,12 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/quotes" class="hover:text-slate-700 dark:hover:text-slate-300">Quotes</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ "Edit" if quote else "New Quote" }}</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/quotes" class="hover:text-slate-700 dark:hover:text-slate-300">Quotes</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ "Edit" if quote else "New Quote" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -252,9 +248,9 @@
         {{ request.state.csrf_form | safe }}
         <!-- Page Header -->
         <div>
-            <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
                 {{ "Edit Quote" if quote else "New Quote" }}
-            </h1>
+            </h2>
             <p class="mt-2 text-slate-500 dark:text-slate-400">
                 Create a sales quote for your customer with pricing and terms.
             </p>
@@ -405,9 +401,7 @@
                     <p class="section-subtitle">Add products or services to this quote</p>
                 </div>
                 <button type="button" @click="addLine" class="btn btn-secondary">
-                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "w-4 h-4 mr-1.5") }}
                     Add Line
                 </button>
             </div>
@@ -511,9 +505,7 @@
                                             @click="removeLine(index)"
                                             x-show="form.lines.length > 1"
                                             class="btn-ghost-danger">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
+                                        {{ icon_svg("trash", "w-4 h-4") }}
                                     </button>
                                 </td>
                             </tr>
@@ -608,9 +600,7 @@
             <div class="flex items-center gap-4">
                 <a href="/finance/quotes" class="btn btn-secondary">Cancel</a>
                 <button type="submit" class="btn btn-primary">
-                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "w-4 h-4 mr-1.5") }}
                     {{ "Update Quote" if quote else "Create Quote" }}
                 </button>
             </div>

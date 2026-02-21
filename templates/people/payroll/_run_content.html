@@ -1,5 +1,5 @@
 {# Partial template for payroll run detail - used for HTMX swaps #}
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 <div id="run-content" class="space-y-6">
     {% if error %}
     <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200"
@@ -22,7 +22,7 @@
                 {{ status_badge(entry.status.value) }}
             </div>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {{ entry.start_date.strftime('%d %b %Y') if entry.start_date else '' }} - {{ entry.end_date.strftime('%d %b %Y') if entry.end_date else '' }}
+                {{ entry.start_date | format_date if entry.start_date else '' }} - {{ entry.end_date | format_date if entry.end_date else '' }}
                 &bull; {{ entry.payroll_frequency.value | title }}
                 {% if entry.department %}&bull; {{ entry.department.department_name }}{% endif %}
             </p>
@@ -42,9 +42,7 @@
             </a>
             {% if entry.salary_slips_created and entry.status.value in ["DRAFT", "SLIPS_CREATED"] %}
             <a href="/people/payroll/runs/{{ entry.entry_id }}/adjustments" class="btn btn-ghost" title="Apply one-time adjustments to all slips">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                 Bulk Adjustments
             </a>
             {% endif %}
@@ -81,9 +79,7 @@
                   title="Submits and approves in one action (requires approver role)">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary" data-loading-disable>
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-4 w-4 mr-1") }}
                     Submit &amp; Approve
                 </button>
             </form>
@@ -114,9 +110,7 @@
                   title="Approves all submitted slips in this run">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary" data-loading-disable>
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 mr-1") }}
                     Approve All Slips
                 </button>
             </form>
@@ -153,9 +147,7 @@
             </form>
             {% endif %}
             <span class="text-sm text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4") }}
                 Payroll Complete
             </span>
             {% endif %}
@@ -242,7 +234,7 @@
         <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
                 <div class="text-slate-500 dark:text-slate-400">Posting Date</div>
-                <div class="text-slate-900 dark:text-white">{{ entry.posting_date.strftime('%d %b %Y') if entry.posting_date else '-' }}</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.posting_date | format_date if entry.posting_date else '-' }}</div>
             </div>
             <div>
                 <div class="text-slate-500 dark:text-slate-400">Currency</div>
@@ -260,7 +252,7 @@
             </div>
             <div>
                 <div class="text-slate-500 dark:text-slate-400">Created</div>
-                <div class="text-slate-900 dark:text-white">{{ entry.created_at.strftime('%d %b %Y %H:%M') if entry.created_at else '-' }}</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.created_at | format_datetime if entry.created_at else '-' }}</div>
             </div>
             <div>
                 <div class="text-slate-500 dark:text-slate-400">Payslip Email Status</div>
@@ -277,7 +269,7 @@
             </div>
             <div>
                 <div class="text-slate-500 dark:text-slate-400">Payslip Emails Queued</div>
-                <div class="text-slate-900 dark:text-white">{{ entry.payslips_email_queued_at.strftime('%d %b %Y %H:%M') if entry.payslips_email_queued_at else '-' }}</div>
+                <div class="text-slate-900 dark:text-white">{{ entry.payslips_email_queued_at | format_datetime if entry.payslips_email_queued_at else '-' }}</div>
             </div>
             <div>
                 <div class="text-slate-500 dark:text-slate-400">Email Target</div>
@@ -312,9 +304,7 @@
                 <!-- Bank Upload -->
                 <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div class="flex items-center gap-2 mb-2">
-                        <svg class="h-5 w-5 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                        </svg>
+                        {{ icon_svg("credit-card", "h-5 w-5 text-violet-600 dark:text-violet-400") }}
                         <span class="font-medium text-slate-900 dark:text-white">Bank Upload</span>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">CSV for bank bulk payment upload (Zenith format)</p>
@@ -327,9 +317,7 @@
                 <!-- PAYE Schedule -->
                 <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div class="flex items-center gap-2 mb-2">
-                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
-                        </svg>
+                        {{ icon_svg("receipt", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
                         <span class="font-medium text-slate-900 dark:text-white">PAYE Schedule</span>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Tax schedule for state revenue</p>
@@ -348,9 +336,7 @@
                 <!-- Pension Schedule -->
                 <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div class="flex items-center gap-2 mb-2">
-                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
+                        {{ icon_svg("cash", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
                         <span class="font-medium text-slate-900 dark:text-white">Pension Schedule</span>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">PFA contribution upload file</p>
@@ -369,9 +355,7 @@
                 <!-- NHF Schedule -->
                 <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                     <div class="flex items-center gap-2 mb-2">
-                        <svg class="h-5 w-5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                        </svg>
+                        {{ icon_svg("home", "h-5 w-5 text-cyan-600 dark:text-cyan-400") }}
                         <span class="font-medium text-slate-900 dark:text-white">NHF Schedule</span>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">FMBN contribution upload file</p>

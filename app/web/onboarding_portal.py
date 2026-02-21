@@ -30,6 +30,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -278,7 +282,6 @@ def complete_onboarding_task(
             completion_notes=notes,
             document_id=document_id,
         )
-        db.commit()
 
         logger.info("Employee completed onboarding task %s", activity_id)
 

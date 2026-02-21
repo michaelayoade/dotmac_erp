@@ -4,14 +4,27 @@ Reports Web Routes.
 HTML template routes for financial reports and analytics.
 """
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.rpt.web import reports_web_service
 from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/reports", tags=["reports-web"])
+
+
+def _csv_response(content: str, filename: str) -> StreamingResponse:
+    """Build a StreamingResponse for CSV download."""
+    import io
+
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("", response_class=HTMLResponse)
@@ -161,6 +174,64 @@ def changes_in_equity_report(
     return reports_web_service.changes_in_equity_response(
         request, auth, start_date, end_date, db
     )
+
+
+# ─────────────────── CSV Export endpoints ───────────────────
+
+
+@router.get("/trial-balance/export")
+def export_trial_balance(
+    as_of_date: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Export trial balance as CSV."""
+    csv = reports_web_service.export_trial_balance_csv(
+        str(auth.organization_id), db, as_of_date
+    )
+    return _csv_response(csv, "trial_balance.csv")
+
+
+@router.get("/income-statement/export")
+def export_income_statement(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Export income statement as CSV."""
+    csv = reports_web_service.export_income_statement_csv(
+        str(auth.organization_id), db, start_date, end_date
+    )
+    return _csv_response(csv, "income_statement.csv")
+
+
+@router.get("/balance-sheet/export")
+def export_balance_sheet(
+    as_of_date: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Export balance sheet as CSV."""
+    csv = reports_web_service.export_balance_sheet_csv(
+        str(auth.organization_id), db, as_of_date
+    )
+    return _csv_response(csv, "balance_sheet.csv")
+
+
+@router.get("/general-ledger/export")
+def export_general_ledger(
+    account_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Export general ledger as CSV."""
+    csv = reports_web_service.export_general_ledger_csv(
+        str(auth.organization_id), db, account_id, start_date, end_date
+    )
+    return _csv_response(csv, "general_ledger.csv")
 
 
 @router.get("/budget-vs-actual", response_class=HTMLResponse)

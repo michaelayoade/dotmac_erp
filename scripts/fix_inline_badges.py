@@ -1,189 +1,360 @@
 #!/usr/bin/env python3
 """
-Replace inline status badge HTML with status_badge() macro calls.
+Migrate inline status badge HTML to the {{ status_badge() }} macro.
 
 Handles:
-1. Simple inline <span class="inline-flex rounded-full bg-*-100 ...">{{ entity.status }}</span>
-2. Conditional badge blocks: {% if status == "X" %}<span...>{% elif...%}...{% endif %}
+1. If/elif chains: {% if expr == "X" %}<span class="...badge...">X</span>{% elif...%}...{% endif %}
+2. Single <span> with conditional classes for status display
+3. Simple inline badges: <span class="inline-flex rounded-full bg-*-100...">{{ status }}</span>
+
+Usage:
+    poetry run python scripts/fix_inline_badges.py --dry-run
+    poetry run python scripts/fix_inline_badges.py --execute
 """
 
-import os
+from __future__ import annotations
+
+import argparse
 import re
-import sys
+from pathlib import Path
 
-TEMPLATES_DIR = "templates"
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
-# Macro import line to add if not present
-MACRO_IMPORT = '{% from "components/macros.html" import status_badge %}'
+SKIP_FILES = {
+    "components/macros.html",
+    "components/_badges.html",
+}
 
-# Pattern 1: Simple inline span badges
-# Matches: <span class="inline-flex...rounded-full...bg-...">{{ var }}</span>
-# or: <span class="inline-flex...rounded-full...bg-...">{{ var | replace('_', ' ') | title }}</span>
-INLINE_BADGE_RE = re.compile(
-    r'<span\s+class="[^"]*(?:inline-flex|rounded-full)[^"]*(?:rounded-full|inline-flex)[^"]*">'
-    r"\s*\{\{\s*"
-    r"([^}]+?)"  # capture the variable expression
-    r"\s*\}\}"
-    r"\s*</span>",
-    re.DOTALL,
+# Color class prefixes that indicate a status badge
+BADGE_COLOR_PREFIXES = (
+    "bg-emerald-",
+    "bg-amber-",
+    "bg-rose-",
+    "bg-blue-",
+    "bg-slate-1",  # bg-slate-100
+    "bg-sky-",
+    "bg-violet-",
+    "bg-green-",
+    "bg-red-",
+    "bg-yellow-",
+    "bg-teal-",
+    "bg-indigo-",
+    "bg-orange-",
 )
 
-# Pattern for badge CSS class combos that indicate a status badge
-BADGE_CLASS_INDICATORS = re.compile(
-    r"(?:rounded-full.*(?:bg-(?:slate|emerald|amber|rose|blue|green|red|yellow)-(?:100|50))|"
-    r"badge-(?:draft|pending|approved|paid|overdue|rejected|posted|cancelled))"
-)
+
+def find_matching_endif(content: str, if_start: int) -> int:
+    """Find the end position of the matching {%% endif %%}."""
+    depth = 0
+    pos = if_start
+    while pos < len(content):
+        tag_start = content.find("{%", pos)
+        if tag_start == -1:
+            return -1
+        tag_end = content.find("%}", tag_start + 2)
+        if tag_end == -1:
+            return -1
+        tag_end += 2
+
+        tag_body = (
+            content[tag_start + 2 : tag_end - 2].strip().lstrip("-").rstrip("-").strip()
+        )
+
+        if (
+            tag_body.startswith("if ")
+            or tag_body.startswith("if\t")
+            or tag_body.startswith("if\n")
+        ):
+            depth += 1
+        elif tag_body == "endif" or tag_body.startswith("endif "):
+            depth -= 1
+            if depth == 0:
+                return tag_end
+
+        pos = tag_end
+
+    return -1
 
 
-def strip_display_filters(expr: str) -> str:
-    """Remove display formatting filters from a template expression.
+def is_badge_html(html: str) -> bool:
+    """Check if HTML snippet contains badge-like content.
 
-    '{{ x.status | replace("_", " ") | title }}' → 'x.status'
-    '{{ x.status.value | replace("_", " ") | title }}' → 'x.status.value'
-    '{{ x.status }}' → 'x.status'
+    A badge is a <span> with rounded-full and a status-color background.
     """
-    # Remove | replace('_', ' ') | title and variations
-    expr = re.sub(
-        r"""\s*\|\s*replace\s*\(\s*['"]_['"]\s*,\s*['"] ['"]\s*\)""",
-        "",
-        expr,
+    has_span = "<span" in html
+    has_rounded = "rounded-full" in html or "rounded" in html
+    has_color = any(prefix in html for prefix in BADGE_COLOR_PREFIXES)
+    has_inline = "inline-flex" in html or "inline-block" in html
+    has_badge_class = "badge-" in html  # semantic badge class
+    return has_span and ((has_rounded and has_color and has_inline) or has_badge_class)
+
+
+def extract_status_variable(block: str) -> str | None:
+    """Extract the variable tested in the if/elif chain.
+
+    Looks for: {% if app.status.value == "APPROVED" %}
+    Returns: app.status.value
+    """
+    match = re.search(r"\{%[-\s]*if\s+([\w.]+)\s*==\s*[\"']", block)
+    if match:
+        return match.group(1)
+    return None
+
+
+def get_indent(content: str, pos: int) -> str:
+    """Get the whitespace indentation at a position."""
+    line_start = content.rfind("\n", 0, pos)
+    if line_start == -1:
+        line_start = 0
+    else:
+        line_start += 1
+    indent_text = content[line_start:pos]
+    if indent_text.strip():
+        return ""
+    return indent_text
+
+
+def split_if_branches(block: str) -> list[str]:
+    """Split an if/elif/else block into individual branch contents.
+
+    Returns the HTML content of each branch (stripping the Jinja2 tags).
+    """
+    branches: list[str] = []
+    # Split on {% elif ... %}, {% else %}, {% endif %}
+    parts = re.split(
+        r"\{%[-\s]*(?:elif\s+[^%]*|else|endif)[-\s]*%\}",
+        block,
     )
-    expr = re.sub(r"\s*\|\s*title\b", "", expr)
-    expr = re.sub(r"\s*\|\s*upper\b", "", expr)
-    expr = re.sub(r"\s*\|\s*lower\b", "", expr)
-    return expr.strip()
+    for part in parts:
+        # Strip the opening {% if ... %} from the first part
+        cleaned = re.sub(r"\{%[-\s]*if\s+[^%]*%\}", "", part).strip()
+        if cleaned:
+            branches.append(cleaned)
+    return branches
 
 
-def determine_size(context_line: str) -> str:
-    """Determine badge size from surrounding context."""
-    if "text-xs" in context_line or "py-0.5" in context_line or "px-2" in context_line:
-        return 'size="sm"'
-    return ""
+def find_badge_if_blocks(content: str) -> list[tuple[int, int, str]]:
+    """Find all if/elif chains that render status badges.
 
-
-def fix_inline_badges(content: str) -> tuple[str, int]:
-    """Replace inline badge spans with status_badge() macro calls."""
-    fixes = 0
-
-    def replacer(match: re.Match) -> str:
-        nonlocal fixes
-        full_match = match.group(0)
-
-        # Only replace if it looks like a badge (has badge-indicator CSS classes)
-        if not BADGE_CLASS_INDICATORS.search(full_match):
-            return full_match
-
-        expr = match.group(1).strip()
-        var_name = strip_display_filters(expr)
-
-        if not var_name or "%" in var_name:
-            return full_match
-
-        size = determine_size(full_match)
-        size_arg = f", {size}" if size else ""
-
-        fixes += 1
-        return f"{{{{ status_badge({var_name}{size_arg}) }}}}"
-
-    content = INLINE_BADGE_RE.sub(replacer, content)
-    return content, fixes
-
-
-def fix_conditional_badges(content: str) -> tuple[str, int]:
-    """Replace conditional badge blocks with status_badge() macro calls.
-
-    Handles patterns like:
-    {% if entity.status == "ACTIVE" %}<span class="badge-approved">Active</span>
-    {% elif entity.status == "DRAFT" %}<span class="badge-draft">Draft</span>
-    {% else %}<span class="badge-draft">{{ entity.status }}</span>{% endif %}
+    Returns list of (start, end, variable_expression) tuples.
     """
-    fixes = 0
+    results: list[tuple[int, int, str]] = []
+    pos = 0
 
-    # Pattern for multi-line conditional badge blocks
-    # This handles the common structure:
-    # {% if var == "X" %}<span class="badge-*">X</span>{% elif var == "Y" %}...{% endif %}
-    cond_badge_re = re.compile(
-        r'\{%[-\s]*if\s+(\S+?)\s*==\s*["\'](\w+)["\']\s*[-]?%\}'  # {% if var == "STATUS" %}
-        r'\s*<span\s+class="[^"]*badge-\w+[^"]*">[^<]*</span>\s*'  # <span class="badge-*">text</span>
-        r'(?:\{%[-\s]*elif\s+\1\s*==\s*["\'](\w+)["\']\s*[-]?%\}'  # {% elif var == "STATUS2" %}
-        r'\s*<span\s+class="[^"]*badge-\w+[^"]*">[^<]*</span>\s*)*'  # repeated badge spans
-        r"(?:\{%[-\s]*else\s*[-]?%\}"  # {% else %}
-        r'\s*<span\s+class="[^"]*badge-\w+[^"]*">[^<]*</span>\s*)?'  # optional else badge
-        r"\{%[-\s]*endif\s*[-]?%\}",  # {% endif %}
+    while pos < len(content):
+        match = re.search(r"\{%[-\s]*if\s+", content[pos:])
+        if not match:
+            break
+
+        start = pos + match.start()
+        end = find_matching_endif(content, start)
+        if end == -1:
+            pos = start + 2
+            continue
+
+        block = content[start:end]
+        variable = extract_status_variable(block)
+
+        if variable is None:
+            pos = start + 2
+            continue
+
+        # Only process status-like variables
+        if "status" not in variable.lower() and "state" not in variable.lower():
+            pos = start + 2
+            continue
+
+        # Check each branch for badge content
+        branches = split_if_branches(block)
+        if not branches:
+            pos = start + 2
+            continue
+
+        badge_count = 0
+        non_badge_count = 0
+        for branch in branches:
+            if is_badge_html(branch):
+                badge_count += 1
+            elif "{{ status_badge(" in branch:
+                badge_count += 1  # Already using macro in one branch
+            elif branch.strip():
+                # Check if it's a simple span (might be a badge without our color prefixes)
+                if re.match(r"^\s*<span[^>]*>[^<]*</span>\s*$", branch, re.DOTALL):
+                    # Could be a badge with unusual colors — count it if it has rounded
+                    if "rounded" in branch:
+                        badge_count += 1
+                    else:
+                        non_badge_count += 1
+                else:
+                    non_badge_count += 1
+
+        # Only replace if ALL branches are badges (or the block only has badge content)
+        if badge_count > 0 and non_badge_count == 0:
+            results.append((start, end, variable))
+
+        pos = start + 2
+
+    # Remove nested blocks
+    results.sort(key=lambda b: (b[0], -b[1]))
+    outermost: list[tuple[int, int, str]] = []
+    for block_info in results:
+        is_nested = any(
+            block_info[0] >= outer[0] and block_info[1] <= outer[1]
+            for outer in outermost
+        )
+        if not is_nested:
+            outermost.append(block_info)
+
+    return outermost
+
+
+def find_inline_class_badges(content: str) -> list[tuple[int, int, str]]:
+    """Find single <span> elements with conditional classes for status.
+
+    Pattern:
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full
+            {% if task.status == 'PENDING' %}bg-amber-100 text-amber-700...
+            {% elif ... %}...{% endif %}">
+            {{ task.status | replace("_", " ") | title }}
+        </span>
+    """
+    results: list[tuple[int, int, str]] = []
+
+    pattern = re.compile(
+        r"<span\s+class=\"[^\"]*"
+        r"\{%[-\s]*if\s+([\w.]+)\s*==\s*['\"]"  # {% if EXPR == '...'
+        r"[^\"]*"  # rest of class attribute
+        r"\{%[-\s]*endif[-\s]*%\}"  # {% endif %}
+        r"[^\"]*\">\s*"  # end of class + >
+        r"\{\{[^}]*\}\}\s*"  # {{ expression }}
+        r"</span>",
         re.DOTALL,
     )
 
-    def cond_replacer(match: re.Match) -> str:
-        nonlocal fixes
-        var_name = match.group(1)
-        fixes += 1
-        return f"{{{{ status_badge({var_name}) }}}}"
+    for m in pattern.finditer(content):
+        variable = m.group(1)
+        if "status" in variable.lower():
+            results.append((m.start(), m.end(), variable))
 
-    content = cond_badge_re.sub(cond_replacer, content)
-    return content, fixes
+    return results
 
 
-def ensure_macro_import(content: str) -> str:
-    """Add status_badge macro import if not present."""
-    if "status_badge" not in content:
-        return content  # Not using status_badge, skip
+def ensure_import(content: str, macro_name: str) -> str:
+    """Ensure the macro is imported from components/macros.html."""
+    import_pattern = re.compile(
+        r'(\{%[-\s]*from\s+"components/macros\.html"\s+import\s+)([^%]+)([-\s]*%\})'
+    )
+    match = import_pattern.search(content)
 
-    if "import status_badge" in content:
-        return content  # Already imported
+    if match:
+        imports_str = match.group(2).strip()
+        imported = [s.strip() for s in imports_str.split(",")]
+        if macro_name in imported:
+            return content
 
-    # Find the right place to add the import
-    # After {% extends %} if present, otherwise at the top
-    extends_match = re.search(r"(\{%\s*extends\s+[^%]+%\})\s*\n", content)
+        new_imports = imports_str.rstrip() + ", " + macro_name + " "
+        return content[: match.start(2)] + new_imports + content[match.end(2) :]
+
+    extends_match = re.search(r'(\{%\s*extends\s+"[^"]+"\s*%\})\n', content)
     if extends_match:
         insert_pos = extends_match.end()
-        return content[:insert_pos] + MACRO_IMPORT + "\n" + content[insert_pos:]
+        import_line = f'{{% from "components/macros.html" import {macro_name} %}}\n'
+        return content[:insert_pos] + import_line + content[insert_pos:]
 
-    # At the top if no extends
-    return MACRO_IMPORT + "\n" + content
+    import_line = f'{{% from "components/macros.html" import {macro_name} %}}\n'
+    return import_line + content
 
 
-def fix_file(filepath: str, dry_run: bool = False) -> int:
-    with open(filepath, encoding="utf-8") as f:
-        content = f.read()
+def process_file(filepath: Path, templates_dir: Path) -> tuple[str, int]:
+    """Process a template file and return (new_content, replacements_count)."""
+    content = filepath.read_text(encoding="utf-8")
+    rel_path = str(filepath.relative_to(templates_dir))
 
-    original = content
-    total_fixes = 0
+    if rel_path in SKIP_FILES:
+        return content, 0
 
-    content, inline_fixes = fix_inline_badges(content)
-    total_fixes += inline_fixes
+    replacements = 0
 
-    content, cond_fixes = fix_conditional_badges(content)
-    total_fixes += cond_fixes
+    # Find if/elif badge chains
+    badge_blocks = find_badge_if_blocks(content)
 
-    if total_fixes > 0:
-        content = ensure_macro_import(content)
+    # Find inline class badges (span with conditional classes)
+    inline_badges = find_inline_class_badges(content)
 
-    if total_fixes > 0 and not dry_run and content != original:
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
+    # Combine and sort by position (process from end to start to preserve positions)
+    all_badges: list[tuple[int, int, str]] = badge_blocks + inline_badges
+    all_badges.sort(key=lambda b: b[0], reverse=True)
 
-    return total_fixes
+    for start, end, variable in all_badges:
+        indent = get_indent(content, start)
+        replacement = f"{indent}{{{{ status_badge({variable}, 'sm') }}}}"
+        # Replace from beginning of the line to avoid double-indent
+        line_start = content.rfind("\n", 0, start)
+        if line_start != -1:
+            line_start += 1  # After the newline
+        else:
+            line_start = 0
+        content = content[:line_start] + replacement + content[end:]
+        replacements += 1
+
+    if replacements > 0:
+        content = ensure_import(content, "status_badge")
+
+    return content, replacements
+
+
+def scan_templates(templates_dir: Path, dry_run: bool) -> dict[str, int]:
+    """Scan all template files and migrate inline badges."""
+    results: dict[str, int] = {}
+
+    for filepath in sorted(templates_dir.rglob("*.html")):
+        rel_path = str(filepath.relative_to(templates_dir))
+        if rel_path in SKIP_FILES:
+            continue
+
+        content = filepath.read_text(encoding="utf-8")
+
+        # Quick checks to skip files without potential inline badges
+        has_status_if = re.search(
+            r"\{%[-\s]*if\s+[\w.]*status[\w.]*\s*==\s*[\"']", content
+        )
+        has_inline_class_badge = re.search(
+            r'class="[^"]*\{%[-\s]*if\s+[\w.]*status', content
+        )
+
+        if not has_status_if and not has_inline_class_badge:
+            continue
+
+        new_content, count = process_file(filepath, templates_dir)
+        if count > 0:
+            results[rel_path] = count
+            if not dry_run:
+                filepath.write_text(new_content, encoding="utf-8")
+
+    return results
 
 
 def main() -> None:
-    dry_run = "--dry-run" in sys.argv
-    total_fixes = 0
-    fixed_files = 0
+    parser = argparse.ArgumentParser(description="Migrate inline badges to macro")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--dry-run", action="store_true", help="Show what would change")
+    group.add_argument("--execute", action="store_true", help="Apply changes")
+    args = parser.parse_args()
 
-    for root, _dirs, files in os.walk(TEMPLATES_DIR):
-        for fname in sorted(files):
-            if not fname.endswith(".html"):
-                continue
-            filepath = os.path.join(root, fname)
-            fixes = fix_file(filepath, dry_run=dry_run)
-            if fixes > 0:
-                action = "Would fix" if dry_run else "Fixed"
-                print(f"{action} {fixes} badge(s) in {filepath}")
-                total_fixes += fixes
-                fixed_files += 1
+    print(f"Scanning templates in {TEMPLATES_DIR}...")
+    results = scan_templates(TEMPLATES_DIR, dry_run=args.dry_run)
 
-    action = "Would fix" if dry_run else "Fixed"
-    print(f"\n{action} {total_fixes} badges across {fixed_files} files")
+    mode = "DRY RUN" if args.dry_run else "EXECUTED"
+    print(f"\n{'=' * 60}")
+    print(f"  {mode}: {len(results)} files, {sum(results.values())} replacements")
+    print(f"{'=' * 60}")
+
+    if results:
+        for path, count in sorted(results.items()):
+            print(f"  {path}: {count} badge block(s)")
+
+    if args.dry_run and results:
+        print("\nRun with --execute to apply changes.")
 
 
 if __name__ == "__main__":

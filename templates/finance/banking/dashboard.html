@@ -1,0 +1,232 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import stats_card, empty_state, status_badge, icon_svg %}
+
+{% block page_title %}Banking Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Banking</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/finance/banking/statements/import" class="btn btn-secondary">
+        {{ icon_svg("upload", "h-4 w-4 mr-1.5") }}
+        Import Statement
+    </a>
+    <a href="/finance/banking/reconciliations/new" class="btn btn-secondary">
+        {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
+        New Reconciliation
+    </a>
+    <a href="/finance/banking/accounts/new" class="btn btn-primary">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        New Bank Account
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 page-enter">
+    <!-- Stat Cards -->
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Balance", total_balance | default("₦0.00"), icon="currency", color="teal", href="/finance/banking/accounts") }}
+        {{ stats_card("Unreconciled", unreconciled_count | default(0), icon="clock", color="amber", href="/finance/banking/statements") }}
+        {{ stats_card("Inflows MTD", inflows_mtd | default("₦0.00"), icon="trending-up", color="emerald") }}
+        {{ stats_card("Outflows MTD", outflows_mtd | default("₦0.00"), icon="trending-down", color="rose") }}
+    </div>
+
+    <!-- Account Balances + Reconciliation Status -->
+    <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Account Balances -->
+        <div class="lg:col-span-2 card">
+            <div class="card-header flex items-center justify-between">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white">Account Balances</h3>
+                <a href="/finance/banking/accounts" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">View all</a>
+            </div>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Bank</th>
+                            <th scope="col">Account</th>
+                            <th scope="col" class="text-right">Balance</th>
+                            <th scope="col">Last Reconciled</th>
+                            <th scope="col" class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for acct in account_balances %}
+                        <tr class="group">
+                            <td>
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ acct.bank_name }}</p>
+                            </td>
+                            <td>
+                                <a href="/finance/banking/accounts/{{ acct.bank_account_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                                    {{ acct.account_name }}
+                                </a>
+                                <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ acct.account_number }}</p>
+                            </td>
+                            <td class="text-right font-mono tabular-nums text-sm font-medium text-slate-900 dark:text-white">
+                                {{ acct.balance if acct.balance else '—' }}
+                            </td>
+                            <td class="text-sm text-slate-600 dark:text-slate-400">
+                                {{ acct.last_reconciled_date if acct.last_reconciled_date else 'Never' }}
+                            </td>
+                            <td class="text-center">
+                                {{ status_badge(acct.status, 'sm') }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="py-12">
+                                {{ empty_state('No bank accounts', 'Add your first bank account to get started.', 'credit-card', 'New Bank Account', '/finance/banking/accounts/new') }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Reconciliation Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white">Reconciliation Status</h3>
+            </div>
+            <div class="p-5 space-y-4">
+                <a href="/finance/banking/reconciliations?status=draft" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
+                            {{ icon_svg("document", "h-4 w-4 text-slate-500 dark:text-slate-400") }}
+                        </span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Draft</span>
+                    </div>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_draft | default(0) }}</span>
+                </a>
+                <a href="/finance/banking/reconciliations?status=rejected" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-900/30">
+                            {{ icon_svg("warning", "h-4 w-4 text-rose-500 dark:text-rose-400") }}
+                        </span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Rejected</span>
+                    </div>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_rejected | default(0) }}</span>
+                </a>
+                <a href="/finance/banking/reconciliations?status=pending_review" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-900/30">
+                            {{ icon_svg("warning", "h-4 w-4 text-amber-500 dark:text-amber-400") }}
+                        </span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Pending Review</span>
+                    </div>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_pending_review | default(0) }}</span>
+                </a>
+                <a href="/finance/banking/reconciliations?status=approved" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-900/30">
+                            {{ icon_svg("check-circle", "h-4 w-4 text-emerald-500 dark:text-emerald-400") }}
+                        </span>
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Approved</span>
+                    </div>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_approved | default(0) }}</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="card">
+        <div class="card-header flex items-center justify-between">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Recent Transactions</h3>
+            <a href="/finance/banking/statements" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">View all</a>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Bank Account</th>
+                        <th scope="col" class="text-center">Type</th>
+                        <th scope="col" class="text-right">Amount</th>
+                        <th scope="col" class="text-center">Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for txn in recent_transactions %}
+                    <tr class="group">
+                        <td class="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {{ txn.transaction_date }}
+                        </td>
+                        <td class="max-w-xs">
+                            <a href="/finance/gl/journals/{{ txn.journal_entry_id }}" class="text-sm font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400 truncate block transition-colors">
+                                {{ txn.description if txn.description else '—' }}
+                            </a>
+                            {% if txn.payee_payer %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ txn.payee_payer }}</p>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ txn.bank_name }}</p>
+                            <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ txn.account_number }}</p>
+                        </td>
+                        <td class="text-center">
+                            {{ status_badge('CR' if txn.transaction_type == 'credit' else 'DR', 'sm') }}
+                        </td>
+                        <td class="text-right font-mono tabular-nums text-sm font-medium {{ 'text-emerald-700 dark:text-emerald-400' if txn.transaction_type == 'credit' else 'text-rose-700 dark:text-rose-400' }}">
+                            {{ txn.amount }}
+                        </td>
+                        <td class="text-center">
+                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                {{ txn.source_label if txn.source_label else 'Journal' }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-12">
+                            {{ empty_state('No recent transactions', 'Posted journal entries against bank accounts will appear here.', 'credit-card') }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid gap-4 sm:grid-cols-3">
+        <a href="/finance/banking/statements/import" class="card card-hover p-5 flex items-center gap-4">
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/30">
+                {{ icon_svg("upload", "h-5 w-5 text-blue-600 dark:text-blue-400") }}
+            </span>
+            <div>
+                <p class="text-sm font-semibold text-slate-900 dark:text-white">Import Statement</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Upload a bank statement file</p>
+            </div>
+        </a>
+        <a href="/finance/banking/reconciliations/new" class="card card-hover p-5 flex items-center gap-4">
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+                {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
+            </span>
+            <div>
+                <p class="text-sm font-semibold text-slate-900 dark:text-white">New Reconciliation</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Start reconciling an account</p>
+            </div>
+        </a>
+        <a href="/finance/banking/accounts/new" class="card card-hover p-5 flex items-center gap-4">
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-900/30">
+                {{ icon_svg("plus", "h-5 w-5 text-teal-600 dark:text-teal-400") }}
+            </span>
+            <div>
+                <p class="text-sm font-semibold text-slate-900 dark:text-white">Add Bank Account</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Register a new bank account</p>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

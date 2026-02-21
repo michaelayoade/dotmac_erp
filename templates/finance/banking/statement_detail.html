@@ -4,12 +4,12 @@
 {% block page_title %}Bank Statement{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    {{ icon_svg("chevron-right", "h-4 w-4") }}
-    <a href="/finance/banking/statements" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Statements</a>
-    {{ icon_svg("chevron-right", "h-4 w-4") }}
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ statement.statement_number if statement and statement.statement_number else "Detail" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/statements" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Statements</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ statement.statement_number if statement and statement.statement_number else "Detail" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 

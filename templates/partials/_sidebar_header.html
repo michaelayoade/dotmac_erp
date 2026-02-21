@@ -1,3 +1,4 @@
+{% from "components/macros.html" import icon_svg %}
 {# Shared sidebar header for module shells (non-admin) #}
 <div class="flex h-16 items-center border-b border-slate-200 dark:border-slate-800"
      :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
@@ -42,9 +43,7 @@
     <button @click="closeSidebar()" x-show="!isDesktop" x-cloak
             class="flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
             aria-label="Close sidebar">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
+        {{ icon_svg("x-mark") }}
     </button>
     <button @click="sidebarCollapsed = false; sidebarCollapsedStored = false; localStorage.setItem('appSidebarCollapsed', false)" x-show="isDesktop && sidebarCollapsed" x-cloak
             class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} hover:opacity-90 transition-opacity"
@@ -62,8 +61,6 @@
     <button @click="sidebarCollapsed = true; sidebarCollapsedStored = true; localStorage.setItem('appSidebarCollapsed', true)" x-show="isDesktop && !sidebarCollapsed" x-cloak
             class="flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
             aria-label="Collapse sidebar">
-        <svg class="h-5 w-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
-        </svg>
+        {{ icon_svg("chevron-double-left", "h-5 w-5 transition-transform duration-300") }}
     </button>
 </div>

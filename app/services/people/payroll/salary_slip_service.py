@@ -129,11 +129,13 @@ class SalarySlipService:
         org_id = coerce_uuid(organization_id)
 
         # Check if component exists
-        component = db.scalar(
-            select(SalaryComponent).where(
+        component = (
+            db.query(SalaryComponent)
+            .filter(
                 SalaryComponent.organization_id == org_id,
                 SalaryComponent.component_code == component_code,
             )
+            .first()
         )
 
         if component:
@@ -216,8 +218,10 @@ class SalarySlipService:
         from app.models.finance.core_config.numbering_sequence import SequenceType
         from app.services.finance.common.numbering import SyncNumberingService
 
-        return SyncNumberingService(db).generate_next_number(
-            organization_id, SequenceType.SALARY_SLIP
+        return str(
+            SyncNumberingService(db).generate_next_number(
+                organization_id, SequenceType.SALARY_SLIP
+            )
         )
 
     @staticmethod
@@ -1080,9 +1084,11 @@ class SalarySlipService:
         if to_date:
             stmt = stmt.where(SalarySlip.end_date <= to_date)
 
-        return db.scalars(
-            stmt.order_by(SalarySlip.created_at.desc()).limit(limit).offset(offset)
-        ).all()
+        return list(
+            db.scalars(
+                stmt.order_by(SalarySlip.created_at.desc()).limit(limit).offset(offset)
+            )
+        )
 
     @staticmethod
     def count(

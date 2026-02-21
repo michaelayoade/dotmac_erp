@@ -272,7 +272,7 @@
                 </span>
             </div>
             <div class="period-info">
-                {{ pay_period_start.strftime('%b %d') if pay_period_start else '' }} – {{ pay_period_end.strftime('%b %d, %Y') if pay_period_end else '' }}
+                {{ pay_period_start.strftime('%b %d') if pay_period_start else '' }} – {{ pay_period_end | format_date if pay_period_end else '' }}
                 &nbsp;|&nbsp; {{ payment_days | int }}/{{ total_working_days | int }} days
             </div>
         </div>
@@ -361,7 +361,7 @@
             Computer-generated document • Confidential
             {% endif %}
             {% if slip.status and slip.status.value == 'PAID' and slip.paid_at %}
-            <br>Paid on {{ slip.paid_at.strftime('%B %d, %Y') }}
+            <br>Paid on {{ slip.paid_at | format_date }}
             {% endif %}
         </div>
     </div>

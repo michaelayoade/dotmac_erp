@@ -1,18 +1,15 @@
 {% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Ticket Aging Report{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">SLA Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Aging Report</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">SLA Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Aging Report</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -37,9 +34,7 @@
         <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
             <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                 <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {% if loop.last %}bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400{% elif loop.index == 3 %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% elif loop.index == 2 %}bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400{% else %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% endif %}">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-4 w-4") }}
                 </span>
                 {{ bucket.label }}
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if loop.last %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif loop.index == 3 %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% elif loop.index == 2 %}bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400{% else %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% endif %}">

@@ -37,6 +37,7 @@ from app.services.common import (
     coerce_uuid,
 )
 from app.services.pm.web.import_web import project_import_web_service
+from app.services.recent_activity import get_recent_activity_for_record
 from app.services.storage import get_storage
 from app.templates import templates
 from app.web.deps import (
@@ -782,7 +783,6 @@ async def create_project_template(
                 )
             )
 
-    db.commit()
     return RedirectResponse(
         url=f"/projects/templates/{template.template_id}?saved=1", status_code=303
     )
@@ -992,7 +992,6 @@ async def update_project_template(
                 )
             )
 
-    db.commit()
     return RedirectResponse(
         url=f"/projects/templates/{template.template_id}?saved=1", status_code=303
     )
@@ -1140,7 +1139,6 @@ def create_global_task(
                 uploaded_by_id=coerce_uuid(auth.user_id),
             )
 
-    db.commit()
     return RedirectResponse(
         url=f"/projects/tasks?project_id={task.project_id}&saved=1",
         status_code=303,
@@ -1218,6 +1216,12 @@ def project_dashboard(
         "request": request,
         **base_context(request, auth, project.project_name, "projects", db=db),
         "project": project,
+        "recent_activity": get_recent_activity_for_record(
+            db,
+            org_id,
+            record=project,
+            limit=10,
+        ),
         "dashboard": dashboard_data,
         "customer_info": customer_info,
         "comments": comments,
@@ -1286,9 +1290,7 @@ async def add_project_comment(
                 )
             )
 
-        db.commit()
     except Exception:
-        db.rollback()
         attachment_errors.append("Comment upload failed")
 
     base_url = _project_url(project)
@@ -1319,10 +1321,8 @@ def delete_project_comment(
 
     try:
         comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
-        db.commit()
     except Exception:
-        db.rollback()
-
+        pass
     return RedirectResponse(
         url=_project_url(project) + "?saved=1" + "#comments", status_code=303
     )
@@ -1587,11 +1587,8 @@ async def create_project(
                     uploaded_by_id=coerce_uuid(auth.user_id),
                 )
 
-        db.commit()
-
         return RedirectResponse(url=_project_url(project) + "?saved=1", status_code=303)
     except Exception as exc:
-        db.rollback()
         customers = db.scalars(
             select(Customer)
             .where(Customer.organization_id == org_id, Customer.is_active == True)
@@ -1722,8 +1719,6 @@ async def update_project(
                 uploaded_by_id=coerce_uuid(auth.user_id),
             )
 
-    db.commit()
-
     return RedirectResponse(
         url=_project_url(project) + "?saved=1",
         status_code=303,
@@ -1745,7 +1740,6 @@ def delete_project(
 
     if project:
         project.status = ProjectStatus.CANCELLED
-        db.commit()
 
     return RedirectResponse(
         url="/projects?success=Record+deleted+successfully", status_code=303
@@ -1876,7 +1870,6 @@ def task_detail(
     task_uuid = task.task_id
     _ensure_task_code(db, org_id, task)
     if task.task_code and task_id != task.task_code:
-        db.commit()
         return RedirectResponse(
             url=_task_url(project, task),
             status_code=302,
@@ -1923,6 +1916,12 @@ def task_detail(
         **base_context(request, auth, task.task_name, "tasks", db=db),
         "project": project,
         "task": task,
+        "recent_activity": get_recent_activity_for_record(
+            db,
+            org_id,
+            record=task,
+            limit=10,
+        ),
         "subtasks": subtasks,
         "dependencies": dependencies,
         "dependents": dependents,
@@ -1999,9 +1998,7 @@ async def add_task_comment(
                 )
             )
 
-        db.commit()
     except Exception:
-        db.rollback()
         attachment_errors.append("Comment upload failed")
 
     base_url = (
@@ -2041,10 +2038,8 @@ def delete_task_comment(
 
     try:
         comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
-        db.commit()
     except Exception:
-        db.rollback()
-
+        pass
     base_url = (
         f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
     )
@@ -2156,7 +2151,6 @@ async def upload_task_attachment(
             content_type=file.content_type or "application/octet-stream",
             uploaded_by_id=user_id,
         )
-    db.commit()
 
     base_url = (
         f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
@@ -2192,7 +2186,6 @@ def delete_task_attachment(
         )
 
     project_attachment_service.delete_attachment(db, org_id, coerce_uuid(attachment_id))
-    db.commit()
 
     base_url = (
         f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"
@@ -2324,8 +2317,6 @@ def create_task(
                 uploaded_by_id=coerce_uuid(auth.user_id),
             )
 
-    db.commit()
-
     return RedirectResponse(
         url=f"/projects/{project.project_code}/tasks/{task.task_code}?saved=1",
         status_code=303,
@@ -2366,7 +2357,6 @@ def edit_task_form(
     task_uuid = task.task_id
     _ensure_task_code(db, org_id, task)
     if task.task_code and task_id != task.task_code:
-        db.commit()
         return RedirectResponse(
             url=f"/projects/{project.project_code}/tasks/{task.task_code}/edit",
             status_code=302,
@@ -2501,7 +2491,6 @@ def update_task(
                     content_type=file.content_type or "application/octet-stream",
                     uploaded_by_id=coerce_uuid(auth.user_id),
                 )
-        db.commit()
     except NotFoundError:
         pass
 
@@ -2537,7 +2526,6 @@ def delete_task(
 
     try:
         services["task"].delete_task(task_uuid)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -2573,7 +2561,6 @@ def start_task(
 
     try:
         services["task"].update_task(task.task_id, {"status": TaskStatus.IN_PROGRESS})
-        db.commit()
     except (NotFoundError, ValidationError):
         pass
 
@@ -2615,7 +2602,6 @@ def complete_task(
                 "progress_percent": 100,
             },
         )
-        db.commit()
     except (NotFoundError, ValidationError):
         pass
 
@@ -2670,7 +2656,6 @@ def add_task_dependency(
             dependency_type=dep_type,
             lag_days=lag_days,
         )
-        db.commit()
     except (NotFoundError, ValidationError):
         # Redirect back with error (could flash message in future)
         pass
@@ -2712,7 +2697,6 @@ def remove_task_dependency(
 
     try:
         services["task"].remove_dependency(task_uuid, depends_on_uuid)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -2773,8 +2757,6 @@ def bulk_update_task_status(
                 logger.exception("bulk_update_tasks: failed for task_id=%s", task_id)
                 continue
 
-    db.commit()
-
     return RedirectResponse(
         url=f"/projects/{project.project_code}/tasks?saved=1",
         status_code=303,
@@ -2809,8 +2791,6 @@ def bulk_delete_tasks(
             except Exception:
                 logger.exception("bulk_delete_tasks: failed for task_id=%s", task_id)
                 continue
-
-    db.commit()
 
     return RedirectResponse(
         url=f"/projects/{project.project_code}/tasks?saved=1",
@@ -2942,8 +2922,6 @@ def create_resource_allocation(
         }
     )
 
-    db.commit()
-
     return RedirectResponse(
         url=f"/projects/{project.project_code}/team?saved=1",
         status_code=303,
@@ -2987,7 +2965,6 @@ def update_resource_allocation(
                 "is_active": is_active == "on",
             },
         )
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3019,7 +2996,6 @@ def end_resource_allocation(
     try:
         end_dt = date.fromisoformat(end_date) if end_date else date.today()
         services["resource"].end_allocation(allocation_uuid, end_dt)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3051,7 +3027,6 @@ def delete_resource_allocation(
 
     try:
         services["resource"].delete_allocation(allocation_uuid)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3262,8 +3237,6 @@ def create_milestone(
         }
     )
 
-    db.commit()
-
     return RedirectResponse(
         url=f"/projects/{project.project_code}/milestones?saved=1",
         status_code=303,
@@ -3305,7 +3278,6 @@ def update_milestone(
                 "target_date": date.fromisoformat(target_date),
             },
         )
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3337,7 +3309,6 @@ def achieve_milestone(
 
     try:
         services["milestone"].achieve_milestone(milestone_uuid)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3369,7 +3340,6 @@ def delete_milestone(
 
     try:
         services["milestone"].delete_milestone(milestone_uuid)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3575,8 +3545,6 @@ def create_time_entry(
         }
     )
 
-    db.commit()
-
     return RedirectResponse(
         url=f"/projects/{project.project_code}/time?saved=1",
         status_code=303,
@@ -3696,7 +3664,6 @@ def update_time_entry(
                 "is_billable": is_billable == "on",
             },
         )
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3726,7 +3693,6 @@ def delete_time_entry(
 
     try:
         services["time"].delete_entry(entry_uuid)
-        db.commit()
     except NotFoundError:
         pass
 
@@ -3757,7 +3723,6 @@ def bill_time_entry(
 
     try:
         services["time"].mark_billed([entry_uuid])
-        db.commit()
     except (NotFoundError, ValidationError):
         pass
 
@@ -3800,7 +3765,6 @@ def bulk_bill_time_entries(
 
     if entry_uuids:
         services["time"].mark_billed(entry_uuids)
-        db.commit()
 
     return RedirectResponse(
         url=f"/projects/{project.project_code}/time?saved=1",
@@ -3918,7 +3882,6 @@ def log_timesheet_entry(
             "is_billable": False,
         }
     )
-    db.commit()
 
     return RedirectResponse(
         url="/projects/timesheet?success=Record+saved+successfully", status_code=303
@@ -4050,7 +4013,6 @@ async def upload_project_attachment(
     )
 
     if error:
-        db.rollback()
         return RedirectResponse(
             url=(
                 f"/projects/{project.project_code}/attachments"
@@ -4058,8 +4020,6 @@ async def upload_project_attachment(
             ),
             status_code=303,
         )
-
-    db.commit()
 
     return RedirectResponse(
         url=f"/projects/{project.project_code}/attachments?success=File+uploaded",
@@ -4154,7 +4114,6 @@ def delete_project_attachment(
     )
 
     if not success:
-        db.rollback()
         return RedirectResponse(
             url=(
                 f"/projects/{project.project_code}/attachments"
@@ -4162,8 +4121,6 @@ def delete_project_attachment(
             ),
             status_code=303,
         )
-
-    db.commit()
 
     return RedirectResponse(
         url=f"/projects/{project.project_code}/attachments?success=Attachment+deleted",

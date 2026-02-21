@@ -1,23 +1,16 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 
 {% block page_title %}Reservation Details{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/fleet/reservations" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Reservations</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Details</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet/reservations" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Reservations</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Details</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -28,9 +21,7 @@
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div class="flex items-start gap-4">
                 <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg">
-                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calendar", "h-7 w-7") }}
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-display">Vehicle Reservation</h2>
@@ -75,11 +66,11 @@
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Start</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.start_datetime.strftime('%b %d, %Y %H:%M') }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.start_datetime | format_datetime }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">End</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.end_datetime.strftime('%b %d, %Y %H:%M') }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.end_datetime | format_datetime }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Destination</dt>
@@ -102,11 +93,11 @@
                 <dl class="grid grid-cols-2 gap-4">
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Actual Start</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.actual_start_datetime.strftime('%b %d, %Y %H:%M') if reservation.actual_start_datetime else '-' }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.actual_start_datetime | format_datetime if reservation.actual_start_datetime else '-' }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Actual End</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.actual_end_datetime.strftime('%b %d, %Y %H:%M') if reservation.actual_end_datetime else '-' }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.actual_end_datetime | format_datetime if reservation.actual_end_datetime else '-' }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Start Odometer</dt>
@@ -154,7 +145,7 @@
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Approved At</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.approved_at.strftime('%b %d, %Y %H:%M') if reservation.approved_at else '-' }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ reservation.approved_at | format_datetime if reservation.approved_at else '-' }}</dd>
                     </div>
                     {% if reservation.rejection_reason %}
                     <div class="col-span-2">
@@ -187,11 +178,11 @@
     <!-- Back -->
     <div class="flex items-center gap-3">
         <a href="/fleet/reservations" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-2") }}
             Back to Reservations
         </a>
     </div>
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

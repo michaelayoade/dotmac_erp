@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state, compact_filters %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters, icon_svg %}
 
 {% block page_title %}Late/Early Report{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Late/Early Report</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Late/Early Report</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -19,13 +19,11 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Late Arrivals & Early Departures</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Late Arrivals & Early Departures</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Track punctuality issues across the organization</p>
         </div>
         <a href="/people/attendance" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
             Back
         </a>
     </div>
@@ -61,9 +59,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
-                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-6 w-6 text-amber-600 dark:text-amber-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Late Arrivals</p>
@@ -77,9 +73,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/30">
-                    <svg class="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                    </svg>
+                    {{ icon_svg("logout", "h-6 w-6 text-rose-600 dark:text-rose-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Early Departures</p>
@@ -144,9 +138,7 @@
         {% else %}
         <div class="p-8 text-center">
             <div class="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle") }}
                 <span>No late arrivals in the selected period!</span>
             </div>
         </div>
@@ -208,9 +200,7 @@
         {% else %}
         <div class="p-8 text-center">
             <div class="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle") }}
                 <span>No early departures in the selected period!</span>
             </div>
         </div>

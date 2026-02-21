@@ -320,6 +320,11 @@ def format_currency(
     try:
         value = Decimal(str(amount))
 
+        # Accounting notation: use absolute value, wrap result in parens
+        is_negative = value < 0
+        if is_negative:
+            value = abs(value)
+
         # Determine separators and currency from context
         from app.services.formatting_context import get_formatting_prefs
 
@@ -341,7 +346,10 @@ def format_currency(
         )
         if show_symbol:
             currency_code = currency or fallback_currency
-            return f"{currency_code} {formatted}"
+            formatted = f"{currency_code} {formatted}"
+
+        if is_negative:
+            return f"({formatted})"
         return formatted
     except (InvalidOperation, ValueError, TypeError):
         return none_value

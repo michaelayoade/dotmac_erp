@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -77,6 +78,36 @@ class GoodsReceiptService(ListResponseMixin):
     """
     Service for goods receipt lifecycle management.
     """
+
+    @staticmethod
+    def build_receipt_input(
+        po_id: UUID,
+        receipt_date: date,
+        lines_raw: list[dict[str, Any]],
+        notes: str | None = None,
+    ) -> GoodsReceiptInput:
+        """Build GoodsReceiptInput from raw API params.
+
+        Raises:
+            ValueError: If any line is missing po_line_id.
+        """
+        lines: list[GRLineInput] = []
+        for line in lines_raw:
+            if not line.get("po_line_id"):
+                raise ValueError("po_line_id required for each line")
+            lines.append(
+                GRLineInput(
+                    po_line_id=line["po_line_id"],
+                    quantity_received=line["quantity_received"],
+                    location_id=line.get("warehouse_id"),
+                )
+            )
+        return GoodsReceiptInput(
+            po_id=po_id,
+            receipt_date=receipt_date,
+            notes=notes,
+            lines=lines,
+        )
 
     @staticmethod
     def build_input_from_payload(
@@ -675,7 +706,7 @@ class GoodsReceiptService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str,
+        organization_id: str | UUID | None = None,
         supplier_id: str | None = None,
         po_id: str | None = None,
         status: ReceiptStatus | None = None,
@@ -700,9 +731,11 @@ class GoodsReceiptService(ListResponseMixin):
         Returns:
             List of GoodsReceipt objects
         """
-        stmt = select(GoodsReceipt).where(
-            GoodsReceipt.organization_id == coerce_uuid(organization_id)
-        )
+        stmt = select(GoodsReceipt)
+        if organization_id is not None:
+            stmt = stmt.where(
+                GoodsReceipt.organization_id == coerce_uuid(organization_id)
+            )
 
         if supplier_id:
             stmt = stmt.where(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))

@@ -121,6 +121,16 @@ class TestDashboardRoutes:
         response = web_client.get("/finance/dashboard")
         assert b"Dashboard" in response.content or b"dashboard" in response.content
 
+    def test_help_center_route_exists(self, web_client):
+        """Test that app-wide help center route exists."""
+        response = web_client.get("/help")
+        assert_route_exists(response)
+
+    def test_legacy_finance_help_route_exists(self, web_client):
+        """Test that legacy finance help route still exists."""
+        response = web_client.get("/finance/help")
+        assert_route_exists(response)
+
 
 # =============================================================================
 # GL (General Ledger) Routes Tests

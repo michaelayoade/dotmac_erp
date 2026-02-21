@@ -40,6 +40,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -499,46 +503,11 @@ def initialize_expense_payment(
 
     config = get_paystack_config(db, organization_id)
 
-    from app.models.expense.expense_claim import ExpenseClaim
-    from app.models.finance.payments.payment_intent import PaymentIntent
-
-    claim = db.get(ExpenseClaim, request_data.expense_claim_id)
-    if not claim or claim.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Expense claim not found")
-
-    # Check for existing active payment intent to prevent duplicate payments
-    active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
-    existing_intent = (
-        db.query(PaymentIntent)
-        .filter(
-            PaymentIntent.source_type == "EXPENSE_CLAIM",
-            PaymentIntent.source_id == request_data.expense_claim_id,
-            PaymentIntent.status.in_(active_statuses),
-        )
-        .first()
-    )
-    if existing_intent:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A payment is already in progress for this claim (status: {existing_intent.status.value}). "
-            "Please wait for it to complete or check the transfers page.",
-        )
-
-    recipient_bank_code = claim.recipient_bank_code
-    recipient_account_number = claim.recipient_account_number
-    if not recipient_bank_code or not recipient_account_number:
-        raise HTTPException(
-            status_code=400,
-            detail="Expense claim is missing bank details",
-        )
-
     svc = PaymentService(db, organization_id)
     try:
         intent = svc.create_expense_payment_intent(
             expense_claim_id=request_data.expense_claim_id,
             paystack_config=config,
-            recipient_bank_code=recipient_bank_code,
-            recipient_account_number=recipient_account_number,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -620,23 +589,7 @@ def initiate_transfer(
         logger.error(f"Transfer initiation failed: {e}")
         raise HTTPException(status_code=502, detail=f"Transfer failed: {e.message}")
 
-    # Get the expense claim status
-    from app.models.expense.expense_claim import ExpenseClaim
-
-    claim_status = None
-    if updated_intent.source_id:
-        claim = db.get(ExpenseClaim, updated_intent.source_id)
-        if claim:
-            claim_status = claim.status.value
-
-    # Determine if completed immediately and create appropriate message
-    completed_immediately = updated_intent.status == PaymentIntentStatus.COMPLETED
-    if completed_immediately:
-        message = "Transfer completed successfully! The expense claim has been marked as paid."
-    elif updated_intent.status == PaymentIntentStatus.FAILED:
-        message = "Transfer failed. Please check the error and try again."
-    else:
-        message = "Transfer initiated and is being processed. You will be notified when complete."
+    result = svc.build_transfer_result(updated_intent)
 
     return InitiateTransferResponse(
         intent_id=updated_intent.intent_id,
@@ -644,9 +597,9 @@ def initiate_transfer(
         status=updated_intent.status.value,
         amount=float(updated_intent.amount),
         currency=updated_intent.currency_code,
-        completed_immediately=completed_immediately,
-        claim_status=claim_status,
-        message=message,
+        completed_immediately=result["completed_immediately"],
+        claim_status=result["claim_status"],
+        message=result["message"],
     )
 
 

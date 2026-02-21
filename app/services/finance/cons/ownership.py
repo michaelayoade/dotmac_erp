@@ -204,7 +204,7 @@ class OwnershipService(ListResponseMixin):
         )
 
         if ownership:
-            return ownership.effective_ownership_percentage
+            return Decimal(str(ownership.effective_ownership_percentage))
         return Decimal("100")
 
     @staticmethod
@@ -245,13 +245,14 @@ class OwnershipService(ListResponseMixin):
         grp_id = coerce_uuid(group_id)
 
         # Get all entities
-        entities = db.scalars(
-            select(LegalEntity).where(
-                LegalEntity.group_id == grp_id,
-                LegalEntity.is_active == True,
+        entities = list(
+            db.scalars(
+                select(LegalEntity).where(
+                    LegalEntity.group_id == grp_id,
+                    LegalEntity.is_active == True,
+                )
             )
         )
-        entities = entities.all()
 
         # Get current ownership interests
         ownership_stmt = select(OwnershipInterest).where(
@@ -356,14 +357,15 @@ class OwnershipService(ListResponseMixin):
         grp_id = coerce_uuid(group_id)
 
         # Get subsidiaries with current ownership
-        subsidiaries = db.scalars(
-            select(LegalEntity).where(
-                LegalEntity.group_id == grp_id,
-                LegalEntity.is_active == True,
-                LegalEntity.consolidation_method == ConsolidationMethod.FULL,
+        subsidiaries = list(
+            db.scalars(
+                select(LegalEntity).where(
+                    LegalEntity.group_id == grp_id,
+                    LegalEntity.is_active == True,
+                    LegalEntity.consolidation_method == ConsolidationMethod.FULL,
+                )
             )
         )
-        subsidiaries = subsidiaries.all()
 
         results = []
         for sub in subsidiaries:
@@ -495,7 +497,7 @@ class OwnershipService(ListResponseMixin):
             .limit(limit)
             .offset(offset)
         )
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

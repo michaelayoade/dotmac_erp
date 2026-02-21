@@ -1,6 +1,6 @@
 {% extends "admin/base_admin.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}Sync Management{% endblock %}
 {% block page_subtitle %}ERPNext integration and data synchronization{% endblock %}
 
@@ -10,9 +10,7 @@
     {% if request.query_params.get('success') %}
     <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
             <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
         </div>
     </div>
@@ -21,9 +19,7 @@
     {% if request.query_params.get('error') %}
     <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-900/20">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
             <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') | urldecode }}</p>
         </div>
     </div>
@@ -58,9 +54,7 @@
                     <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">Records synchronized</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    {{ icon_svg("refresh", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -74,9 +68,7 @@
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Records with errors</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl {% if total_failed > 0 %}bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400{% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("exclamation-circle", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -95,9 +87,7 @@
                     {% endif %}
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -112,17 +102,12 @@
             {% if not integration_configured %}
             <div class="text-center py-6">
                 <div class="mx-auto h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-3">
-                    <svg class="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-6 w-6 text-amber-600 dark:text-amber-400") }}
                 </div>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">Integration Not Configured</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">Configure ERPNext credentials to enable sync</p>
                 <a href="/admin/sync/config" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
+                    {{ icon_svg("cog", "h-4 w-4") }}
                     Configure
                 </a>
             </div>
@@ -152,9 +137,7 @@
                 </div>
 
                 <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    {{ icon_svg("refresh", "h-4 w-4") }}
                     Start Sync
                 </button>
             </form>
@@ -198,9 +181,7 @@
             {% else %}
             <div class="text-center py-12">
                 <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                    <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
-                    </svg>
+                    {{ icon_svg("database", "h-6 w-6 text-slate-400") }}
                 </div>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">No sync data yet</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Run a sync to see entity statistics</p>
@@ -235,7 +216,7 @@
                     {% for h in recent_history %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td class="py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {{ h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '-' }}
+                            {{ h.created_at | format_datetime if h.created_at else '-' }}
                         </td>
                         <td class="py-3">
                             {{ status_badge(h.sync_type.value if h.sync_type else 'Unknown', size="sm") }}
@@ -247,7 +228,7 @@
                                 {% elif h.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
                                 {% elif h.status == 'FAILED' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
                                 {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                {% if h.status == 'IN_PROGRESS' %}<span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse"></span>{% endif %}
+                                {{ status_badge(h.status, 'sm') }}
                                 {{ h.status | replace('_', ' ') | title }}
                             </span>
                         </td>
@@ -274,9 +255,7 @@
         {% else %}
         <div class="text-center py-12">
             <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "h-6 w-6 text-slate-400") }}
             </div>
             <p class="text-sm font-medium text-slate-900 dark:text-white">No sync history</p>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Sync history will appear here after running syncs</p>
@@ -288,9 +267,7 @@
     <div class="grid gap-4 sm:grid-cols-4">
         <a href="/admin/sync/crm" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow border-2 border-primary-200 dark:border-primary-800">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                </svg>
+                {{ icon_svg("switch-horizontal") }}
             </div>
             <div>
                 <span class="block font-medium text-slate-800 dark:text-slate-200">DotMac CRM</span>
@@ -300,10 +277,7 @@
 
         <a href="/admin/sync/config" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
+                {{ icon_svg("cog") }}
             </div>
             <div>
                 <span class="block font-medium text-slate-800 dark:text-slate-200">Configuration</span>
@@ -313,9 +287,7 @@
 
         <a href="/admin/sync/history" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock") }}
             </div>
             <div>
                 <span class="block font-medium text-slate-800 dark:text-slate-200">History</span>
@@ -325,9 +297,7 @@
 
         <a href="/admin/sync/entities" class="admin-card p-4 flex items-center gap-4 hover:shadow-lg transition-shadow">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
-                </svg>
+                {{ icon_svg("database") }}
             </div>
             <div>
                 <span class="block font-medium text-slate-800 dark:text-slate-200">Entities</span>

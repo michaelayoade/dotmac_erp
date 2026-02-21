@@ -92,3 +92,7 @@ def test_admin_audit_logs_context_resolves_actor_name(db_session, person):
     ]
     assert matching
     assert matching[0]["actor_name"] == person.name
+    assert matching[0]["actor_type_label"] == "User"
+    assert matching[0]["action_label"] == "Create (POST)"
+    assert matching[0]["entity_label"] == "Test"
+    assert matching[0]["request_summary"] == "POST /test"

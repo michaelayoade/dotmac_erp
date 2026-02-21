@@ -1,29 +1,26 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters %}
+{% from "components/macros.html" import status_badge, compact_filters, icon_svg, pagination %}
 
 {% block title %}Tasks - {{ project.project_name }}{% endblock %}
 
 {% block page_title %}Tasks{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mt-1" aria-label="Breadcrumb">
-    <a href="/projects" class="hover:text-amber-600 dark:hover:text-amber-400">Projects</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/projects" class="hover:text-amber-600 dark:hover:text-amber-400">Projects</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/projects/{{ project.project_code }}" class="hover:text-amber-600 dark:hover:text-amber-400">{{ project.project_code }}</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Tasks</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/projects" class="hover:text-amber-600 dark:hover:text-amber-400">Projects</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/projects" class="hover:text-amber-600 dark:hover:text-amber-400">Projects</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/projects/{{ project.project_code }}" class="hover:text-amber-600 dark:hover:text-amber-400">{{ project.project_code }}</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Tasks</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/projects/{{ project.project_code }}/tasks/new"
    class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4") }}
     New Task
 </a>
 {% endblock %}
@@ -80,17 +77,13 @@
             <button @click="viewMode = 'tree'" type="button"
                     :class="viewMode === 'tree' ? 'bg-white shadow text-amber-600 dark:bg-slate-600' : 'text-slate-600 dark:text-slate-400'"
                     class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                </svg>
+                {{ icon_svg("list-bullet", "h-4 w-4") }}
                 Tree
             </button>
             <button @click="viewMode = 'flat'" type="button"
                     :class="viewMode === 'flat' ? 'bg-white shadow text-amber-600 dark:bg-slate-600' : 'text-slate-600 dark:text-slate-400'"
                     class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
+                {{ icon_svg("menu", "h-4 w-4") }}
                 Flat
             </button>
         </div>
@@ -214,7 +207,7 @@
                             <td class="px-4 py-4">
                                 {% if task.due_date %}
                                 <span class="text-sm {{ 'text-red-600 dark:text-red-400' if task.is_overdue else 'text-slate-600 dark:text-slate-400' }}">
-                                    {{ task.due_date.strftime('%d %b %Y') }}
+                                    {{ task.due_date | format_date }}
                                 </span>
                                 {% else %}
                                 <span class="text-sm text-slate-400">-</span>
@@ -242,9 +235,7 @@
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2 pl-6">
-                                    <svg class="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                                    </svg>
+                                    {{ icon_svg("arrow-right", "h-3 w-3 text-slate-400") }}
                                     <div>
                                         <a href="/projects/{{ project.project_code }}/tasks/{{ subtask.task_code or subtask.task_id }}"
                                            class="text-sm font-medium text-slate-700 hover:text-amber-600 dark:text-slate-300 dark:hover:text-amber-400">
@@ -334,7 +325,7 @@
                             <td class="px-4 py-4">
                                 {% if task.due_date %}
                                 <span class="text-sm {{ 'text-red-600 dark:text-red-400' if task.is_overdue else 'text-slate-600 dark:text-slate-400' }}">
-                                    {{ task.due_date.strftime('%d %b %Y') }}
+                                    {{ task.due_date | format_date }}
                                 </span>
                                 {% else %}
                                 <span class="text-sm text-slate-400">-</span>
@@ -372,23 +363,15 @@
     </div>
 
     <!-- Pagination -->
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between">
-        <div class="text-sm text-slate-500 dark:text-slate-400">
-            Showing {{ (page - 1) * per_page + 1 }} to {{ [(page * per_page), total] | min }} of {{ total }} tasks
-        </div>
-        <nav class="flex items-center gap-1">
-            {% if page > 1 %}
-            <a href="?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if priority_filter %}&priority={{ priority_filter }}{% endif %}"
-               class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Previous</a>
-            {% endif %}
-            {% if page < total_pages %}
-            <a href="?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if priority_filter %}&priority={{ priority_filter }}{% endif %}"
-               class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Next</a>
-            {% endif %}
-        </nav>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=20,
+        show_size_selector=false,
+        filters={"priority": priority_filter, "status": status_filter}
+    ) }}
+
     </div>
 </div>
 {% endblock %}

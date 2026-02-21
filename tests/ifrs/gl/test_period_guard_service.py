@@ -445,7 +445,8 @@ class TestGetPeriodMethods:
             MockFiscalPeriod(organization_id=org_id, status=MockPeriodStatus.OPEN),
             MockFiscalPeriod(organization_id=org_id, status=MockPeriodStatus.REOPENED),
         ]
-        mock_db.scalars.return_value.all.return_value = periods
+        # Service uses list(db.scalars(stmt)) — iterates directly, no .all()
+        mock_db.scalars.return_value = periods
 
         with patch_period_guard():
             result = PeriodGuardService.get_open_periods(mock_db, org_id)
@@ -465,7 +466,8 @@ class TestGetPeriodMethods:
     def test_list_periods(self, mock_db, org_id):
         """Test listing periods with filters."""
         periods = [MockFiscalPeriod(organization_id=org_id)]
-        mock_db.scalars.return_value.all.return_value = periods
+        # Service uses list(db.scalars(stmt)) — iterates directly, no .all()
+        mock_db.scalars.return_value = periods
 
         with patch_period_guard():
             result = PeriodGuardService.list(

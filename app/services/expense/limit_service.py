@@ -954,6 +954,66 @@ class ExpenseLimitService:
 
         return eligible
 
+    def get_eligible_approvers_for_claim(
+        self,
+        org_id: UUID,
+        claim_id: UUID,
+        expense_service: object,
+    ) -> dict:
+        """Get eligible approvers for a specific expense claim.
+
+        Looks up the claim, finds the linked employee, and returns
+        approvers with sufficient authority for the claim amount.
+
+        Args:
+            org_id: Organization ID
+            claim_id: Expense claim ID
+            expense_service: ExpenseService instance (passed to avoid
+                circular import)
+
+        Returns:
+            Dict with claim_id, claim_amount, eligible_approvers list,
+            and optional message.
+
+        Raises:
+            ValueError: If employee not found.
+        """
+        from typing import Any as _Any
+
+        svc: _Any = expense_service
+        claim = svc.get_claim(org_id, claim_id)
+        if not claim.employee_id:
+            return {
+                "eligible_approvers": [],
+                "message": "No employee linked to claim",
+            }
+
+        from app.models.people.hr.employee import Employee as EmployeeModel
+
+        employee = self.db.get(EmployeeModel, claim.employee_id)
+        if not employee:
+            raise ValueError("Employee not found")
+
+        approvers = self.get_eligible_approvers(
+            org_id, employee, claim.total_claimed_amount
+        )
+        return {
+            "claim_id": str(claim_id),
+            "claim_amount": float(claim.total_claimed_amount),
+            "eligible_approvers": [
+                {
+                    "employee_id": str(a.employee_id),
+                    "employee_name": a.employee_name,
+                    "max_approval_amount": float(a.max_approval_amount)
+                    if a.max_approval_amount
+                    else None,
+                    "is_direct_manager": a.is_direct_manager,
+                    "grade_rank": a.grade_rank,
+                }
+                for a in approvers
+            ],
+        }
+
     def _get_employee_approval_limit(
         self, org_id: UUID, employee: Employee
     ) -> Decimal | None:

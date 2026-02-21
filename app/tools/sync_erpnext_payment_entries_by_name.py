@@ -23,6 +23,9 @@ ADMIN_PERSON_ID = UUID("c8e5f2ee-4f9f-46d0-a6c7-22e4f717a58b")
 
 
 def main() -> None:
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", action="append", dest="names", required=True)
     args = ap.parse_args()

@@ -27,7 +27,7 @@ def build_journal_query(
     from_date = parse_date(start_date)
     to_date = parse_date(end_date)
 
-    query = Query([JournalEntry], session=db).filter(
+    query: Query[JournalEntry] = Query([JournalEntry], session=db).filter(
         JournalEntry.organization_id == org_id
     )
 

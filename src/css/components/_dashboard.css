@@ -8,6 +8,22 @@
        Stat Hero Cards
        -------------------------------------------------------------------------- */
     .stat-hero { display: flex; flex-direction: column; gap: var(--spacing-xs); min-width: 0; }
+    a.stat-hero-link {
+        text-decoration: none;
+        color: inherit;
+        border-radius: var(--radius-card);
+        padding: var(--spacing-sm);
+        margin: calc(-1 * var(--spacing-sm));
+        transition: background-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+        cursor: pointer;
+    }
+    a.stat-hero-link:hover {
+        background-color: rgba(13, 148, 136, 0.04);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    }
+    a.stat-hero-link:active { transform: scale(0.98); }
+    .dark a.stat-hero-link:hover { background-color: rgba(13, 148, 136, 0.08); }
     .stat-hero-label {
         font-size: 11px;
         font-weight: 600;

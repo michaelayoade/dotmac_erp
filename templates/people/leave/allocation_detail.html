@@ -4,16 +4,14 @@
 {% block page_title %}Leave Allocation{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
-    <span class="mx-2">/</span>
-    <a href="/people/leave/allocations" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Allocations</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Detail</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/leave/allocations" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Allocations</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Detail</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -101,7 +99,7 @@
                 <div>
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Period</dt>
                     <dd class="text-sm font-medium text-slate-900 dark:text-white mt-1">
-                        {{ allocation.from_date.strftime('%d %b %Y') }} - {{ allocation.to_date.strftime('%d %b %Y') }}
+                        {{ allocation.from_date | format_date }} - {{ allocation.to_date | format_date }}
                     </dd>
                 </div>
                 <div>
@@ -115,7 +113,7 @@
                 <div>
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Created</dt>
                     <dd class="text-sm font-medium text-slate-900 dark:text-white mt-1">
-                        {{ allocation.created_at.strftime('%d %b %Y %H:%M') if allocation.created_at else '-' }}
+                        {{ allocation.created_at | format_datetime if allocation.created_at else '-' }}
                     </dd>
                 </div>
             </dl>
@@ -176,7 +174,7 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                             <a href="/people/leave/applications/{{ app.application_id }}" class="hover:text-violet-600 dark:hover:text-violet-400">
-                                {{ app.from_date.strftime('%d %b') }} - {{ app.to_date.strftime('%d %b %Y') }}
+                                {{ app.from_date.strftime('%d %b') }} - {{ app.to_date | format_date }}
                             </a>
                         </td>
                         <td class="px-4 py-3 text-sm text-right font-mono text-slate-700 dark:text-slate-300">{{ app.total_leave_days }}</td>

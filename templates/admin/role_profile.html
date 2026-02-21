@@ -1,38 +1,27 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ role.name }}{% endblock %}
 {% block page_subtitle %}Role Profile{% endblock %}
 
+{% block header_actions %}
+<a href="/admin/roles/{{ role.id }}/edit" class="btn btn-primary">
+    {{ icon_svg("edit", "h-4 w-4") }}
+    Edit Role
+</a>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-6">
-    <!-- Back Link + Actions -->
-    <div class="flex items-center justify-between">
-        <a href="/admin/roles" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
-            Back to Roles
-        </a>
-        <a href="/admin/roles/{{ role.id }}/edit"
-           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-500 text-white text-sm font-medium shadow-lg shadow-accent-500/25 hover:bg-accent-600 transition-colors">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-            </svg>
-            Edit Role
-        </a>
-    </div>
-
     <!-- Role Header Card -->
     <div class="admin-card p-6">
         <div class="flex items-start gap-6">
             <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
+                {{ icon_svg("shield-check", "h-8 w-8", stroke_width="1.5") }}
             </div>
             <div class="flex-1">
                 <div class="flex items-center gap-3">
-                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ role.name }}</h1>
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ role.name }}</h2>
                     {% if role.is_active %}
                     <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
@@ -61,9 +50,7 @@
         <div class="admin-card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 text-white shadow-lg shadow-violet-500/25">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-                    </svg>
+                    {{ icon_svg("key", "h-6 w-6") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ permission_count }}</p>
@@ -74,9 +61,7 @@
         <div class="admin-card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-emerald-500 text-white shadow-lg shadow-teal-500/25">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                    </svg>
+                    {{ icon_svg("user-group-lg", "h-6 w-6") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ member_count }}</p>
@@ -111,9 +96,7 @@
                             {% else %}
                             bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400
                             {% endif %}">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                            </svg>
+                            {{ icon_svg("collection") }}
                         </div>
                         <div class="text-left">
                             <h3 class="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
@@ -131,9 +114,7 @@
                     <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                         {% for perm in permissions %}
                         <div class="flex items-start gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                            <svg class="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
+                            {{ icon_svg("check", "h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0") }}
                             <div class="min-w-0">
                                 <code class="text-xs font-mono text-slate-700 dark:text-slate-300 break-all">{{ perm.key }}</code>
                                 {% if perm.description %}
@@ -150,16 +131,12 @@
         {% else %}
         <div class="p-12 text-center">
             <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-                <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-                </svg>
+                {{ icon_svg("key", "h-6 w-6 text-slate-400") }}
             </div>
             <p class="text-sm font-medium text-slate-900 dark:text-white">No permissions assigned</p>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">This role has no permissions yet.</p>
             <a href="/admin/roles/{{ role.id }}/edit" class="inline-flex items-center gap-2 mt-4 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4") }}
                 Add Permissions
             </a>
         </div>

@@ -120,7 +120,6 @@ def create_case(
         reported_by_name = form.get("reported_by_name") or reported_by_name
 
     if not employee_id or not violation_type or not severity or not subject:
-        db.rollback()
         return discipline_web_service.case_new_form_response(
             request=request,
             auth=auth,
@@ -152,7 +151,6 @@ def create_case(
         )
     except Exception as exc:
         message = getattr(exc, "detail", None) or str(exc)
-        db.rollback()
         return discipline_web_service.case_new_form_response(
             request=request,
             auth=auth,
@@ -458,7 +456,6 @@ def upload_document(
             title=title,
             description=description,
         )
-        db.commit()
 
         return RedirectResponse(
             url=f"/people/hr/discipline/{case_id}?success=document_uploaded",
@@ -548,10 +545,7 @@ def delete_document(
             status_code=303,
         )
 
-    deleted = service.delete(auth.organization_id, document_id)
-    if deleted:
-        db.commit()
-
+    service.delete(auth.organization_id, document_id)
     return RedirectResponse(
         url=f"/people/hr/discipline/{case_id}?success=document_deleted",
         status_code=303,

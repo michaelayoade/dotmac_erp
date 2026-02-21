@@ -40,6 +40,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -344,32 +348,16 @@ def calculate_lease(
     db: Session = Depends(get_db),
 ):
     """Calculate initial lease values (ROU asset, liability)."""
-    contract = lease_contract_service.get(db, str(lease_id), organization_id)
-    liability = lease_calculation_service.calculate_initial_liability(db, contract)
-    rou_asset_value = (
-        liability.total_liability
-        + contract.initial_direct_costs
-        - contract.lease_incentives_received
-        + contract.restoration_obligation
-    )
     try:
-        monthly_depreciation = lease_calculation_service.calculate_rou_depreciation(
+        data = lease_calculation_service.calculate_lease_summary(
             db=db,
             lease_id=lease_id,
-            periods=1,
+            organization_id=organization_id,
+            calculation_date=calculation_date,
         )
-    except HTTPException:
-        monthly_depreciation = Decimal("0")
-
-    return LeaseCalculationRead(
-        lease_id=lease_id,
-        calculation_date=calculation_date,
-        present_value_payments=liability.total_liability,
-        initial_direct_costs=contract.initial_direct_costs,
-        rou_asset_value=rou_asset_value,
-        lease_liability=liability.total_liability,
-        monthly_depreciation=monthly_depreciation,
-    )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return LeaseCalculationRead(**data)
 
 
 @router.get("/contracts/{lease_id}/schedule", response_model=LeaseScheduleRead)
@@ -380,32 +368,22 @@ def get_lease_schedule(
     db: Session = Depends(get_db),
 ):
     """Get lease amortization schedule."""
-    contract = lease_contract_service.get(db, str(lease_id), organization_id)
-    schedule = lease_calculation_service.generate_amortization_schedule(
-        db=db, lease_id=lease_id
-    )
-    lines = [
-        LeaseScheduleLineRead(
-            period_number=entry.period,
-            payment_date=entry.payment_date,
-            payment_amount=entry.payment_amount,
-            interest_expense=entry.interest_expense,
-            principal_reduction=entry.principal_reduction,
-            opening_liability=entry.opening_balance,
-            closing_liability=entry.closing_balance,
+    try:
+        data = lease_calculation_service.get_schedule_summary(
+            db=db,
+            lease_id=lease_id,
+            organization_id=organization_id,
         )
-        for entry in schedule
-    ]
-    total_payments = sum((line.payment_amount for line in lines), Decimal("0"))
-    total_interest = sum((line.interest_expense for line in lines), Decimal("0"))
-    total_principal = sum((line.principal_reduction for line in lines), Decimal("0"))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
+    lines = [LeaseScheduleLineRead(**line) for line in data["lines"]]
     return LeaseScheduleRead(
-        lease_id=lease_id,
-        lease_code=contract.lease_number,
-        total_payments=total_payments,
-        total_interest=total_interest,
-        total_principal=total_principal,
+        lease_id=data["lease_id"],
+        lease_code=data["lease_code"],
+        total_payments=data["total_payments"],
+        total_interest=data["total_interest"],
+        total_principal=data["total_principal"],
         lines=lines,
     )
 

@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 
 {% block page_title %}Expense Claims{% endblock %}
 
@@ -21,9 +21,7 @@
                 </select>
             </form>
             <a href="/expense/claims/new" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg shadow-sm hover:from-amber-600 hover:to-orange-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 transition-all duration-200">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4") }}
                 New Claim
             </a>
         </div>
@@ -35,9 +33,7 @@
             <!-- Total Claims -->
             <div class="stat-hero">
                 <div class="stat-hero-icon stat-hero-icon-expense">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document") }}
                 </div>
                 <span class="stat-hero-label">Total Claims</span>
                 <span class="stat-hero-value">{{ stats.total_claims | default(0) }}</span>
@@ -49,9 +45,7 @@
             <!-- Total Amount Claimed -->
             <div class="stat-hero">
                 <div class="stat-hero-icon stat-hero-icon-expense">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("currency") }}
                 </div>
                 <span class="stat-hero-label">Amount Claimed</span>
                 <span class="stat-hero-value">{{ stats.total_amount | default(currency_zero) }}</span>
@@ -63,9 +57,7 @@
             <!-- Pending Review -->
             <div class="stat-hero">
                 <div class="stat-hero-icon stat-hero-icon-expense">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock") }}
                 </div>
                 <span class="stat-hero-label">Pending Review</span>
                 <span class="stat-hero-value">{{ stats.pending_count | default(0) }}</span>
@@ -77,9 +69,7 @@
             <!-- Approved/Paid -->
             <div class="stat-hero">
                 <div class="stat-hero-icon stat-hero-icon-expense">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle") }}
                 </div>
                 <span class="stat-hero-label">Reimbursed</span>
                 <span class="stat-hero-value">{{ stats.paid_amount | default(currency_zero) }}</span>
@@ -291,9 +281,7 @@
                         {% for claim in recent_claims %}
                         <a href="/expense/claims/{{ claim.id }}" class="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
+                                {{ icon_svg("document", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
                             </div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">

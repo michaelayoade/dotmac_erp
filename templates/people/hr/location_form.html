@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{% if location %}Edit Branch{% else %}New Branch{% endif %}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/locations" class="hover:text-teal-600 dark:hover:text-teal-400">Branches</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{% if location %}{{ location.location_code }}{% else %}New{% endif %}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/locations" class="hover:text-teal-600 dark:hover:text-teal-400">Branches</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{% if location %}{{ location.location_code }}{% else %}New{% endif %}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -17,9 +18,7 @@
     {% if error %}
     <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
         <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
-            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0") }}
             <span>{{ error }}</span>
         </div>
     </div>
@@ -121,9 +120,7 @@
                 {% if location %}
                 <a href="/people/hr/locations/{{ location.location_id }}/geofence"
                    class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 flex items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
-                    </svg>
+                    {{ icon_svg("map", "w-4 h-4") }}
                     Advanced Geofence Editor
                 </a>
                 {% endif %}
@@ -132,9 +129,7 @@
                 {% if location and location.geofence_polygon %}
                 <div class="p-3 rounded-lg bg-teal-50 border border-teal-200 dark:bg-teal-900/20 dark:border-teal-800">
                     <div class="flex items-center gap-2 text-teal-700 dark:text-teal-400">
-                        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
-                        </svg>
+                        {{ icon_svg("map", "w-5 h-5 flex-shrink-0") }}
                         <span class="text-sm font-medium">Polygon geofence configured</span>
                     </div>
                     <p class="text-xs text-teal-600 dark:text-teal-500 mt-1 ml-7">

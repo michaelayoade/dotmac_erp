@@ -1,23 +1,16 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 
 {% block page_title %}Incident Details{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/fleet/incidents" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Incidents</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Details</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet/incidents" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Incidents</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Details</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -28,9 +21,7 @@
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div class="flex items-start gap-4">
                 <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg">
-                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-7 w-7") }}
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-display">{{ incident.incident_type | replace('_', ' ') | title }}</h2>
@@ -67,7 +58,7 @@
                 <dl class="grid grid-cols-2 gap-4">
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Date</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ incident.incident_date.strftime('%b %d, %Y') }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ incident.incident_date | format_date }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Time</dt>
@@ -99,7 +90,7 @@
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Resolution Date</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ incident.resolution_date.strftime('%b %d, %Y') if incident.resolution_date else '-' }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ incident.resolution_date | format_date if incident.resolution_date else '-' }}</dd>
                     </div>
                 </dl>
             </div>
@@ -187,11 +178,11 @@
     <!-- Back -->
     <div class="flex items-center gap-3">
         <a href="/fleet/incidents" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-2") }}
             Back to Incidents
         </a>
     </div>
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

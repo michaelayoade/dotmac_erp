@@ -52,6 +52,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -441,16 +445,18 @@ def get_account_balance(
     """Get account balance for a fiscal period."""
     from app.services.finance.gl import balance_service
 
-    balance = balance_service.get_balance(
-        db=db,
-        organization_id=organization_id,
-        account_id=account_id,
-        fiscal_period_id=fiscal_period_id,
-    )
-    if not balance:
-        raise HTTPException(status_code=404, detail="Balance not found")
-
-    account = chart_of_accounts_service.get(db, str(account_id), organization_id)
+    try:
+        balance = balance_service.get_balance(
+            db=db,
+            organization_id=organization_id,
+            account_id=account_id,
+            fiscal_period_id=fiscal_period_id,
+        )
+        if not balance:
+            raise ValueError("Balance not found")
+        account = chart_of_accounts_service.get(db, str(account_id), organization_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return AccountBalanceRead(
         account_id=balance.account_id,
         account_code=account.account_code,

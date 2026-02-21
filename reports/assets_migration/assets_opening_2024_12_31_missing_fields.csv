@@ -1,0 +1,600 @@
+asset_number,asset_name,source_sheet,source_row,missing_fields
+Dotmac/OE/Dt001,All in One Desktop,SUMMARY REPORT SHEET,2,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt002,All in One Desktop,SUMMARY REPORT SHEET,3,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt003,All in One Desktop,SUMMARY REPORT SHEET,4,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt004,All in One Desktop,SUMMARY REPORT SHEET,5,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt005,All in One Desktop,SUMMARY REPORT SHEET,6,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt006,All in One Desktop,SUMMARY REPORT SHEET,7,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt007,All in One Desktop,SUMMARY REPORT SHEET,8,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt008,All in One Desktop,SUMMARY REPORT SHEET,9,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt009,All in One Desktop,SUMMARY REPORT SHEET,10,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt010,All in One Desktop,SUMMARY REPORT SHEET,11,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt011,All in One Desktop,SUMMARY REPORT SHEET,12,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt012,All in One Desktop,SUMMARY REPORT SHEET,13,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt013,All in One Desktop,SUMMARY REPORT SHEET,14,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt014,All in One Desktop,SUMMARY REPORT SHEET,15,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt015,All in One Desktop,SUMMARY REPORT SHEET,16,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt016,All in One Desktop,SUMMARY REPORT SHEET,17,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt017,All in One Desktop,SUMMARY REPORT SHEET,18,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt018,All in One Desktop,SUMMARY REPORT SHEET,19,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt019,All in One Desktop,SUMMARY REPORT SHEET,20,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt020,All in One Desktop,SUMMARY REPORT SHEET,21,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt021,All in One Desktop,SUMMARY REPORT SHEET,23,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt022,All in One Desktop,SUMMARY REPORT SHEET,24,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Lt001,Laptop,SUMMARY REPORT SHEET,25,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt023,All in One Desktop,SUMMARY REPORT SHEET,26,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt024,All in One Desktop,SUMMARY REPORT SHEET,27,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt025,All in One Desktop,SUMMARY REPORT SHEET,28,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt026,All in One Desktop,SUMMARY REPORT SHEET,29,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt027,All in One Desktop,SUMMARY REPORT SHEET,30,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt028,All in One Desktop,SUMMARY REPORT SHEET,31,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt029,All in One Desktop,SUMMARY REPORT SHEET,32,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt030,All in One Desktop,SUMMARY REPORT SHEET,33,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt031,All in One Desktop,SUMMARY REPORT SHEET,34,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt032,All in One Desktop,SUMMARY REPORT SHEET,35,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt033,All in One Desktop,SUMMARY REPORT SHEET,36,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt034,All in One Desktop,SUMMARY REPORT SHEET,37,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt035,All in One Desktop,SUMMARY REPORT SHEET,38,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt036,All in One Desktop,SUMMARY REPORT SHEET,39,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt037,All in One Desktop,SUMMARY REPORT SHEET,40,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt038,All in One Desktop,SUMMARY REPORT SHEET,41,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt039,All in One Desktop,SUMMARY REPORT SHEET,42,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt040,All in One Desktop,SUMMARY REPORT SHEET,43,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt041,All in One Desktop,SUMMARY REPORT SHEET,44,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt042,All in One Desktop,SUMMARY REPORT SHEET,45,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt043,All in One Desktop,SUMMARY REPORT SHEET,46,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt044,All in One Desktop,SUMMARY REPORT SHEET,47,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt045,All in One Desktop,SUMMARY REPORT SHEET,48,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt046,All in One Desktop,SUMMARY REPORT SHEET,49,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt047,All in One Desktop,SUMMARY REPORT SHEET,50,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt048,All in One Desktop,SUMMARY REPORT SHEET,51,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt049,All in One Desktop,SUMMARY REPORT SHEET,52,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt050,All in One Desktop,SUMMARY REPORT SHEET,53,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt051,All in One Desktop,SUMMARY REPORT SHEET,54,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt052,All in One Desktop,SUMMARY REPORT SHEET,55,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt053,All in One Desktop,SUMMARY REPORT SHEET,56,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt054,All in One Desktop,SUMMARY REPORT SHEET,57,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt055,All in One Desktop,SUMMARY REPORT SHEET,58,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt056,All in One Desktop,SUMMARY REPORT SHEET,59,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt057,All in One Desktop,SUMMARY REPORT SHEET,60,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt058,All in One Desktop,SUMMARY REPORT SHEET,61,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt059,All in One Desktop,SUMMARY REPORT SHEET,62,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0001,Desktop (CPU),SUMMARY REPORT SHEET,63,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0002,Monitor,SUMMARY REPORT SHEET,64,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt060,All in One Desktop,SUMMARY REPORT SHEET,65,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt061,All in one Desktop,SUMMARY REPORT SHEET,66,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt062,All in one Desktop,SUMMARY REPORT SHEET,67,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt063,All in one Desktop,SUMMARY REPORT SHEET,68,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Dt064,All in one Desktop,SUMMARY REPORT SHEET,69,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb001,keyboard,SUMMARY REPORT SHEET,70,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb002,keyboard,SUMMARY REPORT SHEET,71,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb003,keyboard,SUMMARY REPORT SHEET,72,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb004,keyboard,SUMMARY REPORT SHEET,73,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb005,keyboard,SUMMARY REPORT SHEET,74,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb006,keyboard,SUMMARY REPORT SHEET,75,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb007,keyboard,SUMMARY REPORT SHEET,76,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb008,keyboard,SUMMARY REPORT SHEET,77,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb009,keyboard,SUMMARY REPORT SHEET,78,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb010,keyboard,SUMMARY REPORT SHEET,79,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb011,keyboard,SUMMARY REPORT SHEET,80,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb012,keyboard,SUMMARY REPORT SHEET,81,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb013,keyboard,SUMMARY REPORT SHEET,82,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb014,keyboard,SUMMARY REPORT SHEET,83,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb015,keyboard,SUMMARY REPORT SHEET,84,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb016,keyboard,SUMMARY REPORT SHEET,85,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb017,keyboard,SUMMARY REPORT SHEET,86,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb018,keyboard,SUMMARY REPORT SHEET,87,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb019,keyboard,SUMMARY REPORT SHEET,88,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb020,keyboard,SUMMARY REPORT SHEET,89,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb021,keyboard,SUMMARY REPORT SHEET,90,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb022,keyboard,SUMMARY REPORT SHEET,91,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb023,keyboard,SUMMARY REPORT SHEET,92,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb024,keyboard,SUMMARY REPORT SHEET,93,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb025,keyboard,SUMMARY REPORT SHEET,94,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb026,keyboard,SUMMARY REPORT SHEET,95,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb027,keyboard,SUMMARY REPORT SHEET,96,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb028,keyboard,SUMMARY REPORT SHEET,97,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb029,keyboard,SUMMARY REPORT SHEET,98,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb030,keyboard,SUMMARY REPORT SHEET,99,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb031,keyboard,SUMMARY REPORT SHEET,100,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb032,keyboard,SUMMARY REPORT SHEET,101,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb034,keyboard,SUMMARY REPORT SHEET,102,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb035,keyboard,SUMMARY REPORT SHEET,104,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb036,keyboard,SUMMARY REPORT SHEET,105,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb037,keyboard,SUMMARY REPORT SHEET,106,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb038,keyboard,SUMMARY REPORT SHEET,107,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb039,keyboard,SUMMARY REPORT SHEET,108,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb040,keyboard,SUMMARY REPORT SHEET,109,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb041,keyboard,SUMMARY REPORT SHEET,110,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb042,keyboard,SUMMARY REPORT SHEET,111,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb043,keyboard,SUMMARY REPORT SHEET,112,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb044,keyboard,SUMMARY REPORT SHEET,113,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb045,keyboard,SUMMARY REPORT SHEET,114,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb046,keyboard,SUMMARY REPORT SHEET,115,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb047,keyboard,SUMMARY REPORT SHEET,116,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb048,keyboard,SUMMARY REPORT SHEET,117,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb049,keyboard,SUMMARY REPORT SHEET,118,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb050,keyboard,SUMMARY REPORT SHEET,119,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb051,keyboard,SUMMARY REPORT SHEET,120,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb052,keyboard,SUMMARY REPORT SHEET,121,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb053,keyboard,SUMMARY REPORT SHEET,122,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb054,keyboard,SUMMARY REPORT SHEET,123,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb055,keyboard,SUMMARY REPORT SHEET,124,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb056,keyboard,SUMMARY REPORT SHEET,125,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb057,keyboard,SUMMARY REPORT SHEET,126,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb058,keyboard,SUMMARY REPORT SHEET,127,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb059,keyboard,SUMMARY REPORT SHEET,128,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb060,keyboard,SUMMARY REPORT SHEET,129,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb061,keyboard,SUMMARY REPORT SHEET,130,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb062,keyboard,SUMMARY REPORT SHEET,131,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb063,keyboard,SUMMARY REPORT SHEET,132,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb064,keyboard,SUMMARY REPORT SHEET,133,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Kb065,keyboard,SUMMARY REPORT SHEET,134,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms001,Mouse,SUMMARY REPORT SHEET,135,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms002,Mouse,SUMMARY REPORT SHEET,136,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms003,Mouse,SUMMARY REPORT SHEET,137,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms004,Mouse,SUMMARY REPORT SHEET,138,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms005,Mouse,SUMMARY REPORT SHEET,139,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms006,Mouse,SUMMARY REPORT SHEET,140,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms007,Mouse,SUMMARY REPORT SHEET,141,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms008,Mouse,SUMMARY REPORT SHEET,142,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms009,Mouse,SUMMARY REPORT SHEET,143,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms010,Mouse,SUMMARY REPORT SHEET,144,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms011,Mouse,SUMMARY REPORT SHEET,145,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms012,Mouse,SUMMARY REPORT SHEET,146,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms013,Mouse,SUMMARY REPORT SHEET,147,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms014,Mouse,SUMMARY REPORT SHEET,148,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms015,Mouse,SUMMARY REPORT SHEET,149,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms016,Mouse,SUMMARY REPORT SHEET,150,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms017,Mouse,SUMMARY REPORT SHEET,151,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms018,Mouse,SUMMARY REPORT SHEET,152,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms019,Mouse,SUMMARY REPORT SHEET,153,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms020,Mouse,SUMMARY REPORT SHEET,154,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms021,Mouse,SUMMARY REPORT SHEET,155,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms022,Mouse,SUMMARY REPORT SHEET,156,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms023,Mouse,SUMMARY REPORT SHEET,157,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms024,Mouse,SUMMARY REPORT SHEET,158,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms025,Mouse,SUMMARY REPORT SHEET,159,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms026,Mouse,SUMMARY REPORT SHEET,160,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms027,Mouse,SUMMARY REPORT SHEET,161,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms028,Mouse,SUMMARY REPORT SHEET,162,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms029,Mouse,SUMMARY REPORT SHEET,163,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms030,Mouse,SUMMARY REPORT SHEET,164,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms031,Mouse,SUMMARY REPORT SHEET,165,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms032,Mouse,SUMMARY REPORT SHEET,166,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms033,Mouse,SUMMARY REPORT SHEET,167,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms034,Mouse,SUMMARY REPORT SHEET,168,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms035,Mouse,SUMMARY REPORT SHEET,169,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms036,Mouse,SUMMARY REPORT SHEET,170,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms037,Mouse,SUMMARY REPORT SHEET,171,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms038,Mouse,SUMMARY REPORT SHEET,172,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms039,Mouse,SUMMARY REPORT SHEET,173,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms040,Mouse,SUMMARY REPORT SHEET,174,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms041,Mouse,SUMMARY REPORT SHEET,175,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms042,Mouse,SUMMARY REPORT SHEET,176,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms043,Mouse,SUMMARY REPORT SHEET,177,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms044,Mouse,SUMMARY REPORT SHEET,178,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms045,Mouse,SUMMARY REPORT SHEET,179,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms046,Mouse,SUMMARY REPORT SHEET,180,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms047,Mouse,SUMMARY REPORT SHEET,181,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms048,Mouse,SUMMARY REPORT SHEET,182,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms049,Mouse,SUMMARY REPORT SHEET,183,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms050,Mouse,SUMMARY REPORT SHEET,184,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms051,Mouse,SUMMARY REPORT SHEET,185,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms052,Mouse,SUMMARY REPORT SHEET,186,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms053,Mouse,SUMMARY REPORT SHEET,187,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/Ms054,Mouse,SUMMARY REPORT SHEET,188,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0003,Mouse,SUMMARY REPORT SHEET,189,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0004,Luminous Inverter,SUMMARY REPORT SHEET,191,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0005,Luminous Inverter,SUMMARY REPORT SHEET,192,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0006,Gpower Inverter,SUMMARY REPORT SHEET,193,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0007,Charge Contoller,SUMMARY REPORT SHEET,194,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0008,Charge Contoller,SUMMARY REPORT SHEET,195,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0009,Charge Contoller,SUMMARY REPORT SHEET,196,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0010,Charge Contoller,SUMMARY REPORT SHEET,197,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0011,Charge Contoller,SUMMARY REPORT SHEET,198,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0012,Inverter Battery,SUMMARY REPORT SHEET,199,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0013,Solar Panels,SUMMARY REPORT SHEET,247,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0014,Inverter,SUMMARY REPORT SHEET,248,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0015,Charge Controller,SUMMARY REPORT SHEET,249,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0016,Inverter Battery,SUMMARY REPORT SHEET,250,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0017,Solar Panels,SUMMARY REPORT SHEET,256,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0018,Inverter,SUMMARY REPORT SHEET,257,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0019,Charge Controller,SUMMARY REPORT SHEET,258,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0020,Inverter Battery,SUMMARY REPORT SHEET,259,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0021,Solar Panels,SUMMARY REPORT SHEET,267,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0022,Inverter,SUMMARY REPORT SHEET,268,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0023,Charge Controller,SUMMARY REPORT SHEET,269,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0024,Inverter Battery,SUMMARY REPORT SHEET,270,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0025,Solar Panels,SUMMARY REPORT SHEET,274,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0026,Inverter,SUMMARY REPORT SHEET,275,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0027,Charge Controller,SUMMARY REPORT SHEET,276,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0028,Inverter Battery,SUMMARY REPORT SHEET,277,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0029,Solar Panels,SUMMARY REPORT SHEET,281,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0030,Inverter,SUMMARY REPORT SHEET,282,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0031,Charge Controller,SUMMARY REPORT SHEET,283,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0032,Inverter Battery,SUMMARY REPORT SHEET,284,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0033,Solar Panels,SUMMARY REPORT SHEET,288,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0034,Inverter,SUMMARY REPORT SHEET,289,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0035,Charge Controller,SUMMARY REPORT SHEET,290,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0036,Inverter Battery,SUMMARY REPORT SHEET,291,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0037,Solar Panels,SUMMARY REPORT SHEET,295,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0038,Inverter,SUMMARY REPORT SHEET,296,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0039,Charge Controller,SUMMARY REPORT SHEET,297,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0040,Inverter Battery,SUMMARY REPORT SHEET,298,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0041,Solar Panels,SUMMARY REPORT SHEET,302,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0042,Inverter,SUMMARY REPORT SHEET,303,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0043,Inverter Battery,SUMMARY REPORT SHEET,304,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0044,Inverter,SUMMARY REPORT SHEET,308,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0045,Inverter Battery,SUMMARY REPORT SHEET,309,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0046,Inverter,SUMMARY REPORT SHEET,313,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0047,Inverter Battery,SUMMARY REPORT SHEET,314,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0048,Solar Panels,SUMMARY REPORT SHEET,318,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0049,Garki Core Router.,SUMMARY REPORT SHEET,319,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0050,Fastnet Router,SUMMARY REPORT SHEET,320,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0051,Garki Access Router,SUMMARY REPORT SHEET,321,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0052,Agg. Switch.,SUMMARY REPORT SHEET,322,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0053,Cloud Core Router,SUMMARY REPORT SHEET,323,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0054,GPON 1,SUMMARY REPORT SHEET,324,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0055,GPON 2,SUMMARY REPORT SHEET,325,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0056,GPON 3,SUMMARY REPORT SHEET,326,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0057,GARKI OLT DEVICE,SUMMARY REPORT SHEET,327,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0058,Patch panel 1,SUMMARY REPORT SHEET,328,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0059,Patch panel 2,SUMMARY REPORT SHEET,329,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0060,Patch panel 3,SUMMARY REPORT SHEET,330,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0061,Patch panel 4,SUMMARY REPORT SHEET,331,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0062,Patch panel 5,SUMMARY REPORT SHEET,332,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0063,Server 1,SUMMARY REPORT SHEET,333,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0064,Server 2,SUMMARY REPORT SHEET,334,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0065,UTM mACRO 250,SUMMARY REPORT SHEET,335,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0066,Monitor.,SUMMARY REPORT SHEET,336,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0067,Network Router,SUMMARY REPORT SHEET,337,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0068,Network Router,SUMMARY REPORT SHEET,338,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0069,Network Router,SUMMARY REPORT SHEET,339,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0070,Cloud Core Switch,SUMMARY REPORT SHEET,340,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0071,OLT Device,SUMMARY REPORT SHEET,341,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0072,Fibre Patch Panel,SUMMARY REPORT SHEET,342,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0073,GPON,SUMMARY REPORT SHEET,346,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0074,Cloud Core Router,SUMMARY REPORT SHEET,350,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0075,Cloud Core Switch,SUMMARY REPORT SHEET,351,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0076,OLT Device,SUMMARY REPORT SHEET,352,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0077,Fibre Patch Panel,SUMMARY REPORT SHEET,353,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0078,GPON,SUMMARY REPORT SHEET,356,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0079,Cloud Core Router,SUMMARY REPORT SHEET,360,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0080,Cloud Core Switch,SUMMARY REPORT SHEET,361,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0081,Fibre patch Panel,SUMMARY REPORT SHEET,362,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0082,Cloud Core Router,SUMMARY REPORT SHEET,363,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0083,Cloud Core Switch,SUMMARY REPORT SHEET,364,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0084,Fibre Patch Panel,SUMMARY REPORT SHEET,365,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0085,OLT Device,SUMMARY REPORT SHEET,367,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0086,Cloud Core Router,SUMMARY REPORT SHEET,368,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0087,Cloud Core Switch,SUMMARY REPORT SHEET,369,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0088,Cloud Core Switch,SUMMARY REPORT SHEET,370,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0089,Cloud Core Router,SUMMARY REPORT SHEET,371,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0090,Fibre Patch Panel,SUMMARY REPORT SHEET,372,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0091,Cloud Core Switch,SUMMARY REPORT SHEET,373,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0092,Cloud Core Router,SUMMARY REPORT SHEET,374,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0093,Fibre Patch Panel,SUMMARY REPORT SHEET,375,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0094,Cloud Core Switch,SUMMARY REPORT SHEET,376,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0095,Cloud Router Switch,SUMMARY REPORT SHEET,377,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0096,9U Rack,SUMMARY REPORT SHEET,378,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0097,Multi-Power Tubula Battery,SUMMARY REPORT SHEET,379,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0098,Intex Inverter,SUMMARY REPORT SHEET,383,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0099,4Way Battery Rack,SUMMARY REPORT SHEET,384,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0100,Standing Fan,SUMMARY REPORT SHEET,385,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0101,Petrol Generator,SUMMARY REPORT SHEET,386,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0102,Extension box,SUMMARY REPORT SHEET,387,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0103,EagleSwitch24 250w,SUMMARY REPORT SHEET,388,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0104,Cloud Core Router,SUMMARY REPORT SHEET,389,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0105,Green Capital Tubular Battery,SUMMARY REPORT SHEET,390,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0106,Index Inverter,SUMMARY REPORT SHEET,394,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0107,4Way Battery Rack,SUMMARY REPORT SHEET,395,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0108,Extension box,SUMMARY REPORT SHEET,396,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0109,Tp-link 3poll Router,SUMMARY REPORT SHEET,397,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0110,Cloud Core Router,SUMMARY REPORT SHEET,398,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0111,Cloud Router Switch,SUMMARY REPORT SHEET,399,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0112,4 Gen2 Ap active,SUMMARY REPORT SHEET,400,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0113,2 Air fiber,SUMMARY REPORT SHEET,401,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0114,Rugged M5 Antenna non active,SUMMARY REPORT SHEET,402,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0115,4lite Ap,SUMMARY REPORT SHEET,403,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0116,Aviation light,SUMMARY REPORT SHEET,404,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0117,Mast,SUMMARY REPORT SHEET,405,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0118,3 Gurd Wire,SUMMARY REPORT SHEET,406,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0119,Fiber Patch Panel,SUMMARY REPORT SHEET,407,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0120,POE Adapter,SUMMARY REPORT SHEET,408,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0121,Solar Panel,SUMMARY REPORT SHEET,409,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0122,Growatt Inverter,SUMMARY REPORT SHEET,417,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0123,Petrol Generator,SUMMARY REPORT SHEET,418,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0124,Green Capital Tubular Battery,SUMMARY REPORT SHEET,419,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0125,Standing Fan,SUMMARY REPORT SHEET,423,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0126,Full Length of installation pipe,SUMMARY REPORT SHEET,425,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0127,Half Length of Installation pipe,SUMMARY REPORT SHEET,426,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0128,Air Conditioner,SUMMARY REPORT SHEET,427,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0129,Chairs,SUMMARY REPORT SHEET,428,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0130,Tables,SUMMARY REPORT SHEET,429,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0131,Computer System,SUMMARY REPORT SHEET,430,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0132,Key Board,SUMMARY REPORT SHEET,431,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0133,Mouse,SUMMARY REPORT SHEET,432,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0134,Extension box,SUMMARY REPORT SHEET,433,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0135,Drilling Machine,SUMMARY REPORT SHEET,434,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0136,PDU Extension,SUMMARY REPORT SHEET,435,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0137,Murping Bucket,SUMMARY REPORT SHEET,436,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0138,Bathing Bucket,SUMMARY REPORT SHEET,437,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0139,Air fiber,SUMMARY REPORT SHEET,438,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0140,Lite AP,SUMMARY REPORT SHEET,439,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0141,Gen2 AP,SUMMARY REPORT SHEET,440,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0142,Surge protector,SUMMARY REPORT SHEET,441,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0143,cloud Router Switch,SUMMARY REPORT SHEET,442,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0144,Green Capital Tubular Battery,SUMMARY REPORT SHEET,443,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0145,Growatt Inverter,SUMMARY REPORT SHEET,447,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0146,Mppt Charge Controller,SUMMARY REPORT SHEET,448,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0147,Solar panel,SUMMARY REPORT SHEET,449,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0148,9U Rack,SUMMARY REPORT SHEET,457,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0149,4way Battery Rack,SUMMARY REPORT SHEET,458,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0150,Mast,SUMMARY REPORT SHEET,459,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0151,Aviation Light,SUMMARY REPORT SHEET,460,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0152,Petrol Generator,SUMMARY REPORT SHEET,461,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0153,1/32 splitter,SUMMARY REPORT SHEET,462,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0154,1/16 splitter,SUMMARY REPORT SHEET,463,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0155,Huawei SmartAX MA5608T,SUMMARY REPORT SHEET,464,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0156,Ubiquiti Ufiber GPON,SUMMARY REPORT SHEET,465,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0157,Patch panel,SUMMARY REPORT SHEET,466,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0158,Mikrotik cloud core router,SUMMARY REPORT SHEET,467,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0159,Spoild OTDR,SUMMARY REPORT SHEET,468,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0160,ONU,SUMMARY REPORT SHEET,469,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0161,CloudRouter Switch Mikrotik,SUMMARY REPORT SHEET,470,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0162,9U Rack,SUMMARY REPORT SHEET,471,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0163,Huawei Router,SUMMARY REPORT SHEET,472,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0164,Active Lite Beam Gen2,SUMMARY REPORT SHEET,473,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0165,Non Active Lite Beam Gen2,SUMMARY REPORT SHEET,474,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0166,Active Lite AP,SUMMARY REPORT SHEET,475,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0167,Airfiber,SUMMARY REPORT SHEET,476,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0168,POE Adaoter,SUMMARY REPORT SHEET,477,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0169,Active OTDR,SUMMARY REPORT SHEET,478,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0170,Active Cliver,SUMMARY REPORT SHEET,479,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0171,Non Active Cliver,SUMMARY REPORT SHEET,480,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0172,Bad Retrieved Fiber Cable,SUMMARY REPORT SHEET,481,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0173,Bad Retrieved Cat 6 Cable,SUMMARY REPORT SHEET,482,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0174,Closure,SUMMARY REPORT SHEET,483,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0175,Water Save Bucket,SUMMARY REPORT SHEET,484,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0176,Muping  Bucket,SUMMARY REPORT SHEET,485,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0177,Water Dispenser Bottle,SUMMARY REPORT SHEET,486,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0178,Tall Tubular Battery,SUMMARY REPORT SHEET,487,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0179,Solar Panel,SUMMARY REPORT SHEET,496,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0180,petrol Generator,SUMMARY REPORT SHEET,504,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0181,4WAY Rack,SUMMARY REPORT SHEET,505,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0182,Solar Charge Controller,SUMMARY REPORT SHEET,507,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0183,Inverter,SUMMARY REPORT SHEET,508,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0184,Cluster Table,SUMMARY REPORT SHEET,509,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0185,Extension,SUMMARY REPORT SHEET,510,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0186,Tall Standing Curburt,SUMMARY REPORT SHEET,512,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF001,Standing Fan.,SUMMARY REPORT SHEET,513,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF002,Standing Fan.,SUMMARY REPORT SHEET,514,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF003,Standing Fan.,SUMMARY REPORT SHEET,515,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF004,Standing Fan.,SUMMARY REPORT SHEET,516,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF005,Standing Fan.,SUMMARY REPORT SHEET,517,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF006,Standing Fan.,SUMMARY REPORT SHEET,518,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF007,Standing Fan.,SUMMARY REPORT SHEET,519,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF008,Standing Fan.,SUMMARY REPORT SHEET,520,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF009,Standing Fan.,SUMMARY REPORT SHEET,521,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF010,Standing Fan.,SUMMARY REPORT SHEET,522,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF011,Standing Fan.,SUMMARY REPORT SHEET,523,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF012,Standing Fan.,SUMMARY REPORT SHEET,524,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF013,Standing Fan.,SUMMARY REPORT SHEET,525,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF014,Standing Fan.,SUMMARY REPORT SHEET,526,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF015,Standing Fan.,SUMMARY REPORT SHEET,527,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF016,Standing Fan.,SUMMARY REPORT SHEET,528,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF017,Standing Fan.,SUMMARY REPORT SHEET,529,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF018,Standing Fan.,SUMMARY REPORT SHEET,530,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF019,Standing Fan.,SUMMARY REPORT SHEET,531,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF020,Standing Fan.,SUMMARY REPORT SHEET,532,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF021,Standing Fan.,SUMMARY REPORT SHEET,533,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF022,Standing Fan.,SUMMARY REPORT SHEET,534,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF023,Standing Fan.,SUMMARY REPORT SHEET,535,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF024,Standing Fan.,SUMMARY REPORT SHEET,536,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF025,Standing Fan.,SUMMARY REPORT SHEET,537,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF026,Standing Fan.,SUMMARY REPORT SHEET,538,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF027,Standing Fan.,SUMMARY REPORT SHEET,539,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/OE/SF028,Standing Fan.,SUMMARY REPORT SHEET,540,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0187,Standing Fan.,SUMMARY REPORT SHEET,541,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0188,Standing Fan.,SUMMARY REPORT SHEET,544,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0189,Standing Fan.,SUMMARY REPORT SHEET,548,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0190,Standing Fan.,SUMMARY REPORT SHEET,549,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0191,Standing Fan.,SUMMARY REPORT SHEET,550,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0192,Standing Fan.,SUMMARY REPORT SHEET,551,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0193,Standing Fan.,SUMMARY REPORT SHEET,552,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC001,Air Conditioner,SUMMARY REPORT SHEET,553,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC002,Air Conditioner,SUMMARY REPORT SHEET,554,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC003,Air Conditioner,SUMMARY REPORT SHEET,555,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC004,Air Conditioner,SUMMARY REPORT SHEET,556,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC005,Air Conditioner,SUMMARY REPORT SHEET,557,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC006,Air Conditioner,SUMMARY REPORT SHEET,558,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC007,Air Conditioner,SUMMARY REPORT SHEET,559,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC008,Air Conditioner,SUMMARY REPORT SHEET,560,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC009,Air Conditioner,SUMMARY REPORT SHEET,561,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC010,Air Conditioner,SUMMARY REPORT SHEET,562,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC011,Air Conditioner,SUMMARY REPORT SHEET,563,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC012,Air Conditioner,SUMMARY REPORT SHEET,564,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC013,Air Conditioner,SUMMARY REPORT SHEET,565,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC014,Air Conditioner,SUMMARY REPORT SHEET,566,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC015,Air Conditioner,SUMMARY REPORT SHEET,567,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC016,Air Conditioner,SUMMARY REPORT SHEET,568,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+Dotmac/PAM/AC017,Air Conditioner,SUMMARY REPORT SHEET,569,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0194,Air Conditioner,SUMMARY REPORT SHEET,570,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0195,Air Conditioner,SUMMARY REPORT SHEET,572,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0196,Air Conditioner,SUMMARY REPORT SHEET,573,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0197,Dispenser,SUMMARY REPORT SHEET,574,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0198,Dispenser,SUMMARY REPORT SHEET,575,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0199,Dispenser,SUMMARY REPORT SHEET,576,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0200,Dispenser,SUMMARY REPORT SHEET,577,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0201,Microwave,SUMMARY REPORT SHEET,578,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0202,Microwave,SUMMARY REPORT SHEET,579,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0203,Refrigerator,SUMMARY REPORT SHEET,580,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0204,Refrigerator,SUMMARY REPORT SHEET,581,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0205,Refrigerator,SUMMARY REPORT SHEET,582,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0206,Refrigerator,SUMMARY REPORT SHEET,583,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0207,Dispenser,SUMMARY REPORT SHEET,584,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0208,Dispenser,SUMMARY REPORT SHEET,585,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0209,Dispenser,SUMMARY REPORT SHEET,586,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0210,Printer,SUMMARY REPORT SHEET,587,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0211,Printer,SUMMARY REPORT SHEET,588,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0212,Printer,SUMMARY REPORT SHEET,589,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0213,Printer,SUMMARY REPORT SHEET,590,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0214,Printer,SUMMARY REPORT SHEET,591,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0215,Scanner,SUMMARY REPORT SHEET,592,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0216,Scanner,SUMMARY REPORT SHEET,593,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0217,Photocopier,SUMMARY REPORT SHEET,594,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0218,Binding Machine,SUMMARY REPORT SHEET,595,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0219,Television,SUMMARY REPORT SHEET,598,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0220,Television,SUMMARY REPORT SHEET,599,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0221,Bill Counter,SUMMARY REPORT SHEET,600,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0222,Paper Shredder,SUMMARY REPORT SHEET,601,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0223,Paper Shredder,SUMMARY REPORT SHEET,602,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0224,Iron Safe,SUMMARY REPORT SHEET,603,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0225,iron Safe,SUMMARY REPORT SHEET,604,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0226,Fire Extinguishers,SUMMARY REPORT SHEET,605,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0227,Fire Extinguishers,SUMMARY REPORT SHEET,606,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0228,Fire Extinguishers,SUMMARY REPORT SHEET,607,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0229,Fire Extinguishers,SUMMARY REPORT SHEET,608,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0230,Fire Extinguishers,SUMMARY REPORT SHEET,609,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0231,Fire Extinguishers,SUMMARY REPORT SHEET,610,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0232,Fire Extinguishers,SUMMARY REPORT SHEET,611,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0233,Fire Extinguishers,SUMMARY REPORT SHEET,612,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0234,Fire Extinguishers,SUMMARY REPORT SHEET,613,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0235,Fire Extinguishers,SUMMARY REPORT SHEET,614,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0236,Fire Extinguishers,SUMMARY REPORT SHEET,615,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0237,Fire Extinguishers,SUMMARY REPORT SHEET,616,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0238,Fire Extinguishers,SUMMARY REPORT SHEET,617,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0239,Fire Extinguishers,SUMMARY REPORT SHEET,618,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0240,Ladder,SUMMARY REPORT SHEET,619,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0241,Battery Charger,SUMMARY REPORT SHEET,621,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0242,Pumping Machine,SUMMARY REPORT SHEET,622,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0243,Generator,SUMMARY REPORT SHEET,623,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0244,Telecom Mast.,SUMMARY REPORT SHEET,624,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0245,Telecom Mast.,SUMMARY REPORT SHEET,625,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0246,Telecom Mast.,SUMMARY REPORT SHEET,626,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0247,Telecom Mast.,SUMMARY REPORT SHEET,627,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0248,Telecom Mast.,SUMMARY REPORT SHEET,628,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0249,Telecom Mast.,SUMMARY REPORT SHEET,629,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0250,Telecom Mast.,SUMMARY REPORT SHEET,630,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0251,Telecom Mast.,SUMMARY REPORT SHEET,631,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0252,2 in 1 Visitors Iron Chair,SUMMARY REPORT SHEET,632,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0253,3 in 1 Visitors Iron Chair,SUMMARY REPORT SHEET,633,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0254,Hopshistory Chair,SUMMARY REPORT SHEET,635,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0255,3 in 1 Hopshistory Chair,SUMMARY REPORT SHEET,639,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0256,Chair,SUMMARY REPORT SHEET,641,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0257,Chair,SUMMARY REPORT SHEET,733,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0258,2 in 1 Visitors Iron Chair,SUMMARY REPORT SHEET,740,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0259,3 in 1 Visitors Iron Chair,SUMMARY REPORT SHEET,741,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0260,Chair,SUMMARY REPORT SHEET,742,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0261,Chair,SUMMARY REPORT SHEET,747,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0262,Chair,SUMMARY REPORT SHEET,748,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0263,4 in 1 Cluster Workstation.,SUMMARY REPORT SHEET,750,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0264,Centre Glass Table,SUMMARY REPORT SHEET,763,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0265,Reception Desk/Table,SUMMARY REPORT SHEET,764,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0266,Conference Table,SUMMARY REPORT SHEET,765,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0267,Executive Table,SUMMARY REPORT SHEET,766,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0268,Tea Table,SUMMARY REPORT SHEET,769,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0269,Table,SUMMARY REPORT SHEET,770,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0270,2 in 1 Desk,SUMMARY REPORT SHEET,775,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0271,6 in 1 Work Desk,SUMMARY REPORT SHEET,776,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0272,7 in 1 Work Desk,SUMMARY REPORT SHEET,778,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0273,Tables,SUMMARY REPORT SHEET,780,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0274,4 in 1 Cluster Work Station,SUMMARY REPORT SHEET,783,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0275,Table,SUMMARY REPORT SHEET,784,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0276,Table,SUMMARY REPORT SHEET,788,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0277,Cabinet Cupboard  (Small),SUMMARY REPORT SHEET,789,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0278,Cabinet Cupboard  (Big),SUMMARY REPORT SHEET,790,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0279,Book Shelf,SUMMARY REPORT SHEET,802,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0280,File Cabinet Cupboard,SUMMARY REPORT SHEET,804,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0281,Cabinet Cupboard (Small),SUMMARY REPORT SHEET,809,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0282,Office Steel Cabinet,SUMMARY REPORT SHEET,810,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0283,42U Server Rack.,SUMMARY REPORT SHEET,811,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0284,Battery Rack,SUMMARY REPORT SHEET,812,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0285,Battery Rack,SUMMARY REPORT SHEET,816,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0286,22U Rack,SUMMARY REPORT SHEET,817,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0287,32U Rack,SUMMARY REPORT SHEET,818,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0288,22U Rack,SUMMARY REPORT SHEET,819,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0289,Battery Rack,SUMMARY REPORT SHEET,820,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0290,Battery Rack,SUMMARY REPORT SHEET,822,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0291,32uU Rack,SUMMARY REPORT SHEET,823,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0292,Battery Rack,SUMMARY REPORT SHEET,824,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0293,52u Rack,SUMMARY REPORT SHEET,825,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0294,Battery Rack,SUMMARY REPORT SHEET,826,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0295,52U-Rack,SUMMARY REPORT SHEET,827,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0296,Battery Rack,SUMMARY REPORT SHEET,828,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0297,32U Rack,SUMMARY REPORT SHEET,829,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0298,Battery Rack,SUMMARY REPORT SHEET,830,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0299,32U-Rack,SUMMARY REPORT SHEET,831,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0300,Battery Rack,SUMMARY REPORT SHEET,832,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0301,32U Rack,SUMMARY REPORT SHEET,833,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0302,Battery Rack,SUMMARY REPORT SHEET,834,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0303,32U Rack,SUMMARY REPORT SHEET,835,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0304,Battery Rack,SUMMARY REPORT SHEET,836,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0305,22U Rack,SUMMARY REPORT SHEET,837,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0306,Window  Blinds,SUMMARY REPORT SHEET,838,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0307,Window  Blinds,SUMMARY REPORT SHEET,873,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0308,Window  Blinds,SUMMARY REPORT SHEET,874,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0309,AVR (Automatic Voltage Regulator),SUMMARY REPORT SHEET,876,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0310,Extensions,SUMMARY REPORT SHEET,877,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0311,Knife Switch,SUMMARY REPORT SHEET,882,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0312,Generator,SUMMARY REPORT SHEET,884,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0313,AVR (Automatic Voltage Regulator),SUMMARY REPORT SHEET,885,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0314,Extensions,SUMMARY REPORT SHEET,886,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0315,Knife Switch,SUMMARY REPORT SHEET,892,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0316,DC Circuit Breaker,SUMMARY REPORT SHEET,894,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0317,Generator,SUMMARY REPORT SHEET,895,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0318,Extensions,SUMMARY REPORT SHEET,896,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0319,Knife Switch,SUMMARY REPORT SHEET,899,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0320,DC Circuit Breaker,SUMMARY REPORT SHEET,900,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0321,Generator,SUMMARY REPORT SHEET,901,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0322,AVR (Automatic Voltage Regulator),SUMMARY REPORT SHEET,902,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0323,Extensions,SUMMARY REPORT SHEET,903,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0324,Changeover Switch,SUMMARY REPORT SHEET,905,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0325,Generator,SUMMARY REPORT SHEET,906,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0326,AVR (Automatic Voltage Regulator),SUMMARY REPORT SHEET,907,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0327,Knife Switch,SUMMARY REPORT SHEET,908,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0328,DC Circuit Breaker,SUMMARY REPORT SHEET,910,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0329,Extension,SUMMARY REPORT SHEET,911,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0330,Generator,SUMMARY REPORT SHEET,914,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0331,AVR (Automatic Voltage Regulator),SUMMARY REPORT SHEET,915,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0332,Extensions,SUMMARY REPORT SHEET,916,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0333,Knife Switch,SUMMARY REPORT SHEET,918,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0334,DC Circuit Breaker,SUMMARY REPORT SHEET,919,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0335,AVR (Automatic Voltage Regulator),SUMMARY REPORT SHEET,920,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0336,Extensions,SUMMARY REPORT SHEET,921,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0337,Knife Switch,SUMMARY REPORT SHEET,923,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0338,Generator,SUMMARY REPORT SHEET,925,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0339,AVR (Automatic VOltage Regulator),SUMMARY REPORT SHEET,926,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0340,Circuit Breaker (MCB),SUMMARY REPORT SHEET,927,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0341,Extensions,SUMMARY REPORT SHEET,928,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0342,Knife Switch,SUMMARY REPORT SHEET,930,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0343,Generator,SUMMARY REPORT SHEET,932,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0344,AVR (Automatic VOltage Regulator),SUMMARY REPORT SHEET,933,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0345,Circuit Breaker (DC MCB),SUMMARY REPORT SHEET,934,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0346,Extensions,SUMMARY REPORT SHEET,935,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0347,Knife Switch,SUMMARY REPORT SHEET,937,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+OPEN-FA-2024-0348,Generator,SUMMARY REPORT SHEET,939,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+KUJ653BF,TOYOTA COROLLA,SUMMARY REPORT SHEET,940,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+YAB214AW,TOYOTA COROLLA,SUMMARY REPORT SHEET,941,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+KUJ259BC,TOYOTA COROLLA,SUMMARY REPORT SHEET,942,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+BWR623CP,TOYOTA CAMRY,SUMMARY REPORT SHEET,943,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+BWR621CP,TOYOTA CAMRY,SUMMARY REPORT SHEET,944,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+KUJ684BV,PEUGEOT 407,SUMMARY REPORT SHEET,945,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+GWA791JL,PEUGEOT 407,SUMMARY REPORT SHEET,946,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+KUJ351AQ,PEUGEOT 407,SUMMARY REPORT SHEET,947,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+YAB648PK,PEUGEOT 406,SUMMARY REPORT SHEET,948,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+YAB254BH,PEUGEOT 406,SUMMARY REPORT SHEET,949,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+ABJ242HL,PEUGEOT 406,SUMMARY REPORT SHEET,950,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+ABC747AE,PEUGEOT 406,SUMMARY REPORT SHEET,951,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+RBC433AM,PEUGEOT 407,SUMMARY REPORT SHEET,952,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+ABJ695HM,PEUGEOT 406,SUMMARY REPORT SHEET,953,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+ABJ456BK,PEUGEOT 406,SUMMARY REPORT SHEET,954,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+RBC03ET,PEUGEOT 406,SUMMARY REPORT SHEET,955,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+GWA560AG,Peugeot 406,SUMMARY REPORT SHEET,956,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+KWL756GX,PEUGEOT 406,SUMMARY REPORT SHEET,957,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+ABJ241HL,PEUGEOT 406,SUMMARY REPORT SHEET,958,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+YAB435EW,PEUGEOT 406,SUMMARY REPORT SHEET,959,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+SMK869HP,TOYOTA CAMRY,SUMMARY REPORT SHEET,960,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+BWR760CP,TOYOTA CAMRY,SUMMARY REPORT SHEET,961,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months
+BWR62CP,TOYOTA CAMRY,SUMMARY REPORT SHEET,962,acquisition_date; acquisition_cost; accumulated_depreciation; net_book_value; useful_life_months; remaining_life_months

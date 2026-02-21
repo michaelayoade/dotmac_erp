@@ -1,21 +1,22 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}My Tax & Bank Information{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Tax & Bank Info</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Tax & Bank Info</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
     <div>
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tax & Bank Information</h1>
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tax & Bank Information</h2>
         <p class="text-sm text-slate-500 dark:text-slate-400">Update your statutory and payment information for payroll processing.</p>
     </div>
 
@@ -92,23 +93,11 @@
                         {{ req.change_type.value | replace('_', ' ') | title }}
                     </p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">
-                        {{ req.created_at.strftime('%b %d, %Y at %H:%M') if req.created_at else 'Unknown' }}
+                        {{ req.created_at | format_datetime if req.created_at else 'Unknown' }}
                     </p>
                 </div>
                 <div>
-                    {% if req.status.value == 'PENDING' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
-                        Pending Review
-                    </span>
-                    {% elif req.status.value == 'APPROVED' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
-                        Approved
-                    </span>
-                    {% elif req.status.value == 'REJECTED' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300">
-                        Rejected
-                    </span>
-                    {% endif %}
+                    {{ status_badge(req.status.value, 'sm') }}
                 </div>
             </div>
             {% endfor %}
@@ -445,9 +434,7 @@
         <!-- Submit Button -->
         <div class="flex justify-end">
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "h-4 w-4 mr-1") }}
                 Submit for Approval
             </button>
         </div>

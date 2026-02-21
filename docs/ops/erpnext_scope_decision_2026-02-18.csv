@@ -1,0 +1,374 @@
+module,doctype,insert_statements,period_token_hits_2025_01,day_token_hits_2025_01_06,bucket,priority_score,sequence_hint,reason
+Finance-AR,Sales Taxes and Charges,12,4376,109,migrate-now,5263,1,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Payment Schedule,10,5259,134,migrate-now,6211,2,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Advance Taxes and Charges,1,0,0,migrate-now,505,3,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Sales Invoice Advance,2,1704,63,migrate-now,2403,4,high business impact from sample period/day and finance-support-payroll scope
+Finance-AP,Purchase Invoice Advance,1,19,1,migrate-now,527,5,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Quotation,2,427,26,migrate-now,1015,6,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Quotation Item,1,193,16,migrate-now,746,7,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Sales Order,2,140,11,migrate-now,683,8,high business impact from sample period/day and finance-support-payroll scope
+Finance-AR,Sales Order Item,1,141,11,migrate-now,679,9,high business impact from sample period/day and finance-support-payroll scope
+Banking/Treasury,Bank Transaction,18,9429,235,migrate-now,10724,10,high business impact from sample period/day and finance-support-payroll scope
+Finance-GL,Bank Transaction Payments,10,6888,50,migrate-now,7588,11,high business impact from sample period/day and finance-support-payroll scope
+Support,HD Ticket Activity,10,9988,398,migrate-now,11732,12,high business impact from sample period/day and finance-support-payroll scope
+Support,HD Ticket Comment,1,0,0,migrate-now,505,13,high business impact from sample period/day and finance-support-payroll scope
+Support,Issue Type,1,0,0,migrate-now,505,14,high business impact from sample period/day and finance-support-payroll scope
+Support,Issue Priority,1,0,0,migrate-now,505,15,high business impact from sample period/day and finance-support-payroll scope
+Support,HD Ticket Type,1,12,0,migrate-now,517,16,high business impact from sample period/day and finance-support-payroll scope
+Support,HD Ticket Status,1,0,0,migrate-now,505,17,high business impact from sample period/day and finance-support-payroll scope
+Support,HD Ticket Priority,1,2,0,migrate-now,507,18,high business impact from sample period/day and finance-support-payroll scope
+HR Payroll,Salary Slip,3,808,0,migrate-now,1323,19,high business impact from sample period/day and finance-support-payroll scope
+HR Payroll,Salary Detail,3,1912,0,migrate-now,2427,20,high business impact from sample period/day and finance-support-payroll scope
+HR Payroll,Salary Structure Assignment,1,60,2,migrate-now,571,21,high business impact from sample period/day and finance-support-payroll scope
+HR Core,Employee Checkin,1,324,30,migrate-now,919,22,high business impact from sample period/day and finance-support-payroll scope
+Documents/Files,File,24,8418,236,migrate-now,9746,23,high business impact from sample period/day and finance-support-payroll scope
+Documents/Files,Communication Link,40,19044,1070,migrate-now,22954,24,high business impact from sample period/day and finance-support-payroll scope
+Finance-GL,GL Entry,110,73695,1956,later,80113,999,archive/reconciliation-only to avoid duplicate-ledger effects
+Finance-GL,Payment Ledger Entry,35,31979,857,later,34725,999,archive/reconciliation-only to avoid duplicate-ledger effects
+System/Logs,ToDo,14,12672,504,later,14254,999,defer until core financial/support/payroll closure
+Inventory,Stock Entry Detail,5,7356,56,later,7549,999,defer until core financial/support/payroll closure
+Other,The Attendance,7,5563,263,later,6387,999,defer until core financial/support/payroll closure
+Inventory,Stock Entry,2,1777,33,later,1886,999,defer until core financial/support/payroll closure
+Other,Dynamic Link,3,977,26,later,1070,999,defer until core financial/support/payroll closure
+HR Core,Leave Ledger Entry,1,920,2,later,931,999,defer until core financial/support/payroll closure
+Other,Lead,1,646,9,later,678,999,defer until core financial/support/payroll closure
+Projects,Task Depends On,1,620,5,later,640,999,defer until core financial/support/payroll closure
+Other,Block Module,2,513,0,later,523,999,defer until core financial/support/payroll closure
+Other,Purchase Taxes and Charges,1,488,0,later,493,999,defer until core financial/support/payroll closure
+Inventory,Serial and Batch Bundle,1,443,0,later,448,999,defer until core financial/support/payroll closure
+Other,Has Role,1,313,33,later,417,999,defer until core financial/support/payroll closure
+Other,Shift Assignment,1,329,7,later,355,999,defer until core financial/support/payroll closure
+Other,Assignment Rule Day,1,335,0,later,340,999,defer until core financial/support/payroll closure
+Other,Property Setter,1,179,23,later,253,999,defer until core financial/support/payroll closure
+Inventory,Serial No,1,232,0,later,237,999,defer until core financial/support/payroll closure
+Inventory,Item Default,1,204,6,later,227,999,defer until core financial/support/payroll closure
+Other,Contact,3,160,17,later,226,999,defer until core financial/support/payroll closure
+Inventory,UOM Conversion Detail,1,198,6,later,221,999,defer until core financial/support/payroll closure
+Other,Contact Phone,1,156,16,later,209,999,defer until core financial/support/payroll closure
+Other,Shift Assignment Schedule,1,204,0,later,209,999,defer until core financial/support/payroll closure
+Inventory,Serial and Batch Entry,1,193,0,later,198,999,defer until core financial/support/payroll closure
+Other,Contact Email,2,134,17,later,195,999,defer until core financial/support/payroll closure
+Other,Address,1,127,10,later,162,999,defer until core financial/support/payroll closure
+Other,Base station Link,1,139,3,later,153,999,defer until core financial/support/payroll closure
+Inventory,Bin,1,131,3,later,145,999,defer until core financial/support/payroll closure
+HR Core,Holiday,1,135,0,later,140,999,defer until core financial/support/payroll closure
+HR Core,Attendance Request,1,90,14,later,137,999,defer until core financial/support/payroll closure
+Other,Cabinets Link,1,125,0,later,130,999,defer until core financial/support/payroll closure
+Other,User,1,85,13,later,129,999,defer until core financial/support/payroll closure
+Banking/Treasury,Bank Statement Import,1,116,0,later,121,999,defer until core financial/support/payroll closure
+Other,Process Subscription,1,93,3,later,107,999,defer until core financial/support/payroll closure
+Other,User Select Document Type,1,102,0,later,107,999,defer until core financial/support/payroll closure
+Finance-AP,Purchase Order Item,1,98,0,later,103,999,defer until core financial/support/payroll closure
+Inventory,Item Price,1,75,6,later,98,999,defer until core financial/support/payroll closure
+Other,Insights Table Link v3,1,90,0,later,95,999,defer until core financial/support/payroll closure
+Other,Shift Schedule Assignment,1,88,0,later,93,999,defer until core financial/support/payroll closure
+Other,Insights Table v3,1,58,0,later,63,999,defer until core financial/support/payroll closure
+Other,Sales Team,1,46,2,later,57,999,defer until core financial/support/payroll closure
+Other,Web Form Field,1,51,0,later,56,999,defer until core financial/support/payroll closure
+Finance-AP,Purchase Order,1,44,0,later,49,999,defer until core financial/support/payroll closure
+Other,Email Group Member,1,24,2,later,35,999,defer until core financial/support/payroll closure
+Other,User Permission,1,10,6,later,33,999,defer until core financial/support/payroll closure
+Other,User Group Member,1,25,0,later,30,999,defer until core financial/support/payroll closure
+Other,List View Settings,1,15,2,later,26,999,defer until core financial/support/payroll closure
+Other,User Document Type,1,21,0,later,26,999,defer until core financial/support/payroll closure
+Other,Staffing Plan Detail,1,20,0,later,25,999,defer until core financial/support/payroll closure
+Other,Server Script,1,18,0,later,23,999,defer until core financial/support/payroll closure
+Other,Role Profile,1,10,2,later,21,999,defer until core financial/support/payroll closure
+CRM,CRM Fields Layout,1,15,0,later,20,999,defer until core financial/support/payroll closure
+Other,Report,1,13,0,later,18,999,defer until core financial/support/payroll closure
+Other,Policy Violations,1,12,0,later,17,999,defer until core financial/support/payroll closure
+Other,Print Format,1,5,2,later,16,999,defer until core financial/support/payroll closure
+Other,Cabinets,1,10,0,later,15,999,defer until core financial/support/payroll closure
+Other,Process Deferred Accounting,1,10,0,later,15,999,defer until core financial/support/payroll closure
+Other,Staffing Plan,1,10,0,later,15,999,defer until core financial/support/payroll closure
+Other,Workflow Action Permitted Role,1,10,0,later,15,999,defer until core financial/support/payroll closure
+Other,Scheduled Job Type,1,9,0,later,14,999,defer until core financial/support/payroll closure
+Other,BTS Maintainance,1,8,0,later,13,999,defer until core financial/support/payroll closure
+Other,Module Profile,1,8,0,later,13,999,defer until core financial/support/payroll closure
+Other,User Type Module,1,8,0,later,13,999,defer until core financial/support/payroll closure
+Other,Workflow Action Master,1,2,2,later,13,999,defer until core financial/support/payroll closure
+Other,HD Service Day,1,7,0,later,12,999,defer until core financial/support/payroll closure
+HR Core,Employee Education,1,6,0,later,11,999,defer until core financial/support/payroll closure
+Other,List Filter,1,6,0,later,11,999,defer until core financial/support/payroll closure
+Inventory,Stock Reconciliation,1,6,0,later,11,999,defer until core financial/support/payroll closure
+CRM,CRM Dropdown Item,1,5,0,later,10,999,defer until core financial/support/payroll closure
+Other,Role,1,5,0,later,10,999,defer until core financial/support/payroll closure
+Other,Assignment Rule User,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Custom HTML Block,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Email Template,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Expected Skill Set,1,4,0,later,9,999,defer until core financial/support/payroll closure
+HR Core,Holiday List,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Interviewer,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Job Opening,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Payment Terms Template,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Payment Terms Template Detail,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Inventory,Stock Reconciliation Item,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Subscription Plan,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Tag,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Tag Link,1,4,0,later,9,999,defer until core financial/support/payroll closure
+Other,Assignment Rule,1,3,0,later,8,999,defer until core financial/support/payroll closure
+CRM,CRM Note,1,3,0,later,8,999,defer until core financial/support/payroll closure
+Other,Letter Head,1,3,0,later,8,999,defer until core financial/support/payroll closure
+Other,Sales Person,1,3,0,later,8,999,defer until core financial/support/payroll closure
+Other,Singles,1,3,0,later,8,999,defer until core financial/support/payroll closure
+Inventory,UOM,1,3,0,later,8,999,defer until core financial/support/payroll closure
+Other,Webhook,1,3,0,later,8,999,defer until core financial/support/payroll closure
+Other,Webhook Header,1,3,0,later,8,999,defer until core financial/support/payroll closure
+HR Core,Branch,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Inventory,Brand,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Email Group,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,HD Article,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,HD Article Category,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Interview Round,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Interview Type,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Number Card,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Offer Term,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Banking/Treasury,Payment Request,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Projects,Project User,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Scheduler Event,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Banking/Treasury,Unreconcile Payment Entries,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,User Group,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Web Form,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Web Form List Column,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Web Page,1,2,0,later,7,999,defer until core financial/support/payroll closure
+Other,Currency,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Finance-GL,Fiscal Year,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,HD Service Holiday List,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,HD Service Level Agreement,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,HD Service Level Priority,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Inventory,Item Tax,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Module Def,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Purchase Taxes and Charges Template,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Report Filter,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Shift Location,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Tax Rule,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Tax Withholding Rate,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,User Type,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Website Route Redirect,1,1,0,later,6,999,defer until core financial/support/payroll closure
+Other,Activity Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Address Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Appraisal Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Appraisal Template Goal,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Asset Activity,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Asset Category Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Asset Movement,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Asset Movement Item,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Auto Email Report,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Banking/Treasury,Bank,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Banking/Treasury,Bank Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Banking/Treasury,Bank Names,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Base Station,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Branches,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Communication Status,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Deal Status,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Form Script,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Industry,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Lead,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Lead Source,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Lead Status,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Lost Reason,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM Organization,1,0,0,later,5,999,defer until core financial/support/payroll closure
+CRM,CRM View Settings,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Campaign,1,0,0,later,5,999,defer until core financial/support/payroll closure
+System/Logs,Changelog Feed,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Color,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Company,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-GL,Cost Center,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Country,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Currency Exchange,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Currency Exchange Settings Details,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Currency Exchange Settings Result,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AR,Customer Group,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Department Approver,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Designation Skill,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Domain,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Email Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Email Domain,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Email Flag Queue,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Email Unsubscribe,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Employee Boarding Activity,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Employee Feedback Criteria,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Employee Feedback Rating,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Employee Onboarding Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Energy Point Rule,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Event management,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Expense Claim Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Finance Book,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-GL,Fiscal Year Company,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Form Tour,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Form Tour Step,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Gender,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Grocery Items,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Grocery Shopping,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,HD Team,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,HD Team Member,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,HD View,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Help Category,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,IMAP Folder,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,IP Address,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,IP Pool,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Incoterm,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Industry Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Chart v3,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Data Source,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Data Source v3,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Notebook,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Query v3,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Team,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Team Member,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Insights Workbook,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Installed Application,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Interview,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Interview Detail,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Item Attribute,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Item Attribute Value,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Item Maintenace,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Item Tax Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Item Tax Template Detail,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Job Applicant,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Job Applicant Source,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Job Offer,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Job Offer Term,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Job Offer Term Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,KRA,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Kanban Board,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Kanban Board Column,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Language,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Lead Source,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Leave Policy,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Core,Leave Policy Detail,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,List of Groceries,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Location,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Market Segment,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-GL,Mode of Payment,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-GL,Mode of Payment Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Module Onboarding,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,NOC Task Tracker,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Navbar Item,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Number Card Link,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Onboarding Permission,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Onboarding Step,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Onboarding Step Map,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Opportunity Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Page,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Party Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Party Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Payment Entry Deduction,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Payment Term,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Payroll,Payroll Period,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Pegged Currency Details,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Portal Menu Item,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Price List,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Print Heading,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Print Style,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Projects,Project Record,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Projects,Project Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Projects,Project Template Task,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Projects,Project Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AP,Purchase Receipt,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AP,Purchase Receipt Item,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Report Column,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Repost Item Valuation,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Payroll,Salary Component,1,0,0,later,5,999,defer until core financial/support/payroll closure
+HR Payroll,Salary Structure,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Sales Partner Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Sales Stage,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AR,Sales Taxes and Charges Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Salutation,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Series,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Service Instance,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Session Default,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Sessions,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Share Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Shift Schedule,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Skill,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Stock Entry Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Success Action,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AP,Supplier Group,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AP,Supplier Scorecard Standing,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Finance-AP,Supplier Scorecard Variable,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Sys Admin Task Tracker,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Projects,Task Management,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Projects,Task Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Tax Category,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Tax Withholding Account,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Tax Withholding Category,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Territory,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Training Attendance Tracker,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,UOM Category,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,UOM Conversion Factor,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Banking/Treasury,Unreconcile Payment,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,User Email,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Variant Field,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Vehicle,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Vehicle Service Item,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Inventory,Warehouse Type,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Web Template,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Web Template Field,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,WebDev Task Tracker,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Webhook Data,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Website Theme,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Workflow,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Workflow Action,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Workflow Document State,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Workflow State,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,Workflow Transition,1,0,0,later,5,999,defer until core financial/support/payroll closure
+Other,project record,1,0,0,later,5,999,defer until core financial/support/payroll closure
+System/Logs,Version,1200,140507,13360,ignore,186587,999,system/meta/audit noise; archive-only if needed
+System/Logs,Access Log,106,35836,1592,ignore,41142,999,system/meta/audit noise; archive-only if needed
+System/Logs,Notification Log,225,32826,998,ignore,36945,999,system/meta/audit noise; archive-only if needed
+Documents/Files,Deleted Document,179,23913,998,ignore,27802,999,system/meta/audit noise; archive-only if needed
+System/Logs,PWA Notification,8,8320,134,ignore,8762,999,system/meta/audit noise; archive-only if needed
+System/Logs,View Log,8,3488,103,ignore,3837,999,system/meta/audit noise; archive-only if needed
+System/Logs,Data Import Log,22,3544,0,ignore,3654,999,system/meta/audit noise; archive-only if needed
+System/Logs,Scheduled Job Log,196,0,0,ignore,980,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocField,6,913,0,ignore,943,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocShare,1,579,22,ignore,650,999,system/meta/audit noise; archive-only if needed
+System/Logs,Email Queue,104,2,0,ignore,522,999,system/meta/audit noise; archive-only if needed
+System/Logs,Error Log,98,0,0,ignore,490,999,system/meta/audit noise; archive-only if needed
+Other,Custom DocPerm,1,210,30,ignore,305,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocPerm,1,129,0,ignore,134,999,system/meta/audit noise; archive-only if needed
+Documents/Files,Document Share Key,1,120,0,ignore,125,999,system/meta/audit noise; archive-only if needed
+System/Logs,Route History,22,3,0,ignore,113,999,system/meta/audit noise; archive-only if needed
+System/Logs,Webhook Request Log,22,0,0,ignore,110,999,system/meta/audit noise; archive-only if needed
+Other,Dashboard Settings,1,45,12,ignore,86,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocType,1,58,0,ignore,63,999,system/meta/audit noise; archive-only if needed
+System/Logs,Prepared Report,1,57,0,ignore,62,999,system/meta/audit noise; archive-only if needed
+Other,Notification Settings,1,32,8,ignore,61,999,system/meta/audit noise; archive-only if needed
+System/Logs,DefaultValue,1,26,6,ignore,49,999,system/meta/audit noise; archive-only if needed
+Other,Insights Query Execution Log,1,20,8,ignore,49,999,system/meta/audit noise; archive-only if needed
+Other,Custom Field,1,29,4,ignore,46,999,system/meta/audit noise; archive-only if needed
+Other,User Social Login,1,22,6,ignore,45,999,system/meta/audit noise; archive-only if needed
+System/Logs,Data Import,1,36,0,ignore,41,999,system/meta/audit noise; archive-only if needed
+Other,Client Script,1,32,1,ignore,40,999,system/meta/audit noise; archive-only if needed
+System/Logs,Patch Log,1,30,0,ignore,35,999,system/meta/audit noise; archive-only if needed
+Other,Notification,1,12,1,ignore,20,999,system/meta/audit noise; archive-only if needed
+Other,Notification Recipient,1,12,1,ignore,20,999,system/meta/audit noise; archive-only if needed
+System/Logs,Email Queue Recipient,3,0,0,ignore,15,999,system/meta/audit noise; archive-only if needed
+Other,Dashboard Chart,1,9,0,ignore,14,999,system/meta/audit noise; archive-only if needed
+Other,Dashboard Chart Link,1,8,0,ignore,13,999,system/meta/audit noise; archive-only if needed
+System/Logs,Activity Log,2,0,0,ignore,10,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocType Link,1,5,0,ignore,10,999,system/meta/audit noise; archive-only if needed
+Other,Dashboard,1,4,0,ignore,9,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocType State,1,3,0,ignore,8,999,system/meta/audit noise; archive-only if needed
+HR Core,Employee External Work History,1,3,0,ignore,8,999,system/meta/audit noise; archive-only if needed
+Other,Workspace,1,1,0,ignore,6,999,system/meta/audit noise; archive-only if needed
+Other,Workspace Custom Block,1,1,0,ignore,6,999,system/meta/audit noise; archive-only if needed
+Other,Bulk Transaction Log Detail,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+CRM,CRM Dashboard,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+CRM,CRM Status Change Log,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+System/Logs,Console Log,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Custom Role,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Dashboard Chart Field,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Dashboard Chart Source,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Documents/Files,DocType Action,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Global Search DocType,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Insights Dashboard Chart v3,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Insights Dashboard v3,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Logs To Clear,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Notification Subscribed Document,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Workspace Chart,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Workspace Link,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Workspace Number Card,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Workspace Quick List,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed
+Other,Workspace Shortcut,1,0,0,ignore,5,999,system/meta/audit noise; archive-only if needed

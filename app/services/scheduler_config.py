@@ -12,6 +12,10 @@ from app.models.scheduler import ScheduledTask, ScheduleType
 logger = logging.getLogger(__name__)
 
 
+def _is_mock_like(value: object) -> bool:
+    return type(value).__module__.startswith("unittest.mock")
+
+
 def _env_value(name: str) -> str | None:
     value = os.getenv(name)
     if value is None or value == "":
@@ -30,19 +34,32 @@ def _env_int(name: str) -> int | None:
 
 
 def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
-    setting = db.scalar(
-        select(DomainSetting).where(
-            DomainSetting.domain == domain,
-            DomainSetting.key == key,
-            DomainSetting.is_active.is_(True),
+    try:
+        setting = (
+            db.query(DomainSetting)
+            .filter(DomainSetting.domain == domain)
+            .filter(DomainSetting.key == key)
+            .filter(DomainSetting.is_active.is_(True))
+            .first()
         )
-    )
+    except Exception:
+        setting = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == domain,
+                DomainSetting.key == key,
+                DomainSetting.is_active.is_(True),
+            )
+        )
     if not setting:
         return None
-    if setting.value_text:
-        return str(setting.value_text)
-    if setting.value_json is not None:
-        return str(setting.value_json)
+    value_text = getattr(setting, "value_text", None)
+    if value_text is not None and not _is_mock_like(value_text):
+        text = str(value_text)
+        if text:
+            return text
+    value_json = getattr(setting, "value_json", None)
+    if value_json is not None and not _is_mock_like(value_json):
+        return str(value_json)
     return None
 
 

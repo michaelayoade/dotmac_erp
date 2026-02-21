@@ -1,0 +1,110 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Team Case {{ case.case_number }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/team/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Team Discipline</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ case.case_number }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl space-y-6">
+    {% if request.query_params.get('success') %}
+    <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
+        <p class="text-green-700 dark:text-green-400">{{ request.query_params.get('success') | replace('_', ' ') | title }}</p>
+    </div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <p class="text-red-700 dark:text-red-400">{{ request.query_params.get('error') }}</p>
+    </div>
+    {% endif %}
+
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ case.case_number }}</h2>
+            <p class="text-slate-600 dark:text-slate-400">{{ case.subject }}</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Employee: {{ case.employee.full_name if case.employee else "-" }}
+            </p>
+        </div>
+        <a href="/people/self/team/discipline" class="btn btn-secondary">Back to Team Cases</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div>
+                <p class="text-slate-500 dark:text-slate-400">Status</p>
+                <p class="font-medium text-slate-900 dark:text-white">{{ case.status.value | replace('_', ' ') | title }}</p>
+            </div>
+            <div>
+                <p class="text-slate-500 dark:text-slate-400">Violation</p>
+                <p class="font-medium text-slate-900 dark:text-white">{{ case.violation_type.value | replace('_', ' ') | title }}</p>
+            </div>
+            <div>
+                <p class="text-slate-500 dark:text-slate-400">Severity</p>
+                <p class="font-medium text-slate-900 dark:text-white">{{ case.severity.value | replace('_', ' ') | title }}</p>
+            </div>
+            <div>
+                <p class="text-slate-500 dark:text-slate-400">Incident Date</p>
+                <p class="font-medium text-slate-900 dark:text-white">{{ case.incident_date if case.incident_date else "-" }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% if case.description %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Description</h3>
+        </div>
+        <div class="card-body">
+            <p class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ case.description }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if case.query_text %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Query</h3>
+        </div>
+        <div class="card-body space-y-3">
+            <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <p class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ case.query_text }}</p>
+            </div>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Due: {{ case.response_due_date if case.response_due_date else "-" }}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if can_issue_query %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Issue Query</h3>
+        </div>
+        <form method="post" action="/people/self/team/discipline/{{ case.case_id }}/issue-query" class="card-body space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div>
+                <label class="label required">Query Text</label>
+                <textarea name="query_text" rows="5" class="input" required minlength="10" placeholder="Formal query text to employee"></textarea>
+            </div>
+            <div>
+                <label class="label required">Response Due Date</label>
+                <input type="date" name="response_due_date" class="input" required>
+            </div>
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary">Issue Query</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

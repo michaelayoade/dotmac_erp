@@ -44,6 +44,7 @@ from app.services.finance.ap.web.base import (
     parse_date,
     payment_detail_view,
     payment_status_label,
+    recent_activity_view,
     supplier_display_name,
     supplier_form_view,
     supplier_option_view,
@@ -404,6 +405,14 @@ class PaymentWebService:
             "supplier": supplier_form_view(supplier) if supplier else None,
             "allocations": allocations_view,
             "attachments": attachments_view,
+            "recent_activity": recent_activity_view(
+                db,
+                org_id,
+                table_schema="ap",
+                table_name="supplier_payment",
+                record_id=str(payment.payment_id),
+                limit=10,
+            ),
         }
 
     @staticmethod

@@ -43,6 +43,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -124,7 +128,6 @@ def create_vehicle(
     service = VehicleService(db, organization_id)
     try:
         vehicle = service.create(data)
-        db.commit()
         return VehicleRead.model_validate(vehicle)
     except ConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -143,7 +146,6 @@ def update_vehicle(
     service = VehicleService(db, organization_id)
     try:
         vehicle = service.update(vehicle_id, data)
-        db.commit()
         return VehicleRead.model_validate(vehicle)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -162,7 +164,6 @@ def change_vehicle_status(
     service = VehicleService(db, organization_id)
     try:
         vehicle = service.change_status(vehicle_id, data.status, data.reason)
-        db.commit()
         return VehicleRead.model_validate(vehicle)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -181,7 +182,6 @@ def update_odometer(
     service = VehicleService(db, organization_id)
     try:
         vehicle = service.update_odometer(vehicle_id, data.reading, data.reading_date)
-        db.commit()
         return VehicleRead.model_validate(vehicle)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -200,7 +200,6 @@ def dispose_vehicle(
     service = VehicleService(db, organization_id)
     try:
         vehicle = service.dispose(vehicle_id, data.method, data.amount, data.notes)
-        db.commit()
         return VehicleRead.model_validate(vehicle)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -218,6 +217,5 @@ def delete_vehicle(
     service = VehicleService(db, organization_id)
     try:
         service.soft_delete(vehicle_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

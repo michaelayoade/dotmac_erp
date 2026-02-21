@@ -149,6 +149,9 @@ def run_sync(org_code: str = "DEFAULT", entity_types: list[str] | None = None):
 
 
 if __name__ == "__main__":
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     import argparse
 
     parser = argparse.ArgumentParser(description="Run ERPNext HR sync")

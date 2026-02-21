@@ -14,6 +14,9 @@ from app.services.erpnext.client import ERPNextClient, ERPNextConfig
 
 
 def main() -> None:
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     org_id = UUID("00000000-0000-0000-0000-000000000001")
     start = date(2022, 1, 1)
     end = date(2025, 12, 31)

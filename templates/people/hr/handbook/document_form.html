@@ -1,18 +1,18 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block page_title %}{{ 'Edit' if document else 'Upload' }} HR Document{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">HR</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/handbook" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Handbook</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if document else 'Upload' }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">HR</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/handbook" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Handbook</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if document else 'Upload' }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -43,26 +43,13 @@
             <div class="card-body space-y-4">
                 {% if not document %}
                 {# File Upload - only for new documents #}
-                <div>
-                    <label for="file" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Document File <span class="text-red-500">*</span>
-                    </label>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Upload PDF, DOCX, or DOC file. Max size: 10MB
-                    </p>
-                    <input type="file"
-                           id="file"
-                           name="file"
-                           accept=".pdf,.doc,.docx"
-                           required
-                           class="mt-2 block w-full text-sm text-slate-500 dark:text-slate-400
-                                  file:mr-4 file:py-2 file:px-4
-                                  file:rounded-lg file:border-0
-                                  file:text-sm file:font-medium
-                                  file:bg-teal-50 file:text-teal-700
-                                  hover:file:bg-teal-100
-                                  dark:file:bg-teal-900/30 dark:file:text-teal-300">
-                </div>
+                {{ file_upload_zone(
+                    name="file",
+                    label="Document File",
+                    accept=".pdf,.doc,.docx",
+                    max_size_mb=10,
+                    hint="Upload PDF, DOCX, or DOC file. Max size: 10MB"
+                ) }}
 
                 {# Document Code - only for new documents #}
                 <div>
@@ -225,9 +212,7 @@
                 Cancel
             </a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
                 {{ 'Save Changes' if document else 'Upload Document' }}
             </button>
         </div>

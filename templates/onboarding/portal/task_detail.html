@@ -1,4 +1,6 @@
 {% extends "onboarding/portal/base_onboarding.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block title %}{{ activity.activity_name }} - Onboarding{% endblock %}
 
@@ -8,9 +10,7 @@
     <!-- Back Link -->
     <a href="/onboarding/start/{{ token }}"
        class="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-        </svg>
+        {{ icon_svg("chevron-left", "h-4 w-4") }}
         Back to Dashboard
     </a>
 
@@ -26,9 +26,7 @@
             </div>
             {% else %}
             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500">
-                <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "h-6 w-6 text-white") }}
             </div>
             {% endif %}
 
@@ -36,14 +34,7 @@
                 <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
                     {{ activity.activity_name }}
                 </h1>
-                {% if activity.activity_status == 'COMPLETED' %}
-                <span class="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                    </svg>
-                    Completed
-                </span>
-                {% endif %}
+                {{ status_badge(activity.activity_status, 'sm') }}
             </div>
         </div>
     </div>
@@ -92,11 +83,9 @@
         {% if activity.due_date %}
         <div class="border-b border-slate-200 p-6 dark:border-slate-700">
             <div class="flex items-center gap-3">
-                <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
+                {{ icon_svg("calendar", "h-5 w-5 text-slate-400") }}
                 <span class="text-sm text-slate-600 dark:text-slate-300">
-                    Due by: <strong>{{ activity.due_date.strftime('%B %d, %Y') }}</strong>
+                    Due by: <strong>{{ activity.due_date | format_date }}</strong>
                 </span>
             </div>
         </div>
@@ -119,28 +108,13 @@
 
                 <!-- Document Upload (if required) -->
                 {% if activity.requires_document %}
-                <div>
-                    <label for="document" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Upload Document <span class="text-red-500">*</span>
-                    </label>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Accepted formats: PDF, DOC, DOCX. Max size: 5MB
-                    </p>
-                    <div class="mt-2">
-                        <input type="file"
-                               id="document"
-                               name="document"
-                               accept=".pdf,.doc,.docx"
-                               required
-                               class="block w-full text-sm text-slate-500 dark:text-slate-400
-                                      file:mr-4 file:py-2 file:px-4
-                                      file:rounded-lg file:border-0
-                                      file:text-sm file:font-medium
-                                      file:bg-emerald-50 file:text-emerald-700
-                                      hover:file:bg-emerald-100
-                                      dark:file:bg-emerald-900/30 dark:file:text-emerald-300" />
-                    </div>
-                </div>
+                {{ file_upload_zone(
+                    name="document",
+                    label="Upload Document",
+                    accept=".pdf,.doc,.docx",
+                    max_size_mb=5,
+                    hint="Accepted formats: PDF, DOC, DOCX. Max size: 5MB"
+                ) }}
                 {% endif %}
 
                 <!-- Notes (optional) -->
@@ -170,9 +144,7 @@
                             class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm
                                    hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2
                                    dark:bg-emerald-500 dark:hover:bg-emerald-600">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4") }}
                         Mark as Complete
                     </button>
                 </div>
@@ -192,7 +164,7 @@
                         </p>
                         {% if activity.completed_on %}
                         <p class="text-sm text-emerald-600 dark:text-emerald-300">
-                            Completed on {{ activity.completed_on.strftime('%B %d, %Y at %I:%M %p') }}
+                            Completed on {{ activity.completed_on | format_datetime }}
                         </p>
                         {% endif %}
                     </div>
@@ -209,9 +181,7 @@
             <div class="mt-4 text-center">
                 <a href="/onboarding/start/{{ token }}"
                    class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left", "h-4 w-4") }}
                     Return to Dashboard
                 </a>
             </div>

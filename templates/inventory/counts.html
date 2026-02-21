@@ -1,23 +1,20 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import status_badge, pagination, empty_state, live_search %}
+{% from "components/macros.html" import status_badge, pagination, empty_state, live_search, icon_svg %}
 
 {% block page_title %}Stock Counts{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Stock Counts</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Stock Counts</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/inventory/counts/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4 mr-2") }}
     New Count
 </a>
 {% endblock %}
@@ -29,9 +26,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                    </svg>
+                    {{ icon_svg("clipboard") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_count | default(0) }}</p>
@@ -42,9 +37,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ in_progress_count | default(0) }}</p>
@@ -55,9 +48,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ completed_count | default(0) }}</p>
@@ -68,9 +59,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ variance_count | default(0) }}</p>
@@ -133,21 +122,17 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
                         onclick="window.location='/inventory/counts/{{ count.count_id }}'">
                         <td class="font-medium text-slate-900 dark:text-white">{{ count.count_number }}</td>
-                        <td>{{ count.count_date.strftime('%Y-%m-%d') if count.count_date else '-' }}</td>
+                        <td>{{ count.count_date | format_date if count.count_date else '-' }}</td>
                         <td>{{ count.warehouse.warehouse_name if count.warehouse else 'All Warehouses' }}</td>
                         <td>
                             {% if count.is_cycle_count %}
                             <span class="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400">
-                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
+                                {{ icon_svg("refresh", "h-3 w-3") }}
                                 Cycle
                             </span>
                             {% elif count.is_full_count %}
                             <span class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
-                                <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                                </svg>
+                                {{ icon_svg("clipboard", "h-3 w-3") }}
                                 Full
                             </span>
                             {% else %}
@@ -179,9 +164,7 @@
                         </td>
                         <td>
                             <a href="/inventory/counts/{{ count.count_id }}" class="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                </svg>
+                                {{ icon_svg("chevron-right") }}
                             </a>
                         </td>
                     </tr>

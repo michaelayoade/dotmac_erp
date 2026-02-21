@@ -46,6 +46,7 @@ DATE_FORMAT_MAP: dict[str, str] = {
     "MM/DD/YYYY": "%m/%d/%Y",
     "DD-MM-YYYY": "%d-%m-%Y",
     "DD.MM.YYYY": "%d.%m.%Y",
+    "DD MMM YYYY": "%d %b %Y",
 }
 
 # Maps the org-level "number_format" display string to (thousand_sep, decimal_sep)
@@ -66,6 +67,7 @@ DATE_FORMAT_CHOICES: list[tuple[str, str]] = [
     ("MM/DD/YYYY", "01/10/2025"),
     ("DD-MM-YYYY", "10-01-2025"),
     ("DD.MM.YYYY", "10.01.2025"),
+    ("DD MMM YYYY", "10 Jan 2025"),
 ]
 
 NUMBER_FORMAT_CHOICES: list[tuple[str, str]] = [

@@ -1,22 +1,21 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Payslip {{ slip.slip_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/payslips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Payslips</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ slip.slip_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/payslips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Payslips</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ slip.slip_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <button onclick="window.print()" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-    </svg>
+    {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>
 {% endblock %}
@@ -39,9 +38,7 @@
     <div class="rounded-lg border {{ banner.border }} {{ banner.bg }} p-4 print:hidden">
         <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-full {{ banner.icon_bg }}">
-                <svg class="h-5 w-5 {{ banner.icon }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-5 w-5 {{ banner.icon }}") }}
             </div>
             <div>
                 <p class="font-semibold {{ banner.text }}">{{ slip.status.value | title }}</p>
@@ -75,7 +72,7 @@
                         <div>
                             <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600">Period</p>
                             <p class="text-sm font-medium text-slate-900 dark:text-white print:text-black">
-                                {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date.strftime('%b %d, %Y') }}
+                                {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date | format_date }}
                             </p>
                         </div>
                         <div>
@@ -132,9 +129,7 @@
             <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 print:border-slate-300 flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900 dark:text-white print:text-black flex items-center gap-2">
                     <span class="flex h-6 w-6 items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/50 print:bg-emerald-100">
-                        <svg class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 print:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus", "h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 print:text-emerald-600") }}
                     </span>
                     Earnings
                 </h3>
@@ -164,9 +159,7 @@
             <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 print:border-slate-300 flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900 dark:text-white print:text-black flex items-center gap-2">
                     <span class="flex h-6 w-6 items-center justify-center rounded bg-red-100 dark:bg-red-900/50 print:bg-red-100">
-                        <svg class="h-3.5 w-3.5 text-red-600 dark:text-red-400 print:text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                        </svg>
+                        {{ icon_svg("minus", "h-3.5 w-3.5 text-red-600 dark:text-red-400 print:text-red-600") }}
                     </span>
                     Deductions
                 </h3>
@@ -198,9 +191,7 @@
         <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 print:border-slate-300">
             <h3 class="font-semibold text-slate-900 dark:text-white print:text-black flex items-center gap-2">
                 <span class="flex h-6 w-6 items-center justify-center rounded bg-violet-100 dark:bg-violet-900/50 print:bg-violet-100">
-                    <svg class="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 print:text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calculator", "h-3.5 w-3.5 text-violet-600 dark:text-violet-400 print:text-violet-600") }}
                 </span>
                 PAYE Tax Calculation (NTA 2025)
             </h3>
@@ -285,9 +276,7 @@
     {# Back Button #}
     <div class="print:hidden">
         <a href="/people/self/payslips" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1.5") }}
             Back to Payslips
         </a>
     </div>

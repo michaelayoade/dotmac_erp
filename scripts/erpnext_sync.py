@@ -312,6 +312,9 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
 
 
 def main():
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    sys.exit(2)
+
     parser = argparse.ArgumentParser(
         description="ERPNext Sync Script for DotMac ERP",
         formatter_class=argparse.RawDescriptionHelpFormatter,

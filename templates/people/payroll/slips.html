@@ -1,15 +1,15 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination, icon_svg %}
 
 {% block page_title %}Salary Slips{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Salary Slips</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Salary Slips</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -26,15 +26,11 @@
         </button>
     </form>
     <a href="/people/payroll/runs" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-        </svg>
+        {{ icon_svg("list-bullet", "h-4 w-4 mr-1.5") }}
         Batch Runs
     </a>
     <a href="/people/payroll/slips/new" class="btn btn-primary group">
-        <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
         New Salary Slip
     </a>
 </div>
@@ -47,9 +43,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-                    <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-5 w-5 text-slate-500") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('DRAFT', 0) }}</p>
@@ -60,9 +54,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-900/30">
-                    <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-5 w-5 text-amber-500") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('SUBMITTED', 0) + status_counts.get('APPROVED', 0) }}</p>
@@ -73,9 +65,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
-                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-5 w-5 text-emerald-500") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('POSTED', 0) }}</p>
@@ -86,9 +76,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/30">
-                    <svg class="h-5 w-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                    </svg>
+                    {{ icon_svg("cash", "h-5 w-5 text-teal-500") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('PAID', 0) }}</p>
@@ -148,7 +136,7 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date.strftime('%b %d, %Y') }}
+                            {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date | format_date }}
                         </td>
                         <td class="px-4 py-3 text-right font-mono text-sm text-slate-900 dark:text-white">
                             {{ "{:,.2f}".format(slip.gross_pay) }}
@@ -177,18 +165,13 @@
                                 <a href="/people/payroll/slips/{{ slip.slip_id }}"
                                    class="p-1.5 rounded text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/30 transition-colors"
                                    title="View Details" aria-label="View Details">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
+                                    {{ icon_svg("eye", "h-4 w-4") }}
                                 </a>
                                 {% if slip.status.value == 'DRAFT' %}
                                 <a href="/people/payroll/slips/{{ slip.slip_id }}/edit"
                                    class="p-1.5 rounded text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/30 transition-colors"
                                    title="Edit Slip" aria-label="Edit Slip">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
+                                    {{ icon_svg("edit", "h-4 w-4") }}
                                 </a>
                                 <form method="post" action="/people/payroll/slips/{{ slip.slip_id }}/delete" onsubmit="return confirm('Delete this draft slip?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -229,18 +212,14 @@
     {# Empty State #}
     <div class="card px-6 py-16 text-center">
         <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-emerald-50 dark:from-teal-900/30 dark:to-emerald-900/10 flex items-center justify-center mb-6">
-            <svg class="h-12 w-12 text-teal-500 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            {{ icon_svg("document", "h-12 w-12 text-teal-500 dark:text-teal-400", stroke_width="1.5") }}
         </div>
         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No salary slips yet</h3>
         <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
             Salary slips are generated from employee salary structures. Create one to get started with payroll.
         </p>
         <a href="/people/payroll/slips/new" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-            </svg>
+            {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
             Create Salary Slip
         </a>
     </div>

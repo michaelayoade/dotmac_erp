@@ -59,12 +59,13 @@ class PeriodWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get fiscal years
-        years = db.scalars(
-            select(FiscalYear)
-            .where(FiscalYear.organization_id == org_id)
-            .order_by(FiscalYear.year_code.desc())
+        years = list(
+            db.scalars(
+                select(FiscalYear)
+                .where(FiscalYear.organization_id == org_id)
+                .order_by(FiscalYear.year_code.desc())
+            )
         )
-        years = years.all()
 
         if not years:
             return {
@@ -84,12 +85,13 @@ class PeriodWebService:
             selected_year = years[0]
 
         # Get periods for selected year
-        periods = db.scalars(
-            select(FiscalPeriod)
-            .where(FiscalPeriod.fiscal_year_id == selected_year.fiscal_year_id)
-            .order_by(FiscalPeriod.period_number)
+        periods = list(
+            db.scalars(
+                select(FiscalPeriod)
+                .where(FiscalPeriod.fiscal_year_id == selected_year.fiscal_year_id)
+                .order_by(FiscalPeriod.period_number)
+            )
         )
-        periods = periods.all()
 
         return {
             "years": [fiscal_year_option_view(y) for y in years],
@@ -115,12 +117,13 @@ class PeriodWebService:
             if period and period.organization_id != org_id:
                 period = None
 
-        years = db.scalars(
-            select(FiscalYear)
-            .where(FiscalYear.organization_id == org_id)
-            .order_by(FiscalYear.year_code.desc())
+        years = list(
+            db.scalars(
+                select(FiscalYear)
+                .where(FiscalYear.organization_id == org_id)
+                .order_by(FiscalYear.year_code.desc())
+            )
         )
-        years = years.all()
 
         return {
             "period": period_option_view(period) if period else None,
@@ -142,7 +145,7 @@ class PeriodWebService:
         ref_date = parse_date(as_of_date) or date.today()
 
         # Find period for the reference date
-        period = db.scalars(
+        period = db.scalar(
             select(FiscalPeriod)
             .where(
                 FiscalPeriod.organization_id == org_id,
@@ -150,17 +153,17 @@ class PeriodWebService:
                 FiscalPeriod.end_date >= ref_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
+            .limit(1)
         )
-        period = period.first()
 
         # If no period for the date, get the latest period
         if not period:
-            period = db.scalars(
+            period = db.scalar(
                 select(FiscalPeriod)
                 .where(FiscalPeriod.organization_id == org_id)
                 .order_by(FiscalPeriod.end_date.desc())
+                .limit(1)
             )
-            period = period.first()
 
         balances = []
         total_debit = Decimal("0")
@@ -183,18 +186,33 @@ class PeriodWebService:
             rows = rows.all()
 
             for balance, account, category in rows:
-                debit = balance.closing_debit or Decimal("0")
-                credit = balance.closing_credit or Decimal("0")
-                total_debit += debit
-                total_credit += credit
+                raw_debit = balance.closing_debit or Decimal("0")
+                raw_credit = balance.closing_credit or Decimal("0")
+                net = raw_debit - raw_credit
+                # Trial balance: each account shows net in one column
+                if net > 0:
+                    tb_debit = net
+                    tb_credit = Decimal("0")
+                elif net < 0:
+                    tb_debit = Decimal("0")
+                    tb_credit = abs(net)
+                else:
+                    tb_debit = Decimal("0")
+                    tb_credit = Decimal("0")
+                total_debit += tb_debit
+                total_credit += tb_credit
                 balances.append(
                     {
                         "account_id": str(account.account_id),
                         "account_code": account.account_code,
                         "account_name": account.account_name,
                         "category": ifrs_label(category.ifrs_category),
-                        "debit": format_currency(debit, balance.currency_code),
-                        "credit": format_currency(credit, balance.currency_code),
+                        "debit": format_currency(tb_debit, balance.currency_code)
+                        if tb_debit
+                        else "",
+                        "credit": format_currency(tb_credit, balance.currency_code)
+                        if tb_credit
+                        else "",
                     }
                 )
 

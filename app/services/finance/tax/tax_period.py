@@ -13,7 +13,6 @@ from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
@@ -69,11 +68,13 @@ class TaxPeriodService(ListResponseMixin):
         jurisdiction_id = coerce_uuid(input.jurisdiction_id)
 
         # Validate jurisdiction exists
-        jurisdiction = db.scalar(
-            select(TaxJurisdiction).where(
+        jurisdiction = (
+            db.query(TaxJurisdiction)
+            .filter(
                 TaxJurisdiction.jurisdiction_id == jurisdiction_id,
                 TaxJurisdiction.organization_id == org_id,
             )
+            .first()
         )
 
         if not jurisdiction:
@@ -86,13 +87,15 @@ class TaxPeriodService(ListResponseMixin):
             )
 
         # Check for overlapping periods
-        existing = db.scalar(
-            select(TaxPeriod).where(
+        existing = (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.organization_id == org_id,
                 TaxPeriod.jurisdiction_id == jurisdiction_id,
                 TaxPeriod.start_date <= input.end_date,
                 TaxPeriod.end_date >= input.start_date,
             )
+            .first()
         )
 
         if existing:
@@ -224,11 +227,13 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.scalar(
-            select(TaxPeriod).where(
+        period = (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.period_id == period_id,
                 TaxPeriod.organization_id == org_id,
             )
+            .first()
         )
 
         if not period:
@@ -274,11 +279,13 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.scalar(
-            select(TaxPeriod).where(
+        period = (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.period_id == period_id,
                 TaxPeriod.organization_id == org_id,
             )
+            .first()
         )
 
         if not period:
@@ -317,11 +324,13 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.scalar(
-            select(TaxPeriod).where(
+        period = (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.period_id == period_id,
                 TaxPeriod.organization_id == org_id,
             )
+            .first()
         )
 
         if not period:
@@ -354,11 +363,13 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(period_id)
 
-        period = db.scalar(
-            select(TaxPeriod).where(
+        period = (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.period_id == period_id,
                 TaxPeriod.organization_id == org_id,
             )
+            .first()
         )
 
         if not period:
@@ -394,13 +405,15 @@ class TaxPeriodService(ListResponseMixin):
         jurisdiction_id = coerce_uuid(jurisdiction_id)
         check_date = as_of_date or date.today()
 
-        return db.scalar(
-            select(TaxPeriod).where(
+        return (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.organization_id == org_id,
                 TaxPeriod.jurisdiction_id == jurisdiction_id,
                 TaxPeriod.start_date <= check_date,
                 TaxPeriod.end_date >= check_date,
             )
+            .first()
         )
 
     @staticmethod
@@ -423,16 +436,17 @@ class TaxPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         check_date = as_of_date or date.today()
 
-        return db.scalars(
-            select(TaxPeriod)
-            .where(
+        return (
+            db.query(TaxPeriod)
+            .filter(
                 TaxPeriod.organization_id == org_id,
                 TaxPeriod.status == TaxPeriodStatus.OPEN,
                 TaxPeriod.due_date < check_date,
                 TaxPeriod.is_extension_filed == False,
             )
             .order_by(TaxPeriod.due_date)
-        ).all()
+            .all()
+        )
 
     @staticmethod
     def get(
@@ -441,8 +455,10 @@ class TaxPeriodService(ListResponseMixin):
         organization_id: UUID | None = None,
     ) -> TaxPeriod | None:
         """Get a tax period by ID."""
-        period = db.scalar(
-            select(TaxPeriod).where(TaxPeriod.period_id == coerce_uuid(period_id))
+        period = (
+            db.query(TaxPeriod)
+            .filter(TaxPeriod.period_id == coerce_uuid(period_id))
+            .first()
         )
         if not period:
             return None
@@ -479,33 +495,36 @@ class TaxPeriodService(ListResponseMixin):
         Returns:
             List of TaxPeriod objects
         """
-        query = select(TaxPeriod)
+        query = db.query(TaxPeriod)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 TaxPeriod.organization_id == coerce_uuid(organization_id)
             )
 
         if jurisdiction_id:
-            query = query.where(
+            query = query.filter(
                 TaxPeriod.jurisdiction_id == coerce_uuid(jurisdiction_id)
             )
 
         if status:
-            query = query.where(TaxPeriod.status == status)
+            query = query.filter(TaxPeriod.status == status)
 
         if frequency:
-            query = query.where(TaxPeriod.frequency == frequency)
+            query = query.filter(TaxPeriod.frequency == frequency)
 
         if year:
-            query = query.where(
+            query = query.filter(
                 TaxPeriod.start_date >= date(year, 1, 1),
                 TaxPeriod.end_date <= date(year, 12, 31),
             )
 
-        return db.scalars(
-            query.order_by(TaxPeriod.start_date.desc()).offset(offset).limit(limit)
-        ).all()
+        return (
+            query.order_by(TaxPeriod.start_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
 
 # Module-level instance

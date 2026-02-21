@@ -1,14 +1,15 @@
 {% extends "procurement/base_procurement.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Contract {{ contract.contract_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/procurement/contracts" class="hover:text-amber-600 transition-colors">Contracts</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ contract.contract_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/contracts" class="hover:text-amber-600 transition-colors">Contracts</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ contract.contract_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -106,10 +107,10 @@
             {% for doc in documents %}
             <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                 <div class="flex items-center gap-3">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                    {{ icon_svg("document-text", "h-5 w-5 text-slate-400") }}
                     <div>
                         <p class="text-sm font-medium text-slate-900 dark:text-white">{{ doc.title }}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ doc.document_type }} | {{ doc.uploaded_at.strftime('%Y-%m-%d') }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ doc.document_type }} | {{ doc.uploaded_at | format_date }}</p>
                     </div>
                 </div>
             </div>
@@ -117,5 +118,7 @@
         </div>
     </div>
     {% endif %}
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

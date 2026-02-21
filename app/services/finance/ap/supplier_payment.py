@@ -12,6 +12,7 @@ import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -85,6 +86,45 @@ class SupplierPaymentService(ListResponseMixin):
 
     Manages payment creation, approval, posting, and invoice allocation.
     """
+
+    @staticmethod
+    def build_payment_input(
+        supplier_id: UUID,
+        payment_date: date,
+        payment_method_str: str,
+        bank_account_id: UUID,
+        currency_code: str,
+        allocations_raw: list[dict[str, Any]],
+        reference: str | None = None,
+    ) -> SupplierPaymentInput:
+        """Build SupplierPaymentInput from raw API params.
+
+        Raises:
+            ValueError: If payment_method is invalid.
+        """
+        allocations = [
+            PaymentAllocationInput(
+                invoice_id=a["invoice_id"],
+                amount=a["amount"],
+            )
+            for a in allocations_raw
+        ]
+        total_amount = sum((alloc.amount for alloc in allocations), Decimal("0"))
+        try:
+            payment_method = APPaymentMethod(payment_method_str)
+        except ValueError:
+            raise ValueError(f"Invalid payment method: {payment_method_str}")
+
+        return SupplierPaymentInput(
+            supplier_id=supplier_id,
+            payment_date=payment_date,
+            payment_method=payment_method,
+            bank_account_id=bank_account_id,
+            currency_code=currency_code,
+            amount=total_amount,
+            reference=reference,
+            allocations=allocations,
+        )
 
     @staticmethod
     def build_input_from_payload(

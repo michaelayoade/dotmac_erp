@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -43,6 +44,7 @@ from app.services.inventory.item import (
 )
 from app.services.inventory.transaction import TransactionInput
 from app.services.inventory.warehouse import WarehouseInput, warehouse_service
+from app.services.recent_activity import get_recent_activity_for_record
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -224,14 +226,15 @@ class InventoryWebService:
         item_code_preview = InventoryWebService._sequence_preview(sequence, today)
 
         # Get categories for dropdown
-        categories = db.scalars(
-            select(ItemCategory)
-            .where(
+        categories = (
+            db.query(ItemCategory)
+            .filter(
                 ItemCategory.organization_id == org_id,
                 ItemCategory.is_active.is_(True),
             )
             .order_by(ItemCategory.category_code)
-        ).all()
+            .all()
+        )
 
         # Get GL accounts for inline category creation modal
         accounts = db.scalars(
@@ -274,7 +277,7 @@ class InventoryWebService:
             for s in suppliers
         ]
 
-        context = {
+        context: dict[str, Any] = {
             "categories": categories,
             "accounts": accounts,
             "item_types": item_types,
@@ -374,6 +377,12 @@ class InventoryWebService:
             "category": category,
             "stock_summary": stock_summary,
             "warehouse_stock": warehouse_stock,
+            "recent_activity": get_recent_activity_for_record(
+                db,
+                org_id,
+                record=item_obj,
+                limit=10,
+            ),
         }
 
     @staticmethod
@@ -458,20 +467,18 @@ class InventoryWebService:
 
         # Pre-computed stat-card counts (across ALL items, not just the page)
         active_count = (
-            db.scalar(
-                select(func.count(Item.item_id)).where(
-                    Item.organization_id == org_id, Item.is_active.is_(True)
-                )
-            )
+            db.query(func.count(Item.item_id))
+            .filter(Item.organization_id == org_id, Item.is_active.is_(True))
+            .scalar()
             or 0
         )
         stock_count = (
-            db.scalar(
-                select(func.count(Item.item_id)).where(
-                    Item.organization_id == org_id,
-                    Item.item_type == ItemType.INVENTORY,
-                )
+            db.query(func.count(Item.item_id))
+            .filter(
+                Item.organization_id == org_id,
+                Item.item_type == ItemType.INVENTORY,
             )
+            .scalar()
             or 0
         )
 
@@ -504,19 +511,17 @@ class InventoryWebService:
 
         type_value = _parse_transaction_type(transaction_type)
 
-        conditions = [InventoryTransaction.organization_id == org_id]
         query = (
-            select(InventoryTransaction, Item, Warehouse)
+            db.query(InventoryTransaction, Item, Warehouse)
             .join(Item, InventoryTransaction.item_id == Item.item_id)
             .join(
                 Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id
             )
-            .where(*conditions)
+            .filter(InventoryTransaction.organization_id == org_id)
         )
 
         if type_value:
-            conditions.append(InventoryTransaction.transaction_type == type_value)
-            query = query.where(InventoryTransaction.transaction_type == type_value)
+            query = query.filter(InventoryTransaction.transaction_type == type_value)
 
         if search:
             search_pattern = f"%{search}%"
@@ -525,27 +530,20 @@ class InventoryWebService:
                 Item.item_code.ilike(search_pattern),
                 Item.item_name.ilike(search_pattern),
             )
-            conditions.append(search_filter)
-            query = query.where(search_filter)
+            query = query.filter(search_filter)
 
         total_count = (
-            db.scalar(
-                select(func.count(InventoryTransaction.transaction_id))
-                .select_from(InventoryTransaction)
-                .join(Item, InventoryTransaction.item_id == Item.item_id)
-                .join(
-                    Warehouse,
-                    InventoryTransaction.warehouse_id == Warehouse.warehouse_id,
-                )
-                .where(*conditions)
-            )
+            query.with_entities(
+                func.count(InventoryTransaction.transaction_id)
+            ).scalar()
             or 0
         )
-        rows = db.execute(
+        rows = (
             query.order_by(InventoryTransaction.transaction_date.desc())
             .limit(limit)
             .offset(offset)
-        ).all()
+            .all()
+        )
 
         transactions_view = []
         for txn, item, warehouse in rows:
@@ -1074,7 +1072,7 @@ class InventoryWebService:
             .order_by(ItemCategory.category_code)
         ).all()
 
-        context = {
+        context: dict[str, Any] = {
             "accounts": accounts,
             "parent_categories": parent_categories,
             "category": None,
@@ -1401,6 +1399,12 @@ class InventoryWebService:
             "total_items": total_items,
             "total_value": _format_currency(total_value),
             "inventory": inventory[:20],  # Show top 20 items
+            "recent_activity": get_recent_activity_for_record(
+                db,
+                org_id,
+                record=warehouse,
+                limit=10,
+            ),
         }
 
     def list_warehouses_response(

@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}{{ "Edit AP Invoice" if invoice else "New AP Invoice" }}{% endblock %}
 
 {% block page_styles %}
@@ -492,12 +492,14 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="breadcrumb flex items-center gap-2" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600">Dashboard</a>
-    <span>/</span>
-    <a href="/finance/ap/invoices" class="hover:text-teal-600">AP Invoices</a>
-    <span>/</span>
-    <span class="current" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span>
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600">Dashboard</a></li>
+        <li class="flex items-center gap-2">None <span>/</span></li>
+        <li class="flex items-center gap-2">None <a href="/finance/ap/invoices" class="hover:text-teal-600">AP Invoices</a></li>
+        <li class="flex items-center gap-2">None <span>/</span></li>
+        <li class="flex items-center gap-2">None <span class="current" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -509,9 +511,9 @@
 
         <!-- Page Header -->
         <div class="fade-up">
-            <h1 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
+            <h2 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
                 {{ "Edit Invoice" if invoice else "New AP Invoice" }}
-            </h1>
+            </h2>
             <p class="mt-2 text-[var(--ink-muted)] dark:text-white/50">
                 Enter the supplier invoice details and line items below.
             </p>
@@ -525,9 +527,7 @@
         <div class="rounded-xl bg-teal-50 border border-teal-200 p-4 dark:bg-teal-900/20 dark:border-teal-800 fade-up delay-1">
             <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/30">
-                    <svg class="h-5 w-5 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                    </svg>
+                    {{ icon_svg("clipboard", "h-5 w-5 text-teal-600 dark:text-teal-400") }}
                 </div>
                 <div class="flex-1">
                     <p class="text-sm font-medium text-teal-800 dark:text-teal-300">Creating invoice from Purchase Order</p>
@@ -676,9 +676,7 @@
                     <p class="section-subtitle">Add expense items to this invoice</p>
                 </div>
                 <button type="button" @click="addLine" class="btn-outline">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "w-4 h-4") }}
                     Add Line
                 </button>
             </div>
@@ -716,9 +714,7 @@
                                             <button type="button"
                                                     @click="line.item_open = !line.item_open"
                                                     class="absolute inset-y-0 right-2 flex items-center text-[var(--ink-muted)] hover:text-[var(--ink)]">
-                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                                </svg>
+                                                {{ icon_svg("chevron-down", "h-4 w-4") }}
                                             </button>
                                         </div>
                                         <input type="hidden" x-model="line.item_id">
@@ -788,7 +784,7 @@
                                             class="table-input">
                                         <option value="">No Tax</option>
                                         {% for tax in tax_codes %}
-                                        <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%)</option>
+                                        <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%){% if tax.is_inclusive %} Incl.{% endif %}</option>
                                         {% else %}
                                         <tr>
                                             <td colspan="99" class="p-0">
@@ -809,9 +805,7 @@
                                             @click="removeLine(index)"
                                             x-show="form.lines.length > 1"
                                             class="btn-ghost-danger">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
+                                        {{ icon_svg("trash", "w-4 h-4") }}
                                     </button>
                                 </td>
                             </tr>
@@ -828,8 +822,8 @@
                         <span class="total-value" x-text="formatCurrency(subtotal)"></span>
                     </div>
                     <div class="total-row">
-                        <span class="total-label">Tax</span>
-                        <span class="total-value" x-text="formatCurrency(taxAmount)"></span>
+                        <span class="total-label">Tax (VAT)</span>
+                        <span class="total-value" x-text="formatCurrency(exclusiveTaxAmount)"></span>
                     </div>
                     <div class="total-row total-final">
                         <span class="total-label">Total</span>
@@ -880,9 +874,7 @@
                     Save as Draft
                 </button>
                 <button type="submit" class="btn-primary">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "w-4 h-4") }}
                     {{ "Update Invoice" if invoice else "Create Invoice" }}
                 </button>
             </div>
@@ -982,8 +974,26 @@ function invoiceForm() {
             return this.form.lines.reduce((sum, line) => sum + (line.tax_amount || 0), 0);
         },
 
+        get inclusiveTaxAmount() {
+            const inclusive = this.form.lines.reduce((sum, line) => {
+                if (!line.tax_code_id) {
+                    return sum;
+                }
+                const taxCode = taxCodeData[line.tax_code_id];
+                if (!taxCode || !taxCode.isInclusive) {
+                    return sum;
+                }
+                return sum + (line.tax_amount || 0);
+            }, 0);
+            return parseFloat(inclusive.toFixed(2));
+        },
+
+        get exclusiveTaxAmount() {
+            return parseFloat((this.taxAmount - this.inclusiveTaxAmount).toFixed(2));
+        },
+
         get total() {
-            return this.subtotal + this.taxAmount;
+            return this.subtotal + this.exclusiveTaxAmount;
         },
 
         formatCurrency(amount) {

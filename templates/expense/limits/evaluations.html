@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{%- from "components/macros.html" import status_badge, pagination, empty_state, compact_filters %}
+{%- from "components/macros.html" import status_badge, pagination, empty_state, compact_filters, icon_svg %}
 
 
 {% block content %}
@@ -10,9 +10,7 @@
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Audit trail of expense limit checks</p>
         </div>
         <a href="/expense/limits/rules" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1.5") }}
             Back to Rules
         </a>
     </div>
@@ -98,7 +96,7 @@
                     {% for eval in evaluations %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                            {{ eval.evaluated_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ eval.evaluated_at | format_datetime }}
                         </td>
                         <td class="font-mono text-slate-900 dark:text-white">
                             <a href="/expense/claims/{{ eval.claim_id }}" class="hover:text-amber-600">

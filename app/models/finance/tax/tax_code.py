@@ -34,6 +34,7 @@ class TaxType(str, enum.Enum):
     INCOME_TAX = "INCOME_TAX"
     EXCISE = "EXCISE"
     CUSTOMS = "CUSTOMS"
+    STAMP_DUTY = "STAMP_DUTY"
     OTHER = "OTHER"
 
 

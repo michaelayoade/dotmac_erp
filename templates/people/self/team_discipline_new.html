@@ -1,0 +1,156 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}New Team Discipline Case{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/team/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Team Discipline</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">New Case</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+    <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center text-white">
+            {{ icon_svg("warning", "w-6 h-6") }}
+        </div>
+        <div>
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-white">New Team Discipline Case</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Create a case for your direct report and issue a formal query.</p>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500") }}
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not has_direct_reports %}
+    <div class="card p-8 text-center">
+        <p class="text-slate-600 dark:text-slate-400">You do not have direct reports yet, so you cannot create team discipline cases.</p>
+        <div class="mt-4">
+            <a href="/people/self/team/discipline" class="btn btn-secondary">Back to Team Cases</a>
+        </div>
+    </div>
+    {% else %}
+    <form method="post" action="/people/self/team/discipline/new" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Employee Information</h3>
+            </div>
+            <div class="card-body space-y-6">
+                <div>
+                    <label for="employee_id" class="form-label required">Employee</label>
+                    <select id="employee_id" name="employee_id" class="form-select w-full" required>
+                        <option value="">Select direct report</option>
+                        {% for emp in reports %}
+                        <option value="{{ emp.employee_id }}" {% if form_data.get('employee_id') == (emp.employee_id | string) %}selected{% endif %}>
+                            {{ emp.full_name }}{% if emp.employee_code %} ({{ emp.employee_code }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Only your direct reports are available here.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Violation Details</h3>
+            </div>
+            <div class="card-body space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <label for="violation_type" class="form-label required">Violation Type</label>
+                        <select id="violation_type" name="violation_type" class="form-select w-full" required>
+                            <option value="">Select Type</option>
+                            {% for v in violation_types %}
+                            <option value="{{ v }}" {% if form_data.get('violation_type') == v %}selected{% endif %}>
+                                {{ v | replace('_', ' ') | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="severity" class="form-label required">Severity</label>
+                        <select id="severity" name="severity" class="form-select w-full" required>
+                            <option value="">Select Severity</option>
+                            {% for s in severities %}
+                            <option value="{{ s }}" {% if form_data.get('severity') == s %}selected{% endif %}>
+                                {{ s | replace('_', ' ') | title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="subject" class="form-label required">Subject</label>
+                    <input type="text" id="subject" name="subject" class="form-input w-full" required maxlength="255" placeholder="Brief description of the violation"
+                           value="{{ form_data.get('subject', '') }}">
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" class="form-input w-full" rows="4" placeholder="Detailed description of the incident...">{{ form_data.get('description', '') }}</textarea>
+                </div>
+
+                <div>
+                    <label for="incident_date" class="form-label">Incident Date</label>
+                    <input type="date" id="incident_date" name="incident_date" class="form-input w-full"
+                           value="{{ form_data.get('incident_date', '') }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Issue Query</h3>
+            </div>
+            <div class="card-body space-y-6">
+                <div>
+                    <label for="query_text" class="form-label required">Query Text</label>
+                    <textarea id="query_text" name="query_text" class="form-input w-full" rows="5" required minlength="10" placeholder="Formal query text to employee...">{{ form_data.get('query_text', '') }}</textarea>
+                </div>
+
+                <div>
+                    <label for="response_due_date" class="form-label required">Response Due Date</label>
+                    <input type="date" id="response_due_date" name="response_due_date" class="form-input w-full" required
+                           value="{{ form_data.get('response_due_date', '') }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+            <div class="flex items-start gap-3">
+                {{ icon_svg("information-circle", "w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0") }}
+                <div class="text-sm text-blue-700 dark:text-blue-300">
+                    <p class="font-medium">Team Case Creation</p>
+                    <p class="text-blue-600 dark:text-blue-400 mt-1">This creates a disciplinary case and immediately issues the query to the selected direct report.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/self/team/discipline" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("plus", "w-4 h-4 mr-2") }}
+                Create Case & Issue Query
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

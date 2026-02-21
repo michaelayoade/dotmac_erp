@@ -4,7 +4,6 @@ import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -179,13 +178,11 @@ def create_document(
             if expiry_date
             else None,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/documents?success=Document+uploaded",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         emp_svc = EmployeeService(db, org_id)
         employee = _load_employee(emp_svc, emp_id)
         context = base_context(
@@ -229,26 +226,18 @@ def verify_document(
     doc_svc = EmployeeDocumentService(db, org_id)
 
     try:
-        verifier = db.scalar(
-            select(Employee).where(
-                Employee.organization_id == org_id,
-                Employee.person_id == auth.user_id,
-            )
-        )
-        verifier_id = verifier.employee_id if verifier else None
+        verifier_id = doc_svc.get_employee_id_for_person(coerce_uuid(auth.user_id))
 
         doc_svc.verify_document(
             document_id=coerce_uuid(document_id),
             verified_by_id=verifier_id,
             notes=notes,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/documents?success=Document+verified",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/documents?error={str(e)}",
             status_code=303,
@@ -272,13 +261,11 @@ def delete_document(
 
     try:
         doc_svc.delete_document(coerce_uuid(document_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/documents?success=Document+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/documents?error={str(e)}",
             status_code=303,
@@ -411,13 +398,11 @@ def create_qualification(
             grade=grade or None,
             notes=notes or None,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/qualifications?success=Qualification+added",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/qualifications?error={str(e)}",
             status_code=303,
@@ -438,13 +423,11 @@ def delete_qualification(
 
     try:
         qual_svc.delete_qualification(coerce_uuid(qualification_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/qualifications?success=Qualification+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/qualifications?error={str(e)}",
             status_code=303,
@@ -573,13 +556,11 @@ def create_certification(
             credential_url=credential_url or None,
             notes=notes or None,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/certifications?success=Certification+added",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/certifications?error={str(e)}",
             status_code=303,
@@ -600,13 +581,11 @@ def delete_certification(
 
     try:
         cert_svc.delete_certification(coerce_uuid(certification_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/certifications?success=Certification+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/certifications?error={str(e)}",
             status_code=303,
@@ -749,13 +728,11 @@ def create_dependent(
             else None,
             notes=notes or None,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/dependents?success=Dependent+added",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/dependents?error={str(e)}",
             status_code=303,
@@ -776,13 +753,11 @@ def delete_dependent(
 
     try:
         dep_svc.delete_dependent(coerce_uuid(dependent_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/dependents?success=Dependent+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/dependents?error={str(e)}",
             status_code=303,
@@ -921,13 +896,11 @@ def add_employee_skill(
             is_certified=_parse_bool(is_certified),
             notes=notes or None,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/skills?success=Skill+added",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/skills?error={str(e)}",
             status_code=303,
@@ -948,13 +921,11 @@ def remove_employee_skill(
 
     try:
         skill_svc.remove_skill(coerce_uuid(employee_skill_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/skills?success=Skill+removed",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/employees/{employee_id}/skills?error={str(e)}",
             status_code=303,

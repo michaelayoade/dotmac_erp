@@ -186,6 +186,22 @@ class Invoice(Base, VersionedMixin):
         comment="NOT_POSTED, POSTING, POSTED, FAILED",
     )
 
+    # Withholding tax
+    withholding_tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    withholding_tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
+    # Stamp duty
+    stamp_duty_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=0
+    )
+    stamp_duty_code_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+
     # IFRS 9 ECL
     ecl_provision_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6),

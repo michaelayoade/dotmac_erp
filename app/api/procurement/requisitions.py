@@ -24,6 +24,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -80,7 +84,6 @@ def create_requisition(
     user_id = UUID(person_id)
     try:
         req = service.create(organization_id, data, user_id)
-        db.commit()
         return RequisitionResponse.model_validate(req)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -97,7 +100,6 @@ def update_requisition(
     service = RequisitionService(db)
     try:
         req = service.update(organization_id, requisition_id, data)
-        db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -115,7 +117,6 @@ def submit_requisition(
     service = RequisitionService(db)
     try:
         req = service.submit(organization_id, requisition_id)
-        db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -138,7 +139,6 @@ def verify_budget(
     user_id = UUID(person_id)
     try:
         req = service.verify_budget(organization_id, requisition_id, user_id)
-        db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -161,7 +161,6 @@ def approve_requisition(
     user_id = UUID(person_id)
     try:
         req = service.approve(organization_id, requisition_id, user_id)
-        db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -179,7 +178,6 @@ def reject_requisition(
     service = RequisitionService(db)
     try:
         req = service.reject(organization_id, requisition_id)
-        db.commit()
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

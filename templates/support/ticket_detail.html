@@ -1,19 +1,16 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 {% block page_title %}{{ ticket.ticket_number if ticket else 'Ticket Not Found' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support Tickets</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ ticket.ticket_number if ticket else 'Not Found' }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support Tickets</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ ticket.ticket_number if ticket else 'Not Found' }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -21,16 +18,12 @@
 {% if ticket %}
 <div class="flex items-center gap-2">
 <a href="{{ ticket.ticket_edit_url }}" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
         Edit
     </a>
     <div x-data="{ showConfirm: false }" class="relative">
         <button @click="showConfirm = true" type="button" class="btn btn-secondary text-slate-500 hover:text-rose-600">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-            </svg>
+            {{ icon_svg("archive", "h-4 w-4 mr-1.5") }}
             Archive
         </button>
         {# Confirmation Modal #}
@@ -46,9 +39,7 @@
                     <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/archive" class="inline">
                         {{ request.state.csrf_form | safe }}
                         <button type="submit" class="btn btn-danger">
-                            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-                            </svg>
+                            {{ icon_svg("archive", "h-4 w-4 mr-1.5") }}
                             Archive
                         </button>
                     </form>
@@ -84,6 +75,8 @@
         </div>
     </div>
     {% endif %}
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endif %}
 {% endblock %}
@@ -94,9 +87,7 @@
     <div class="card p-12">
         <div class="text-center">
             <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("exclamation-circle", "h-8 w-8 text-slate-400") }}
             </div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Ticket Not Found</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">This ticket could not be found or you don't have access to it.</p>
@@ -124,9 +115,7 @@
                 {% if ticket.can_transition_to %}
                 <div x-data="{ open: false }" class="relative">
                     <button @click="open = !open" class="btn btn-secondary">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
+                        {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
                         Change Status
                     </button>
                     <div x-show="open" @click.outside="open = false" x-transition
@@ -175,22 +164,15 @@
                 <div class="p-6 space-y-4">
                     <form method="post" enctype="multipart/form-data" action="/support/tickets/{{ ticket.ticket_number }}/attachments" class="space-y-4">
                         {{ request.state.csrf_form | safe }}
-                        <div>
-                            <input type="file" name="file"
-                                   accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
-                                   class="block w-full text-sm text-slate-500 dark:text-slate-400
-                                          file:mr-4 file:py-2 file:px-4
-                                          file:rounded-lg file:border-0
-                                          file:text-sm file:font-medium
-                                          file:bg-amber-50 file:text-amber-700
-                                          hover:file:bg-amber-100
-                                          dark:file:bg-amber-900/20 dark:file:text-amber-400">
-                            <p class="mt-1 text-xs text-slate-400">Max 10MB. Images, PDFs, Office docs, or ZIP files.</p>
-                        </div>
+                        {{ file_upload_zone(
+                            name="file",
+                            label="",
+                            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip",
+                            max_size_mb=10,
+                            hint="Max 10MB. Images, PDFs, Office docs, or ZIP files."
+                        ) }}
                         <button type="submit" class="btn btn-secondary btn-sm">
-                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                            </svg>
+                            {{ icon_svg("cloud-upload", "h-4 w-4 mr-1") }}
                             Upload Attachment
                         </button>
                     </form>
@@ -207,9 +189,7 @@
                                 </button>
                                 {% else %}
                                 <div class="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
-                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
+                                    {{ icon_svg("document") }}
                                 </div>
                                 {% endif %}
                                 <div>
@@ -244,9 +224,7 @@
             {% if ticket.resolution %}
             <div class="card p-6 border-l-4 border-emerald-500">
                 <h3 class="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-5 w-5 text-emerald-500") }}
                     Resolution
                 </h3>
                 <div class="prose prose-slate dark:prose-invert max-w-none text-sm">
@@ -276,9 +254,7 @@
                         <textarea name="resolution" required rows="4" class="form-input w-full" placeholder="Describe how this issue was resolved..."></textarea>
                     </div>
                     <button type="submit" class="btn btn-success">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
                         Mark as Resolved
                     </button>
                 </form>
@@ -315,9 +291,7 @@
                 </div>
                 {% else %}
                 <div class="p-6 text-center">
-                    <svg class="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                    </svg>
+                    {{ icon_svg("cash", "h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2") }}
                     <p class="text-sm text-slate-500 dark:text-slate-400">No expense claims linked to this ticket</p>
                 </div>
                 {% endif %}
@@ -358,9 +332,7 @@
                 </div>
                 {% else %}
                 <div class="p-6 text-center">
-                    <svg class="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                    </svg>
+                    {{ icon_svg("clipboard-check", "h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2") }}
                     <p class="text-sm text-slate-500 dark:text-slate-400">No tasks linked to this ticket</p>
                 </div>
                 {% endif %}
@@ -443,9 +415,7 @@
                         <dt class="text-sm text-slate-500 dark:text-slate-400">Team</dt>
                         <dd class="text-sm">
                             <a href="/support/teams/{{ ticket.team_id }}" class="inline-flex items-center gap-1.5 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                </svg>
+                                {{ icon_svg("user-group", "h-4 w-4") }}
                                 {{ ticket.team_name }}
                             </a>
                         </dd>
@@ -473,9 +443,7 @@
             {% if sla %}
             <div class="card p-6">
                 <h3 class="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-5 w-5 text-slate-400") }}
                     SLA Status
                 </h3>
                 <div class="space-y-4">
@@ -587,9 +555,7 @@
                         </select>
                     </div>
                     <button type="submit" class="btn btn-secondary btn-sm w-full">
-                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
+                        {{ icon_svg("user", "h-4 w-4 mr-1") }}
                         {{ 'Reassign' if ticket.assigned_to_name else 'Assign' }}
                     </button>
                 </form>
@@ -601,9 +567,7 @@
                 <div class="space-y-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                            <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                            </svg>
+                            {{ icon_svg("plus", "h-4 w-4 text-slate-500") }}
                         </div>
                         <div>
                             <p class="text-sm text-slate-900 dark:text-white">Created</p>
@@ -613,9 +577,7 @@
                     {% if ticket.updated_at %}
                     <div class="flex items-center gap-3">
                         <div class="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/30">
-                            <svg class="h-4 w-4 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                            </svg>
+                            {{ icon_svg("edit", "h-4 w-4 text-sky-600 dark:text-sky-400") }}
                         </div>
                         <div>
                             <p class="text-sm text-slate-900 dark:text-white">Last Updated</p>
@@ -626,9 +588,7 @@
                     {% if ticket.resolution_date_formatted %}
                     <div class="flex items-center gap-3">
                         <div class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                            <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
+                            {{ icon_svg("check", "h-4 w-4 text-emerald-600 dark:text-emerald-400") }}
                         </div>
                         <div>
                             <p class="text-sm text-slate-900 dark:text-white">Resolved</p>
@@ -639,9 +599,7 @@
                     {% if ticket.last_synced_at %}
                     <div class="flex items-center gap-3">
                         <div class="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-                            <svg class="h-4 w-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
+                            {{ icon_svg("refresh", "h-4 w-4 text-purple-600 dark:text-purple-400") }}
                         </div>
                         <div>
                             <p class="text-sm text-slate-900 dark:text-white">Last Synced</p>
@@ -681,9 +639,7 @@
     <div class="card mt-6" x-data="activityLogFilter()">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between cursor-pointer" @click="expanded = !expanded">
             <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "h-5 w-5 text-slate-400") }}
                 Activity Log
                 {% if activity_timeline %}
                 {{ status_badge(activity_timeline | length, size="sm") }}
@@ -703,18 +659,14 @@
                     <button @click="filter = 'all'" type="button"
                             :class="filter === 'all' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
                             class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors">
-                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                        </svg>
+                        {{ icon_svg("list-bullet", "h-3.5 w-3.5") }}
                         All
                         <span class="opacity-60" x-text="'(' + counts.all + ')'"></span>
                     </button>
                     <button @click="filter = 'comment'" type="button"
                             :class="filter === 'comment' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
                             class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors">
-                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                        </svg>
+                        {{ icon_svg("chat-bubble", "h-3.5 w-3.5") }}
                         Comments
                         <span class="opacity-60" x-text="'(' + counts.comment + ')'"></span>
                     </button>
@@ -730,9 +682,7 @@
                     <button @click="filter = 'system'" type="button"
                             :class="filter === 'system' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
                             class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors">
-                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
+                        {{ icon_svg("refresh", "h-3.5 w-3.5") }}
                         Status Changes
                         <span class="opacity-60" x-text="'(' + counts.system + ')'"></span>
                     </button>
@@ -765,9 +715,7 @@
                             <span>Internal note (staff only)</span>
                         </label>
                         <button type="submit" class="btn btn-primary btn-sm">
-                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                            </svg>
+                            {{ icon_svg("paper-airplane", "h-4 w-4 mr-1") }}
                             Add Comment
                         </button>
                     </div>
@@ -822,9 +770,7 @@
                                     </button>
                                     {% else %}
                                     <div class="h-8 w-8 rounded bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
-                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                        </svg>
+                                        {{ icon_svg("document", "h-4 w-4") }}
                                     </div>
                                     {% endif %}
                                     <div class="min-w-0">
@@ -844,9 +790,7 @@
 
             {# Empty State for Filtered View #}
             <div x-show="filteredCount === 0 && filter !== 'all'" class="px-6 py-8 text-center">
-                <svg class="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
+                {{ icon_svg("filter", "h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2") }}
                 <p class="text-sm text-slate-500 dark:text-slate-400">No <span x-text="filterLabels[filter]"></span> found</p>
                 <button @click="filter = 'all'" class="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mt-2">
                     Show all activity
@@ -854,9 +798,7 @@
             </div>
             {% else %}
             <div class="px-6 py-8 text-center">
-                <svg class="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2") }}
                 <p class="text-sm text-slate-500 dark:text-slate-400">No activity recorded yet</p>
             </div>
             {% endif %}

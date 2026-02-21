@@ -1,15 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, stats_card, filter_custom_select_field %}
+{% from "components/macros.html" import compact_filters, pagination, stats_card, filter_custom_select_field, icon_svg, empty_state %}
 
 {% block page_title %}General Ledger{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">General Ledger</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">General Ledger</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -17,16 +17,12 @@
 <div class="flex items-center gap-2">
     <button onclick="window.print()"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-        </svg>
+        {{ icon_svg("printer", "h-4 w-4") }}
         Print
     </button>
     <a href="/finance/gl/journals/new"
        class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4") }}
         New Journal Entry
     </a>
 </div>
@@ -66,9 +62,7 @@
     <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-900/30">
         <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-800">
-                <svg class="h-5 w-5 text-teal-600 dark:text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-5 w-5 text-teal-600 dark:text-teal-300") }}
             </div>
             <div>
                 <p class="font-mono text-sm font-medium text-teal-700 dark:text-teal-300">{{ selected_account.account_code }}</p>
@@ -120,36 +114,16 @@
                             <p class="text-sm text-slate-900 dark:text-white">{{ line.description | truncate(50) }}</p>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ line.reference }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-debit">{{ line.debit }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white table-cell-credit">{{ line.credit }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white table-cell-debit">{{ line.debit }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white table-cell-credit">{{ line.credit }}</td>
                         {% if show_balance_column %}
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono text-slate-900 dark:text-white">{{ line.balance }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ line.balance }}</td>
                         {% endif %}
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="{{ 8 if show_balance_column else 7 }}" class="px-6 py-12 text-center">
-                            <div class="empty-state">
-                                <div class="empty-state-icon">
-                                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                                    </svg>
-                                </div>
-                                <p class="empty-state-title">No ledger entries found</p>
-                                <p class="empty-state-description">
-                                    {% if selected_account or start_date or end_date or search %}
-                                    Try adjusting your filters or
-                                    {% else %}
-                                    Post journal entries to see transactions here, or
-                                    {% endif %}
-                                </p>
-                                <a href="/finance/gl/journals/new" class="btn btn-teal">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                                    </svg>
-                                    New Journal Entry
-                                </a>
-                            </div>
+                        <td colspan="{{ 8 if show_balance_column else 7 }}" class="p-0">
+                            {{ empty_state('No ledger entries found', 'Post journal entries to see transactions here.', 'book-open', 'New Journal Entry', '/finance/gl/journals/new') }}
                         </td>
                     </tr>
                     {% endfor %}

@@ -26,6 +26,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -80,7 +84,6 @@ def create_rfq(
     user_id = UUID(person_id)
     try:
         rfq = service.create(organization_id, data, user_id)
-        db.commit()
         return RFQResponse.model_validate(rfq)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -97,7 +100,6 @@ def update_rfq(
     service = RFQService(db)
     try:
         rfq = service.update(organization_id, rfq_id, data)
-        db.commit()
         return RFQResponse.model_validate(rfq)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -115,7 +117,6 @@ def publish_rfq(
     service = RFQService(db)
     try:
         rfq = service.publish(organization_id, rfq_id)
-        db.commit()
         return RFQResponse.model_validate(rfq)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -133,7 +134,6 @@ def close_rfq(
     service = RFQService(db)
     try:
         rfq = service.close_bidding(organization_id, rfq_id)
-        db.commit()
         return RFQResponse.model_validate(rfq)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -152,7 +152,6 @@ def invite_vendor(
     service = RFQService(db)
     try:
         invitation = service.invite_vendor(organization_id, rfq_id, data.supplier_id)
-        db.commit()
         return RFQInvitationResponse.model_validate(invitation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

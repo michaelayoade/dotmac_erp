@@ -53,6 +53,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -132,7 +136,6 @@ def create_training_program(
         provider_contact=payload.provider_contact,
         status=payload.status,
     )
-    db.commit()
     return TrainingProgramRead.model_validate(program)
 
 
@@ -160,7 +163,6 @@ def update_training_program(
     svc = TrainingService(db)
     update_data = payload.model_dump(exclude_unset=True)
     program = svc.update_program(organization_id, program_id, **update_data)
-    db.commit()
     return TrainingProgramRead.model_validate(program)
 
 
@@ -173,7 +175,6 @@ def delete_training_program(
     """Delete a training program."""
     svc = TrainingService(db)
     svc.delete_program(organization_id, program_id)
-    db.commit()
 
 
 # =============================================================================
@@ -250,7 +251,6 @@ def create_training_event(
         total_cost=payload.total_cost,
         currency_code=payload.currency_code,
     )
-    db.commit()
     return TrainingEventRead.model_validate(event)
 
 
@@ -276,7 +276,6 @@ def update_training_event(
     svc = TrainingService(db)
     update_data = payload.model_dump(exclude_unset=True)
     event = svc.update_event(organization_id, event_id, **update_data)
-    db.commit()
     return TrainingEventRead.model_validate(event)
 
 
@@ -289,7 +288,6 @@ def delete_training_event(
     """Delete a training event."""
     svc = TrainingService(db)
     svc.delete_event(organization_id, event_id)
-    db.commit()
 
 
 # Event workflow actions
@@ -302,7 +300,6 @@ def start_event(
     """Mark event as started (in progress)."""
     svc = TrainingService(db)
     event = svc.start_event(organization_id, event_id)
-    db.commit()
     return TrainingEventRead.model_validate(event)
 
 
@@ -318,7 +315,6 @@ def complete_event(
     event = svc.complete_event(
         organization_id, event_id, feedback_notes=payload.feedback_notes
     )
-    db.commit()
     return TrainingEventRead.model_validate(event)
 
 
@@ -332,7 +328,6 @@ def cancel_event(
     """Cancel a training event."""
     svc = TrainingService(db)
     event = svc.cancel_event(organization_id, event_id, reason=reason)
-    db.commit()
     return TrainingEventRead.model_validate(event)
 
 
@@ -396,7 +391,6 @@ def add_attendee(
     attendee = svc.invite_attendee(
         organization_id, event_id, payload.employee_id, notes=payload.notes
     )
-    db.commit()
     return TrainingAttendeeRead.model_validate(attendee)
 
 
@@ -414,7 +408,6 @@ def bulk_invite_attendees(
         event_id=event_id,
         employee_ids=payload.employee_ids,
     )
-    db.commit()
     return BulkInviteResponse(
         success_count=len(attendees),
         failed_count=max(0, len(payload.employee_ids) - len(attendees)),
@@ -435,7 +428,6 @@ def remove_attendee(
     """Remove an attendee from a training event."""
     svc = TrainingService(db)
     svc.remove_attendee(organization_id, event_id, attendee_id)
-    db.commit()
 
 
 # Attendee actions
@@ -455,7 +447,6 @@ def confirm_attendance(
     if existing.event_id != event_id:
         raise HTTPException(status_code=404, detail="Attendee not found for event")
     attendee = svc.confirm_attendance(organization_id, attendee_id)
-    db.commit()
     return TrainingAttendeeRead.model_validate(attendee)
 
 
@@ -476,7 +467,6 @@ def mark_attended(
     if existing.event_id != event_id:
         raise HTTPException(status_code=404, detail="Attendee not found for event")
     attendee = svc.mark_attended(organization_id, attendee_id)
-    db.commit()
     return TrainingAttendeeRead.model_validate(attendee)
 
 
@@ -502,7 +492,6 @@ def submit_feedback(
         rating=payload.rating,
         feedback=payload.feedback,
     )
-    db.commit()
     return TrainingAttendeeRead.model_validate(attendee)
 
 
@@ -527,7 +516,6 @@ def issue_certificate(
         attendee_id=attendee_id,
         certificate_number=payload.certificate_number,
     )
-    db.commit()
     return TrainingAttendeeRead.model_validate(attendee)
 
 

@@ -1,14 +1,15 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Tax summary by type{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/reports" class="hover:text-primary-600 dark:hover:text-primary-400">Reports</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Tax summary</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/finance/reports" class="hover:text-primary-600 dark:hover:text-primary-400">Reports</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Tax summary</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -17,7 +18,7 @@
     <!-- Header & Filters -->
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Tax summary by type</h1>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Tax summary by type</h2>
             <p class="mt-1 text-sm text-slate-500">Overview of all tax types for the selected period.</p>
         </div>
         <form method="GET" class="flex items-center gap-2">
@@ -124,9 +125,7 @@
         <a href="/finance/tax/reports/vat-return?start_date={{ start_date }}&end_date={{ end_date }}"
            class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-primary-700">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                {{ icon_svg("document-report") }}
             </div>
             <div>
                 <p class="font-medium text-slate-900 dark:text-white">VAT Return</p>
@@ -136,9 +135,7 @@
         <a href="/finance/tax/reports/wht?start_date={{ start_date }}&end_date={{ end_date }}"
            class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-primary-700">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
-                </svg>
+                {{ icon_svg("receipt") }}
             </div>
             <div>
                 <p class="font-medium text-slate-900 dark:text-white">WHT report</p>
@@ -148,9 +145,7 @@
         <a href="/finance/tax/transactions?start_date={{ start_date }}&end_date={{ end_date }}"
            class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-primary-700">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                </svg>
+                {{ icon_svg("list-bullet") }}
             </div>
             <div>
                 <p class="font-medium text-slate-900 dark:text-white">Tax register</p>

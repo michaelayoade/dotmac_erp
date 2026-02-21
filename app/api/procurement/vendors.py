@@ -24,6 +24,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -96,7 +100,6 @@ def create_prequalification(
     """Create a prequalification record."""
     service = VendorPrequalificationService(db)
     preq = service.create(organization_id, data)
-    db.commit()
     return PrequalificationResponse.model_validate(preq)
 
 
@@ -114,7 +117,6 @@ def update_prequalification(
     service = VendorPrequalificationService(db)
     try:
         preq = service.update(organization_id, prequalification_id, data)
-        db.commit()
         return PrequalificationResponse.model_validate(preq)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -138,7 +140,6 @@ def qualify_vendor(
     service = VendorPrequalificationService(db)
     try:
         preq = service.qualify(organization_id, prequalification_id, user_id)
-        db.commit()
         return PrequalificationResponse.model_validate(preq)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -162,7 +163,6 @@ def disqualify_vendor(
     service = VendorPrequalificationService(db)
     try:
         preq = service.disqualify(organization_id, prequalification_id, user_id)
-        db.commit()
         return PrequalificationResponse.model_validate(preq)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

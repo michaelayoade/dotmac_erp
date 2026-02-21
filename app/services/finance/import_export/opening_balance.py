@@ -594,6 +594,51 @@ class OpeningBalanceImporter:
         )
 
 
+def get_journal_import_status(
+    db: Session,
+    organization_id: UUID,
+    journal_entry_id: UUID,
+) -> dict | None:
+    """
+    Get status of an imported opening balance journal entry.
+
+    Returns dict with journal details and line count, or None if not found.
+    """
+    from sqlalchemy import func, select
+
+    from app.models.finance.gl.journal_entry import JournalEntry
+    from app.models.finance.gl.journal_entry_line import JournalEntryLine
+
+    journal = db.execute(
+        select(JournalEntry).where(
+            JournalEntry.journal_entry_id == journal_entry_id,
+            JournalEntry.organization_id == organization_id,
+        )
+    ).scalar_one_or_none()
+
+    if not journal:
+        return None
+
+    line_count = db.execute(
+        select(func.count(JournalEntryLine.line_id)).where(
+            JournalEntryLine.journal_entry_id == journal_entry_id
+        )
+    ).scalar()
+
+    return {
+        "journal_entry_id": str(journal.journal_entry_id),
+        "journal_number": journal.journal_number,
+        "journal_type": journal.journal_type.value,
+        "entry_date": journal.entry_date.isoformat(),
+        "description": journal.description,
+        "status": journal.status.value,
+        "total_debit": float(journal.total_debit),
+        "total_credit": float(journal.total_credit),
+        "line_count": line_count,
+        "created_at": journal.created_at.isoformat(),
+    }
+
+
 def get_opening_balance_template() -> str:
     """Return CSV template for opening balances."""
     return """Account Name,Account Type,Debit,Credit,Normal Balance,Notes,COA Match

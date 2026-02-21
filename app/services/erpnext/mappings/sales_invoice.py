@@ -41,6 +41,10 @@ class SalesInvoiceMapping(DocTypeMapping):
                     target="_customer_source_name",
                     required=True,
                 ),
+                FieldMapping(
+                    source="customer_name",
+                    target="_customer_display_name",
+                ),
                 # Dates
                 FieldMapping(
                     source="posting_date",

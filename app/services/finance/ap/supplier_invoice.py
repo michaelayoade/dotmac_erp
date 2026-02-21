@@ -306,8 +306,7 @@ class SupplierInvoiceService(ListResponseMixin):
         # Pre-calculate taxes for all lines
         line_tax_results: list[LineCalculationResult | None] = []
         for line in input.lines:
-            line_amount = line.quantity * line.unit_price
-            subtotal += line_amount
+            gross_line_amount = line.quantity * line.unit_price
 
             # Build list of tax codes (support both new and legacy format)
             effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
@@ -319,14 +318,17 @@ class SupplierInvoiceService(ListResponseMixin):
                 line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
-                    line_amount=line_amount,
+                    line_amount=gross_line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
                 line_tax_results.append(line_tax_result)
+                # Use net_amount for subtotal (handles inclusive tax extraction)
+                subtotal += line_tax_result.net_amount
                 tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
+                subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
 
@@ -376,15 +378,17 @@ class SupplierInvoiceService(ListResponseMixin):
 
         # Create lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
-            line_amount = line_input.quantity * line_input.unit_price
-            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
-                line_amount = -abs(line_amount)
-
             # Get the pre-calculated tax result for this line
             tax_result = line_tax_results[idx - 1]
+            gross_line_amount = line_input.quantity * line_input.unit_price
+            # Use net_amount so line_amount reflects expense (after inclusive tax extraction)
+            net_line_amount = tax_result.net_amount if tax_result else gross_line_amount
             line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
-            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE and tax_result:
-                line_tax_total = -abs(line_tax_total)
+
+            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+                net_line_amount = -abs(net_line_amount)
+                if tax_result:
+                    line_tax_total = -abs(line_tax_total)
 
             # Get primary tax code ID for legacy compatibility (first tax code)
             effective_tax_codes = (
@@ -405,7 +409,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 description=line_input.description,
                 quantity=line_input.quantity,
                 unit_price=line_input.unit_price,
-                line_amount=line_amount,
+                line_amount=net_line_amount,
                 tax_code_id=primary_tax_code_id,  # Primary tax for backwards compatibility
                 tax_amount=line_tax_total,  # Total of all taxes on this line
                 expense_account_id=line_input.expense_account_id
@@ -527,8 +531,7 @@ class SupplierInvoiceService(ListResponseMixin):
         # Pre-calculate taxes for all lines
         line_tax_results: list[LineCalculationResult | None] = []
         for line in input.lines:
-            line_amount = line.quantity * line.unit_price
-            subtotal += line_amount
+            gross_line_amount = line.quantity * line.unit_price
 
             # Build list of tax codes (support both new and legacy format)
             effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
@@ -540,14 +543,16 @@ class SupplierInvoiceService(ListResponseMixin):
                 line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
-                    line_amount=line_amount,
+                    line_amount=gross_line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
                 line_tax_results.append(line_tax_result)
+                subtotal += line_tax_result.net_amount
                 tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
+                subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
 
@@ -614,14 +619,15 @@ class SupplierInvoiceService(ListResponseMixin):
                 )
 
         for idx, line_input in enumerate(input.lines, start=1):
-            line_amount = line_input.quantity * line_input.unit_price
-            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
-                line_amount = -abs(line_amount)
-
             tax_result = line_tax_results[idx - 1]
+            gross_line_amount = line_input.quantity * line_input.unit_price
+            net_line_amount = tax_result.net_amount if tax_result else gross_line_amount
             line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
-            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE and tax_result:
-                line_tax_total = -abs(line_tax_total)
+
+            if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+                net_line_amount = -abs(net_line_amount)
+                if tax_result:
+                    line_tax_total = -abs(line_tax_total)
 
             effective_tax_codes = (
                 list(line_input.tax_code_ids) if line_input.tax_code_ids else []
@@ -641,7 +647,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 description=line_input.description,
                 quantity=line_input.quantity,
                 unit_price=line_input.unit_price,
-                line_amount=line_amount,
+                line_amount=net_line_amount,
                 tax_code_id=primary_tax_code_id,
                 tax_amount=line_tax_total,
                 expense_account_id=line_input.expense_account_id

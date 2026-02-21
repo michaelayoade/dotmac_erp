@@ -33,6 +33,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -532,9 +536,8 @@ def offer_portal_pdf(
     letter_service = OfferLetterService(db)
     try:
         letter_service._ensure_default_template(ctx.org_id, user_id)
-        db.commit()
     except Exception:
-        db.rollback()
+        pass
     pdf_bytes, doc = letter_service.generate_offer_letter(offer.offer_id, user_id)
     filename = doc.document_number or f"OFFER-{offer.offer_number}"
 
@@ -570,7 +573,6 @@ def offer_portal_accept(
     try:
         offer = service._careers_service.accept_offer_by_token(ctx.org_id, token)
     except Exception as exc:
-        db.rollback()
         error_msg = str(exc).lower()
         if "expired" in error_msg:
             return RedirectResponse(
@@ -580,7 +582,6 @@ def offer_portal_accept(
         raise
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found or expired")
-    db.commit()
     return RedirectResponse(
         url=(
             f"/careers/{org_slug}/offer/{token}?message=Your+response+has+been+recorded"
@@ -615,7 +616,6 @@ def offer_portal_decline(
     )
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found or expired")
-    db.commit()
     return RedirectResponse(
         url=(
             f"/careers/{org_slug}/offer/{token}?message=Your+response+has+been+recorded"

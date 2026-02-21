@@ -217,6 +217,16 @@ class EmployeeDocumentService:
         self.db.flush()
         return doc
 
+    def get_employee_id_for_person(self, person_id: uuid.UUID) -> uuid.UUID | None:
+        """Look up the employee_id for a person within this organization."""
+        emp = self.db.scalar(
+            select(Employee).where(
+                Employee.organization_id == self.organization_id,
+                Employee.person_id == person_id,
+            )
+        )
+        return emp.employee_id if emp else None
+
     def verify_document(
         self,
         document_id: uuid.UUID,

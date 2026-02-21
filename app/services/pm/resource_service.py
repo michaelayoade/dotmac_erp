@@ -214,6 +214,7 @@ class ResourceService:
 
         self.db.add(allocation)
         self.db.flush()
+        self.db.refresh(allocation)
         return allocation
 
     def update_allocation(
@@ -238,6 +239,7 @@ class ResourceService:
         if self.principal and hasattr(self.principal, "person_id"):
             allocation.updated_by_id = self.principal.person_id
 
+        self.db.refresh(allocation)
         return allocation
 
     def end_allocation(
@@ -257,6 +259,7 @@ class ResourceService:
         if self.principal and hasattr(self.principal, "person_id"):
             allocation.updated_by_id = self.principal.person_id
 
+        self.db.refresh(allocation)
         return allocation
 
     def delete_allocation(self, allocation_id: uuid.UUID) -> bool:

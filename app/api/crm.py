@@ -32,6 +32,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -200,13 +204,10 @@ def trigger_sync(
                     detail=f"Unknown entity type: {request_data.entity_type}",
                 )
 
-            db.commit()
-
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("CRM sync failed: %s", str(e))
-        db.rollback()
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
     return results
@@ -407,8 +408,6 @@ async def crm_webhook(
                     message=f"Unknown entity type: {entity_type}",
                 )
 
-            db.commit()
-
             if result.error_count > 0:
                 return WebhookResponse(
                     status="error",
@@ -422,7 +421,6 @@ async def crm_webhook(
 
     except Exception as e:
         logger.exception("CRM webhook processing failed: %s", str(e))
-        db.rollback()
         return WebhookResponse(
             status="error",
             message=str(e),

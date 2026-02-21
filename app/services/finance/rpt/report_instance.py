@@ -15,7 +15,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
@@ -415,11 +415,15 @@ class ReportInstanceService(ListResponseMixin):
             return definition
 
         if request.report_code:
-            definition = db.scalar(
-                select(ReportDefinition).where(
-                    ReportDefinition.organization_id == organization_id,
-                    ReportDefinition.report_code == request.report_code,
+            definition = (
+                db.query(ReportDefinition)
+                .filter(
+                    and_(
+                        ReportDefinition.organization_id == organization_id,
+                        ReportDefinition.report_code == request.report_code,
+                    )
                 )
+                .first()
             )
             if definition:
                 return definition
@@ -632,16 +636,16 @@ class ReportInstanceService(ListResponseMixin):
         Returns:
             List of queued report instances
         """
-        stmt = select(ReportInstance).where(
-            ReportInstance.status == ReportStatus.QUEUED,
+        stmt = db.query(ReportInstance).filter(
+            ReportInstance.status == ReportStatus.QUEUED
         )
 
         if organization_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
-        return db.scalars(stmt.order_by(ReportInstance.queued_at).limit(limit)).all()
+        return stmt.order_by(ReportInstance.queued_at).limit(limit).all()
 
     @staticmethod
     def get_generation_statistics(
@@ -662,16 +666,14 @@ class ReportInstanceService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        stmt = select(ReportInstance).where(
-            ReportInstance.organization_id == org_id,
-        )
+        stmt = db.query(ReportInstance).filter(ReportInstance.organization_id == org_id)
 
         if report_def_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ReportInstance.report_def_id == coerce_uuid(report_def_id)
             )
 
-        instances = db.scalars(stmt).all()
+        instances = stmt.all()
 
         total = len(instances)
         completed = len([i for i in instances if i.status == ReportStatus.COMPLETED])
@@ -718,20 +720,23 @@ class ReportInstanceService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
 
-        instances = db.scalars(
-            select(ReportInstance).where(
-                ReportInstance.organization_id == org_id,
-                ReportInstance.generated_at < cutoff_date,
-                ReportInstance.status.in_(
-                    [
-                        ReportStatus.COMPLETED,
-                        ReportStatus.FAILED,
-                        ReportStatus.CANCELLED,
-                    ]
-                ),
+        instances = (
+            db.query(ReportInstance)
+            .filter(
+                and_(
+                    ReportInstance.organization_id == org_id,
+                    ReportInstance.generated_at < cutoff_date,
+                    ReportInstance.status.in_(
+                        [
+                            ReportStatus.COMPLETED,
+                            ReportStatus.FAILED,
+                            ReportStatus.CANCELLED,
+                        ]
+                    ),
+                )
             )
+            .all()
         )
-        instances = instances.all()
 
         count = len(instances)
         for instance in instances:
@@ -809,23 +814,23 @@ class ReportInstanceService(ListResponseMixin):
         offset: int = 0,
     ) -> list[ReportInstance]:
         """List report instances with optional filters."""
-        stmt = select(ReportInstance)
+        stmt = db.query(ReportInstance)
 
         if organization_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
         if report_def_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ReportInstance.report_def_id == coerce_uuid(report_def_id)
             )
 
         if status:
-            stmt = stmt.where(ReportInstance.status == status)
+            stmt = stmt.filter(ReportInstance.status == status)
 
         if fiscal_period_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ReportInstance.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
@@ -834,7 +839,7 @@ class ReportInstanceService(ListResponseMixin):
             .limit(limit)
             .offset(offset)
         )
-        return db.scalars(stmt).all()
+        return stmt.all()
 
 
 # Module-level singleton instance

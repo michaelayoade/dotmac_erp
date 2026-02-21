@@ -31,6 +31,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -99,7 +103,6 @@ def create_incident(
     service = IncidentService(db, organization_id)
     try:
         incident = service.create(data)
-        db.commit()
         return IncidentRead.model_validate(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -116,7 +119,6 @@ def update_incident(
     service = IncidentService(db, organization_id)
     try:
         incident = service.update(incident_id, data)
-        db.commit()
         return IncidentRead.model_validate(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -135,7 +137,6 @@ def resolve_incident(
     service = IncidentService(db, organization_id)
     try:
         incident = service.resolve(incident_id, data)
-        db.commit()
         return IncidentRead.model_validate(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -153,7 +154,6 @@ def close_incident(
     service = IncidentService(db, organization_id)
     try:
         incident = service.close(incident_id)
-        db.commit()
         return IncidentRead.model_validate(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -171,6 +171,5 @@ def delete_incident(
     service = IncidentService(db, organization_id)
     try:
         service.soft_delete(incident_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

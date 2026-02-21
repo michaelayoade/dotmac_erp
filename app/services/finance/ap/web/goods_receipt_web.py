@@ -28,6 +28,7 @@ from app.services.finance.ap.web.base import (
     format_file_size,
     logger,
     parse_date,
+    recent_activity_view,
     supplier_display_name,
     supplier_form_view,
     supplier_option_view,
@@ -316,6 +317,14 @@ class GoodsReceiptWebService:
             else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "recent_activity": recent_activity_view(
+                db,
+                org_id,
+                table_schema="ap",
+                table_name="goods_receipt",
+                record_id=str(gr.receipt_id),
+                limit=10,
+            ),
         }
 
     @staticmethod

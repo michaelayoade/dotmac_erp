@@ -4,12 +4,12 @@
 {% block page_title %}Expense {{ expense.expense_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    {{ icon_svg("chevron-right", "h-4 w-4") }}
-    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expenses</a>
-    {{ icon_svg("chevron-right", "h-4 w-4") }}
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ expense.expense_number }}</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expenses</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ expense.expense_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 

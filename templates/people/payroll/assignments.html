@@ -1,31 +1,26 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg %}
 
 {% block page_title %}Salary Assignments{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Assignments</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Assignments</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/payroll/assignments/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
     New Assignment
 </a>
 <a href="/people/payroll/assignments/bulk" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-    </svg>
+    {{ icon_svg("menu", "h-4 w-4 mr-1.5") }}
     Bulk Assign
 </a>
 {% endblock %}
@@ -92,10 +87,10 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ assignment.from_date.strftime('%Y-%m-%d') }}
+                            {{ assignment.from_date | format_date }}
                             {% if assignment.to_date %}
                             <span class="mx-1">to</span>
-                            {{ assignment.to_date.strftime('%Y-%m-%d') }}
+                            {{ assignment.to_date | format_date }}
                             {% else %}
                             <span class="text-slate-400 dark:text-slate-500"> - Present</span>
                             {% endif %}
@@ -118,9 +113,7 @@
                             <div class="flex items-center justify-end gap-2">
                                 <a href="/people/payroll/assignments/{{ assignment.assignment_id }}/edit"
                                    class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400" title="Edit" aria-label="Edit">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
+                                    {{ icon_svg("edit", "w-4 h-4") }}
                                 </a>
                                 <form method="post" action="/people/payroll/assignments/{{ assignment.assignment_id }}/delete" onsubmit="return confirm('Delete this assignment?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -136,9 +129,7 @@
                     {% else %}
                     <tr>
                         <td colspan="6" class="px-4 py-12 text-center">
-                            <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
+                            {{ icon_svg("currency", "mx-auto h-12 w-12 text-slate-300 dark:text-slate-600") }}
                             <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No assignments found</h3>
                             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 {% if search %}

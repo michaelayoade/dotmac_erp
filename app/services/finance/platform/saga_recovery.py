@@ -79,7 +79,7 @@ class SagaRecoveryService:
                 SagaExecution.organization_id == coerce_uuid(organization_id)
             )
 
-        stuck = db.scalars(stmt).all()
+        stuck = list(db.scalars(stmt))
 
         if stuck:
             logger.warning(
@@ -142,11 +142,11 @@ class SagaRecoveryService:
         if force_compensate or saga.status == SagaStatus.COMPENSATING:
             # Force compensation
             result = orchestrator._compensate_steps(db, saga)
-            return result.was_compensated
+            return bool(result.was_compensated)
         else:
             # Attempt to resume
             result = orchestrator._execute_steps(db, saga)
-            return result.success
+            return bool(result.success)
 
     @staticmethod
     def mark_failed(
@@ -284,7 +284,7 @@ class SagaRecoveryService:
         db.commit()
 
         result = orchestrator._compensate_steps(db, saga)
-        return result.was_compensated
+        return bool(result.was_compensated)
 
     @staticmethod
     def cleanup_old_completed_sagas(
@@ -309,21 +309,22 @@ class SagaRecoveryService:
         cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
         # Get IDs to delete
-        saga_ids = db.scalars(
-            select(SagaExecution.saga_id)
-            .where(
-                SagaExecution.status.in_(
-                    [
-                        SagaStatus.COMPLETED,
-                        SagaStatus.COMPENSATED,
-                        SagaStatus.FAILED,
-                    ]
-                ),
-                SagaExecution.completed_at < cutoff_date,
+        saga_ids = list(
+            db.scalars(
+                select(SagaExecution.saga_id)
+                .where(
+                    SagaExecution.status.in_(
+                        [
+                            SagaStatus.COMPLETED,
+                            SagaStatus.COMPENSATED,
+                            SagaStatus.FAILED,
+                        ]
+                    ),
+                    SagaExecution.completed_at < cutoff_date,
+                )
+                .limit(batch_size)
             )
-            .limit(batch_size)
         )
-        saga_ids = saga_ids.all()
 
         if not saga_ids:
             return 0

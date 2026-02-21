@@ -1,6 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block title %}Milestones - {{ project.project_name }}{% endblock %}
 
 {% block content %}
@@ -10,9 +10,7 @@
         <div>
             <div class="flex items-center gap-2">
                 <a href="/projects/{{ project.project_code }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left") }}
                 </a>
                 <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Milestones</h1>
             </div>
@@ -20,9 +18,7 @@
         </div>
         <a href="/projects/{{ project.project_code }}/milestones/new"
            class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
+            {{ icon_svg("plus", "h-4 w-4") }}
             New Milestone
         </a>
     </div>
@@ -74,13 +70,9 @@
                     } %}
                     <div class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full {{ status_colors.get(milestone.status.value, 'bg-slate-400') }}">
                         {% if milestone.status.value == 'ACHIEVED' %}
-                        <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-white") }}
                         {% elif milestone.status.value == 'MISSED' %}
-                        <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
+                        {{ icon_svg("x-mark", "h-4 w-4 text-white") }}
                         {% else %}
                         <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3"/>
@@ -97,11 +89,11 @@
                             </div>
                             <div class="text-right">
                                 <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                    {% if milestone.target_date %}{{ milestone.target_date.strftime('%d %b %Y') }}{% else %}-{% endif %}
+                                    {% if milestone.target_date %}{{ milestone.target_date | format_date }}{% else %}-{% endif %}
                                 </div>
                                 {% if milestone.actual_date %}
                                 <div class="text-xs text-slate-500 dark:text-slate-400">
-                                    Achieved: {{ milestone.actual_date.strftime('%d %b %Y') }}
+                                    Achieved: {{ milestone.actual_date | format_date }}
                                 </div>
                                 {% endif %}
                             </div>
@@ -134,9 +126,7 @@
         </div>
         {% else %}
         <div class="text-center py-12">
-            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
-            </svg>
+            {{ icon_svg("check-badge", "mx-auto h-12 w-12 text-slate-400") }}
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No milestones defined</p>
             <a href="/projects/{{ project.project_code }}/milestones/new"
                class="mt-4 inline-flex items-center gap-2 text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400">

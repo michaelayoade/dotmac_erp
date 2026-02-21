@@ -24,6 +24,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -65,7 +69,6 @@ def create_quotation(
     """Record a vendor quotation response."""
     service = QuotationResponseService(db)
     response = service.create(organization_id, data)
-    db.commit()
     return QuotationResponseSchema.model_validate(response)
 
 
@@ -80,7 +83,6 @@ def update_quotation(
     service = QuotationResponseService(db)
     try:
         response = service.update(organization_id, response_id, data)
-        db.commit()
         return QuotationResponseSchema.model_validate(response)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

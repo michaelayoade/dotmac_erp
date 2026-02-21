@@ -168,6 +168,9 @@ def _ensure_extra_reimbursement_journal(
 
 
 def main() -> None:
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--from-date", default="2025-01-01")
     ap.add_argument("--to-date", default="2025-12-31")

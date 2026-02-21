@@ -1,0 +1,7 @@
+assumption_id,topic,assumption,impact,required_action
+A1,Migration Basis,"Opening balances as at 2024-12-31, no historical monthly depreciation reconstruction",Depreciation starts prospectively from 2025-01-01,Approve accounting policy memo
+A2,Acquisition Cost,"Where original invoice cost unavailable, use deemed cost at migration date",Potential valuation estimate risk,Provide valuation support or management sign-off
+A3,Accumulated Depreciation,"If historical depreciation unavailable, set opening accumulated depreciation from NBV policy or estimate",Affects retained earnings/PPE rollforward,Agree adjustment JE and documentation
+A4,Useful Life,Set remaining useful life by category/engineering estimate,Future depreciation expense pattern,Approve life matrix by Finance/Engineering
+A5,Residual Value,Default residual value set to zero unless documented,Conservative depreciation base,Confirm exceptions for vehicles/heavy equipment
+A6,Asset IDs,Rows missing code assigned temporary OPEN-FA-2024-xxxx IDs,Needs permanent tagging later,Replace with physical tag register IDs

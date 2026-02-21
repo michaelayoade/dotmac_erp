@@ -693,10 +693,11 @@ class JournalService(ListResponseMixin):
         if journal.status == JournalStatus.POSTED:
             return journal  # Already posted (idempotent)
 
-        if journal.status not in {JournalStatus.APPROVED, JournalStatus.DRAFT}:
+        if journal.status != JournalStatus.APPROVED:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot post journal with status '{journal.status.value}'",
+                detail=f"Cannot post journal with status '{journal.status.value}'. "
+                "Journal must be approved before posting.",
             )
 
         old_status = journal.status.value
@@ -881,32 +882,32 @@ class JournalService(ListResponseMixin):
         Returns:
             List of JournalEntry objects
         """
-        query = select(JournalEntry)
+        stmt = select(JournalEntry)
 
         if organization_id:
-            query = query.where(
+            stmt = stmt.where(
                 JournalEntry.organization_id == coerce_uuid(organization_id)
             )
 
         if status:
-            query = query.where(JournalEntry.status == status)
+            stmt = stmt.where(JournalEntry.status == status)
 
         if journal_type:
-            query = query.where(JournalEntry.journal_type == journal_type)
+            stmt = stmt.where(JournalEntry.journal_type == journal_type)
 
         if fiscal_period_id:
-            query = query.where(
+            stmt = stmt.where(
                 JournalEntry.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if from_date:
-            query = query.where(JournalEntry.posting_date >= from_date)
+            stmt = stmt.where(JournalEntry.posting_date >= from_date)
 
         if to_date:
-            query = query.where(JournalEntry.posting_date <= to_date)
+            stmt = stmt.where(JournalEntry.posting_date <= to_date)
 
-        query = query.order_by(JournalEntry.created_at.desc())
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+        stmt = stmt.order_by(JournalEntry.created_at.desc())
+        return list(db.scalars(stmt.limit(limit).offset(offset)).all())
 
     @staticmethod
     def create_entry(

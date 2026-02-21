@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{% if profile %}Edit Tax Profile{% else %}New Tax Profile{% endif %}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/tax/profiles" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax Profiles</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{% if profile %}Edit{% else %}New{% endif %}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/tax/profiles" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax Profiles</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{% if profile %}Edit{% else %}New{% endif %}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -229,9 +229,7 @@
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/payroll/tax/profiles" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
                 {% if profile %}Update Profile{% else %}Create Profile{% endif %}
             </button>
         </div>

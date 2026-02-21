@@ -58,6 +58,9 @@ def decrypt_value(encrypted: str) -> str:
 
 
 def main():
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     print("=" * 60)
     print("Stock Ledger Entry Sync Test")
     print("=" * 60)

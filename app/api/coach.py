@@ -88,5 +88,4 @@ def submit_feedback(
         insight_id=coerce_uuid(insight_id),
         feedback=payload.feedback,
     )
-    db.commit()
     return CoachInsightSummary.model_validate(updated)

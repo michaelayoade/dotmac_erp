@@ -9,15 +9,19 @@ from __future__ import annotations
 import builtins
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+
+if TYPE_CHECKING:
+    from app.models.finance.rpt.financial_statement_line import StatementType
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +107,15 @@ class ReportDefinitionService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Check for duplicate report code
-        existing = db.scalar(
-            select(ReportDefinition).where(
-                ReportDefinition.organization_id == org_id,
-                ReportDefinition.report_code == input.report_code,
+        existing = (
+            db.query(ReportDefinition)
+            .filter(
+                and_(
+                    ReportDefinition.organization_id == org_id,
+                    ReportDefinition.report_code == input.report_code,
+                )
             )
+            .first()
         )
         if existing:
             raise HTTPException(
@@ -356,11 +364,15 @@ class ReportDefinitionService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Source definition not found")
 
         # Check for duplicate
-        existing = db.scalar(
-            select(ReportDefinition).where(
-                ReportDefinition.organization_id == org_id,
-                ReportDefinition.report_code == new_report_code,
+        existing = (
+            db.query(ReportDefinition)
+            .filter(
+                and_(
+                    ReportDefinition.organization_id == org_id,
+                    ReportDefinition.report_code == new_report_code,
+                )
             )
+            .first()
         )
         if existing:
             raise HTTPException(
@@ -403,11 +415,15 @@ class ReportDefinitionService(ListResponseMixin):
         report_code: str,
     ) -> ReportDefinition | None:
         """Get report definition by code."""
-        return db.scalar(
-            select(ReportDefinition).where(
-                ReportDefinition.organization_id == coerce_uuid(organization_id),
-                ReportDefinition.report_code == report_code,
+        return (
+            db.query(ReportDefinition)
+            .filter(
+                and_(
+                    ReportDefinition.organization_id == coerce_uuid(organization_id),
+                    ReportDefinition.report_code == report_code,
+                )
             )
+            .first()
         )
 
     @staticmethod
@@ -417,15 +433,18 @@ class ReportDefinitionService(ListResponseMixin):
         report_type: ReportType,
     ) -> builtins.list[ReportDefinition]:
         """Get report definitions by type."""
-        return db.scalars(
-            select(ReportDefinition)
-            .where(
-                ReportDefinition.organization_id == coerce_uuid(organization_id),
-                ReportDefinition.report_type == report_type,
-                ReportDefinition.is_active == True,
+        return (
+            db.query(ReportDefinition)
+            .filter(
+                and_(
+                    ReportDefinition.organization_id == coerce_uuid(organization_id),
+                    ReportDefinition.report_type == report_type,
+                    ReportDefinition.is_active == True,
+                )
             )
             .order_by(ReportDefinition.report_name)
-        ).all()
+            .all()
+        )
 
     @staticmethod
     def get(
@@ -444,6 +463,30 @@ class ReportDefinitionService(ListResponseMixin):
         return definition
 
     @staticmethod
+    def resolve_statement_type(
+        db: Session,
+        organization_id: UUID,
+        report_id: UUID,
+    ) -> StatementType:
+        """Resolve a report definition to its StatementType.
+
+        Raises:
+            ValueError: If the definition is not found or its report_type
+                cannot be converted to a StatementType.
+        """
+        from app.models.finance.rpt.financial_statement_line import StatementType as ST
+
+        definition = db.get(ReportDefinition, report_id)
+        if not definition or definition.organization_id != coerce_uuid(organization_id):
+            raise ValueError("Report definition not found")
+        try:
+            return ST(definition.report_type.value)
+        except ValueError as exc:
+            raise ValueError(
+                f"Report type {definition.report_type} does not support statement lines"
+            ) from exc
+
+    @staticmethod
     def list(
         db: Session,
         organization_id: str | None = None,
@@ -455,28 +498,31 @@ class ReportDefinitionService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ReportDefinition]:
         """List report definitions with optional filters."""
-        stmt = select(ReportDefinition)
+        stmt = db.query(ReportDefinition)
 
         if organization_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ReportDefinition.organization_id == coerce_uuid(organization_id)
             )
 
         if report_type:
-            stmt = stmt.where(ReportDefinition.report_type == report_type)
+            stmt = stmt.filter(ReportDefinition.report_type == report_type)
 
         if category:
-            stmt = stmt.where(ReportDefinition.category == category)
+            stmt = stmt.filter(ReportDefinition.category == category)
 
         if is_active is not None:
-            stmt = stmt.where(ReportDefinition.is_active == is_active)
+            stmt = stmt.filter(ReportDefinition.is_active == is_active)
 
         if is_system_report is not None:
-            stmt = stmt.where(ReportDefinition.is_system_report == is_system_report)
+            stmt = stmt.filter(ReportDefinition.is_system_report == is_system_report)
 
-        stmt = stmt.order_by(ReportDefinition.category, ReportDefinition.report_name)
-        stmt = stmt.limit(limit).offset(offset)
-        return db.scalars(stmt).all()
+        return (
+            stmt.order_by(ReportDefinition.category, ReportDefinition.report_name)
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
 
 
 # Module-level singleton instance

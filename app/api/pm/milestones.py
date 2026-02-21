@@ -31,6 +31,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -81,8 +85,6 @@ def create_milestone(
     """Create a new milestone."""
     svc = MilestoneService(db, organization_id)
     milestone = svc.create_milestone(data.model_dump())
-    db.commit()
-    db.refresh(milestone)
     return MilestoneRead.model_validate(milestone)
 
 
@@ -187,8 +189,6 @@ def update_milestone(
         milestone = svc.update_milestone(
             milestone_id, data.model_dump(exclude_unset=True)
         )
-        db.commit()
-        db.refresh(milestone)
         return MilestoneRead.model_validate(milestone)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -204,7 +204,6 @@ def delete_milestone(
     svc = MilestoneService(db, organization_id)
     try:
         svc.delete_milestone(milestone_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -226,7 +225,6 @@ def achieve_milestone(
     try:
         actual_date = data.actual_date if data else None
         milestone = svc.achieve_milestone(milestone_id, actual_date)
-        db.commit()
         if milestone.actual_date is None:
             raise HTTPException(
                 status_code=500, detail="Milestone actual date was not set"

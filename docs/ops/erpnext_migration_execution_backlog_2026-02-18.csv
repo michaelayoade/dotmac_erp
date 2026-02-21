@@ -1,0 +1,374 @@
+priority,wave,module,doctype,insert_statements,kind,migration_mode,target_service
+P1,W1-Core,Banking/Treasury,Bank Transaction,18,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Bank,1,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Bank Account,1,Child/Supporting,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Bank Names,1,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Bank Statement Import,1,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Payment Request,1,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Unreconcile Payment,1,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Banking/Treasury,Unreconcile Payment Entries,1,Primary,Full,app/services/erpnext/sync/payment_entry.py
+P1,W1-Core,Finance-AP,Purchase Invoice Advance,1,Primary,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Purchase Order,1,Primary,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Purchase Order Item,1,Child/Supporting,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Purchase Receipt,1,Primary,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Purchase Receipt Item,1,Child/Supporting,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Supplier Group,1,Primary,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Supplier Scorecard Standing,1,Primary,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AP,Supplier Scorecard Variable,1,Primary,Full,app/services/erpnext/sync/purchase_invoice.py
+P1,W1-Core,Finance-AR,Sales Taxes and Charges,12,Child/Supporting,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Payment Schedule,10,Primary,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Quotation,2,Primary,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Sales Invoice Advance,2,Primary,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Sales Order,2,Primary,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Advance Taxes and Charges,1,Child/Supporting,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Customer Group,1,Primary,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Quotation Item,1,Child/Supporting,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Sales Order Item,1,Child/Supporting,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-AR,Sales Taxes and Charges Template,1,Child/Supporting,Full,app/services/erpnext/sync/sales_invoice.py
+P1,W1-Core,Finance-GL,GL Entry,110,Primary,Archive-Only,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Payment Ledger Entry,35,Primary,Archive-Only,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Bank Transaction Payments,10,Primary,Full,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Cost Center,1,Primary,Full,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Fiscal Year,1,Primary,Full,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Fiscal Year Company,1,Primary,Full,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Mode of Payment,1,Primary,Full,app/services/erpnext/sync/journal_entry.py
+P1,W1-Core,Finance-GL,Mode of Payment Account,1,Child/Supporting,Full,app/services/erpnext/sync/journal_entry.py
+P1,W2-Ops,Documents/Files,Deleted Document,179,Primary,Archive-Only,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,Communication Link,40,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,File,24,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocField,6,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocPerm,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocShare,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocType,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocType Action,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocType Link,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,DocType State,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,Documents/Files,Document Share Key,1,Primary,Full,NEW app/services/erpnext/sync/files.py
+P1,W2-Ops,HR Core,Attendance Request,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Branch,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Branches,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Department Approver,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Designation Skill,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee Boarding Activity,1,Child/Supporting,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee Checkin,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee Education,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee External Work History,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee Feedback Criteria,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee Feedback Rating,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Employee Onboarding Template,1,Child/Supporting,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Holiday,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Holiday List,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Leave Ledger Entry,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Leave Policy,1,Primary,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Core,Leave Policy Detail,1,Child/Supporting,Full,"app/services/erpnext/sync/hr.py, app/services/erpnext/sync/attendance.py, app/services/erpnext/sync/leave.py"
+P1,W2-Ops,HR Payroll,Salary Detail,3,Child/Supporting,Full,NEW app/services/erpnext/sync/payroll.py
+P1,W2-Ops,HR Payroll,Salary Slip,3,Primary,Full,NEW app/services/erpnext/sync/payroll.py
+P1,W2-Ops,HR Payroll,Payroll Period,1,Primary,Full,NEW app/services/erpnext/sync/payroll.py
+P1,W2-Ops,HR Payroll,Salary Component,1,Primary,Full,NEW app/services/erpnext/sync/payroll.py
+P1,W2-Ops,HR Payroll,Salary Structure,1,Primary,Full,NEW app/services/erpnext/sync/payroll.py
+P1,W2-Ops,HR Payroll,Salary Structure Assignment,1,Primary,Full,NEW app/services/erpnext/sync/payroll.py
+P1,W2-Ops,Projects,Project Record,1,Primary,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Project Template,1,Child/Supporting,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Project Template Task,1,Child/Supporting,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Project Type,1,Child/Supporting,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Project User,1,Child/Supporting,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Task Depends On,1,Child/Supporting,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Task Management,1,Primary,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Projects,Task Type,1,Child/Supporting,Full,"app/services/erpnext/sync/projects.py, app/services/erpnext/sync/tasks.py, app/services/erpnext/sync/timesheets.py"
+P1,W2-Ops,Support,HD Ticket Activity,10,Child/Supporting,Full,app/services/erpnext/sync/support.py
+P1,W2-Ops,Support,HD Ticket Comment,1,Primary,Full,app/services/erpnext/sync/support.py
+P1,W2-Ops,Support,HD Ticket Priority,1,Child/Supporting,Full,app/services/erpnext/sync/support.py
+P1,W2-Ops,Support,HD Ticket Status,1,Child/Supporting,Full,app/services/erpnext/sync/support.py
+P1,W2-Ops,Support,HD Ticket Type,1,Child/Supporting,Full,app/services/erpnext/sync/support.py
+P1,W2-Ops,Support,Issue Priority,1,Child/Supporting,Full,app/services/erpnext/sync/support.py
+P1,W2-Ops,Support,Issue Type,1,Child/Supporting,Full,app/services/erpnext/sync/support.py
+P2,W3-Extended,CRM,CRM Communication Status,1,Child/Supporting,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Dashboard,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Deal Status,1,Child/Supporting,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Dropdown Item,1,Child/Supporting,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Fields Layout,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Form Script,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Industry,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Lead,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Lead Source,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Lead Status,1,Child/Supporting,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Lost Reason,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Note,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Organization,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM Status Change Log,1,Child/Supporting,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,CRM,CRM View Settings,1,Primary,Full,defer or map to app/services/sync/dotmac_crm
+P2,W3-Extended,Inventory,Stock Entry Detail,5,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Stock Entry,2,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Bin,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Brand,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Attribute,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Attribute Value,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Default,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Maintenace,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Price,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Tax,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Tax Template,1,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Item Tax Template Detail,1,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Serial No,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Serial and Batch Bundle,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Serial and Batch Entry,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Stock Entry Type,1,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Stock Reconciliation,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Stock Reconciliation Item,1,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,UOM,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,UOM Category,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,UOM Conversion Detail,1,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,UOM Conversion Factor,1,Primary,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P2,W3-Extended,Inventory,Warehouse Type,1,Child/Supporting,Full,"app/services/erpnext/sync/items.py, app/services/erpnext/sync/stock_ledger.py, NEW stock_entry sync"
+P3,W4-Optional,System/Logs,Version,1200,Primary,Archive-Only,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Notification Log,225,Primary,Archive-Only,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Scheduled Job Log,196,Primary,Archive-Only,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Access Log,106,Primary,Archive-Only,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Email Queue,104,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Error Log,98,Primary,Archive-Only,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Data Import Log,22,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Route History,22,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Webhook Request Log,22,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,ToDo,14,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,PWA Notification,8,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,View Log,8,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Email Queue Recipient,3,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Activity Log,2,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Changelog Feed,1,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Console Log,1,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Data Import,1,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,DefaultValue,1,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Patch Log,1,Primary,Optional,defer (audit/archive only)
+P3,W4-Optional,System/Logs,Prepared Report,1,Primary,Optional,defer (audit/archive only)
+P3,W4-Triage,Other,The Attendance,7,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Contact,3,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dynamic Link,3,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Block Module,2,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Contact Email,2,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Activity Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Address,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Address Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Appraisal Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Appraisal Template Goal,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Asset Activity,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Asset Category Account,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Asset Movement,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Asset Movement Item,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Assignment Rule,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Assignment Rule Day,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Assignment Rule User,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Auto Email Report,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,BTS Maintainance,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Base Station,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Base station Link,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Bulk Transaction Log Detail,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Cabinets,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Cabinets Link,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Campaign,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Client Script,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Color,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Company,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Contact Phone,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Country,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Currency,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Currency Exchange,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Currency Exchange Settings Details,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Currency Exchange Settings Result,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Custom DocPerm,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Custom Field,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Custom HTML Block,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Custom Role,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dashboard,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dashboard Chart,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dashboard Chart Field,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dashboard Chart Link,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dashboard Chart Source,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Dashboard Settings,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Domain,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Account,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Domain,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Flag Queue,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Group,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Group Member,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Email Unsubscribe,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Energy Point Rule,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Event management,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Expected Skill Set,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Expense Claim Account,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Finance Book,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Form Tour,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Form Tour Step,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Gender,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Global Search DocType,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Grocery Items,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Grocery Shopping,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Article,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Article Category,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Service Day,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Service Holiday List,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Service Level Agreement,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Service Level Priority,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Team,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD Team Member,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,HD View,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Has Role,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Help Category,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,IMAP Folder,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,IP Address,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,IP Pool,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Incoterm,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Industry Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Chart v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Dashboard Chart v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Dashboard v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Data Source,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Data Source v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Notebook,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Query Execution Log,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Query v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Table Link v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Table v3,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Team,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Team Member,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Insights Workbook,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Installed Application,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Interview,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Interview Detail,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Interview Round,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Interview Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Interviewer,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Job Applicant,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Job Applicant Source,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Job Offer,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Job Offer Term,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Job Offer Term Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Job Opening,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,KRA,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Kanban Board,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Kanban Board Column,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Language,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Lead,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Lead Source,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Letter Head,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,List Filter,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,List View Settings,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,List of Groceries,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Location,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Logs To Clear,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Market Segment,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Module Def,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Module Onboarding,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Module Profile,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,NOC Task Tracker,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Navbar Item,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Notification,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Notification Recipient,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Notification Settings,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Notification Subscribed Document,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Number Card,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Number Card Link,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Offer Term,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Onboarding Permission,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Onboarding Step,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Onboarding Step Map,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Opportunity Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Page,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Party Account,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Party Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Payment Entry Deduction,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Payment Term,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Payment Terms Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Payment Terms Template Detail,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Pegged Currency Details,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Policy Violations,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Portal Menu Item,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Price List,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Print Format,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Print Heading,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Print Style,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Process Deferred Accounting,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Process Subscription,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Property Setter,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Purchase Taxes and Charges,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Purchase Taxes and Charges Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Report,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Report Column,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Report Filter,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Repost Item Valuation,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Role,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Role Profile,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Sales Partner Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Sales Person,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Sales Stage,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Sales Team,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Salutation,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Scheduled Job Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Scheduler Event,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Series,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Server Script,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Service Instance,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Session Default,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Sessions,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Share Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Shift Assignment,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Shift Assignment Schedule,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Shift Location,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Shift Schedule,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Shift Schedule Assignment,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Singles,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Skill,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Staffing Plan,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Staffing Plan Detail,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Subscription Plan,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Success Action,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Sys Admin Task Tracker,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Tag,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Tag Link,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Tax Category,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Tax Rule,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Tax Withholding Account,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Tax Withholding Category,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Tax Withholding Rate,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Territory,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Training Attendance Tracker,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User Document Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,User Email,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User Group,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User Group Member,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User Permission,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User Select Document Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,User Social Login,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,User Type,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,User Type Module,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Variant Field,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Vehicle,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Vehicle Service Item,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Web Form,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Web Form Field,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Web Form List Column,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Web Page,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Web Template,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,Web Template Field,1,Child/Supporting,Full,triage/manual mapping
+P3,W4-Triage,Other,WebDev Task Tracker,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Webhook,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Webhook Data,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Webhook Header,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Website Route Redirect,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Website Theme,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow Action,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow Action Master,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow Action Permitted Role,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow Document State,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow State,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workflow Transition,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace Chart,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace Custom Block,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace Link,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace Number Card,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace Quick List,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,Workspace Shortcut,1,Primary,Full,triage/manual mapping
+P3,W4-Triage,Other,project record,1,Primary,Full,triage/manual mapping

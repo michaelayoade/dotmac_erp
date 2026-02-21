@@ -44,7 +44,8 @@ def test_post_journal_entry_idempotent_posted_batch():
         posted_entries=2,
         correlation_id="c",
     )
-    db.query.return_value.filter.return_value.first.return_value = batch
+    # Idempotency check: db.scalar(select(PostingBatch).where(...))
+    db.scalar.return_value = batch
     req = _make_request()
     result = LedgerPostingService.post_journal_entry(db, req)
     assert result.success is True
@@ -74,7 +75,8 @@ def test_post_journal_entry_retries_failed_batch_in_place():
         processing_started_at=None,
     )
 
-    db.query.return_value.filter.return_value.first.return_value = failed_batch
+    # Idempotency check: db.scalar(select(PostingBatch).where(...))
+    db.scalar.return_value = failed_batch
 
     req = PostingRequest(
         organization_id=org_id,
@@ -111,7 +113,8 @@ def test_post_journal_entry_retries_failed_batch_in_place():
 
     # First db.get() is journal; second is FiscalPeriod (ignored)
     db.get.side_effect = [journal, SimpleNamespace(fiscal_period_id=uuid4())]
-    db.query.return_value.filter.return_value.all.return_value = [
+    # Account lookup: db.scalars(select(Account).where(...)).all()
+    db.scalars.return_value.all.return_value = [
         SimpleNamespace(account_id=req.entries[0].account_id, account_code="1000"),
         SimpleNamespace(account_id=req.entries[1].account_id, account_code="2000"),
     ]
@@ -135,7 +138,8 @@ def test_post_journal_entry_retries_failed_batch_in_place():
 
 def test_post_journal_entry_missing_journal():
     db = MagicMock()
-    db.query.return_value.filter.return_value.first.return_value = None
+    # Idempotency check: no existing batch
+    db.scalar.return_value = None
     db.get.return_value = None
     req = _make_request()
     with pytest.raises(HTTPException):
@@ -237,7 +241,8 @@ def test_post_journal_entry_rejects_non_approved_journal():
         ],
     )
 
-    db.query.return_value.filter.return_value.first.return_value = None
+    # Idempotency check: no existing batch
+    db.scalar.return_value = None
     journal = SimpleNamespace(
         journal_entry_id=journal_id,
         organization_id=org_id,
@@ -272,13 +277,12 @@ def test_post_journal_entry_preserves_journal_line_traceability():
         posted_by_user_id=uuid4(),
     )
 
-    batch_query = MagicMock()
-    batch_query.filter.return_value.first.return_value = None
+    # Idempotency check: db.scalar(select(PostingBatch).where(...)) → None
+    db.scalar.return_value = None
 
     line_id_1 = uuid4()
     line_id_2 = uuid4()
-    line_query = MagicMock()
-    line_query.filter.return_value.order_by.return_value.all.return_value = [
+    journal_lines = [
         SimpleNamespace(
             line_id=line_id_1,
             account_id=account_id_1,
@@ -311,22 +315,17 @@ def test_post_journal_entry_preserves_journal_line_traceability():
         ),
     ]
 
-    acct_query = MagicMock()
-    acct_query.filter.return_value.all.return_value = [
+    accounts = [
         SimpleNamespace(account_id=account_id_1, account_code="1000"),
         SimpleNamespace(account_id=account_id_2, account_code="2000"),
     ]
 
-    def _query(model):
-        if model.__name__ == "PostingBatch":
-            return batch_query
-        if model.__name__ == "JournalEntryLine":
-            return line_query
-        if model.__name__ == "Account":
-            return acct_query
-        raise AssertionError(f"Unexpected query model: {model}")
-
-    db.query.side_effect = _query
+    # db.scalars() is called twice: first for journal lines, then for accounts
+    lines_result = MagicMock()
+    lines_result.all.return_value = journal_lines
+    accts_result = MagicMock()
+    accts_result.all.return_value = accounts
+    db.scalars.side_effect = [lines_result, accts_result]
 
     journal = SimpleNamespace(
         journal_entry_id=journal_id,
@@ -394,7 +393,8 @@ def test_post_journal_entry_success_flow():
         ],
     )
 
-    db.query.return_value.filter.return_value.first.return_value = None
+    # Idempotency check: no existing batch
+    db.scalar.return_value = None
     journal = SimpleNamespace(
         journal_entry_id=journal_id,
         organization_id=org_id,
@@ -407,7 +407,8 @@ def test_post_journal_entry_success_flow():
         created_by_user_id=uuid4(),
     )
     db.get.side_effect = [journal, SimpleNamespace(fiscal_period_id=uuid4())]
-    db.query.return_value.filter.return_value.all.return_value = [
+    # Account lookup: db.scalars(select(Account).where(...)).all()
+    db.scalars.return_value.all.return_value = [
         SimpleNamespace(account_id=req.entries[0].account_id, account_code="1000"),
         SimpleNamespace(account_id=req.entries[1].account_id, account_code="2000"),
     ]
@@ -434,21 +435,15 @@ def test_get_batch_and_get_ledger_lines():
     db.get.return_value = batch
     assert LedgerPostingService.get_batch(db, str(uuid4())) == batch
 
-    query = MagicMock()
-    db.query.return_value = query
-    query.filter.return_value = query
-    query.order_by.return_value = query
-    query.limit.return_value.offset.return_value.all.return_value = []
+    # get_ledger_lines uses db.scalars(select(...).where(...).order_by(...).limit(...).offset(...)).all()
+    db.scalars.return_value.all.return_value = []
     LedgerPostingService.get_ledger_lines(db, uuid4())
 
 
 def test_list_and_post_entry():
     db = MagicMock()
-    query = MagicMock()
-    db.query.return_value = query
-    query.filter.return_value = query
-    query.order_by.return_value = query
-    query.limit.return_value.offset.return_value.all.return_value = []
+    # list() uses db.scalars(select(...).where(...).order_by(...).limit(...).offset(...)).all()
+    db.scalars.return_value.all.return_value = []
     LedgerPostingService.list(db, organization_id=str(uuid4()))
 
     journal = SimpleNamespace(

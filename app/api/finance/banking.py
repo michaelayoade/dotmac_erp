@@ -62,6 +62,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -213,56 +217,12 @@ async def _update_bank_account(
     auth: dict,
     db: Session,
 ) -> BankAccountRead:
+    """Parse partial update payload and delegate to service."""
     payload = await _bank_account_payload_from_request(request, BankAccountUpdate)
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
-
-    existing = bank_account_service.get(db, organization_id, bank_account_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Bank account not found")
-    # Verify tenant ownership
-    if existing.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Bank account not found")
-
-    input_data = BankAccountInput(
-        bank_name=payload.bank_name or existing.bank_name,
-        account_number=existing.account_number,  # Cannot change
-        account_name=payload.account_name or existing.account_name,
-        gl_account_id=payload.gl_account_id or existing.gl_account_id,
-        currency_code=existing.currency_code,  # Cannot change
-        account_type=payload.account_type or existing.account_type,
-        bank_code=payload.bank_code
-        if payload.bank_code is not None
-        else existing.bank_code,
-        branch_code=payload.branch_code
-        if payload.branch_code is not None
-        else existing.branch_code,
-        branch_name=payload.branch_name
-        if payload.branch_name is not None
-        else existing.branch_name,
-        iban=payload.iban if payload.iban is not None else existing.iban,
-        contact_name=payload.contact_name
-        if payload.contact_name is not None
-        else existing.contact_name,
-        contact_phone=payload.contact_phone
-        if payload.contact_phone is not None
-        else existing.contact_phone,
-        contact_email=payload.contact_email
-        if payload.contact_email is not None
-        else existing.contact_email,
-        notes=payload.notes if payload.notes is not None else existing.notes,
-        is_primary=payload.is_primary
-        if payload.is_primary is not None
-        else existing.is_primary,
-        allow_overdraft=payload.allow_overdraft
-        if payload.allow_overdraft is not None
-        else existing.allow_overdraft,
-        overdraft_limit=payload.overdraft_limit
-        if payload.overdraft_limit is not None
-        else existing.overdraft_limit,
-    )
     result = bank_account_service.update(
-        db, organization_id, bank_account_id, input_data, user_id
+        db, organization_id, bank_account_id, payload, user_id
     )
     return BankAccountRead.model_validate(result)
 
@@ -663,7 +623,6 @@ def add_reconciliation_multi_match(
         notes=payload.notes,
         created_by=user_id,
     )
-    db.commit()
     return lines
 
 

@@ -1,26 +1,23 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge, pagination, compact_filters, filter_select_field, stats_card, action_buttons, list_header_actions %}
+{% from "components/macros.html" import empty_state, status_badge, pagination, compact_filters, filter_select_field, stats_card, action_buttons, list_header_actions, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, icon_svg %}
 
 {% block page_title %}Payees{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Payees</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Payees</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 {{ list_header_actions(
     new_url="/finance/banking/payees/new",
-    new_label="New Payee"
+    new_label="New Payee",
+    export_url="/finance/banking/payees/export"
 ) }}
 {% endblock %}
 
@@ -52,6 +49,7 @@
             <table class="table" data-testid="payees-table">
                 <thead>
                     <tr>
+                        {{ bulk_select_header() }}
                         <th scope="col">Payee</th>
                         <th scope="col">Type</th>
                         <th scope="col">Default Account</th>
@@ -65,6 +63,7 @@
                 <tbody>
                     {% for payee in payees %}
                     <tr class="group">
+                        {{ bulk_select_cell(payee.payee_id) }}
                         <td>
                             <a href="/finance/banking/payees/{{ payee.payee_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                 {{ payee.payee_name }}
@@ -105,7 +104,7 @@
                             {{ payee.match_count | default(0) }}
                         </td>
                         <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                            {{ payee.last_matched_at.strftime('%Y-%m-%d') if payee.last_matched_at else 'Never' }}
+                            {{ payee.last_matched_at | format_date if payee.last_matched_at else 'Never' }}
                         </td>
                         <td class="whitespace-nowrap">
                             {{ status_badge('active' if payee.is_active else 'inactive', 'sm') }}
@@ -119,7 +118,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="py-12">
+                        <td colspan="9" class="py-12">
                             {{ empty_state('No payees found', 'Add your first payee to speed up reconciliation.', 'users', 'New Payee', '/finance/banking/payees/new') }}
                         </td>
                     </tr>
@@ -138,5 +137,18 @@
         ) }}
     </div>
     </div>{# /results-container #}
+
+    {{ bulk_action_bar(
+        actions=[
+            {
+                "name": "export",
+                "label": "Export",
+                "endpoint": "/finance/banking/payees/bulk-export",
+                "icon": bulk_icon_export(),
+                "class": "btn-secondary"
+            }
+        ],
+        entity_name="payees"
+    ) }}
 </div>
 {% endblock %}

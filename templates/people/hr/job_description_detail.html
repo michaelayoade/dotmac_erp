@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}{{ jd.job_title }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/job-descriptions" class="hover:text-teal-600 dark:hover:text-teal-400">Job Descriptions</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ jd.jd_code }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr" class="hover:text-teal-600 dark:hover:text-teal-400">HR</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/job-descriptions" class="hover:text-teal-600 dark:hover:text-teal-400">Job Descriptions</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ jd.jd_code }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -28,9 +28,7 @@
     </form>
     {% endif %}
     <a href="/people/hr/job-descriptions/{{ jd.job_description_id }}/edit" class="btn btn-primary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
         Edit
     </a>
 </div>
@@ -41,9 +39,7 @@
     {% if success %}
     <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
         <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "w-5 h-5") }}
             <span>{{ success }}</span>
         </div>
     </div>
@@ -58,13 +54,7 @@
                         <h3 class="text-lg font-medium text-slate-900 dark:text-white">{{ jd.job_title }}</h3>
                         <p class="text-sm text-slate-500 dark:text-slate-400 font-mono">{{ jd.jd_code }}</p>
                     </div>
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
-                                 {% if jd.status.value == 'active' %}bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400
-                                 {% elif jd.status.value == 'draft' %}bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
-                                 {% elif jd.status.value == 'under_review' %}bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400
-                                 {% else %}bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400{% endif %}">
-                        {{ jd.status.value | replace('_', ' ') | title }}
-                    </span>
+                    {{ status_badge(jd.status.value, 'sm') }}
                 </div>
                 <div class="card-body">
                     <dl class="grid grid-cols-2 gap-4 text-sm">
@@ -203,9 +193,7 @@
                                       onsubmit="return confirm('Remove this competency?')">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <button type="submit" class="text-red-600 hover:text-red-700 dark:text-red-400 p-1" aria-label="Close">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                        </svg>
+                                        {{ icon_svg("x-mark", "w-4 h-4") }}
                                     </button>
                                 </form>
                             </div>

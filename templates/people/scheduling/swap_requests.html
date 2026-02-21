@@ -1,18 +1,17 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters %}
+{% from "components/macros.html" import status_badge, compact_filters, pagination %}
 
 {% block page_title %}Shift Swap Requests{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/scheduling" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scheduling</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Swap Requests</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/scheduling" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scheduling</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Swap Requests</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,7 +19,7 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Swap Requests</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Swap Requests</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Review and approve shift swap requests.</p>
         </div>
         <div class="flex gap-2">
@@ -84,17 +83,7 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3">
-                            {% if sr.status == 'PENDING' %}
-                            <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Pending</span>
-                            {% elif sr.status == 'TARGET_ACCEPTED' %}
-                            <span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Awaiting Approval</span>
-                            {% elif sr.status == 'APPROVED' %}
-                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Approved</span>
-                            {% elif sr.status == 'REJECTED' %}
-                            <span class="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">Rejected</span>
-                            {% else %}
-                            {{ status_badge(sr.status, size="sm") }}
-                            {% endif %}
+                            {{ status_badge(sr.status, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ sr.created_at }}</td>
                         <td class="px-4 py-3 text-right">
@@ -131,21 +120,14 @@
     </div>
     {% endif %}
 
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
-            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
-        </p>
-        <div class="flex gap-2">
-            {% if has_prev %}
-            <a href="?page={{ page - 1 }}&status={{ status | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
-            {% endif %}
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}&status={{ status | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=20,
+        show_size_selector=false,
+        filters={"status": status}
+    ) }}
+
 </div>
 {% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/macros.html" import success_banner %}
+{% from "components/macros.html" import success_banner, icon_svg %}
 
 {% block title %}{{ page_title | default("Admin") }} - {{ brand.name }}{% endblock %}
 
@@ -197,9 +197,7 @@
                 <button @click="toggleSidebar()" x-show="!sidebarCollapsed && isDesktop" x-cloak
                         class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
                         aria-label="Collapse sidebar">
-                    <svg class="h-5 w-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-double-left", "h-5 w-5 transition-transform") }}
                 </button>
             </div>
 
@@ -209,45 +207,35 @@
                     <!-- Dashboard -->
                     <a href="/admin"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'dashboard' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                        </svg>
+                        {{ icon_svg("home", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Dashboard</span>
                     </a>
 
                     <!-- Users -->
                     <a href="/admin/users"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'users' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                        </svg>
+                        {{ icon_svg("users", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Users</span>
                     </a>
 
                     <!-- Roles -->
                     <a href="/admin/roles"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'roles' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
+                        {{ icon_svg("shield-check", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Roles</span>
                     </a>
 
                     <!-- Permissions -->
                     <a href="/admin/permissions"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'permissions' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-                        </svg>
+                        {{ icon_svg("key", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Permissions</span>
                     </a>
 
                     <!-- Organizations -->
                     <a href="/admin/organizations"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'organizations' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                        </svg>
+                        {{ icon_svg("building", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Organizations</span>
                     </a>
 
@@ -258,19 +246,14 @@
                     <!-- Settings -->
                     <a href="/admin/settings/hub"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'settings' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
+                        {{ icon_svg("cog", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Settings</span>
                     </a>
 
                     <!-- Audit Logs -->
                     <a href="/admin/audit-logs"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'audit' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+                        {{ icon_svg("document", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Audit Logs</span>
                     </a>
 
@@ -286,18 +269,14 @@
                     <!-- Scheduled Tasks -->
                     <a href="/admin/tasks"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'tasks' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("clock", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Scheduled Tasks</span>
                     </a>
 
                     <!-- Sync Management -->
                     <a href="/admin/sync"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'sync' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
-                        <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
+                        {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0") }}
                         <span x-show="!sidebarCollapsed" x-transition>Sync Management</span>
                     </a>
 
@@ -325,9 +304,7 @@
                                 x-show="!isDesktop || sidebarCollapsed"
                                 x-cloak
                                 class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
-                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                            </svg>
+                            {{ icon_svg("menu", "h-6 w-6") }}
                         </button>
                         {% if (back_fallback_url | trim) %}
                         <button type="button"
@@ -340,9 +317,7 @@
                                 "
                                 class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/60 px-2 py-1.5 text-sm font-medium text-slate-600 hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                                 aria-label="Go back">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                            </svg>
+                            {{ icon_svg("chevron-left", "h-4 w-4") }}
                             <span class="hidden sm:inline">Back</span>
                         </button>
                         {% endif %}
@@ -363,9 +338,7 @@
                     </button>
                     <!-- Back to app -->
                     <a href="/" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
+                        {{ icon_svg("arrow-left", "h-4 w-4") }}
                         Back to App
                     </a>
                 </div>

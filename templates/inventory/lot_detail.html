@@ -1,19 +1,15 @@
 {% extends "inventory/base_inventory.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}Lot {{ lot.lot_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/inventory/lots" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Lots & Serials</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ lot.lot_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/lots" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Lots & Serials</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ lot.lot_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -23,14 +19,10 @@
     {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-secondary {{ 'text-emerald-600 hover:text-emerald-700' if lot.is_quarantined else 'text-amber-600 hover:text-amber-700' }}">
         {% if lot.is_quarantined %}
-        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("check-circle", "h-4 w-4 mr-2") }}
         Release
         {% else %}
-        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
+        {{ icon_svg("warning", "h-4 w-4 mr-2") }}
         Quarantine
         {% endif %}
     </button>
@@ -72,7 +64,7 @@
                 {% endif %}
             </div>
             <div class="text-right text-sm text-slate-500 dark:text-slate-400">
-                <p>Received: <span class="font-medium text-slate-900 dark:text-white">{{ lot.received_date.strftime('%B %d, %Y') if lot.received_date else '-' }}</span></p>
+                <p>Received: <span class="font-medium text-slate-900 dark:text-white">{{ lot.received_date | format_date if lot.received_date else '-' }}</span></p>
                 <p>ID: <span class="font-mono text-xs">{{ lot.lot_id }}</span></p>
             </div>
         </div>
@@ -118,12 +110,12 @@
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Manufacture Date</dt>
-                    <dd class="font-medium text-slate-900 dark:text-white">{{ lot.manufacture_date.strftime('%Y-%m-%d') if lot.manufacture_date else '-' }}</dd>
+                    <dd class="font-medium text-slate-900 dark:text-white">{{ lot.manufacture_date | format_date if lot.manufacture_date else '-' }}</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Expiry Date</dt>
                     <dd class="font-medium {{ 'text-rose-600' if lot.expiry_date and lot.expiry_date < now else 'text-slate-900 dark:text-white' }}">
-                        {{ lot.expiry_date.strftime('%Y-%m-%d') if lot.expiry_date else '-' }}
+                        {{ lot.expiry_date | format_date if lot.expiry_date else '-' }}
                     </dd>
                 </div>
                 <div class="flex justify-between">
@@ -171,7 +163,7 @@
                     {% for txn in transactions %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
                         onclick="window.location='/inventory/transactions/{{ txn.transaction_id }}'">
-                        <td>{{ txn.transaction_date.strftime('%Y-%m-%d') if txn.transaction_date else '-' }}</td>
+                        <td>{{ txn.transaction_date | format_date if txn.transaction_date else '-' }}</td>
                         <td>
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
                                 {{ 'bg-emerald-100 text-emerald-700' if txn.transaction_type.value == 'RECEIPT' else

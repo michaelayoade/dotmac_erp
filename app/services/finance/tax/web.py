@@ -71,16 +71,18 @@ def _get_accounts(
     ifrs_category: IFRSCategory,
 ) -> list[Account]:
     """Get GL accounts by IFRS category for dropdowns."""
-    return db.scalars(
-        select(Account)
-        .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .where(
-            Account.organization_id == organization_id,
-            Account.is_active.is_(True),
-            AccountCategory.ifrs_category == ifrs_category,
+    return list(
+        db.scalars(
+            select(Account)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+            .where(
+                Account.organization_id == organization_id,
+                Account.is_active.is_(True),
+                AccountCategory.ifrs_category == ifrs_category,
+            )
+            .order_by(Account.account_code)
         )
-        .order_by(Account.account_code)
-    ).all()
+    )
 
 
 def _tax_code_form_view(tax_code: TaxCode) -> dict:

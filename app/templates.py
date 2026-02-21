@@ -35,6 +35,9 @@ def format_currency(
 ) -> str:
     """Format a number as currency with thousand separators.
 
+    Negative amounts are displayed in accounting notation: ``(1,234.56)``
+    instead of ``-1,234.56``.
+
     Template usage::
 
         {{ amount | format_currency('$', 0) }}
@@ -42,11 +45,29 @@ def format_currency(
     """
     if value is None:
         return f"{symbol}0.00" if symbol else "0.00"
-    # When a symbol like "$" or "NGN " is explicitly provided, use it.
-    # Otherwise let the service formatter decide (org pref or config default).
+
+    # Detect negative for accounting parentheses notation
+    try:
+        dec = Decimal(str(value))
+        is_negative = dec < 0
+        abs_value: Decimal | float | int = abs(dec) if is_negative else value
+    except (ValueError, TypeError, ArithmeticError):
+        is_negative = False
+        abs_value = value
+
+    # When a symbol like "$" or "NGN " is explicitly provided, concatenate it
+    # directly (the core formatter would add an extra space via its own prefix).
     if symbol:
-        return f"{symbol}{_fmt.format_currency(value, show_symbol=False, decimal_places=decimals)}"
-    return _fmt.format_currency(value, show_symbol=False, decimal_places=decimals)
+        formatted = f"{symbol}{_fmt.format_currency(abs_value, show_symbol=False, decimal_places=decimals)}"
+    else:
+        formatted = _fmt.format_currency(
+            abs_value, show_symbol=False, decimal_places=decimals
+        )
+
+    # Accounting notation: wrap negatives in parentheses
+    if is_negative:
+        return f"({formatted})"
+    return formatted
 
 
 def format_number(value: Union[Decimal, float, int, None], decimals: int = 2) -> str:

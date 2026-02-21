@@ -1,21 +1,22 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ "Edit Interview" if interview else "Schedule Interview" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/recruit/interviews" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Interviews</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if interview else "Schedule" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/recruit/interviews" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Interviews</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if interview else "Schedule" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
     <div>
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ "Edit Interview" if interview else "Schedule Interview" }}</h1>
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ "Edit Interview" if interview else "Schedule Interview" }}</h2>
         <p class="text-sm text-slate-500 dark:text-slate-400">{{ "Update interview details" if interview else "Schedule a new interview with an applicant" }}</p>
     </div>
 
@@ -142,9 +143,7 @@
         <div class="p-6 flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="{{ '/people/recruit/interviews/' ~ interview.interview_id if interview else '/people/recruit/interviews' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1") }}
                 {{ "Update Interview" if interview else "Schedule Interview" }}
             </button>
         </div>

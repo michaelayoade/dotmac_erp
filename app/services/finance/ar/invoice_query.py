@@ -33,7 +33,7 @@ def build_invoice_query(
     from_date = parse_date(start_date)
     to_date = parse_date(end_date)
 
-    query = (
+    query: Query[Invoice] = (
         Query([Invoice], session=db)
         .join(Customer, Invoice.customer_id == Customer.customer_id)
         .filter(Invoice.organization_id == org_id)

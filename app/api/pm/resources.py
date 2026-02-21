@@ -36,6 +36,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -111,8 +115,6 @@ def allocate_resource(
     svc = ResourceService(db, organization_id)
     try:
         allocation = svc.allocate_resource(data.model_dump())
-        db.commit()
-        db.refresh(allocation)
         return ResourceAllocationRead.model_validate(allocation)
     except (ValidationError, ConflictError) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -260,8 +262,6 @@ def update_allocation(
         allocation = svc.update_allocation(
             allocation_id, data.model_dump(exclude_unset=True)
         )
-        db.commit()
-        db.refresh(allocation)
         return ResourceAllocationRead.model_validate(allocation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -279,8 +279,6 @@ def end_allocation(
     try:
         end_date_value = data.end_date if data else None
         allocation = svc.end_allocation(allocation_id, end_date_value)
-        db.commit()
-        db.refresh(allocation)
         return ResourceAllocationRead.model_validate(allocation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -298,6 +296,5 @@ def delete_allocation(
     svc = ResourceService(db, organization_id)
     try:
         svc.delete_allocation(allocation_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

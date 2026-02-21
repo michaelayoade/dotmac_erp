@@ -48,8 +48,25 @@ logger = logging.getLogger(__name__)
 # to avoid circular imports with app.web.deps
 
 
-def _ifrs_label(category: IFRSCategory) -> str:
-    label_map = {
+def _iso_date(d: date) -> str:
+    """Format date as YYYY-MM-DD for HTML5 date inputs."""
+    return d.isoformat()
+
+
+def _build_csv(headers: list[str], rows: list[list[str]]) -> str:
+    """Build a CSV string from headers and rows."""
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    writer.writerows(rows)
+    return output.getvalue()
+
+
+def _ifrs_label(category: IFRSCategory | str | None) -> str:
+    label_map: dict[IFRSCategory, str] = {
         IFRSCategory.ASSETS: "Assets",
         IFRSCategory.LIABILITIES: "Liabilities",
         IFRSCategory.EQUITY: "Equity",
@@ -57,11 +74,22 @@ def _ifrs_label(category: IFRSCategory) -> str:
         IFRSCategory.EXPENSES: "Expenses",
         IFRSCategory.OTHER_COMPREHENSIVE_INCOME: "Other Comprehensive Income",
     }
-    return label_map.get(category, category.value)
+    if category is None:
+        return ""
+    if isinstance(category, str) and not isinstance(category, IFRSCategory):
+        try:
+            category = IFRSCategory(category)
+        except ValueError:
+            return category.replace("_", " ").title()
+    if isinstance(category, IFRSCategory):
+        if category in label_map:
+            return label_map[category]
+        return str(category.value)
+    return category
 
 
 def _report_type_label(report_type: ReportType) -> str:
-    labels = {
+    labels: dict[ReportType, str] = {
         ReportType.BALANCE_SHEET: "Statement of Financial Position",
         ReportType.INCOME_STATEMENT: "Statement of Profit or Loss",
         ReportType.CASH_FLOW: "Cash Flow Statement",
@@ -75,7 +103,9 @@ def _report_type_label(report_type: ReportType) -> str:
         ReportType.REGULATORY: "Regulatory Report",
         ReportType.CUSTOM: "Custom Report",
     }
-    return labels.get(report_type, report_type.value)
+    if report_type in labels:
+        return labels[report_type]
+    return str(report_type.value)
 
 
 class ReportsWebService:
@@ -159,11 +189,19 @@ class ReportsWebService:
         start_date: date,
         end_date: date,
     ) -> dict:
+        """Aggregate tax totals from GL by querying the TAX-L category.
+
+        Groups accounts by name pattern:
+        - VAT/Output tax → output_tax (liability, credit-normal)
+        - WHT → withholding (liability, credit-normal)
+        - Everything else under TAX-L → input_tax proxy
+        """
         org_id = coerce_uuid(organization_id)
 
         rows = db.execute(
             select(
-                AccountCategory.category_code,
+                Account.account_code,
+                Account.account_name,
                 func.coalesce(
                     func.sum(JournalEntryLine.debit_amount_functional), 0
                 ).label("debit"),
@@ -171,7 +209,7 @@ class ReportsWebService:
                     func.sum(JournalEntryLine.credit_amount_functional), 0
                 ).label("credit"),
             )
-            .join(Account, Account.category_id == AccountCategory.category_id)
+            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
             .join(JournalEntryLine, JournalEntryLine.account_id == Account.account_id)
             .join(
                 JournalEntry,
@@ -182,27 +220,29 @@ class ReportsWebService:
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= start_date,
                 JournalEntry.posting_date <= end_date,
-                AccountCategory.category_code.in_(["CAT016", "CAT017", "CAT019"]),
+                AccountCategory.category_code == "TAX-L",
             )
-            .group_by(AccountCategory.category_code)
+            .group_by(Account.account_code, Account.account_name)
         ).all()
 
-        totals = {
-            "CAT016": Decimal("0"),
-            "CAT017": Decimal("0"),
-            "CAT019": Decimal("0"),
-        }
-        for code, debit, credit in rows:
+        output_tax = Decimal("0")
+        input_tax = Decimal("0")
+        withholding = Decimal("0")
+
+        for _code, name, debit, credit in rows:
             debit = Decimal(str(debit or 0))
             credit = Decimal(str(credit or 0))
-            if code == "CAT016":
-                totals[code] = credit - debit
-            else:
-                totals[code] = debit - credit
+            balance = credit - debit  # Liability accounts are credit-normal
 
-        output_tax = totals["CAT016"]
-        input_tax = totals["CAT017"]
-        withholding = totals["CAT019"]
+            name_lower = (name or "").lower()
+            if "vat" in name_lower or "output" in name_lower:
+                output_tax += balance
+            elif "wht" in name_lower or "withholding" in name_lower:
+                withholding += balance
+            else:
+                # Other tax liabilities (income tax, education tax, etc.)
+                input_tax += balance
+
         net_tax = output_tax - input_tax - withholding
 
         return {
@@ -353,7 +393,7 @@ class ReportsWebService:
         # Get overdue tax periods
         overdue_tax_periods = (
             db.scalar(
-                select(func.count(TaxPeriod.tax_period_id)).where(
+                select(func.count(TaxPeriod.period_id)).where(
                     TaxPeriod.organization_id == org_id,
                     TaxPeriod.status == TaxPeriodStatus.OPEN,
                     TaxPeriod.due_date < today,
@@ -407,8 +447,10 @@ class ReportsWebService:
 
         # Key metrics summary
         key_metrics = {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "total_assets": _format_currency(total_assets),
             "total_assets_raw": float(total_assets),
             "total_liabilities": _format_currency(total_liabilities),
@@ -436,6 +478,7 @@ class ReportsWebService:
             "overdue_tax_periods": overdue_tax_periods,
             "period_name": period.period_name if period else "No Active Period",
             "as_of_date": _format_date(to_date),
+            "as_of_date_iso": _iso_date(to_date),
         }
 
         # Get report definitions
@@ -659,8 +702,12 @@ class ReportsWebService:
             total_debit += debit
             total_credit += credit
 
+            # If account_code is truncated (exactly 20 chars = VARCHAR limit),
+            # hide it and show only account_name.
+            display_code = account_code if len(account_code) < 20 else ""
+
             entry = {
-                "account_code": account_code,
+                "account_code": display_code,
                 "account_name": account_name,
                 "debit": _format_currency(debit) if debit else "",
                 "credit": _format_currency(credit) if credit else "",
@@ -682,7 +729,8 @@ class ReportsWebService:
                 balances.append(entry)
 
         return {
-            "as_of_date": as_of_date or _format_date(ref_date),
+            "as_of_date": _format_date(ref_date),
+            "as_of_date_iso": _iso_date(ref_date),
             "period_name": period.period_name if period else "No Period",
             "assets": assets,
             "liabilities": liabilities,
@@ -692,7 +740,7 @@ class ReportsWebService:
             "other_balances": balances,
             "total_debit": _format_currency(total_debit),
             "total_credit": _format_currency(total_credit),
-            "is_balanced": total_debit == total_credit,
+            "is_balanced": round(total_debit, 2) == round(total_credit, 2),
         }
 
     @staticmethod
@@ -731,10 +779,10 @@ class ReportsWebService:
         def cat_amount(code: str) -> Decimal:
             return cast(Decimal, balances.get(code, {}).get("amount", Decimal("0")))
 
-        revenue = cat_amount("REV") + cat_amount("CAT001")
-        other_income = cat_amount("CAT015")
-        cogs = cat_amount("CAT011")
-        operating_expenses = cat_amount("CAT002") + cat_amount("CAT008")
+        revenue = cat_amount("REV")
+        other_income = Decimal("0")
+        cogs = cat_amount("COS")
+        operating_expenses = cat_amount("EXP")
         profit_for_period = revenue + other_income - cogs - operating_expenses
         oci = cat_amount("OCI")
         total_comprehensive_income = profit_for_period + oci
@@ -778,8 +826,10 @@ class ReportsWebService:
         ]
 
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "period_name": period.period_name if period else "No Period",
             "income_statement_lines": income_statement_lines,
             "total_revenue": _format_currency(revenue + other_income),
@@ -827,27 +877,26 @@ class ReportsWebService:
             return cast(Decimal, balances.get(code, {}).get("amount", Decimal("0")))
 
         current_assets = [
-            ("Cash and Cash Equivalents", cat_amount("CAT003") + cat_amount("CAT012")),
-            ("Accounts Receivable", cat_amount("CAT004")),
-            ("Inventory", cat_amount("CAT010")),
-            ("Input Tax", cat_amount("CAT017")),
-            ("Withholding Tax", cat_amount("CAT019")),
-            ("Other Current Assets", cat_amount("CAT005") + cat_amount("CAT018")),
+            ("Cash and Cash Equivalents", cat_amount("CASH") + cat_amount("BANK")),
+            ("Accounts Receivable", cat_amount("AR")),
+            ("Inventory", cat_amount("INV")),
+            ("Other Current Assets", cat_amount("AST") + cat_amount("ASSETS")),
         ]
         non_current_assets = [
-            ("Property, Plant and Equipment", cat_amount("CAT013")),
+            ("Property, Plant and Equipment", cat_amount("FA") + cat_amount("FA-AD")),
         ]
         current_liabilities = [
-            ("Accounts Payable", cat_amount("CAT006")),
-            ("Output Tax", cat_amount("CAT016")),
-            ("Other Current Liabilities", cat_amount("CAT007")),
+            ("Accounts Payable", cat_amount("AP")),
+            ("Tax Liabilities", cat_amount("TAX-L")),
+            ("Other Current Liabilities", cat_amount("LIA")),
         ]
         non_current_liabilities = [
-            ("Other Liabilities", cat_amount("CAT009")),
-            ("Long-term Liabilities", cat_amount("CAT014")),
+            ("Long-term Liabilities", cat_amount("LTL")),
         ]
         equity_lines = [
-            ("Equity", cat_amount("EQT")),
+            ("Share Capital", cat_amount("EQ")),
+            ("Retained Earnings", cat_amount("RE")),
+            ("Other Equity", cat_amount("EQT")),
         ]
 
         total_assets = sum(
@@ -903,14 +952,15 @@ class ReportsWebService:
         }
 
         return {
-            "as_of_date": as_of_date or _format_date(ref_date),
+            "as_of_date": _format_date(ref_date),
+            "as_of_date_iso": _iso_date(ref_date),
             "period_name": period.period_name if period else "No Period",
             "balance_sheet_lines": balance_sheet_lines,
             "total_assets": _format_currency(total_assets),
             "total_liabilities": _format_currency(total_liabilities),
             "total_equity": _format_currency(total_equity),
             "total_liabilities_equity": _format_currency(total_liabilities_equity),
-            "is_balanced": total_assets == total_liabilities_equity,
+            "is_balanced": round(total_assets, 2) == round(total_liabilities_equity, 2),
         }
 
     @staticmethod
@@ -993,7 +1043,8 @@ class ReportsWebService:
         )
 
         return {
-            "as_of_date": as_of_date or _format_date(ref_date),
+            "as_of_date": _format_date(ref_date),
+            "as_of_date_iso": _iso_date(ref_date),
             "current": current,
             "days_1_30": days_1_30,
             "days_31_60": days_31_60,
@@ -1116,7 +1167,8 @@ class ReportsWebService:
         )
 
         return {
-            "as_of_date": as_of_date or _format_date(ref_date),
+            "as_of_date": _format_date(ref_date),
+            "as_of_date_iso": _iso_date(ref_date),
             "current": current,
             "days_1_30": days_1_30,
             "days_31_60": days_31_60,
@@ -1188,7 +1240,9 @@ class ReportsWebService:
         account_options = [
             {
                 "account_id": str(acct.account_id),
-                "account_code": acct.account_code,
+                "account_code": acct.account_code
+                if len(acct.account_code) < 20
+                else "",
                 "account_name": acct.account_name,
             }
             for acct in accounts
@@ -1244,8 +1298,10 @@ class ReportsWebService:
                     )
 
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "account_id": account_id,
             "accounts": account_options,
             "selected_account": {
@@ -1310,8 +1366,10 @@ class ReportsWebService:
         upcoming_deadlines: list[dict[str, Any]] = []
 
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "output_tax": _format_currency(output_tax),
             "output_tax_raw": float(output_tax),
             "input_tax": _format_currency(input_tax),
@@ -1401,8 +1459,10 @@ class ReportsWebService:
         top_expenses = expense_items[:5]
 
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "expense_items": expense_items,
             "top_expenses": top_expenses,
             "total_expenses": _format_currency(total_expenses),
@@ -1423,7 +1483,7 @@ class ReportsWebService:
         from_date = _parse_date(start_date) or today.replace(day=1)
         to_date = _parse_date(end_date) or today
 
-        cash_category_codes = {"CAT003", "CAT012"}
+        cash_category_codes = {"CASH", "BANK"}
         cash_category_ids = db.scalars(
             select(AccountCategory.category_id).where(
                 AccountCategory.organization_id == org_id,
@@ -1496,8 +1556,10 @@ class ReportsWebService:
         net_cash = total_inflow - total_outflow
 
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "cash_movements": movements,
             "total_inflow": _format_currency(total_inflow),
             "total_outflow": _format_currency(total_outflow),
@@ -1647,8 +1709,10 @@ class ReportsWebService:
         net_income = total_revenue - total_expenses
 
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "equity_lines": line_items,
             "opening_equity": _format_currency(total_opening),
             "change_in_equity": _format_currency(total_change),
@@ -1718,31 +1782,34 @@ class ReportsWebService:
             )
 
         account_ids = list(budget_totals.keys())
-        actual_rows = []
+        actual_rows: list[Any] = []
         if account_ids:
-            actual_rows = db.execute(
-                select(
-                    JournalEntryLine.account_id,
-                    func.coalesce(
-                        func.sum(JournalEntryLine.debit_amount_functional), 0
-                    ).label("debit"),
-                    func.coalesce(
-                        func.sum(JournalEntryLine.credit_amount_functional), 0
-                    ).label("credit"),
-                )
-                .join(
-                    JournalEntry,
-                    JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
-                )
-                .where(
-                    JournalEntry.organization_id == org_id,
-                    JournalEntry.status == JournalStatus.POSTED,
-                    JournalEntry.posting_date >= from_date,
-                    JournalEntry.posting_date <= to_date,
-                    JournalEntryLine.account_id.in_(account_ids),
-                )
-                .group_by(JournalEntryLine.account_id)
-            ).all()
+            actual_rows = list(
+                db.execute(
+                    select(
+                        JournalEntryLine.account_id,
+                        func.coalesce(
+                            func.sum(JournalEntryLine.debit_amount_functional), 0
+                        ).label("debit"),
+                        func.coalesce(
+                            func.sum(JournalEntryLine.credit_amount_functional), 0
+                        ).label("credit"),
+                    )
+                    .join(
+                        JournalEntry,
+                        JournalEntry.journal_entry_id
+                        == JournalEntryLine.journal_entry_id,
+                    )
+                    .where(
+                        JournalEntry.organization_id == org_id,
+                        JournalEntry.status == JournalStatus.POSTED,
+                        JournalEntry.posting_date >= from_date,
+                        JournalEntry.posting_date <= to_date,
+                        JournalEntryLine.account_id.in_(account_ids),
+                    )
+                    .group_by(JournalEntryLine.account_id)
+                ).all()
+            )
 
         actual_map = {row.account_id: row for row in actual_rows}
 
@@ -1785,11 +1852,29 @@ class ReportsWebService:
         rows.sort(key=lambda x: x["account_code"])
         total_variance = total_actual - total_budget
 
+        # Fetch budgets for dropdown
+        budget_options = [
+            {
+                "budget_id": str(b.budget_id),
+                "budget_code": b.budget_code,
+                "budget_name": b.budget_name,
+                "status": b.status.value if b.status else "",
+            }
+            for b in db.scalars(
+                select(Budget)
+                .where(Budget.organization_id == org_id)
+                .order_by(Budget.budget_code)
+            ).all()
+        ]
+
         return {
-            "start_date": start_date or _format_date(from_date),
-            "end_date": end_date or _format_date(to_date),
+            "start_date": _format_date(from_date),
+            "start_date_iso": _iso_date(from_date),
+            "end_date": _format_date(to_date),
+            "end_date_iso": _iso_date(to_date),
             "budget_id": budget_id or "",
             "budget_code": budget_code or "",
+            "budgets": budget_options,
             "budget_lines": rows,
             "total_budget": _format_currency(total_budget),
             "total_actual": _format_currency(total_actual),
@@ -2084,6 +2169,113 @@ class ReportsWebService:
         return templates.TemplateResponse(
             request, "finance/reports/budget_vs_actual.html", context
         )
+
+    # ─────────────────── CSV Export helpers ───────────────────
+
+    def export_trial_balance_csv(
+        self,
+        organization_id: str,
+        db: Session,
+        as_of_date: str | None = None,
+    ) -> str:
+        """Export trial balance as CSV."""
+        ctx = self.trial_balance_context(db, organization_id, as_of_date)
+        headers = ["Category", "Account Code", "Account Name", "Debit", "Credit"]
+        rows: list[list[str]] = []
+        for section_name, section_key in [
+            ("Assets", "assets"),
+            ("Liabilities", "liabilities"),
+            ("Equity", "equity"),
+            ("Revenue", "revenue"),
+            ("Expenses", "expenses"),
+        ]:
+            for item in ctx.get(section_key, []):
+                rows.append(
+                    [
+                        section_name,
+                        item["account_code"],
+                        item["account_name"],
+                        str(item["debit_raw"]),
+                        str(item["credit_raw"]),
+                    ]
+                )
+        rows.append(["", "", "TOTAL", ctx["total_debit"], ctx["total_credit"]])
+        return _build_csv(headers, rows)
+
+    def export_income_statement_csv(
+        self,
+        organization_id: str,
+        db: Session,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> str:
+        """Export income statement as CSV."""
+        ctx = self.income_statement_context(db, organization_id, start_date, end_date)
+        headers = ["Line Item", "Amount"]
+        rows = [
+            [item["name"], str(item["amount_raw"])]
+            for item in ctx.get("income_statement_lines", [])
+        ]
+        return _build_csv(headers, rows)
+
+    def export_balance_sheet_csv(
+        self,
+        organization_id: str,
+        db: Session,
+        as_of_date: str | None = None,
+    ) -> str:
+        """Export balance sheet as CSV."""
+        ctx = self.balance_sheet_context(db, organization_id, as_of_date)
+        headers = ["Section", "Line Item", "Amount"]
+        rows: list[list[str]] = []
+        for section_name, section_key in [
+            ("Current Assets", "current_assets"),
+            ("Non-Current Assets", "non_current_assets"),
+            ("Current Liabilities", "current_liabilities"),
+            ("Non-Current Liabilities", "non_current_liabilities"),
+            ("Equity", "equity"),
+        ]:
+            for item in ctx.get("balance_sheet_lines", {}).get(section_key, []):
+                rows.append([section_name, item["name"], str(item["amount_raw"])])
+        rows.append(["", "Total Assets", ctx["total_assets"]])
+        rows.append(["", "Total Liabilities", ctx["total_liabilities"]])
+        rows.append(["", "Total Equity", ctx["total_equity"]])
+        return _build_csv(headers, rows)
+
+    def export_general_ledger_csv(
+        self,
+        organization_id: str,
+        db: Session,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> str:
+        """Export general ledger as CSV."""
+        ctx = self.general_ledger_context(
+            db, organization_id, account_id, start_date, end_date
+        )
+        headers = [
+            "Date",
+            "Journal #",
+            "Description",
+            "Reference",
+            "Debit",
+            "Credit",
+            "Balance",
+        ]
+        rows = [
+            [
+                txn["date"],
+                txn["journal_number"],
+                txn["description"],
+                txn["reference"],
+                txn["debit"],
+                txn["credit"],
+                txn["balance"],
+            ]
+            for txn in ctx.get("transactions", [])
+        ]
+        return _build_csv(headers, rows)
 
 
 reports_web_service = ReportsWebService()

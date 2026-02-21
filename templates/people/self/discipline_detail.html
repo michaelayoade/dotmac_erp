@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}Case {{ case.case_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Discipline</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ case.case_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/discipline" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Discipline</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ case.case_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,18 +20,14 @@
     {% if request.query_params.get('success') == 'response_submitted' %}
     <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-5 w-5 text-green-600 dark:text-green-400") }}
             <p class="text-green-800 dark:text-green-200">Your response has been submitted successfully.</p>
         </div>
     </div>
     {% elif request.query_params.get('success') == 'appeal_filed' %}
     <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-5 w-5 text-green-600 dark:text-green-400") }}
             <p class="text-green-800 dark:text-green-200">Your appeal has been filed successfully.</p>
         </div>
     </div>
@@ -40,22 +36,11 @@
     {# Header #}
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ case.case_number }}</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ case.case_number }}</h2>
             <p class="text-lg text-slate-600 dark:text-slate-400 mt-1">{{ case.subject }}</p>
         </div>
         {% set status = case.status.value if case.status is defined and case.status.value is defined else case.status %}
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
-            {% if status == 'QUERY_ISSUED' %}
-                bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400
-            {% elif status == 'CLOSED' or status == 'WITHDRAWN' %}
-                bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300
-            {% elif status == 'DECISION_MADE' %}
-                bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400
-            {% else %}
-                bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
-            {% endif %}">
-            {{ status | replace('_', ' ') | title }}
-        </span>
+        {{ status_badge(status, 'sm') }}
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -127,7 +112,7 @@
                                 {{ response.response_text }}
                             </div>
                             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                                Submitted: {{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                                Submitted: {{ response.submitted_at | format_datetime }}
                                 {% if response.is_appeal_response %}
                                 <span class="ml-2 text-purple-600 dark:text-purple-400">(Appeal Response)</span>
                                 {% endif %}
@@ -168,27 +153,19 @@
                             <div class="flex-shrink-0">
                                 {% if 'WARNING' in action_type %}
                                 <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30">
-                                    <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                                    </svg>
+                                    {{ icon_svg("warning", "h-5 w-5 text-yellow-600 dark:text-yellow-400") }}
                                 </span>
                                 {% elif 'SUSPENSION' in action_type %}
                                 <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                                    <svg class="h-5 w-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                                    </svg>
+                                    {{ icon_svg("ban", "h-5 w-5 text-orange-600 dark:text-orange-400") }}
                                 </span>
                                 {% elif action_type == 'TERMINATION' %}
                                 <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-red-100 dark:bg-red-900/30">
-                                    <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                    </svg>
+                                    {{ icon_svg("x-mark", "h-5 w-5 text-red-600 dark:text-red-400") }}
                                 </span>
                                 {% else %}
                                 <span class="inline-flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30">
-                                    <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
+                                    {{ icon_svg("check-circle", "h-5 w-5 text-blue-600 dark:text-blue-400") }}
                                 </span>
                                 {% endif %}
                             </div>
@@ -288,7 +265,7 @@
                         {% if case.hearing_date %}
                         <div>
                             <dt class="text-xs text-slate-500 dark:text-slate-400">Hearing Date</dt>
-                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ case.hearing_date.strftime('%Y-%m-%d %H:%M') }}</dd>
+                            <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ case.hearing_date | format_datetime }}</dd>
                         </div>
                         {% endif %}
                         {% if case.hearing_location %}
@@ -308,9 +285,7 @@
                     <div class="space-y-3">
                         {% if case.response_due_date and status == 'QUERY_ISSUED' %}
                         <div class="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                            <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
+                            {{ icon_svg("clock", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
                             <div>
                                 <p class="text-xs text-amber-600 dark:text-amber-400">Response Due</p>
                                 <p class="text-sm font-medium text-amber-800 dark:text-amber-200">{{ case.response_due_date }}</p>
@@ -319,9 +294,7 @@
                         {% endif %}
                         {% if case.appeal_deadline and status == 'DECISION_MADE' %}
                         <div class="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                            <svg class="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
+                            {{ icon_svg("clock", "h-5 w-5 text-purple-600 dark:text-purple-400") }}
                             <div>
                                 <p class="text-xs text-purple-600 dark:text-purple-400">Appeal Deadline</p>
                                 <p class="text-sm font-medium text-purple-800 dark:text-purple-200">{{ case.appeal_deadline }}</p>
@@ -334,9 +307,7 @@
 
             {# Back Link #}
             <a href="/people/self/discipline" class="btn btn-secondary w-full">
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                </svg>
+                {{ icon_svg("arrow-left", "h-4 w-4 mr-2") }}
                 Back to Cases
             </a>
         </div>

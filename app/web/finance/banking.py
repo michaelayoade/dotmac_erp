@@ -14,12 +14,23 @@ from app.web.deps import WebAuthContext, get_db, require_finance_access
 router = APIRouter(prefix="/banking", tags=["banking-web"])
 
 
+@router.get("/dashboard", response_class=HTMLResponse)
+def banking_dashboard(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Banking module dashboard page."""
+    return banking_web_service.dashboard_response(request, auth, db)
+
+
 @router.get("/accounts", response_class=HTMLResponse)
 def list_bank_accounts(
     request: Request,
     search: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
     sort: str | None = None,
     sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
@@ -27,7 +38,7 @@ def list_bank_accounts(
 ):
     """Bank accounts list page."""
     return banking_web_service.list_accounts_response(
-        request, auth, db, search, status, page, sort, sort_dir
+        request, auth, db, search, status, page, limit, sort, sort_dir
     )
 
 
@@ -49,6 +60,29 @@ async def new_bank_account_submit(
 ):
     """Create new bank account from form."""
     return await banking_web_service.create_account_response(request, auth, db)
+
+
+@router.get("/accounts/export")
+async def export_all_accounts(
+    search: str = "",
+    status: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all bank accounts to CSV."""
+    return await banking_web_service.export_all_accounts_response(
+        auth, db, search=search, status=status
+    )
+
+
+@router.post("/accounts/bulk-export")
+async def bulk_export_accounts(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export selected bank accounts to CSV."""
+    return await banking_web_service.bulk_export_accounts_response(request, auth, db)
 
 
 @router.post("/accounts/{account_id}/edit")
@@ -91,15 +125,18 @@ def list_statements(
     request: Request,
     account_id: str | None = None,
     status: str | None = None,
+    match_status: str | None = None,
+    search: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
     sort: str | None = None,
     sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
-    """Bank statements list page."""
+    """Bank statements list page (flat view of imported statement lines)."""
     return banking_web_service.list_statements_response(
         request,
         auth,
@@ -109,8 +146,43 @@ def list_statements(
         start_date,
         end_date,
         page,
+        limit,
         sort,
         sort_dir,
+        match_status=match_status,
+        search=search,
+    )
+
+
+@router.get("/statements/imports", response_class=HTMLResponse)
+def list_statement_imports(
+    request: Request,
+    account_id: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    sort: str | None = None,
+    sort_dir: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Imported statements list page (header-level view)."""
+    return banking_web_service.list_statement_imports_response(
+        request,
+        auth,
+        db,
+        account_id,
+        status,
+        start_date,
+        end_date,
+        page,
+        limit,
+        sort,
+        sort_dir,
+        search=search,
     )
 
 
@@ -197,6 +269,53 @@ async def bulk_export_statements(
 ):
     """Export selected statements to CSV."""
     return await banking_web_service.bulk_export_statements_response(request, auth, db)
+
+
+# -- Flat statement-line routes (before parameterized {statement_id}) --
+
+
+@router.post("/lines/apply-rules")
+async def apply_rules_flat(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Apply categorization rules across all statements for a bank account."""
+    form = await request.form()
+    account_id = str(form.get("account_id", ""))
+    if not account_id:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail="account_id required")
+    return banking_web_service.apply_rules_flat_response(request, auth, db, account_id)
+
+
+@router.post("/lines/{line_id}/accept")
+async def accept_suggestion_flat(
+    request: Request,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Accept a categorization suggestion from the flat lines view."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.accept_suggestion_flat_response(
+        request, auth, db, line_id
+    )
+
+
+@router.post("/lines/{line_id}/reject")
+async def reject_suggestion_flat(
+    request: Request,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Reject a categorization suggestion from the flat lines view."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.reject_suggestion_flat_response(
+        request, auth, db, line_id
+    )
 
 
 @router.get("/statements/{statement_id}", response_class=HTMLResponse)
@@ -398,6 +517,7 @@ def list_reconciliations(
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -411,6 +531,7 @@ def list_reconciliations(
         start_date,
         end_date,
         page,
+        limit,
     )
 
 
@@ -554,12 +675,13 @@ def list_payees(
     search: str | None = None,
     payee_type: str | None = None,
     page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=200),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Payees list page."""
     return banking_web_service.list_payees_response(
-        request, auth, db, search, payee_type, page
+        request, auth, db, search, payee_type, page, limit
     )
 
 
@@ -581,6 +703,29 @@ async def new_payee_submit(
 ):
     """Create new payee from form."""
     return await banking_web_service.create_payee_response(request, auth, db)
+
+
+@router.get("/payees/export")
+async def export_all_payees(
+    search: str = "",
+    payee_type: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all payees to CSV."""
+    return await banking_web_service.export_all_payees_response(
+        auth, db, search=search, payee_type=payee_type
+    )
+
+
+@router.post("/payees/bulk-export")
+async def bulk_export_payees(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export selected payees to CSV."""
+    return await banking_web_service.bulk_export_payees_response(request, auth, db)
 
 
 @router.post("/payees/{payee_id}/edit")
@@ -610,11 +755,14 @@ def list_transaction_rules(
     request: Request,
     rule_type: str | None = None,
     page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=200),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Transaction rules list page."""
-    return banking_web_service.list_rules_response(request, auth, db, rule_type, page)
+    return banking_web_service.list_rules_response(
+        request, auth, db, rule_type, page, limit
+    )
 
 
 @router.get("/rules/new", response_class=HTMLResponse)

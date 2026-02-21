@@ -1,17 +1,16 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg, pagination %}
 {% block page_title %}Department: {{ department.department_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/departments" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Departments</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ department.department_name }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/departments" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Departments</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ department.department_name }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -29,9 +28,7 @@
             <div>
                 <div class="flex items-center gap-3">
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/25">
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                        </svg>
+                        {{ icon_svg("building", "h-6 w-6") }}
                     </div>
                     <div>
                         <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ department.department_name }}</h2>
@@ -92,87 +89,14 @@
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Employees</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400">Designation, employment type, and shift assignment for this department.</p>
         </div>
-        {% if employees %}
-        <div class="table-container">
-            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-                <thead class="bg-slate-50 dark:bg-slate-900/50">
-                    <tr>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Designation</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employment Type</th>
-                        <th scope="col" class="px-5 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Shift Type</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for employee in employees %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
-                        <td class="px-5 py-4">
-                            <div class="flex items-center gap-3">
-                                <div class="h-9 w-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-white flex items-center justify-center text-xs font-semibold">
-                                    {{ employee.full_name[0] if employee.full_name else '?' }}
-                                </div>
-                                <div>
-                                    <a href="/people/hr/employees/{{ employee.employee_id }}" class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
-                                        {{ employee.full_name or employee.employee_code }}
-                                    </a>
-                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ employee.employee_code }}</p>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
-                            {{ employee.designation.designation_name if employee.designation else '-' }}
-                        </td>
-                        <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
-                            {{ employee.employment_type.type_name if employee.employment_type else '-' }}
-                        </td>
-                        <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
-                            {{ employee.default_shift_type.shift_name if employee.default_shift_type else '-' }}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="99" class="p-0">
-                            {{ empty_state("No employees found", "There are no employees to display.") }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total | default(0),
+            limit=20,
+            show_size_selector=false
+        ) }}
 
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between px-5 py-4 border-t border-slate-100 dark:border-slate-800">
-            <div class="text-sm text-slate-500 dark:text-slate-400">
-                Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
-                <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
-                <span class="hidden sm:inline">({{ total }} total employees)</span>
-            </div>
-            <div class="flex gap-2">
-                {% if has_prev %}
-                <a href="?page={{ page - 1 }}" class="btn btn-secondary btn-sm">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
-                    Previous
-                </a>
-                {% endif %}
-                {% if has_next %}
-                <a href="?page={{ page + 1 }}" class="btn btn-secondary btn-sm">
-                    Next
-                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                    </svg>
-                </a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-        {% else %}
-        <div class="px-6 py-12 text-center">
-            <h4 class="text-base font-semibold text-slate-900 dark:text-white">No employees in this department</h4>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Assign employees to see them listed here.</p>
-        </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

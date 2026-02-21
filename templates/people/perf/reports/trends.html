@@ -1,15 +1,15 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}Performance Trends{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Performance</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Trends</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Performance</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Trends</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,13 +18,11 @@
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Performance Trends</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Performance Trends</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Historical performance across appraisal cycles</p>
         </div>
         <a href="/people/perf/appraisals" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
             Back
         </a>
     </div>
@@ -34,9 +32,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
-                    <svg class="h-6 w-6 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calendar", "h-6 w-6 text-violet-600 dark:text-violet-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Total Cycles</p>
@@ -64,9 +60,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
-                    <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-6 w-6 text-teal-600 dark:text-teal-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Total Appraisals</p>
@@ -147,15 +141,7 @@
                             {{ c.period_start.strftime('%b %Y') if c.period_start else '' }} - {{ c.period_end.strftime('%b %Y') if c.period_end else '' }}
                         </td>
                         <td class="px-5 py-3 text-center">
-                            {% if c.status == 'ACTIVE' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">Active</span>
-                            {% elif c.status == 'COMPLETED' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Completed</span>
-                            {% elif c.status == 'DRAFT' %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">Draft</span>
-                            {% else %}
-                            {{ status_badge(c.status, size="sm") }}
-                            {% endif %}
+                            {{ status_badge(c.status, 'sm') }}
                         </td>
                         <td class="px-5 py-3 text-right text-sm text-slate-700 dark:text-slate-300">{{ c.total_appraisals }}</td>
                         <td class="px-5 py-3 text-right text-sm font-medium text-green-600 dark:text-green-400">{{ c.completed_appraisals }}</td>

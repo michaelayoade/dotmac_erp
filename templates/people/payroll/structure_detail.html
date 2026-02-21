@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ structure.structure_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Structures</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ structure.structure_code }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Structures</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ structure.structure_code }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -19,9 +20,7 @@
         <div class="flex items-start justify-between">
             <div class="flex items-center gap-4">
                 <div class="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-lime-500 to-emerald-600 text-white shadow-lg shadow-lime-500/25">
-                    <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calculator", "h-8 w-8") }}
                 </div>
                 <div>
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ structure.structure_name }}</h2>
@@ -62,7 +61,7 @@
             </div>
             <div>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Created</p>
-                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ structure.created_at.strftime('%b %d, %Y') }}</p>
+                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ structure.created_at | format_date }}</p>
             </div>
         </div>
     </div>
@@ -74,9 +73,7 @@
             <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <span class="flex h-6 w-6 items-center justify-center rounded bg-emerald-100 dark:bg-emerald-900/50">
-                        <svg class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus", "h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400") }}
                     </span>
                     Earnings
                 </h3>
@@ -112,9 +109,7 @@
             <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <span class="flex h-6 w-6 items-center justify-center rounded bg-red-100 dark:bg-red-900/50">
-                        <svg class="h-3.5 w-3.5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                        </svg>
+                        {{ icon_svg("minus", "h-3.5 w-3.5 text-red-600 dark:text-red-400") }}
                     </span>
                     Deductions
                 </h3>
@@ -185,7 +180,7 @@
                             {{ "{:,.2f}".format(assignment.base_pay) if assignment.base_pay else '-' }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ assignment.from_date.strftime('%b %d, %Y') }}
+                            {{ assignment.from_date | format_date }}
                         </td>
                         <td class="px-4 py-3 text-center">
                             {% if not assignment.to_date or assignment.to_date >= now().date() %}

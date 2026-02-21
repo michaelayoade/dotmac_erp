@@ -357,16 +357,18 @@ class PeriodGuardService(ListResponseMixin):
         if include_reopened:
             statuses.append(PeriodStatus.REOPENED)
 
-        return db.scalars(
-            select(FiscalPeriod)
-            .where(
-                and_(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.status.in_(statuses),
+        return list(
+            db.scalars(
+                select(FiscalPeriod)
+                .where(
+                    and_(
+                        FiscalPeriod.organization_id == org_id,
+                        FiscalPeriod.status.in_(statuses),
+                    )
                 )
+                .order_by(FiscalPeriod.start_date)
             )
-            .order_by(FiscalPeriod.start_date)
-        ).all()
+        )
 
     @staticmethod
     def get_current_period(
@@ -693,7 +695,7 @@ class PeriodGuardService(ListResponseMixin):
             stmt = stmt.where(FiscalPeriod.status == status)
 
         stmt = stmt.order_by(FiscalPeriod.start_date).limit(limit).offset(offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

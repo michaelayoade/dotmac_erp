@@ -92,6 +92,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -152,7 +156,6 @@ def create_department(
         is_active=payload.is_active,
     )
     dept = svc.create_department(data)
-    db.commit()
     return DepartmentRead.model_validate(dept)
 
 
@@ -185,7 +188,6 @@ def update_department(
         is_active=payload.is_active,
     )
     dept = svc.update_department(department_id, data)
-    db.commit()
     return DepartmentRead.model_validate(dept)
 
 
@@ -198,7 +200,6 @@ def delete_department(
     """Delete a department."""
     svc = OrganizationService(db, organization_id)
     svc.delete_department(department_id)
-    db.commit()
 
 
 # =============================================================================
@@ -287,8 +288,6 @@ def create_location(
         ),
         is_active=payload.is_active,
     )
-    db.commit()
-    db.refresh(location)
     return LocationRead.model_validate(location)
 
 
@@ -318,8 +317,6 @@ def update_location(
         )
     svc = OrganizationService(db, organization_id)
     location = svc.update_location(location_id, update_data)
-    db.commit()
-    db.refresh(location)
     return LocationRead.model_validate(location)
 
 
@@ -331,7 +328,6 @@ def delete_location(
 ):
     svc = OrganizationService(db, organization_id)
     svc.delete_location(location_id)
-    db.commit()
 
 
 # =============================================================================
@@ -386,7 +382,6 @@ def create_checklist_template(
         is_active=payload.is_active,
         items=[item.model_dump() for item in payload.items],
     )
-    db.commit()
     return ChecklistTemplateRead.model_validate(template)
 
 
@@ -416,7 +411,6 @@ def update_checklist_template(
     if "items" in update_data and update_data["items"] is not None:
         update_data["items"] = [item.model_dump() for item in update_data["items"]]
     template = svc.update_template(organization_id, template_id, **update_data)
-    db.commit()
     return ChecklistTemplateRead.model_validate(template)
 
 
@@ -430,7 +424,6 @@ def delete_checklist_template(
 ):
     svc = ChecklistTemplateService(db)
     svc.delete_template(organization_id, template_id)
-    db.commit()
 
 
 @router.post(
@@ -450,7 +443,6 @@ def create_designation(
         is_active=payload.is_active,
     )
     desig = svc.create_designation(data)
-    db.commit()
     return DesignationRead.model_validate(desig)
 
 
@@ -481,7 +473,6 @@ def update_designation(
         is_active=payload.is_active,
     )
     desig = svc.update_designation(designation_id, data)
-    db.commit()
     return DesignationRead.model_validate(desig)
 
 
@@ -494,7 +485,6 @@ def delete_designation(
     """Delete a designation."""
     svc = OrganizationService(db, organization_id)
     svc.delete_designation(designation_id)
-    db.commit()
 
 
 # =============================================================================
@@ -544,7 +534,6 @@ def create_employment_type(
         is_active=payload.is_active,
     )
     emp_type = svc.create_employment_type(data)
-    db.commit()
     return EmploymentTypeRead.model_validate(emp_type)
 
 
@@ -579,7 +568,6 @@ def update_employment_type(
         is_active=payload.is_active,
     )
     emp_type = svc.update_employment_type(employment_type_id, data)
-    db.commit()
     return EmploymentTypeRead.model_validate(emp_type)
 
 
@@ -594,7 +582,6 @@ def delete_employment_type(
     """Delete an employment type."""
     svc = OrganizationService(db, organization_id)
     svc.delete_employment_type(employment_type_id)
-    db.commit()
 
 
 # =============================================================================
@@ -645,7 +632,6 @@ def create_employee_grade(
         is_active=payload.is_active,
     )
     grade = svc.create_employee_grade(data)
-    db.commit()
     return EmployeeGradeRead.model_validate(grade)
 
 
@@ -679,7 +665,6 @@ def update_employee_grade(
         is_active=payload.is_active,
     )
     grade = svc.update_employee_grade(grade_id, data)
-    db.commit()
     return EmployeeGradeRead.model_validate(grade)
 
 
@@ -692,7 +677,6 @@ def delete_employee_grade(
     """Delete an employee grade."""
     svc = OrganizationService(db, organization_id)
     svc.delete_employee_grade(grade_id)
-    db.commit()
 
 
 # =============================================================================
@@ -776,7 +760,6 @@ def create_employee(
         notes=payload.notes,
     )
     emp = svc.create_employee(payload.person_id, data)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -823,7 +806,6 @@ def update_employee(
         notes=payload.notes,
     )
     emp = svc.update_employee(employee_id, data)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -847,8 +829,6 @@ def create_employee_user_credentials(
         provider=payload.provider,
         must_change_password=payload.must_change_password,
     )
-    db.commit()
-    db.refresh(credential)
     return UserCredentialRead.model_validate(credential)
 
 
@@ -862,7 +842,6 @@ def link_employee_user(
     """Link an employee to an existing user (Person)."""
     svc = EmployeeService(db, organization_id)
     emp = svc.link_employee_to_person(employee_id, payload.person_id)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -875,7 +854,6 @@ def delete_employee(
     """Delete an employee (soft delete)."""
     svc = EmployeeService(db, organization_id)
     svc.delete_employee(employee_id)
-    db.commit()
 
 
 # =============================================================================
@@ -892,7 +870,6 @@ def activate_employee(
     """Activate an employee."""
     svc = EmployeeService(db, organization_id)
     emp = svc.activate_employee(employee_id)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -905,7 +882,6 @@ def suspend_employee(
     """Suspend an employee."""
     svc = EmployeeService(db, organization_id)
     emp = svc.suspend_employee(employee_id)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -924,7 +900,6 @@ def terminate_employee(
         exit_interview_notes=payload.exit_interview_notes,
     )
     emp = svc.terminate_employee(employee_id, data)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -938,7 +913,6 @@ def resign_employee(
     """Record employee resignation."""
     svc = EmployeeService(db, organization_id)
     emp = svc.resign_employee(employee_id, payload.date_of_leaving)
-    db.commit()
     return EmployeeRead.model_validate(emp)
 
 
@@ -963,7 +937,6 @@ def bulk_update_employees(
         reports_to_id=payload.reports_to_id,
     )
     result = svc.bulk_update(data)
-    db.commit()
     return BulkOperationResponse(
         updated_count=result.updated_count,
         failed_ids=result.failed_ids,
@@ -980,7 +953,6 @@ def bulk_delete_employees(
     """Bulk delete employees."""
     svc = EmployeeService(db, organization_id)
     result = svc.bulk_delete(payload.ids)
-    db.commit()
     return BulkOperationResponse(
         deleted_count=result.deleted_count,
         failed_ids=result.failed_ids,

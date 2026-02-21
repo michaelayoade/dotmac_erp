@@ -319,6 +319,9 @@ def sync_stock_reconciliations(dry_run: bool = True) -> dict:
 
 
 def main():
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     parser = argparse.ArgumentParser(
         description="Sync ERPNext Stock Reconciliation to DotMac InventoryCount"
     )

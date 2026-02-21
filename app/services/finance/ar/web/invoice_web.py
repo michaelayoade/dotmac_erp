@@ -46,6 +46,7 @@ from app.services.finance.ar.web.base import (
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.tax.tax_master import tax_code_service
+from app.services.recent_activity import get_recent_activity
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -411,8 +412,9 @@ class InvoiceWebService:
                     if line_tax.tax_rate < 1
                     else f"{line_tax.tax_rate}%"
                 )
+                incl_suffix = " Incl." if line_tax.is_inclusive else ""
                 vat_labels_by_line.setdefault(line_tax.line_id, set()).add(
-                    f"{tax_code.tax_code} {rate_label}"
+                    f"{tax_code.tax_code} {rate_label}{incl_suffix}"
                 )
 
         for idx, line in enumerate(lines):
@@ -431,8 +433,9 @@ class InvoiceWebService:
                     if tax.tax_rate < 1
                     else f"{tax.tax_rate}%"
                 )
+                incl_suffix = " Incl." if tax.is_inclusive else ""
                 vat_labels_by_line.setdefault(line.line_id, set()).add(
-                    f"{tax.tax_code} {rate_label}"
+                    f"{tax.tax_code} {rate_label}{incl_suffix}"
                 )
 
             if vat_amount > 0:
@@ -481,6 +484,14 @@ class InvoiceWebService:
             "customer": customer_form_view(customer) if customer else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "recent_activity": get_recent_activity(
+                db,
+                org_id,
+                table_schema="ar",
+                table_name="invoice",
+                record_id=str(invoice.invoice_id),
+                limit=10,
+            ),
         }
 
     @staticmethod
@@ -501,7 +512,7 @@ class InvoiceWebService:
             logger.info("delete_invoice: deleted invoice %s for org %s", inv_id, org_id)
             return None
         except HTTPException as exc:
-            return exc.detail
+            return str(exc.detail)
         except Exception as e:
             logger.exception("delete_invoice: failed for org %s", org_id)
             return f"Failed to delete invoice: {str(e)}"
@@ -685,12 +696,16 @@ class InvoiceWebService:
         invoice_id: str,
     ) -> RedirectResponse:
         """Submit invoice for approval."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.submit_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(invoice_id),
-                submitted_by_user_id=auth.user_id,
+                submitted_by_user_id=user_id,
             )
             return RedirectResponse(
                 url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+submitted+for+approval",
@@ -711,12 +726,16 @@ class InvoiceWebService:
         invoice_id: str,
     ) -> RedirectResponse:
         """Approve a submitted invoice."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.approve_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(invoice_id),
-                approved_by_user_id=auth.user_id,
+                approved_by_user_id=user_id,
             )
             return RedirectResponse(
                 url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+approved",
@@ -737,12 +756,16 @@ class InvoiceWebService:
         invoice_id: str,
     ) -> RedirectResponse:
         """Post invoice to general ledger."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.post_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(invoice_id),
-                posted_by_user_id=auth.user_id,
+                posted_by_user_id=user_id,
             )
             return RedirectResponse(
                 url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+posted+to+ledger",
@@ -763,12 +786,16 @@ class InvoiceWebService:
         invoice_id: str,
     ) -> RedirectResponse:
         """Void an invoice."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.void_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(invoice_id),
-                voided_by_user_id=auth.user_id,
+                voided_by_user_id=user_id,
                 reason="Voided via web interface",
             )
             return RedirectResponse(

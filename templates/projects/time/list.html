@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import compact_filters %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination, status_badge %}
 
 
 {% block title %}Time Entries - {{ project.project_name }}{% endblock %}
@@ -11,9 +11,7 @@
         <div>
             <div class="flex items-center gap-2">
                 <a href="/projects/{{ project.project_code }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left") }}
                 </a>
                 <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Time Entries</h1>
             </div>
@@ -21,9 +19,7 @@
         </div>
         <a href="/projects/{{ project.project_code }}/time/new"
            class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
+            {{ icon_svg("plus", "h-4 w-4") }}
             Log Time
         </a>
     </div>
@@ -91,9 +87,7 @@
                 {{ request.state.csrf_form | safe }}
                 <input type="hidden" name="entry_ids" :value="selectedEntries.join(',')">
                 <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-4 w-4") }}
                     Mark as Billed
                 </button>
             </form>
@@ -134,7 +128,7 @@
                         {% endif %}
                     </td>
                     <td class="px-4 py-4">
-                        <span class="text-sm text-slate-900 dark:text-white">{{ entry.entry_date.strftime('%d %b %Y') }}</span>
+                        <span class="text-sm text-slate-900 dark:text-white">{{ entry.entry_date | format_date }}</span>
                     </td>
                     <td class="px-4 py-4">
                         <span class="text-sm text-slate-600 dark:text-slate-400">
@@ -159,19 +153,7 @@
                     </td>
                     <td class="px-4 py-4 text-center">
                         {% set status_val = entry.billing_status.value if entry.billing_status else 'NOT_BILLED' %}
-                        {% if status_val == 'BILLED' %}
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                            Billed
-                        </span>
-                        {% elif status_val == 'NOT_BILLED' %}
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                            Not Billed
-                        </span>
-                        {% else %}
-                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                            Non-Billable
-                        </span>
-                        {% endif %}
+                        {{ status_badge(status_val, 'sm') }}
                     </td>
                     <td class="px-4 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
@@ -205,21 +187,14 @@
     </div>
 
     <!-- Pagination -->
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between">
-        <div class="text-sm text-slate-500 dark:text-slate-400">
-            Showing {{ (page - 1) * per_page + 1 }} to {{ [(page * per_page), total] | min }} of {{ total }} entries
-        </div>
-        <nav class="flex items-center gap-1">
-            {% if page > 1 %}
-            <a href="?page={{ page - 1 }}" class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Previous</a>
-            {% endif %}
-            {% if page < total_pages %}
-            <a href="?page={{ page + 1 }}" class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700">Next</a>
-            {% endif %}
-        </nav>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=20,
+        show_size_selector=false
+    ) }}
+
     </div>
 </div>
 {% endblock %}

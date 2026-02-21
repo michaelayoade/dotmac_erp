@@ -1,19 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 
 {% block page_title %}Tax Return Details{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/tax/returns" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax Returns</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ tax_return.return_reference if tax_return else "Return" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/tax/returns" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax Returns</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ tax_return.return_reference if tax_return else "Return" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -22,9 +18,7 @@
 <div class="flex items-center gap-2">
     <a href="/finance/tax/returns/{{ tax_return.return_id }}/transactions" data-testid="view-transactions"
        class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
+        {{ icon_svg("clipboard", "h-4 w-4") }}
         View Transactions
     </a>
 </div>
@@ -76,9 +70,7 @@
             <form action="/finance/tax/returns/{{ tax_return.return_id }}/recalculate" method="POST" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" data-testid="recalculate-return" class="btn btn-secondary">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    {{ icon_svg("refresh", "h-4 w-4") }}
                     Recalculate
                 </button>
             </form>
@@ -88,9 +80,7 @@
             <form action="/finance/tax/returns/{{ tax_return.return_id }}/review" method="POST" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" data-testid="review-return" class="btn btn-primary">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-4 w-4") }}
                     Mark as Reviewed
                 </button>
             </form>
@@ -100,9 +90,7 @@
             <form action="/finance/tax/returns/{{ tax_return.return_id }}/file" method="POST" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" data-testid="file-return" class="btn btn-success">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-4 w-4") }}
                     File Return
                 </button>
             </form>
@@ -110,18 +98,14 @@
 
             {% if tax_return.status == 'FILED' and not tax_return.is_paid %}
             <span class="text-sm text-amber-600 dark:text-amber-400">
-                <svg class="inline h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("exclamation-circle", "inline h-4 w-4 mr-1") }}
                 Payment pending
             </span>
             {% endif %}
 
             {% if tax_return.is_paid %}
             <span class="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4") }}
                 Paid on {{ tax_return.payment_date }}
             </span>
             {% endif %}

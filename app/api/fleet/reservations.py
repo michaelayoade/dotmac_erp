@@ -42,6 +42,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -118,7 +122,6 @@ def create_reservation(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.create(data)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -139,7 +142,6 @@ def update_reservation(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.update(reservation_id, data)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -160,7 +162,6 @@ def approve_reservation(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.approve(reservation_id, data.approved_by_id)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -181,7 +182,6 @@ def reject_reservation(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.reject(reservation_id, data.rejection_reason)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -200,7 +200,6 @@ def checkout_vehicle(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.checkout(reservation_id, data)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -219,7 +218,6 @@ def checkin_vehicle(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.checkin(reservation_id, data)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -237,7 +235,6 @@ def cancel_reservation(
     service = ReservationService(db, organization_id)
     try:
         reservation = service.cancel(reservation_id)
-        db.commit()
         return ReservationRead.model_validate(reservation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

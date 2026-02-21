@@ -4,7 +4,7 @@ import os
 import secrets
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import redis
 from fastapi import HTTPException, Request
@@ -71,17 +71,20 @@ _REDIS_CLIENT: redis.Redis | None = None
 
 
 def _auth_setting(db: Session, key: str) -> str | None:
-    setting = db.scalar(
-        select(DomainSetting).where(
-            DomainSetting.domain == SettingDomain.auth,
-            DomainSetting.key == key,
-            DomainSetting.is_active.is_(True),
-        )
+    setting = cast(
+        DomainSetting | None,
+        db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == SettingDomain.auth,
+                DomainSetting.key == key,
+                DomainSetting.is_active.is_(True),
+            )
+        ),
     )
     if not setting:
         return None
     if setting.value_text is not None:
-        return setting.value_text
+        return str(setting.value_text)
     if setting.value_json is not None:
         return str(setting.value_json)
     return None
@@ -209,7 +212,7 @@ class UserCredentials(ListResponseMixin):
             },
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
     @staticmethod
     def update(
@@ -319,7 +322,7 @@ class MFAMethods(ListResponseMixin):
             },
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
     @staticmethod
     def update(db: Session, method_id: str, payload: MFAMethodUpdate) -> MFAMethod:
@@ -410,7 +413,7 @@ class Sessions(ListResponseMixin):
             },
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
     @staticmethod
     def update(db: Session, session_id: str, payload: SessionUpdate) -> AuthSession:
@@ -459,7 +462,7 @@ class ApiKeys(ListResponseMixin):
         window = max(window_seconds, 1)
         key = f"api_key_rl:{client_ip}:{int(time.time() // window)}"
         try:
-            count = int(redis_client.incr(key))  # type: ignore[arg-type]
+            count = int(cast(Any, redis_client.incr(key)))
             if count == 1:
                 redis_client.expire(key, window)
             if count > max(max_per_window, 1):
@@ -529,7 +532,7 @@ class ApiKeys(ListResponseMixin):
             {"created_at": ApiKey.created_at, "label": ApiKey.label},
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
     @staticmethod
     def update(db: Session, key_id: str, payload: ApiKeyUpdate) -> ApiKey:

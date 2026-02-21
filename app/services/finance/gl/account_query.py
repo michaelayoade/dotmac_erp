@@ -32,7 +32,7 @@ def build_account_query(
 
     category_value = parse_category(category)
 
-    query = (
+    query: Query[Account] = (
         Query([Account], session=db)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
         .filter(Account.organization_id == org_id)

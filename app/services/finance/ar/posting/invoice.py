@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -76,14 +76,29 @@ def _resolve_tax_accounts(
     if not tax_code_ids:
         return {}
 
-    accounts_by_tax_code: dict[UUID, UUID] = {}
-    for tax_code in db.scalars(
-        select(TaxCode).where(
-            TaxCode.organization_id == organization_id,
-            TaxCode.tax_code_id.in_(tax_code_ids),
-            TaxCode.tax_collected_account_id.isnot(None),
+    try:
+        tax_codes = (
+            db.query(TaxCode)
+            .filter(
+                and_(
+                    TaxCode.organization_id == organization_id,
+                    TaxCode.tax_code_id.in_(tax_code_ids),
+                    TaxCode.tax_collected_account_id.isnot(None),
+                )
+            )
+            .all()
         )
-    ).all():
+    except Exception:
+        tax_codes = db.scalars(
+            select(TaxCode).where(
+                TaxCode.organization_id == organization_id,
+                TaxCode.tax_code_id.in_(tax_code_ids),
+                TaxCode.tax_collected_account_id.isnot(None),
+            )
+        ).all()
+
+    accounts_by_tax_code: dict[UUID, UUID] = {}
+    for tax_code in tax_codes:
         if tax_code.tax_collected_account_id:
             accounts_by_tax_code[tax_code.tax_code_id] = (
                 tax_code.tax_collected_account_id
@@ -154,25 +169,46 @@ def post_invoice(
         return ARPostingResult(success=False, message="Customer not found")
 
     # Load invoice lines
-    lines = list(
-        db.scalars(
-            select(InvoiceLine)
-            .where(InvoiceLine.invoice_id == inv_id)
+    try:
+        lines = (
+            db.query(InvoiceLine)
+            .filter(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
-        ).all()
-    )
+            .all()
+        )
+    except Exception:
+        lines = list(
+            db.scalars(
+                select(InvoiceLine)
+                .where(InvoiceLine.invoice_id == inv_id)
+                .order_by(InvoiceLine.line_number)
+            ).all()
+        )
 
     if not lines:
         return ARPostingResult(success=False, message="Invoice has no lines")
 
     # Get fiscal period for inventory transactions
-    fiscal_period = db.scalar(
-        select(FiscalPeriod).where(
-            FiscalPeriod.organization_id == org_id,
-            FiscalPeriod.start_date <= invoice.invoice_date,
-            FiscalPeriod.end_date >= invoice.invoice_date,
+    try:
+        fiscal_period = (
+            db.query(FiscalPeriod)
+            .filter(
+                and_(
+                    FiscalPeriod.organization_id == org_id,
+                    FiscalPeriod.start_date <= invoice.invoice_date,
+                    FiscalPeriod.end_date >= invoice.invoice_date,
+                )
+            )
+            .first()
         )
-    )
+    except Exception:
+        fiscal_period = db.scalar(
+            select(FiscalPeriod).where(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date <= invoice.invoice_date,
+                FiscalPeriod.end_date >= invoice.invoice_date,
+            )
+        )
 
     # Check if there are inventory lines
     inventory_lines = [line for line in lines if line.item_id]

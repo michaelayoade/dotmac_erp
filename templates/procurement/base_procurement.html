@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/macros.html" import topbar, success_banner %}
+{% from "components/macros.html" import topbar, success_banner, icon_svg %}
 
 {% block head %}
 <meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
@@ -34,6 +34,7 @@
                     if (path === href || (segments.length >= 2 && path.startsWith(href + '/'))) {
                         link.classList.remove('text-slate-600', 'dark:text-slate-400');
                         link.classList.add('text-amber-800', 'bg-amber-50/50', 'font-medium', 'dark:text-amber-200', 'dark:bg-amber-900/20');
+                        link.setAttribute('aria-current', 'page');
                     }
                 });
             });
@@ -98,11 +99,10 @@
         <nav class="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Procurement navigation">
             <!-- Dashboard -->
             <a href="/procurement"
+               :aria-current="activeModule === 'procurement' ? 'page' : false"
                :class="activeModule === 'procurement' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
-                </svg>
+                {{ icon_svg("view-boards", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Dashboard</span>
             </a>
 
@@ -115,9 +115,7 @@
             <a href="/procurement/plans"
                :class="activeModule === 'proc_plans' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                </svg>
+                {{ icon_svg("clipboard-check", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Plans</span>
             </a>
 
@@ -125,9 +123,7 @@
             <a href="/procurement/requisitions"
                :class="activeModule === 'proc_requisitions' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Requisitions</span>
             </a>
 
@@ -135,9 +131,7 @@
             <a href="/procurement/rfqs"
                :class="activeModule === 'proc_rfqs' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
+                {{ icon_svg("calendar", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>RFQs</span>
             </a>
 
@@ -145,9 +139,7 @@
             <a href="/procurement/contracts"
                :class="activeModule === 'proc_contracts' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
+                {{ icon_svg("shield-check", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Contracts</span>
             </a>
 
@@ -160,9 +152,7 @@
             <a href="/procurement/vendors"
                :class="activeModule === 'proc_vendors' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
+                {{ icon_svg("user-group", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Vendors</span>
             </a>
 
@@ -170,9 +160,7 @@
             <a href="/procurement/vendors/prequalification"
                :class="activeModule === 'proc_prequalification' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
-                </svg>
+                {{ icon_svg("check-badge", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Prequalification</span>
             </a>
 
@@ -180,10 +168,7 @@
             <a href="/procurement/evaluations"
                :class="activeModule === 'proc_evaluations' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
-                </svg>
+                {{ icon_svg("pie-chart", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Evaluations</span>
             </a>
 

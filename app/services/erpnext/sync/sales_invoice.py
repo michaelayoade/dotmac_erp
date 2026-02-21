@@ -8,14 +8,16 @@ Handles dedup against Splynx-originated invoices via splynx_id.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 
@@ -53,6 +55,8 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
         self._mapping = SalesInvoiceMapping()
         self._item_mapping = SalesInvoiceItemMapping()
         self._invoice_cache: dict[str, Invoice] = {}
+        self._customer_exact_lookup: dict[str, uuid.UUID] | None = None
+        self._customer_norm_lookup: dict[str, uuid.UUID] | None = None
         # Injected by orchestrator
         self.ar_control_account_id: uuid.UUID | None = None
 
@@ -110,6 +114,107 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
         """Resolve an ERPNext account name to gl.account UUID."""
         return self._resolve_entity_id(account_source_name, "Account")
 
+    @staticmethod
+    def _normalize_party_name(value: str | None) -> str:
+        if not value:
+            return ""
+        norm = value.strip().lower()
+        norm = norm.replace("&", "and")
+        norm = re.sub(r"\s+", " ", norm)
+        norm = re.sub(r"\s*-\s*\d+$", "", norm)  # "Name - 1"
+        norm = re.sub(r"\s+\d+\)$", ")", norm)  # "(Name 1)" -> "(Name)"
+        return norm
+
+    def _ensure_customer_lookups(self) -> None:
+        if (
+            self._customer_exact_lookup is not None
+            and self._customer_norm_lookup is not None
+        ):
+            return
+
+        rows = self.db.execute(
+            select(
+                Customer.customer_id,
+                Customer.customer_code,
+                Customer.legal_name,
+                Customer.trading_name,
+                Customer.erpnext_id,
+            ).where(Customer.organization_id == self.organization_id)
+        ).all()
+
+        exact: dict[str, uuid.UUID] = {}
+        norm_multi: dict[str, set[uuid.UUID]] = {}
+
+        for row in rows:
+            customer_id = row.customer_id
+            for key in (row.erpnext_id, row.customer_code):
+                if key and key not in exact:
+                    exact[str(key)] = customer_id
+
+            for key in (
+                row.erpnext_id,
+                row.customer_code,
+                row.legal_name,
+                row.trading_name,
+            ):
+                nk = self._normalize_party_name(key)
+                if not nk:
+                    continue
+                norm_multi.setdefault(nk, set()).add(customer_id)
+
+        norm_unique = {k: next(iter(v)) for k, v in norm_multi.items() if len(v) == 1}
+        self._customer_exact_lookup = exact
+        self._customer_norm_lookup = norm_unique
+
+    def _resolve_customer_id(self, source_name: str | None) -> uuid.UUID | None:
+        if not source_name:
+            return None
+
+        candidate = self._resolve_entity_id(source_name, "Customer")
+        if candidate and self.db.get(Customer, candidate):
+            return candidate
+
+        self._ensure_customer_lookups()
+        assert self._customer_exact_lookup is not None
+        assert self._customer_norm_lookup is not None
+
+        if source_name in self._customer_exact_lookup:
+            return self._customer_exact_lookup[source_name]
+
+        source_norm = self._normalize_party_name(source_name)
+        if source_norm in self._customer_norm_lookup:
+            return self._customer_norm_lookup[source_norm]
+
+        prefix_candidates: set[uuid.UUID] = set()
+        for key, customer_id in self._customer_norm_lookup.items():
+            if not source_norm:
+                break
+            if key.startswith(source_norm) or source_norm.startswith(key):
+                if abs(len(key) - len(source_norm)) <= 3:
+                    prefix_candidates.add(customer_id)
+        if len(prefix_candidates) == 1:
+            return next(iter(prefix_candidates))
+
+        customer = self.db.scalar(
+            select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                Customer.erpnext_id == source_name,
+            )
+        )
+        if customer:
+            return customer.customer_id
+
+        customer = self.db.scalar(
+            select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                Customer.customer_code == source_name,
+            )
+        )
+        if customer:
+            return customer.customer_id
+
+        return None
+
     def _map_status(self, data: dict[str, Any]) -> InvoiceStatus:
         """Map ERPNext docstatus + status to DotMac InvoiceStatus."""
         docstatus = data.get("_docstatus", 0)
@@ -162,6 +267,43 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
             self.organization_id, SequenceType.CREDIT_NOTE, reference_date
         )
 
+    @staticmethod
+    def _calculate_line_taxes(
+        items_data: list[dict[str, Any]],
+        total_tax_amount: Decimal,
+    ) -> list[Decimal]:
+        """Allocate invoice-level tax to lines, preserving explicit line taxes."""
+        if not items_data:
+            return []
+
+        total_tax = Decimal(total_tax_amount or 0)
+        explicit_taxes = [Decimal(item.get("tax_amount") or 0) for item in items_data]
+        line_amounts = [Decimal(item.get("line_amount") or 0) for item in items_data]
+
+        remaining = total_tax - sum(explicit_taxes, Decimal("0"))
+        allocated = [tax for tax in explicit_taxes]
+        total_line_amount = sum(line_amounts, Decimal("0"))
+
+        if remaining != 0:
+            if total_line_amount > 0:
+                distributed = Decimal("0")
+                for idx, line_amount in enumerate(line_amounts):
+                    if idx == len(line_amounts) - 1:
+                        share = remaining - distributed
+                    else:
+                        share = (remaining * line_amount / total_line_amount).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_UP
+                        )
+                        distributed += share
+                    allocated[idx] += share
+            else:
+                allocated[-1] += remaining
+
+        return [
+            amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            for amount in allocated
+        ]
+
     def _create_invoice_lines(
         self, invoice_id: uuid.UUID, items_data: list[dict[str, Any]]
     ) -> None:
@@ -207,6 +349,7 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
         data.pop("_source_name", None)
         data.pop("_source_modified", None)
         customer_source = data.pop("_customer_source_name", None)
+        customer_display = data.pop("_customer_display_name", None)
         items_data = data.pop("_items", [])
         data.pop("_cost_center_source_name", None)
         data.pop("_project_source_name", None)
@@ -225,9 +368,13 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
             return existing_splynx
 
         # Resolve customer
-        customer_id = self._resolve_entity_id(customer_source, "Customer")
+        customer_id = self._resolve_customer_id(customer_source)
+        if not customer_id and customer_display:
+            customer_id = self._resolve_customer_id(customer_display)
         if not customer_id:
-            raise ValueError(f"Customer '{customer_source}' not found in sync_entity")
+            raise ValueError(
+                f"Customer '{customer_source or customer_display}' not found in sync_entity"
+            )
 
         # Map status and type
         status = self._map_status(data)
@@ -301,6 +448,7 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
         data.pop("_source_name", None)
         data.pop("_source_modified", None)
         data.pop("_customer_source_name", None)
+        data.pop("_customer_display_name", None)
         data.pop("_items", [])
         data.pop("_cost_center_source_name", None)
         data.pop("_project_source_name", None)

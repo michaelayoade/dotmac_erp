@@ -1,0 +1,374 @@
+module,doctype,insert_statements
+"Banking/Treasury","Bank Transaction",18
+"Banking/Treasury","Bank",1
+"Banking/Treasury","Bank Account",1
+"Banking/Treasury","Bank Names",1
+"Banking/Treasury","Bank Statement Import",1
+"Banking/Treasury","Payment Request",1
+"Banking/Treasury","Unreconcile Payment",1
+"Banking/Treasury","Unreconcile Payment Entries",1
+"CRM","CRM Communication Status",1
+"CRM","CRM Dashboard",1
+"CRM","CRM Deal Status",1
+"CRM","CRM Dropdown Item",1
+"CRM","CRM Fields Layout",1
+"CRM","CRM Form Script",1
+"CRM","CRM Industry",1
+"CRM","CRM Lead",1
+"CRM","CRM Lead Source",1
+"CRM","CRM Lead Status",1
+"CRM","CRM Lost Reason",1
+"CRM","CRM Note",1
+"CRM","CRM Organization",1
+"CRM","CRM Status Change Log",1
+"CRM","CRM View Settings",1
+"Documents/Files","Deleted Document",179
+"Documents/Files","Communication Link",40
+"Documents/Files","File",24
+"Documents/Files","DocField",6
+"Documents/Files","DocPerm",1
+"Documents/Files","DocShare",1
+"Documents/Files","DocType",1
+"Documents/Files","DocType Action",1
+"Documents/Files","DocType Link",1
+"Documents/Files","DocType State",1
+"Documents/Files","Document Share Key",1
+"Finance-AP","Purchase Invoice Advance",1
+"Finance-AP","Purchase Order",1
+"Finance-AP","Purchase Order Item",1
+"Finance-AP","Purchase Receipt",1
+"Finance-AP","Purchase Receipt Item",1
+"Finance-AP","Supplier Group",1
+"Finance-AP","Supplier Scorecard Standing",1
+"Finance-AP","Supplier Scorecard Variable",1
+"Finance-AR","Sales Taxes and Charges",12
+"Finance-AR","Payment Schedule",10
+"Finance-AR","Quotation",2
+"Finance-AR","Sales Invoice Advance",2
+"Finance-AR","Sales Order",2
+"Finance-AR","Advance Taxes and Charges",1
+"Finance-AR","Customer Group",1
+"Finance-AR","Quotation Item",1
+"Finance-AR","Sales Order Item",1
+"Finance-AR","Sales Taxes and Charges Template",1
+"Finance-GL","GL Entry",110
+"Finance-GL","Payment Ledger Entry",35
+"Finance-GL","Bank Transaction Payments",10
+"Finance-GL","Cost Center",1
+"Finance-GL","Fiscal Year",1
+"Finance-GL","Fiscal Year Company",1
+"Finance-GL","Mode of Payment",1
+"Finance-GL","Mode of Payment Account",1
+"HR Core","Attendance Request",1
+"HR Core","Branch",1
+"HR Core","Branches",1
+"HR Core","Department Approver",1
+"HR Core","Designation Skill",1
+"HR Core","Employee Boarding Activity",1
+"HR Core","Employee Checkin",1
+"HR Core","Employee Education",1
+"HR Core","Employee External Work History",1
+"HR Core","Employee Feedback Criteria",1
+"HR Core","Employee Feedback Rating",1
+"HR Core","Employee Onboarding Template",1
+"HR Core","Holiday",1
+"HR Core","Holiday List",1
+"HR Core","Leave Ledger Entry",1
+"HR Core","Leave Policy",1
+"HR Core","Leave Policy Detail",1
+"HR Payroll","Salary Detail",3
+"HR Payroll","Salary Slip",3
+"HR Payroll","Payroll Period",1
+"HR Payroll","Salary Component",1
+"HR Payroll","Salary Structure",1
+"HR Payroll","Salary Structure Assignment",1
+"Inventory","Stock Entry Detail",5
+"Inventory","Stock Entry",2
+"Inventory","Bin",1
+"Inventory","Brand",1
+"Inventory","Item Attribute",1
+"Inventory","Item Attribute Value",1
+"Inventory","Item Default",1
+"Inventory","Item Maintenace",1
+"Inventory","Item Price",1
+"Inventory","Item Tax",1
+"Inventory","Item Tax Template",1
+"Inventory","Item Tax Template Detail",1
+"Inventory","Serial No",1
+"Inventory","Serial and Batch Bundle",1
+"Inventory","Serial and Batch Entry",1
+"Inventory","Stock Entry Type",1
+"Inventory","Stock Reconciliation",1
+"Inventory","Stock Reconciliation Item",1
+"Inventory","UOM",1
+"Inventory","UOM Category",1
+"Inventory","UOM Conversion Detail",1
+"Inventory","UOM Conversion Factor",1
+"Inventory","Warehouse Type",1
+"Other","The Attendance",7
+"Other","Contact",3
+"Other","Dynamic Link",3
+"Other","Block Module",2
+"Other","Contact Email",2
+"Other","Activity Type",1
+"Other","Address",1
+"Other","Address Template",1
+"Other","Appraisal Template",1
+"Other","Appraisal Template Goal",1
+"Other","Asset Activity",1
+"Other","Asset Category Account",1
+"Other","Asset Movement",1
+"Other","Asset Movement Item",1
+"Other","Assignment Rule",1
+"Other","Assignment Rule Day",1
+"Other","Assignment Rule User",1
+"Other","Auto Email Report",1
+"Other","BTS Maintainance",1
+"Other","Base Station",1
+"Other","Base station Link",1
+"Other","Bulk Transaction Log Detail",1
+"Other","Cabinets",1
+"Other","Cabinets Link",1
+"Other","Campaign",1
+"Other","Client Script",1
+"Other","Color",1
+"Other","Company",1
+"Other","Contact Phone",1
+"Other","Country",1
+"Other","Currency",1
+"Other","Currency Exchange",1
+"Other","Currency Exchange Settings Details",1
+"Other","Currency Exchange Settings Result",1
+"Other","Custom DocPerm",1
+"Other","Custom Field",1
+"Other","Custom HTML Block",1
+"Other","Custom Role",1
+"Other","Dashboard",1
+"Other","Dashboard Chart",1
+"Other","Dashboard Chart Field",1
+"Other","Dashboard Chart Link",1
+"Other","Dashboard Chart Source",1
+"Other","Dashboard Settings",1
+"Other","Domain",1
+"Other","Email Account",1
+"Other","Email Domain",1
+"Other","Email Flag Queue",1
+"Other","Email Group",1
+"Other","Email Group Member",1
+"Other","Email Template",1
+"Other","Email Unsubscribe",1
+"Other","Energy Point Rule",1
+"Other","Event management",1
+"Other","Expected Skill Set",1
+"Other","Expense Claim Account",1
+"Other","Finance Book",1
+"Other","Form Tour",1
+"Other","Form Tour Step",1
+"Other","Gender",1
+"Other","Global Search DocType",1
+"Other","Grocery Items",1
+"Other","Grocery Shopping",1
+"Other","HD Article",1
+"Other","HD Article Category",1
+"Other","HD Service Day",1
+"Other","HD Service Holiday List",1
+"Other","HD Service Level Agreement",1
+"Other","HD Service Level Priority",1
+"Other","HD Team",1
+"Other","HD Team Member",1
+"Other","HD View",1
+"Other","Has Role",1
+"Other","Help Category",1
+"Other","IMAP Folder",1
+"Other","IP Address",1
+"Other","IP Pool",1
+"Other","Incoterm",1
+"Other","Industry Type",1
+"Other","Insights Chart v3",1
+"Other","Insights Dashboard Chart v3",1
+"Other","Insights Dashboard v3",1
+"Other","Insights Data Source",1
+"Other","Insights Data Source v3",1
+"Other","Insights Notebook",1
+"Other","Insights Query Execution Log",1
+"Other","Insights Query v3",1
+"Other","Insights Table Link v3",1
+"Other","Insights Table v3",1
+"Other","Insights Team",1
+"Other","Insights Team Member",1
+"Other","Insights Workbook",1
+"Other","Installed Application",1
+"Other","Interview",1
+"Other","Interview Detail",1
+"Other","Interview Round",1
+"Other","Interview Type",1
+"Other","Interviewer",1
+"Other","Job Applicant",1
+"Other","Job Applicant Source",1
+"Other","Job Offer",1
+"Other","Job Offer Term",1
+"Other","Job Offer Term Template",1
+"Other","Job Opening",1
+"Other","KRA",1
+"Other","Kanban Board",1
+"Other","Kanban Board Column",1
+"Other","Language",1
+"Other","Lead",1
+"Other","Lead Source",1
+"Other","Letter Head",1
+"Other","List Filter",1
+"Other","List View Settings",1
+"Other","List of Groceries",1
+"Other","Location",1
+"Other","Logs To Clear",1
+"Other","Market Segment",1
+"Other","Module Def",1
+"Other","Module Onboarding",1
+"Other","Module Profile",1
+"Other","NOC Task Tracker",1
+"Other","Navbar Item",1
+"Other","Notification",1
+"Other","Notification Recipient",1
+"Other","Notification Settings",1
+"Other","Notification Subscribed Document",1
+"Other","Number Card",1
+"Other","Number Card Link",1
+"Other","Offer Term",1
+"Other","Onboarding Permission",1
+"Other","Onboarding Step",1
+"Other","Onboarding Step Map",1
+"Other","Opportunity Type",1
+"Other","Page",1
+"Other","Party Account",1
+"Other","Party Type",1
+"Other","Payment Entry Deduction",1
+"Other","Payment Term",1
+"Other","Payment Terms Template",1
+"Other","Payment Terms Template Detail",1
+"Other","Pegged Currency Details",1
+"Other","Policy Violations",1
+"Other","Portal Menu Item",1
+"Other","Price List",1
+"Other","Print Format",1
+"Other","Print Heading",1
+"Other","Print Style",1
+"Other","Process Deferred Accounting",1
+"Other","Process Subscription",1
+"Other","Property Setter",1
+"Other","Purchase Taxes and Charges",1
+"Other","Purchase Taxes and Charges Template",1
+"Other","Report",1
+"Other","Report Column",1
+"Other","Report Filter",1
+"Other","Repost Item Valuation",1
+"Other","Role",1
+"Other","Role Profile",1
+"Other","Sales Partner Type",1
+"Other","Sales Person",1
+"Other","Sales Stage",1
+"Other","Sales Team",1
+"Other","Salutation",1
+"Other","Scheduled Job Type",1
+"Other","Scheduler Event",1
+"Other","Series",1
+"Other","Server Script",1
+"Other","Service Instance",1
+"Other","Session Default",1
+"Other","Sessions",1
+"Other","Share Type",1
+"Other","Shift Assignment",1
+"Other","Shift Assignment Schedule",1
+"Other","Shift Location",1
+"Other","Shift Schedule",1
+"Other","Shift Schedule Assignment",1
+"Other","Singles",1
+"Other","Skill",1
+"Other","Staffing Plan",1
+"Other","Staffing Plan Detail",1
+"Other","Subscription Plan",1
+"Other","Success Action",1
+"Other","Sys Admin Task Tracker",1
+"Other","Tag",1
+"Other","Tag Link",1
+"Other","Tax Category",1
+"Other","Tax Rule",1
+"Other","Tax Withholding Account",1
+"Other","Tax Withholding Category",1
+"Other","Tax Withholding Rate",1
+"Other","Territory",1
+"Other","Training Attendance Tracker",1
+"Other","User",1
+"Other","User Document Type",1
+"Other","User Email",1
+"Other","User Group",1
+"Other","User Group Member",1
+"Other","User Permission",1
+"Other","User Select Document Type",1
+"Other","User Social Login",1
+"Other","User Type",1
+"Other","User Type Module",1
+"Other","Variant Field",1
+"Other","Vehicle",1
+"Other","Vehicle Service Item",1
+"Other","Web Form",1
+"Other","Web Form Field",1
+"Other","Web Form List Column",1
+"Other","Web Page",1
+"Other","Web Template",1
+"Other","Web Template Field",1
+"Other","WebDev Task Tracker",1
+"Other","Webhook",1
+"Other","Webhook Data",1
+"Other","Webhook Header",1
+"Other","Website Route Redirect",1
+"Other","Website Theme",1
+"Other","Workflow",1
+"Other","Workflow Action",1
+"Other","Workflow Action Master",1
+"Other","Workflow Action Permitted Role",1
+"Other","Workflow Document State",1
+"Other","Workflow State",1
+"Other","Workflow Transition",1
+"Other","Workspace",1
+"Other","Workspace Chart",1
+"Other","Workspace Custom Block",1
+"Other","Workspace Link",1
+"Other","Workspace Number Card",1
+"Other","Workspace Quick List",1
+"Other","Workspace Shortcut",1
+"Other","project record",1
+"Projects","Project Record",1
+"Projects","Project Template",1
+"Projects","Project Template Task",1
+"Projects","Project Type",1
+"Projects","Project User",1
+"Projects","Task Depends On",1
+"Projects","Task Management",1
+"Projects","Task Type",1
+"Support","HD Ticket Activity",10
+"Support","HD Ticket Comment",1
+"Support","HD Ticket Priority",1
+"Support","HD Ticket Status",1
+"Support","HD Ticket Type",1
+"Support","Issue Priority",1
+"Support","Issue Type",1
+"System/Logs","Version",1200
+"System/Logs","Notification Log",225
+"System/Logs","Scheduled Job Log",196
+"System/Logs","Access Log",106
+"System/Logs","Email Queue",104
+"System/Logs","Error Log",98
+"System/Logs","Data Import Log",22
+"System/Logs","Route History",22
+"System/Logs","Webhook Request Log",22
+"System/Logs","ToDo",14
+"System/Logs","PWA Notification",8
+"System/Logs","View Log",8
+"System/Logs","Email Queue Recipient",3
+"System/Logs","Activity Log",2
+"System/Logs","Changelog Feed",1
+"System/Logs","Console Log",1
+"System/Logs","Data Import",1
+"System/Logs","DefaultValue",1
+"System/Logs","Patch Log",1
+"System/Logs","Prepared Report",1

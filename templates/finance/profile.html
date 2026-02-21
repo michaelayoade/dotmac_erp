@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block content %}
 <div class="px-6 py-8">
@@ -38,9 +39,7 @@
                         {% endfor %}
                         {% if person.email_verified %}
                         <span class="badge badge-success">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
+                            {{ icon_svg("check", "w-3 h-3") }}
                             Verified
                         </span>
                         {% else %}
@@ -53,7 +52,7 @@
                 <div class="text-right hidden sm:block">
                     <p class="text-sm text-slate-500 dark:text-slate-400">Member since</p>
                     <p class="font-medium text-slate-900 dark:text-white">
-                        {{ person.created_at.strftime('%b %d, %Y') }}
+                        {{ person.created_at | format_date }}
                     </p>
                 </div>
             </div>
@@ -211,7 +210,7 @@
                             <h4 class="font-medium text-slate-900 dark:text-white">Password</h4>
                             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                                 {% if credential and credential.password_updated_at %}
-                                Last changed {{ credential.password_updated_at.strftime('%b %d, %Y') }}
+                                Last changed {{ credential.password_updated_at | format_date }}
                                 {% else %}
                                 Never changed
                                 {% endif %}
@@ -267,9 +266,7 @@
                     {% if current_session %}
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-teal-50 dark:bg-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                            </svg>
+                            {{ icon_svg("desktop-computer", "w-5 h-5") }}
                         </div>
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium text-slate-900 dark:text-white truncate">

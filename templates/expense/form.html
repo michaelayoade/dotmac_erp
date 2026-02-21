@@ -1,18 +1,15 @@
 {% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ 'Edit Expense' if expense else 'New Expense' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expenses</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ 'Edit' if expense else 'New' }}</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expenses</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ 'Edit' if expense else 'New' }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -169,9 +166,7 @@
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="{{ return_to or '/expense' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
                 {{ 'Update Expense' if expense else 'Create Expense' }}
             </button>
         </div>

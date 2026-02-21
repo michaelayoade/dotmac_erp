@@ -1,31 +1,26 @@
 {% extends "people/base_people.html" %}
-{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination, icon_svg %}
 
 {% block page_title %}Employee Loans{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Loans</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Loans</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <div class="flex gap-2">
     <a href="/people/payroll/loans/types" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
+        {{ icon_svg("cog", "h-4 w-4 mr-1.5") }}
         Loan Types
     </a>
     <a href="/people/payroll/loans/new" class="btn btn-primary group">
-        <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
         New Loan
     </a>
 </div>
@@ -105,7 +100,7 @@
                         {{ status_badge(loan.status.value, size="sm") }}
                     </td>
                     <td class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                        {{ loan.application_date.strftime('%d %b %Y') if loan.application_date else '-' }}
+                        {{ loan.application_date | format_date if loan.application_date else '-' }}
                     </td>
                     <td class="px-4 py-3 text-right">
                         <a href="/people/payroll/loans/{{ loan.loan_id }}" class="btn btn-ghost btn-sm">View</a>
@@ -127,9 +122,7 @@
 
     {% else %}
     <div class="card p-12 text-center">
-        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("currency", "mx-auto h-12 w-12 text-slate-400", stroke_width="1.5") }}
         <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No loans found</h3>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
             {% if search or status %}

@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_code import TaxCode, TaxType
@@ -119,11 +119,13 @@ class TaxCodeService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = db.scalar(
-            select(TaxCode).where(
+        existing = (
+            db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == org_id,
                 TaxCode.tax_code == input.tax_code,
             )
+            .first()
         )
         if existing:
             raise HTTPException(
@@ -323,11 +325,13 @@ class TaxCodeService(ListResponseMixin):
         code: str,
     ) -> TaxCode | None:
         """Get a tax code by code string."""
-        return db.scalar(
-            select(TaxCode).where(
+        return (
+            db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == coerce_uuid(organization_id),
                 TaxCode.tax_code == code,
             )
+            .first()
         )
 
     @staticmethod
@@ -343,28 +347,31 @@ class TaxCodeService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[TaxCode]:
         """List tax codes with optional filters."""
-        query = select(TaxCode)
+        query = db.query(TaxCode)
 
         if organization_id:
-            query = query.where(TaxCode.organization_id == coerce_uuid(organization_id))
+            query = query.filter(
+                TaxCode.organization_id == coerce_uuid(organization_id)
+            )
 
         if tax_type:
-            query = query.where(TaxCode.tax_type == tax_type)
+            query = query.filter(TaxCode.tax_type == tax_type)
 
         if jurisdiction_id:
-            query = query.where(TaxCode.jurisdiction_id == coerce_uuid(jurisdiction_id))
+            query = query.filter(
+                TaxCode.jurisdiction_id == coerce_uuid(jurisdiction_id)
+            )
 
         if is_active is not None:
-            query = query.where(TaxCode.is_active == is_active)
+            query = query.filter(TaxCode.is_active == is_active)
 
         if applies_to_purchases is not None:
-            query = query.where(TaxCode.applies_to_purchases == applies_to_purchases)
+            query = query.filter(TaxCode.applies_to_purchases == applies_to_purchases)
 
         if applies_to_sales is not None:
-            query = query.where(TaxCode.applies_to_sales == applies_to_sales)
+            query = query.filter(TaxCode.applies_to_sales == applies_to_sales)
 
-        query = query.order_by(TaxCode.tax_code)
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return query.order_by(TaxCode.tax_code).limit(limit).offset(offset).all()
 
     @staticmethod
     def get_effective_codes(
@@ -375,16 +382,17 @@ class TaxCodeService(ListResponseMixin):
         """Get all tax codes effective on a given date."""
         org_id = coerce_uuid(organization_id)
 
-        return db.scalars(
-            select(TaxCode)
-            .where(
+        return (
+            db.query(TaxCode)
+            .filter(
                 TaxCode.organization_id == org_id,
                 TaxCode.is_active == True,
                 TaxCode.effective_from <= as_of_date,
                 (TaxCode.effective_to.is_(None)) | (TaxCode.effective_to >= as_of_date),
             )
             .order_by(TaxCode.tax_code)
-        ).all()
+            .all()
+        )
 
 
 class TaxJurisdictionService(ListResponseMixin):
@@ -414,11 +422,13 @@ class TaxJurisdictionService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = db.scalar(
-            select(TaxJurisdiction).where(
+        existing = (
+            db.query(TaxJurisdiction)
+            .filter(
                 TaxJurisdiction.organization_id == org_id,
                 TaxJurisdiction.jurisdiction_code == input.jurisdiction_code,
             )
+            .first()
         )
         if existing:
             raise HTTPException(
@@ -611,11 +621,13 @@ class TaxJurisdictionService(ListResponseMixin):
         code: str,
     ) -> TaxJurisdiction | None:
         """Get a jurisdiction by code string."""
-        return db.scalar(
-            select(TaxJurisdiction).where(
+        return (
+            db.query(TaxJurisdiction)
+            .filter(
                 TaxJurisdiction.organization_id == coerce_uuid(organization_id),
                 TaxJurisdiction.jurisdiction_code == code,
             )
+            .first()
         )
 
     @staticmethod
@@ -629,26 +641,30 @@ class TaxJurisdictionService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[TaxJurisdiction]:
         """List jurisdictions with optional filters."""
-        query = select(TaxJurisdiction)
+        query = db.query(TaxJurisdiction)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 TaxJurisdiction.organization_id == coerce_uuid(organization_id)
             )
 
         if country_code:
-            query = query.where(TaxJurisdiction.country_code == country_code)
+            query = query.filter(TaxJurisdiction.country_code == country_code)
 
         if jurisdiction_level:
-            query = query.where(
+            query = query.filter(
                 TaxJurisdiction.jurisdiction_level == jurisdiction_level
             )
 
         if is_active is not None:
-            query = query.where(TaxJurisdiction.is_active == is_active)
+            query = query.filter(TaxJurisdiction.is_active == is_active)
 
-        query = query.order_by(TaxJurisdiction.jurisdiction_code)
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return (
+            query.order_by(TaxJurisdiction.jurisdiction_code)
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
 
     @staticmethod
     def deactivate_jurisdiction(
@@ -686,14 +702,12 @@ class TaxJurisdictionService(ListResponseMixin):
 
         # Check for active tax codes in this jurisdiction
         active_codes = (
-            db.scalar(
-                select(func.count())
-                .select_from(TaxCode)
-                .where(
-                    TaxCode.jurisdiction_id == jur_id,
-                    TaxCode.is_active == True,
-                )
+            db.query(func.count(TaxCode.tax_code_id))
+            .filter(
+                TaxCode.jurisdiction_id == jur_id,
+                TaxCode.is_active == True,
             )
+            .scalar()
             or 0
         )
 

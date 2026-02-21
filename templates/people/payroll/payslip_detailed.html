@@ -435,7 +435,7 @@
                 <div class="document-title">Salary Slip</div>
                 <div class="document-number">{{ slip.slip_number }}</div>
                 <div class="document-period">
-                    {{ pay_period_start.strftime('%B %d') if pay_period_start else '' }} – {{ pay_period_end.strftime('%B %d, %Y') if pay_period_end else '' }}
+                    {{ pay_period_start.strftime('%B %d') if pay_period_start else '' }} – {{ pay_period_end | format_date if pay_period_end else '' }}
                 </div>
             </div>
         </div>
@@ -465,9 +465,9 @@
             <strong>Pro-rated Salary:</strong>
             {% set reason = slip.proration_reason | default('', true) %}
             {% if reason == 'JOINED_MID_PERIOD' %}
-            Employee joined on {{ slip.employee_start_in_period.strftime('%B %d, %Y') if slip.employee_start_in_period else 'mid-period' }}.
+            Employee joined on {{ slip.employee_start_in_period | format_date if slip.employee_start_in_period else 'mid-period' }}.
             {% elif reason == 'LEFT_MID_PERIOD' %}
-            Employee left on {{ slip.employee_end_in_period.strftime('%B %d, %Y') if slip.employee_end_in_period else 'mid-period' }}.
+            Employee left on {{ slip.employee_end_in_period | format_date if slip.employee_end_in_period else 'mid-period' }}.
             {% elif reason == 'BOTH' %}
             Partial period: {{ slip.employee_start_in_period.strftime('%B %d') if slip.employee_start_in_period else '' }} – {{ slip.employee_end_in_period.strftime('%B %d') if slip.employee_end_in_period else '' }}.
             {% else %}
@@ -688,7 +688,7 @@
                 </div>
                 <div class="payment-row">
                     <span class="payment-label">Date</span>
-                    <span class="payment-value">{{ slip.paid_at.strftime('%B %d, %Y') if slip.paid_at else '—' }}</span>
+                    <span class="payment-value">{{ slip.paid_at | format_date if slip.paid_at else '—' }}</span>
                 </div>
                 {% if slip.payment_reference %}
                 <div class="payment-row">

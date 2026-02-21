@@ -20,6 +20,29 @@ from app.services.common import NotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
 
+REQUISITION_EXPORT_COLUMNS: list[str] = [
+    "requisition_number",
+    "requisition_date",
+    "requester_id",
+    "department_id",
+    "urgency",
+    "justification",
+    "currency_code",
+    "material_request_id",
+    "plan_item_id",
+    "line_number",
+    "item_id",
+    "description",
+    "quantity",
+    "uom",
+    "estimated_unit_price",
+    "estimated_amount",
+    "expense_account_id",
+    "cost_center_id",
+    "project_id",
+    "delivery_date",
+]
+
 
 class RequisitionService:
     """Service for purchase requisition management."""
@@ -229,3 +252,117 @@ class RequisitionService:
         self.db.flush()
         logger.info("Rejected requisition %s", req.requisition_number)
         return req
+
+    def export_requisitions_data(
+        self,
+        org_id: UUID,
+        status_filter: str | None = None,
+        urgency_filter: str | None = None,
+        columns: list[str] | None = None,
+    ) -> tuple[list[str], list[list[object]]]:
+        """Build detailed per-line export data for requisitions.
+
+        Each requisition line becomes one row.  Requisitions with no lines
+        still produce a single row with blank line columns.
+
+        Args:
+            org_id: Organization ID
+            status_filter: Optional status filter
+            urgency_filter: Optional urgency filter
+            columns: Header column names to use (defaults to REQUISITION_EXPORT_COLUMNS)
+
+        Returns:
+            Tuple of (headers, rows) for CSV/XLSX export.
+        """
+        from sqlalchemy.orm import selectinload
+
+        stmt = (
+            select(PurchaseRequisition)
+            .where(PurchaseRequisition.organization_id == org_id)
+            .options(selectinload(PurchaseRequisition.lines))
+            .order_by(PurchaseRequisition.created_at.desc())
+        )
+        if status_filter:
+            try:
+                stmt = stmt.where(
+                    PurchaseRequisition.status == RequisitionStatus(status_filter)
+                )
+            except ValueError:
+                pass
+        if urgency_filter:
+            try:
+                stmt = stmt.where(
+                    PurchaseRequisition.urgency == UrgencyLevel(urgency_filter)
+                )
+            except ValueError:
+                pass
+
+        requisitions = list(self.db.scalars(stmt).all())
+        headers = columns or REQUISITION_EXPORT_COLUMNS
+
+        rows: list[list[object]] = []
+        empty_line = [""] * 11  # 11 line-level columns
+        for req in requisitions:
+            header_values: list[object] = [
+                req.requisition_number,
+                req.requisition_date.isoformat() if req.requisition_date else "",
+                str(req.requester_id),
+                str(req.department_id) if req.department_id else "",
+                req.urgency.value if req.urgency else "",
+                req.justification or "",
+                req.currency_code,
+                str(req.material_request_id) if req.material_request_id else "",
+                str(req.plan_item_id) if req.plan_item_id else "",
+            ]
+            if req.lines:
+                for line in req.lines:
+                    rows.append(
+                        header_values
+                        + [
+                            line.line_number,
+                            str(line.item_id) if line.item_id else "",
+                            line.description,
+                            line.quantity,
+                            line.uom or "",
+                            line.estimated_unit_price,
+                            line.estimated_amount,
+                            str(line.expense_account_id)
+                            if line.expense_account_id
+                            else "",
+                            str(line.cost_center_id) if line.cost_center_id else "",
+                            str(line.project_id) if line.project_id else "",
+                            line.delivery_date.isoformat()
+                            if line.delivery_date
+                            else "",
+                        ]
+                    )
+            else:
+                rows.append(header_values + empty_line)
+        return headers, rows
+
+    def find_duplicate_requisition_numbers(
+        self,
+        org_id: UUID,
+        requisition_numbers: list[str],
+    ) -> list[str]:
+        """Check which requisition numbers already exist.
+
+        Args:
+            org_id: Organization ID
+            requisition_numbers: List of numbers to check
+
+        Returns:
+            List of requisition numbers that already exist.
+        """
+        if not requisition_numbers:
+            return []
+
+        existing = list(
+            self.db.scalars(
+                select(PurchaseRequisition.requisition_number).where(
+                    PurchaseRequisition.organization_id == org_id,
+                    PurchaseRequisition.requisition_number.in_(requisition_numbers),
+                )
+            ).all()
+        )
+        return existing

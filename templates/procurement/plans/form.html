@@ -1,23 +1,25 @@
 {% extends "procurement/base_procurement.html" %}
+{% from "components/macros.html" import icon_svg %}
+{% from "components/_file_upload.html" import file_upload_zone %}
 
 {% block page_title %}New Procurement Plan{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/procurement/plans" class="hover:text-amber-600 transition-colors">Plans</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/plans" class="hover:text-amber-600 transition-colors">Plans</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto pb-12">
     <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
             New Procurement Plan
-        </h1>
+        </h2>
         <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
             Define the plan header, attach supporting documentation, and move to line items.
         </p>
@@ -29,9 +31,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                        </svg>
+                        {{ icon_svg("clipboard", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Plan Details</h2>
@@ -64,8 +64,13 @@
                     <textarea name="description" rows="3" class="form-input" placeholder="Optional summary of the procurement plan..."></textarea>
                 </div>
                 <div class="sm:col-span-2">
-                    <label class="form-label">Attachment (optional)</label>
-                    <input type="file" name="attachment" class="form-input text-sm">
+                    {{ file_upload_zone(
+                        name="attachment",
+                        label="Attachment (optional)",
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv",
+                        max_size_mb=10,
+                        hint="PDF, Office documents, or CSV"
+                    ) }}
                 </div>
             </div>
         </div>

@@ -1,6 +1,12 @@
 """
 Tests for LedgerPostingService.
+
+Mocking strategy: The service uses SQLAlchemy 2.0 select()-based queries.
+We mock db.scalar() / db.scalars() / db.execute() directly rather than
+patching model classes (which breaks select()).
 """
+
+from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
@@ -123,7 +129,8 @@ class TestPostJournalEntry:
             posted_entries=3,
             correlation_id="corr-123",
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_batch
+        # Service uses db.scalar(select(PostingBatch).where(...))
+        mock_db.scalar.return_value = mock_batch
 
         result = LedgerPostingService.post_journal_entry(mock_db, posting_request)
 
@@ -135,7 +142,8 @@ class TestPostJournalEntry:
 
     def test_journal_not_found_raises(self, mock_db, posting_request):
         """Test posting non-existent journal fails."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # No existing batch (scalar returns None), no journal (get returns None)
+        mock_db.scalar.return_value = None
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
@@ -147,8 +155,8 @@ class TestPostJournalEntry:
     def test_wrong_organization_raises(self, mock_db, posting_request):
         """Test posting journal from different org fails."""
         wrong_org_journal = MockJournalEntry(organization_id=uuid4())
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-
+        # No existing batch
+        mock_db.scalar.return_value = None
         mock_db.get.return_value = wrong_org_journal
 
         with pytest.raises(HTTPException) as exc:
@@ -162,7 +170,8 @@ class TestPostJournalEntry:
         posted_journal = MockJournalEntry(
             organization_id=org_id, status=JournalStatus.POSTED
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # No existing batch
+        mock_db.scalar.return_value = None
         mock_db.get.return_value = posted_journal
 
         with pytest.raises(HTTPException) as exc:
@@ -176,7 +185,8 @@ class TestPostJournalEntry:
         draft_journal = MockJournalEntry(
             organization_id=org_id, status=JournalStatus.DRAFT
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # No existing batch
+        mock_db.scalar.return_value = None
         mock_db.get.return_value = draft_journal
 
         with pytest.raises(HTTPException) as exc:
@@ -187,7 +197,8 @@ class TestPostJournalEntry:
     def test_period_guard_blocks_posting(self, mock_db, posting_request, org_id):
         """Test that closed period blocks posting."""
         journal = MockJournalEntry(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # No existing batch
+        mock_db.scalar.return_value = None
         mock_db.get.return_value = journal
 
         with patch(
@@ -329,8 +340,7 @@ class TestGetBatch:
         batch = MockPostingBatch(batch_id=batch_id)
         mock_db.get.return_value = batch
 
-        with patch("app.services.finance.gl.ledger_posting.PostingBatch"):
-            result = LedgerPostingService.get_batch(mock_db, batch_id)
+        result = LedgerPostingService.get_batch(mock_db, batch_id)
 
         assert result == batch
 
@@ -339,9 +349,8 @@ class TestGetBatch:
         mock_db.get.return_value = None
         batch_id = uuid4()
 
-        with patch("app.services.finance.gl.ledger_posting.PostingBatch"):
-            with pytest.raises(HTTPException) as exc:
-                LedgerPostingService.get_batch(mock_db, batch_id)
+        with pytest.raises(HTTPException) as exc:
+            LedgerPostingService.get_batch(mock_db, batch_id)
 
         assert exc.value.status_code == 404
 
@@ -352,21 +361,14 @@ class TestListPostingBatches:
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing posting batches with filters."""
         batches = [MockPostingBatch(), MockPostingBatch()]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = batches
-        mock_db.query.return_value = mock_query
+        # Service uses db.scalars(stmt).all()
+        mock_db.scalars.return_value.all.return_value = batches
 
-        with patch("app.services.finance.gl.ledger_posting.PostingBatch"):
-            result = LedgerPostingService.list(
-                mock_db, organization_id=str(org_id), limit=50, offset=0
-            )
+        result = LedgerPostingService.list(
+            mock_db, organization_id=str(org_id), limit=50, offset=0
+        )
 
         assert result == batches
-        mock_query.filter.assert_called()
 
 
 class TestGetLedgerLines:
@@ -376,17 +378,11 @@ class TestGetLedgerLines:
         """Test getting ledger lines for a batch."""
         batch_id = uuid4()
         lines = [MagicMock(), MagicMock()]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = lines
-        mock_db.query.return_value = mock_query
+        # Service uses db.scalars(stmt).all()
+        mock_db.scalars.return_value.all.return_value = lines
 
-        with patch("app.services.finance.gl.ledger_posting.PostedLedgerLine"):
-            result = LedgerPostingService.get_ledger_lines(
-                mock_db, org_id, posting_batch_id=batch_id
-            )
+        result = LedgerPostingService.get_ledger_lines(
+            mock_db, org_id, posting_batch_id=batch_id
+        )
 
         assert result == lines

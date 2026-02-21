@@ -51,11 +51,10 @@ def build_asset_query(
     status_value = _parse_status(status)
     category_id = _try_uuid(category)
 
-    query = (
-        Query([Asset], session=db)
-        .join(AssetCategory, Asset.category_id == AssetCategory.category_id)
-        .filter(Asset.organization_id == org_id)
+    query = db.query(Asset).join(
+        AssetCategory, Asset.category_id == AssetCategory.category_id
     )
+    query = query.filter(Asset.organization_id == org_id)
 
     if status_value:
         query = query.filter(Asset.status == status_value)

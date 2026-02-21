@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters %}
+{% from "components/macros.html" import compact_filters, icon_svg, status_badge, pagination %}
 
 
 {% block page_title %}My Payslips{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">My Payslips</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">My Payslips</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,7 +18,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Payslips</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Payslips</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">View your salary slips and payment history.</p>
         </div>
 
@@ -58,14 +58,7 @@
                         {{ slip.start_date.strftime('%B %Y') }}
                     </p>
                 </div>
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                    {% if slip.status.value == 'PAID' %}
-                    bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300
-                    {% else %}
-                    bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300
-                    {% endif %}">
-                    {{ slip.status.value }}
-                </span>
+                {{ status_badge(slip.status.value, 'sm') }}
             </div>
 
             <div class="space-y-2">
@@ -90,42 +83,29 @@
             </div>
 
             <div class="mt-4 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-                <span>{{ slip.start_date.strftime('%d %b') }} - {{ slip.end_date.strftime('%d %b, %Y') }}</span>
-                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
+                <span>{{ slip.start_date.strftime('%d %b') }} - {{ slip.end_date | format_datetime }}</span>
+                {{ icon_svg("chevron-right", "w-4 h-4 group-hover:translate-x-1 transition-transform") }}
             </div>
         </a>
         {% endfor %}
     </div>
 
     {# Pagination #}
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-4">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-            Showing {{ (page - 1) * 12 + 1 }} to {{ [page * 12, total] | min }} of {{ total }} payslips
-        </p>
-        <div class="flex items-center gap-2">
-            {% if has_prev %}
-            <a href="?page={{ page - 1 }}{% if year %}&year={{ year }}{% endif %}"
-               class="btn btn-secondary btn-sm">Previous</a>
-            {% endif %}
-            <span class="text-sm text-slate-600 dark:text-slate-400">Page {{ page }} of {{ total_pages }}</span>
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}{% if year %}&year={{ year }}{% endif %}"
-               class="btn btn-secondary btn-sm">Next</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=12,
+        show_size_selector=false,
+        filters={"year": year}
+    ) }}
+
 
     {% else %}
     <div class="card p-12 text-center">
         <div class="flex justify-center mb-4">
             <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-8 w-8 text-slate-400") }}
             </div>
         </div>
         <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">No payslips available</h3>

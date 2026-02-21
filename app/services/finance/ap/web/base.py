@@ -37,6 +37,7 @@ from app.services.finance.common import (
     parse_date,
     parse_enum_safe,
 )
+from app.services.recent_activity import get_recent_activity
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,7 @@ def supplier_detail_view(supplier: Supplier, balance: Decimal) -> dict:
 
 def invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
     """Transform invoice line to view."""
+    line_amount_raw = float(line.line_amount) if line.line_amount else 0.0
     return {
         "line_id": line.line_id,
         "line_number": line.line_number,
@@ -218,7 +220,10 @@ def invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
         "tax_amount": format_currency(line.tax_amount, currency_code),
         "tax_amount_raw": float(line.tax_amount),
         "tax_code_id": line.tax_code_id,
+        "line_amount_raw": line_amount_raw,
         "line_amount": format_currency(line.line_amount, currency_code),
+        "display_line_amount_raw": line_amount_raw,
+        "display_line_amount": format_currency(line.line_amount, currency_code),
         "expense_account_id": line.expense_account_id,
         "asset_account_id": line.asset_account_id,
         "cost_center_id": line.cost_center_id,
@@ -242,7 +247,17 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> 
         "due_date": format_date(invoice.due_date),
         "currency_code": invoice.currency_code,
         "subtotal": format_currency(invoice.subtotal, invoice.currency_code),
+        "display_subtotal": format_currency(invoice.subtotal, invoice.currency_code),
+        "display_subtotal_raw": float(invoice.subtotal),
         "tax_amount": format_currency(invoice.tax_amount, invoice.currency_code),
+        "display_tax_amount": format_currency(
+            invoice.tax_amount, invoice.currency_code
+        ),
+        "display_tax_amount_raw": float(invoice.tax_amount),
+        "display_tax_added": format_currency(invoice.tax_amount, invoice.currency_code),
+        "display_tax_added_raw": float(invoice.tax_amount),
+        "display_tax_included": format_currency(Decimal("0"), invoice.currency_code),
+        "display_tax_included_raw": 0.0,
         "total_amount": format_currency(invoice.total_amount, invoice.currency_code),
         "total_amount_raw": float(invoice.total_amount),
         "amount_paid": format_currency(invoice.amount_paid, invoice.currency_code),
@@ -432,6 +447,26 @@ def calculate_supplier_balance_trends(
     return trends
 
 
+def recent_activity_view(
+    db: Session,
+    organization_id: UUID,
+    *,
+    table_schema: str,
+    table_name: str,
+    record_id: str,
+    limit: int = 10,
+) -> list[dict]:
+    """Return latest immutable audit log activity for a single record."""
+    return get_recent_activity(
+        db,
+        organization_id,
+        table_schema=table_schema,
+        table_name=table_name,
+        record_id=record_id,
+        limit=limit,
+    )
+
+
 # ==============================================================================
 # Data Classes
 # ==============================================================================
@@ -477,6 +512,7 @@ __all__ = [
     "get_cost_centers",
     "get_projects",
     "calculate_supplier_balance_trends",
+    "recent_activity_view",
     # Data classes
     "InvoiceStats",
     # Logger

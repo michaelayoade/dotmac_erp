@@ -1,19 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 
 {% block page_title %}{{ "Edit Purchase Order" if order else "New Purchase Order" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/ap/purchase-orders" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Purchase Orders</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if order else "New" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/purchase-orders" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Purchase Orders</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if order else "New" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -21,9 +17,9 @@
 <div class="max-w-4xl mx-auto pb-12" x-data="purchaseOrderForm()">
     <!-- Page Header -->
     <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
             {{ "Edit Purchase Order" if order else "New Purchase Order" }}
-        </h1>
+        </h2>
         <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
             {{ "Update purchase order details" if order else "Create a new purchase order for your supplier" }}
         </p>
@@ -32,9 +28,7 @@
     {% if error %}
     <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 stagger-in" style="animation-delay: 25ms;">
         <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0") }}
             <div>
                 <h3 class="font-semibold text-rose-800 dark:text-rose-300">Error</h3>
                 <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
@@ -49,9 +43,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                        </svg>
+                        {{ icon_svg("clipboard", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Details</h2>
@@ -80,9 +72,7 @@
                                 aria-haspopup="listbox"
                             >
                             <button type="button" @click="supplierOpen = !supplierOpen" class="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                </svg>
+                                {{ icon_svg("chevron-down", "h-4 w-4") }}
                             </button>
                         </div>
                         <input type="hidden" x-model="formData.supplier_id">
@@ -158,9 +148,7 @@
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-4">
                         <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                            </svg>
+                            {{ icon_svg("list-bullet", "h-5 w-5", stroke_width="1.5") }}
                         </div>
                         <div>
                             <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Lines</h2>
@@ -168,9 +156,7 @@
                         </div>
                     </div>
                     <button type="button" @click="addLine" class="btn btn-ghost text-sm">
-                        <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                         Add Line
                     </button>
                 </div>
@@ -207,9 +193,7 @@
                                                 aria-haspopup="listbox"
                                             >
                                             <button type="button" @click="line.item_open = !line.item_open" class="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                                </svg>
+                                                {{ icon_svg("chevron-down", "h-4 w-4") }}
                                             </button>
                                         </div>
                                         <input type="hidden" x-model="line.item_id">
@@ -249,9 +233,7 @@
                                 </td>
                                 <td>
                                     <button type="button" @click="removeLine(index)" class="rounded p-1 text-slate-400 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 dark:hover:text-rose-400" aria-label="Delete">
-                                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
+                                        {{ icon_svg("trash", "h-4 w-4") }}
                                     </button>
                                 </td>
                             </tr>

@@ -1,28 +1,28 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters %}
+{% from "components/macros.html" import compact_filters, icon_svg %}
 
 
 {% block page_title %}General ledger{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">General ledger</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">General ledger</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
+{% if selected_account %}
+<a href="/finance/reports/general-ledger/export?account_id={{ account_id }}&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export CSV
+</a>
+{% endif %}
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-    </svg>
+    {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>
 {% endblock %}
@@ -35,8 +35,8 @@
         base_url="/finance/reports/general-ledger",
         active_filters=active_filters | default([]),
         date_range=true,
-        start_date=start_date | default('', true),
-        end_date=end_date | default('', true)
+        start_date=start_date_iso | default('', true),
+        end_date=end_date_iso | default('', true)
     ) %}
     <div>
             <div class="flex-1 min-w-[200px]">
@@ -108,9 +108,7 @@
         {% else %}
         <div class="empty-state">
             <div class="empty-state-icon">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-8 w-8") }}
             </div>
             <h3 class="empty-state-title">No transactions</h3>
             <p class="empty-state-description">No posted journal entries found for this account in the selected period.</p>
@@ -124,9 +122,7 @@
     <div class="card p-6">
         <div class="empty-state">
             <div class="empty-state-icon">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                </svg>
+                {{ icon_svg("book-open", "h-8 w-8") }}
             </div>
             <h3 class="empty-state-title">Select an Account</h3>
             <p class="empty-state-description">Choose an account from the dropdown above to view its transaction history.</p>

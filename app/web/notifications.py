@@ -193,7 +193,6 @@ async def mark_notification_read(
         return RedirectResponse(url="/login", status_code=302)
 
     notification_service.mark_read(db, notification_id)
-    db.commit()
 
     # Return updated unread count for HTMX
     unread_count = notification_service.get_unread_count(
@@ -217,7 +216,6 @@ async def mark_all_notifications_read(
         return RedirectResponse(url="/login", status_code=302)
 
     notification_service.mark_all_read(db, auth.person_id, auth.organization_id)
-    db.commit()
 
     # Redirect back to notifications page
     return RedirectResponse(url="/notifications", status_code=302)

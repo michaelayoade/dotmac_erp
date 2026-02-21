@@ -14,7 +14,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.lease.lease_asset import LeaseAsset
@@ -92,11 +91,13 @@ class LeaseModificationService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Load lease contract
-        contract = db.scalar(
-            select(LeaseContract).where(
+        contract = (
+            db.query(LeaseContract)
+            .filter(
                 LeaseContract.lease_id == lease_id,
                 LeaseContract.organization_id == org_id,
             )
+            .first()
         )
 
         if not contract:
@@ -109,13 +110,11 @@ class LeaseModificationService(ListResponseMixin):
             )
 
         # Load liability and asset
-        liability = db.scalars(
-            select(LeaseLiability).where(LeaseLiability.lease_id == lease_id)
-        ).first()
+        liability = (
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == lease_id).first()
+        )
 
-        asset = db.scalars(
-            select(LeaseAsset).where(LeaseAsset.lease_id == lease_id)
-        ).first()
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == lease_id).first()
 
         if not liability or not asset:
             return ModificationResult(
@@ -355,10 +354,10 @@ class LeaseModificationService(ListResponseMixin):
         mod_id = coerce_uuid(modification_id)
         user_id = coerce_uuid(approved_by_user_id)
 
-        modification = db.scalar(
-            select(LeaseModification).where(
-                LeaseModification.modification_id == mod_id,
-            )
+        modification = (
+            db.query(LeaseModification)
+            .filter(LeaseModification.modification_id == mod_id)
+            .first()
         )
 
         if not modification:
@@ -385,10 +384,10 @@ class LeaseModificationService(ListResponseMixin):
         organization_id: UUID | None = None,
     ) -> LeaseModification | None:
         """Get a modification by ID."""
-        modification = db.scalar(
-            select(LeaseModification).where(
-                LeaseModification.modification_id == coerce_uuid(modification_id)
-            )
+        modification = (
+            db.query(LeaseModification)
+            .filter(LeaseModification.modification_id == coerce_uuid(modification_id))
+            .first()
         )
         if not modification:
             return None
@@ -404,11 +403,12 @@ class LeaseModificationService(ListResponseMixin):
         lease_id: UUID,
     ) -> list[LeaseModification]:
         """List all modifications for a lease."""
-        return db.scalars(
-            select(LeaseModification)
-            .where(LeaseModification.lease_id == coerce_uuid(lease_id))
+        return (
+            db.query(LeaseModification)
+            .filter(LeaseModification.lease_id == coerce_uuid(lease_id))
             .order_by(LeaseModification.effective_date.desc())
-        ).all()
+            .all()
+        )
 
     @staticmethod
     def list(
@@ -421,22 +421,23 @@ class LeaseModificationService(ListResponseMixin):
         offset: int = 0,
     ) -> list[LeaseModification]:
         """List modifications with filters."""
-        stmt = select(LeaseModification)
+        stmt = db.query(LeaseModification)
 
         if modification_type:
-            stmt = stmt.where(LeaseModification.modification_type == modification_type)
+            stmt = stmt.filter(LeaseModification.modification_type == modification_type)
 
         if from_date:
-            stmt = stmt.where(LeaseModification.effective_date >= from_date)
+            stmt = stmt.filter(LeaseModification.effective_date >= from_date)
 
         if to_date:
-            stmt = stmt.where(LeaseModification.effective_date <= to_date)
+            stmt = stmt.filter(LeaseModification.effective_date <= to_date)
 
-        return db.scalars(
+        return (
             stmt.order_by(LeaseModification.effective_date.desc())
             .offset(offset)
             .limit(limit)
-        ).all()
+            .all()
+        )
 
 
 # Module-level instance

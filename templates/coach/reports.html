@@ -18,12 +18,12 @@
           <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             {{ status_badge(report.report_type) }}
             <span class="font-mono">{{ report.audience | replace('_', ' ') | title }}</span>
-            <span>{{ report.period_start.strftime('%d %b %Y') }} &ndash; {{ report.period_end.strftime('%d %b %Y') }}</span>
+            <span>{{ report.period_start | format_date }} &ndash; {{ report.period_end | format_date }}</span>
           </div>
           <p class="mt-3 text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ report.executive_summary[:200] }}{% if report.executive_summary|length > 200 %}&hellip;{% endif %}</p>
         </div>
         <div class="shrink-0 text-xs text-slate-400 dark:text-slate-500">
-          {{ report.created_at.strftime('%d %b %Y') }}
+          {{ report.created_at | format_date }}
         </div>
       </div>
     </a>

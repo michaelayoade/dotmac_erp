@@ -216,6 +216,7 @@ class TimeEntryService:
         if entry.task_id:
             self._update_task_hours(entry.task_id)
 
+        self.db.refresh(entry)
         return entry
 
     def update_entry(self, entry_id: uuid.UUID, data: dict) -> TimeEntry:
@@ -257,6 +258,7 @@ class TimeEntryService:
         if entry.task_id:
             self._update_task_hours(entry.task_id)
 
+        self.db.refresh(entry)
         return entry
 
     def delete_entry(self, entry_id: uuid.UUID) -> bool:

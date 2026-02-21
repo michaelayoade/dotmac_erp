@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}{{ "Edit AR Invoice" if invoice else "New AR Invoice" }}{% endblock %}
 
 {% block page_styles %}
@@ -54,16 +54,12 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/ar/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AR Invoices</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ar/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AR Invoices</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -75,9 +71,9 @@
 
         <!-- Page Header -->
         <div class="fade-up">
-            <h1 class="font-display text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">
+            <h2 class="font-display text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">
                 {{ "Edit Invoice" if invoice else "New Sales Invoice" }}
-            </h1>
+            </h2>
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Create a new invoice for your customer with line items and taxes.
             </p>
@@ -153,9 +149,7 @@
                     {% endif %}
                     <!-- Credit Warning -->
                     <div x-show="creditWarning" x-cloak class="credit-warning">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                        </svg>
+                        {{ icon_svg("warning") }}
                         <span x-text="creditWarning"></span>
                     </div>
                 </div>
@@ -253,9 +247,7 @@
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Add products or services to this invoice</p>
                 </div>
                 <button type="button" @click="addLine" class="btn btn-secondary">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "w-4 h-4") }}
                     Add Line
                 </button>
             </div>
@@ -355,7 +347,7 @@
                                                        :checked="line.tax_code_ids && line.tax_code_ids.includes('{{ tax.tax_code_id }}')"
                                                        @change="toggleTaxCode(index, '{{ tax.tax_code_id }}', $event.target.checked)"
                                                        class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
-                                                <span class="ml-2 text-sm text-slate-900 dark:text-white">{{ tax.tax_code }} ({{ tax.tax_rate }}{% if tax.tax_rate < 1 %}%{% endif %})</span>
+                                                <span class="ml-2 text-sm text-slate-900 dark:text-white">{{ tax.tax_code }} ({{ tax.tax_rate }}{% if tax.tax_rate < 1 %}%{% endif %}){% if tax.is_inclusive %} <span class="text-xs text-amber-600 dark:text-amber-400">Incl.</span>{% endif %}</span>
                                             </label>
                                             {% else %}
                                             <tr>
@@ -375,9 +367,7 @@
                                             @click="removeLine(index)"
                                             x-show="form.lines.length > 1"
                                             class="btn-ghost-danger">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
+                                        {{ icon_svg("trash", "w-4 h-4") }}
                                     </button>
                                 </td>
                             </tr>
@@ -491,9 +481,7 @@
                     Save as Draft
                 </button>
                 <button type="submit" class="btn btn-primary">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "w-4 h-4") }}
                     {{ "Update Invoice" if invoice else "Create Invoice" }}
                 </button>
             </div>
@@ -507,7 +495,7 @@
 // Tax code lookup data
 const taxCodeData = {
     {% for tax in tax_codes %}
-    '{{ tax.tax_code_id }}': { code: '{{ tax.tax_code }}', rate: {{ tax.tax_rate }}, name: '{{ tax.tax_name }}' },
+    '{{ tax.tax_code_id }}': { code: '{{ tax.tax_code }}', rate: {{ tax.tax_rate }}, name: '{{ tax.tax_name }}', isInclusive: {{ 'true' if tax.is_inclusive else 'false' }} },
     {% endfor %}
 };
 
@@ -814,48 +802,43 @@ function invoiceForm() {
                     line.tax_details = result.taxes || [];
                 } else {
                     // Fallback to local calculation if API fails
-                    let totalTax = 0;
-                    line.tax_details = [];
-                    for (const taxId of line.tax_code_ids) {
-                        const taxInfo = taxCodeData[taxId];
-                        if (taxInfo) {
-                            const rate = taxInfo.rate < 1 ? taxInfo.rate : taxInfo.rate / 100;
-                            const taxAmount = baseAmount * rate;
-                            totalTax += taxAmount;
-                            line.tax_details.push({
-                                tax_code_id: taxId,
-                                tax_code: taxInfo.code,
-                                tax_name: taxInfo.name,
-                                tax_amount: taxAmount
-                            });
-                        }
-                    }
-                    line.tax_amount = totalTax;
+                    this._calculateTaxLocally(line, baseAmount);
                 }
             } catch (error) {
                 console.error('Tax calculation error:', error);
                 // Fallback to local calculation
-                let totalTax = 0;
-                line.tax_details = [];
-                for (const taxId of line.tax_code_ids) {
-                    const taxInfo = taxCodeData[taxId];
-                    if (taxInfo) {
-                        const rate = taxInfo.rate < 1 ? taxInfo.rate : taxInfo.rate / 100;
-                        const taxAmount = baseAmount * rate;
-                        totalTax += taxAmount;
-                        line.tax_details.push({
-                            tax_code_id: taxId,
-                            tax_code: taxInfo.code,
-                            tax_name: taxInfo.name,
-                            tax_amount: taxAmount
-                        });
-                    }
-                }
-                line.tax_amount = totalTax;
+                this._calculateTaxLocally(line, baseAmount);
             }
 
             this.updateTaxBreakdown();
             this.checkCredit();
+        },
+
+        _calculateTaxLocally(line, baseAmount) {
+            let totalTax = 0;
+            line.tax_details = [];
+            for (const taxId of line.tax_code_ids) {
+                const taxInfo = taxCodeData[taxId];
+                if (taxInfo) {
+                    const rate = taxInfo.rate < 1 ? taxInfo.rate : taxInfo.rate / 100;
+                    let taxAmount;
+                    if (taxInfo.isInclusive) {
+                        // Tax-inclusive: extract tax from amount
+                        taxAmount = baseAmount * rate / (1 + rate);
+                    } else {
+                        // Tax-exclusive: add tax on top
+                        taxAmount = baseAmount * rate;
+                    }
+                    totalTax += taxAmount;
+                    line.tax_details.push({
+                        tax_code_id: taxId,
+                        tax_code: taxInfo.code,
+                        tax_name: taxInfo.name,
+                        tax_amount: parseFloat(taxAmount.toFixed(2))
+                    });
+                }
+            }
+            line.tax_amount = parseFloat(totalTax.toFixed(2));
         },
 
         // Aggregate tax breakdown from all lines

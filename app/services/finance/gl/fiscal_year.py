@@ -12,7 +12,6 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -65,11 +64,13 @@ class FiscalYearService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate year code
-        existing = db.scalar(
-            select(FiscalYear).where(
+        existing = (
+            db.query(FiscalYear)
+            .filter(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == input.year_code,
             )
+            .first()
         )
         if existing:
             raise HTTPException(
@@ -189,14 +190,12 @@ class FiscalYearService(ListResponseMixin):
 
         # Check all periods are hard closed
         open_periods = (
-            db.scalar(
-                select(func.count())
-                .select_from(FiscalPeriod)
-                .where(
-                    FiscalPeriod.fiscal_year_id == year_id,
-                    FiscalPeriod.status != PeriodStatus.HARD_CLOSED,
-                )
+            db.query(FiscalPeriod)
+            .filter(
+                FiscalPeriod.fiscal_year_id == year_id,
+                FiscalPeriod.status != PeriodStatus.HARD_CLOSED,
             )
+            .count()
             or 0
         )
 
@@ -265,11 +264,13 @@ class FiscalYearService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        year = db.scalar(
-            select(FiscalYear).where(
+        year = (
+            db.query(FiscalYear)
+            .filter(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == year_code,
             )
+            .first()
         )
         if not year:
             raise HTTPException(status_code=404, detail="Fiscal year not found")
@@ -296,18 +297,18 @@ class FiscalYearService(ListResponseMixin):
         Returns:
             List of FiscalYear objects
         """
-        stmt = select(FiscalYear)
+        stmt = db.query(FiscalYear)
 
         if organization_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 FiscalYear.organization_id == coerce_uuid(organization_id)
             )
 
         if is_closed is not None:
-            stmt = stmt.where(FiscalYear.is_closed == is_closed)
+            stmt = stmt.filter(FiscalYear.is_closed == is_closed)
 
         stmt = stmt.order_by(FiscalYear.start_date.desc()).limit(limit).offset(offset)
-        return db.scalars(stmt).all()
+        return stmt.all()
 
 
 # Module-level singleton instance

@@ -303,16 +303,16 @@ class InventoryBalanceService:
         category = db.get(ItemCategory, item.category_id) if item.category_id else None
 
         # Get all warehouses with inventory for this item
-        warehouse_ids = db.execute(
-            select(InventoryTransaction.warehouse_id)
-            .where(
+        warehouse_ids = (
+            db.query(InventoryTransaction.warehouse_id)
+            .filter(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
                 )
             )
-            .distinct()
-        ).all()
+            .all()
+        )
 
         warehouse_balances = []
         total_on_hand = Decimal("0")
@@ -407,10 +407,10 @@ class InventoryBalanceService:
             )
 
         # Get items with reorder point or minimum stock (item-level or category fallback)
-        items = db.execute(
-            select(Item, ItemCategory)
+        items = (
+            db.query(Item, ItemCategory)
             .join(ItemCategory, Item.category_id == ItemCategory.category_id)
-            .where(
+            .filter(
                 and_(
                     Item.organization_id == org_id,
                     Item.is_active == True,
@@ -418,7 +418,8 @@ class InventoryBalanceService:
                     or_(*stock_filters),
                 )
             )
-        ).all()
+            .all()
+        )
 
         low_stock = []
         for item, category in items:
@@ -605,16 +606,16 @@ class InventoryBalanceService:
         wh_id = coerce_uuid(warehouse_id)
 
         # Get all items with transactions at this warehouse
-        item_ids = db.execute(
-            select(InventoryTransaction.item_id)
-            .where(
+        item_ids = (
+            db.query(InventoryTransaction.item_id)
+            .filter(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.warehouse_id == wh_id,
                 )
             )
-            .distinct()
-        ).all()
+            .all()
+        )
 
         balances = []
         for (item_id,) in item_ids:

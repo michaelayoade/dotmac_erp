@@ -1,32 +1,23 @@
 {% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ "Edit Warehouse" if warehouse else "New Warehouse" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/inventory/warehouses" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Warehouses</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if warehouse else "New" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/warehouses" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Warehouses</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if warehouse else "New" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto pb-12">
-    <!-- Page Header -->
-    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
-            {{ "Edit Warehouse" if warehouse else "New Warehouse" }}
-        </h1>
-        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
-            {{ "Update warehouse information and settings" if warehouse else "Create a new inventory storage location" }}
-        </p>
-    </div>
+    <p class="mb-6 text-sm text-slate-500 dark:text-slate-400">
+        {{ "Update warehouse information and settings" if warehouse else "Create a new inventory storage location" }}
+    </p>
 
     <form method="post"
           action="{{ '/inventory/warehouses/' ~ warehouse.warehouse_id ~ '/edit' if warehouse else '/inventory/warehouses/new' }}"
@@ -37,9 +28,7 @@
             {% if error %}
             <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
                 <div class="flex items-start gap-3">
-                    <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("exclamation-circle", "w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0") }}
                     <div>
                         <h3 class="font-semibold text-rose-800 dark:text-rose-300">Error</h3>
                         <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
@@ -54,9 +43,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                        </svg>
+                        {{ icon_svg("home", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Warehouse Details</h2>
@@ -109,9 +96,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
+                        {{ icon_svg("user", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Contact Information</h2>
@@ -158,10 +143,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
+                        {{ icon_svg("location-marker", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Address</h2>
@@ -238,9 +220,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("check-circle", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Capabilities</h2>
@@ -314,9 +294,7 @@
                     Cancel
                 </a>
                 <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 mr-2") }}
                     {{ "Update Warehouse" if warehouse else "Create Warehouse" }}
                 </button>
             </div>

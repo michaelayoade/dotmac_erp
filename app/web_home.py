@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
+from app.services.help_center import build_help_center_payload
+from app.services.settings_spec import resolve_value
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -58,6 +61,31 @@ def dashboard_redirect(
     Redirects authenticated users to the module selector page.
     """
     return RedirectResponse(url="/", status_code=302)
+
+
+@router.get("/help", tags=["web"], response_class=HTMLResponse)
+def help_center(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+):
+    """App-wide help center with module manuals and end-to-end journeys."""
+    context = base_context(request, auth, "Help & Training", "help", db=db)
+    content_overrides = resolve_value(
+        db, SettingDomain.settings, "help_center_content_json"
+    )
+    context.update(
+        build_help_center_payload(
+            accessible_modules=auth.accessible_modules,
+            roles=auth.roles,
+            scopes=auth.scopes,
+            is_admin=auth.is_admin,
+            overrides=content_overrides
+            if isinstance(content_overrides, dict)
+            else None,
+        )
+    )
+    return templates.TemplateResponse(request, "help_center.html", context)
 
 
 @router.get("/operations/dashboard", tags=["web"], response_class=HTMLResponse)

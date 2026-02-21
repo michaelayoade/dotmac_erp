@@ -251,28 +251,8 @@ class IntegrationConfigService:
 
     def _verify_erpnext(self, creds: dict) -> tuple[bool, str | None]:
         """Verify ERPNext connection."""
-        from app.services.erpnext.client import (
-            ERPNextClient,
-            ERPNextConfig,
-            ERPNextError,
-        )
-
-        config = ERPNextConfig(
-            url=creds["base_url"],
-            api_key=creds["api_key"],
-            api_secret=creds["api_secret"],
-            company=creds.get("company"),
-        )
-
-        try:
-            with ERPNextClient(config) as client:
-                client.test_connection()
-                # Update last_verified_at
-                return True, None
-        except ERPNextError as e:
-            return False, e.message
-        except Exception as e:
-            return False, str(e)
+        _ = creds
+        return False, "ERPNext API sync/verification is disabled. Use SQL-based sync."
 
     def mark_verified(
         self,

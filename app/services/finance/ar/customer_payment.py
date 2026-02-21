@@ -11,9 +11,10 @@ import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -77,6 +78,45 @@ class CustomerPaymentService(ListResponseMixin):
 
     Manages payment creation, posting, and invoice allocation.
     """
+
+    @staticmethod
+    def build_receipt_input(
+        customer_id: UUID,
+        receipt_date: date,
+        payment_method_str: str,
+        bank_account_id: UUID,
+        currency_code: str,
+        allocations_raw: list[dict[str, Any]],
+        reference: str | None = None,
+    ) -> CustomerPaymentInput:
+        """Build CustomerPaymentInput from raw API params.
+
+        Raises:
+            ValueError: If payment_method is invalid.
+        """
+        allocations = [
+            PaymentAllocationInput(
+                invoice_id=a["invoice_id"],
+                amount=a["amount"],
+            )
+            for a in allocations_raw
+        ]
+        total_amount = sum((alloc.amount for alloc in allocations), Decimal("0"))
+        try:
+            payment_method = PaymentMethod(payment_method_str)
+        except ValueError:
+            raise ValueError(f"Invalid payment method: {payment_method_str}")
+
+        return CustomerPaymentInput(
+            customer_id=customer_id,
+            payment_date=receipt_date,
+            payment_method=payment_method,
+            bank_account_id=bank_account_id,
+            currency_code=currency_code,
+            amount=total_amount,
+            reference=reference,
+            allocations=allocations,
+        )
 
     @staticmethod
     def create_payment(
@@ -496,12 +536,14 @@ class CustomerPaymentService(ListResponseMixin):
                 tax_transaction_service,
             )
 
-            fiscal_period = db.scalar(
-                select(FiscalPeriod).where(
+            fiscal_period = (
+                db.query(FiscalPeriod)
+                .filter(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= payment.payment_date,
                     FiscalPeriod.end_date >= payment.payment_date,
                 )
+                .first()
             )
 
             tax_code = db.get(TaxCode, payment.wht_code_id)
@@ -536,9 +578,11 @@ class CustomerPaymentService(ListResponseMixin):
                 )
 
         # Apply allocations to invoices
-        allocations = db.scalars(
-            select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
-        ).all()
+        allocations = (
+            db.query(PaymentAllocation)
+            .filter(PaymentAllocation.payment_id == pay_id)
+            .all()
+        )
 
         for alloc in allocations:
             invoice = db.get(Invoice, alloc.invoice_id)
@@ -642,9 +686,19 @@ class CustomerPaymentService(ListResponseMixin):
 
         # Reverse allocations if payment was cleared
         if payment.status == PaymentStatus.CLEARED:
-            allocations = db.scalars(
-                select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
-            ).all()
+            allocations = list(
+                db.query(PaymentAllocation)
+                .filter(PaymentAllocation.payment_id == pay_id)
+                .all()
+            )
+            if not allocations:
+                allocations = list(
+                    db.scalars(
+                        select(PaymentAllocation).where(
+                            PaymentAllocation.payment_id == pay_id
+                        )
+                    ).all()
+                )
 
             for alloc in allocations:
                 invoice = db.get(Invoice, alloc.invoice_id)
@@ -684,9 +738,19 @@ class CustomerPaymentService(ListResponseMixin):
 
         # Reverse allocations if payment was cleared
         if payment.status == PaymentStatus.CLEARED:
-            allocations = db.scalars(
-                select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
-            ).all()
+            allocations = list(
+                db.query(PaymentAllocation)
+                .filter(PaymentAllocation.payment_id == pay_id)
+                .all()
+            )
+            if not allocations:
+                allocations = list(
+                    db.scalars(
+                        select(PaymentAllocation).where(
+                            PaymentAllocation.payment_id == pay_id
+                        )
+                    ).all()
+                )
 
             for alloc in allocations:
                 invoice = db.get(Invoice, alloc.invoice_id)
@@ -816,9 +880,9 @@ class CustomerPaymentService(ListResponseMixin):
         payment.description = input.description
 
         # Delete existing allocations and recreate
-        db.execute(
-            delete(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
-        )
+        db.query(PaymentAllocation).filter(
+            PaymentAllocation.payment_id == pay_id
+        ).delete()
 
         # Create new allocations
         for alloc in input.allocations:
@@ -859,9 +923,11 @@ class CustomerPaymentService(ListResponseMixin):
         if not payment or payment.organization_id != org_id:
             raise NotFoundError("Payment not found")
 
-        return db.scalars(
-            select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
-        ).all()
+        return (
+            db.query(PaymentAllocation)
+            .filter(PaymentAllocation.payment_id == pay_id)
+            .all()
+        )
 
     @staticmethod
     def delete_receipt(
@@ -883,9 +949,9 @@ class CustomerPaymentService(ListResponseMixin):
                 "Only draft receipts can be deleted."
             )
 
-        db.execute(
-            delete(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
-        )
+        db.query(PaymentAllocation).filter(
+            PaymentAllocation.payment_id == pay_id
+        ).delete()
         db.delete(payment)
         db.flush()
         db.commit()
@@ -903,30 +969,32 @@ class CustomerPaymentService(ListResponseMixin):
         offset: int = 0,
     ) -> list[CustomerPayment]:
         """List payments with optional filters."""
-        query = select(CustomerPayment)
+        query = db.query(CustomerPayment)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 CustomerPayment.organization_id == coerce_uuid(organization_id)
             )
 
         if customer_id:
-            query = query.where(CustomerPayment.customer_id == coerce_uuid(customer_id))
+            query = query.filter(
+                CustomerPayment.customer_id == coerce_uuid(customer_id)
+            )
 
         if status:
-            query = query.where(CustomerPayment.status == status)
+            query = query.filter(CustomerPayment.status == status)
 
         if payment_method:
-            query = query.where(CustomerPayment.payment_method == payment_method)
+            query = query.filter(CustomerPayment.payment_method == payment_method)
 
         if from_date:
-            query = query.where(CustomerPayment.payment_date >= from_date)
+            query = query.filter(CustomerPayment.payment_date >= from_date)
 
         if to_date:
-            query = query.where(CustomerPayment.payment_date <= to_date)
+            query = query.filter(CustomerPayment.payment_date <= to_date)
 
         query = query.order_by(CustomerPayment.payment_date.desc())
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return query.limit(limit).offset(offset).all()
 
 
 # Module-level singleton instance

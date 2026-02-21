@@ -1,25 +1,22 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 
 {% block page_title %}Payroll Variance{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll Runs</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/runs/{{ entry.entry_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ entry.entry_number }}</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Variance</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll Runs</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/runs/{{ entry.entry_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ entry.entry_number }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Variance</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/payroll/runs/{{ entry.entry_id }}" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-    </svg>
+    {{ icon_svg("chevron-left", "h-4 w-4 mr-1.5") }}
     Back to Run
 </a>
 {% endblock %}
@@ -29,7 +26,7 @@
     <div class="card p-6">
         <div class="flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll Variance</h1>
+                <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Payroll Variance</h2>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                     {{ entry.entry_number }} ({{ entry.start_date }} – {{ entry.end_date }})
                 </p>

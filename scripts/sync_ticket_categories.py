@@ -15,6 +15,9 @@ ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 def main() -> None:
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     from sqlalchemy import select, text
 
     from app.db import SessionLocal

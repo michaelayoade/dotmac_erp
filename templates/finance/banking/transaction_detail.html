@@ -1,25 +1,18 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 
 {% block page_title %}Transaction Detail{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
-    {% if account %}
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/accounts/{{ account.bank_account_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ account.account_name }}</a>
-    {% endif %}
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Transaction</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+        {% if account %}
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/accounts/{{ account.bank_account_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ account.account_name }}</a></li>
+        {% endif %}
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Transaction</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -28,9 +21,7 @@
 <div class="flex items-center gap-2">
     <a href="/finance/banking/statements/{{ statement.statement_id }}"
        class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
+        {{ icon_svg("document", "h-4 w-4") }}
         View Statement
     </a>
 </div>
@@ -46,13 +37,9 @@
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-lg {{ 'bg-emerald-100 dark:bg-emerald-900/30' if line.transaction_type == 'credit' else 'bg-rose-100 dark:bg-rose-900/30' }}">
                     {% if line.transaction_type == 'credit' %}
-                    <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-6 w-6 text-emerald-600 dark:text-emerald-400") }}
                     {% else %}
-                    <svg class="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                    </svg>
+                    {{ icon_svg("minus", "h-6 w-6 text-rose-600 dark:text-rose-400") }}
                     {% endif %}
                 </div>
                 <div>
@@ -193,9 +180,7 @@
                 <div class="flex items-center gap-3 mb-4">
                     {% if line.is_matched %}
                     <div class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                        <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-600 dark:text-emerald-400") }}
                     </div>
                     <div>
                         <p class="text-sm font-medium text-emerald-700 dark:text-emerald-400">Matched</p>

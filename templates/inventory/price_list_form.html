@@ -1,19 +1,15 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 
 {% block page_title %}{{ 'Edit Price List' if price_list else 'New Price List' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/inventory/price-lists" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Price Lists</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if price_list else 'New' }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/price-lists" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Price Lists</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if price_list else 'New' }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -109,9 +105,7 @@
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Item Prices</h2>
                 <button type="button" @click="addItem()" class="btn btn-sm btn-secondary">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                     Add Item
                 </button>
             </div>
@@ -158,9 +152,7 @@
                                 </td>
                                 <td class="py-3 pl-2">
                                     <button type="button" @click="removeItem(index)" class="text-slate-400 hover:text-rose-500" aria-label="Delete">
-                                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
+                                        {{ icon_svg("trash") }}
                                     </button>
                                 </td>
                             </tr>

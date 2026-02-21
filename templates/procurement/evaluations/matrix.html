@@ -1,17 +1,16 @@
 {% extends "procurement/base_procurement.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}Bid Evaluation - {{ rfq.rfq_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/procurement/rfqs" class="hover:text-amber-600 transition-colors">RFQs</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="hover:text-amber-600 transition-colors">{{ rfq.rfq_number }}</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Evaluation</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/rfqs" class="hover:text-amber-600 transition-colors">RFQs</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="hover:text-amber-600 transition-colors">{{ rfq.rfq_number }}</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Evaluation</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,7 +19,7 @@
 <form method="post" action="/procurement/evaluations/{{ rfq.rfq_id }}/finalize" class="inline">
     {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-primary">
-        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        {{ icon_svg("check", "h-4 w-4 mr-2") }}
         Finalize Evaluation
     </button>
 </form>

@@ -171,13 +171,11 @@ def create_job_description(
             direct_reports=direct_reports or None,
             status=JobDescriptionStatus(status),
         )
-        db.commit()
         return RedirectResponse(
             url="/people/hr/job-descriptions?success=Job+description+created",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         designations = org_svc.list_designations(
             DesignationFilters(is_active=True),
             PaginationParams(limit=200),
@@ -361,13 +359,11 @@ def update_job_description(
                 "status": JobDescriptionStatus(status),
             },
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+updated",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         jd = jd_svc.get_job_description(coerce_uuid(jd_id))
         designations = org_svc.list_designations(
             DesignationFilters(is_active=True),
@@ -412,13 +408,11 @@ def activate_job_description(
 
     try:
         jd_svc.activate_job_description(coerce_uuid(jd_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+activated",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
         )
@@ -437,13 +431,11 @@ def archive_job_description(
 
     try:
         jd_svc.archive_job_description(coerce_uuid(jd_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?success=Job+description+archived",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
         )
@@ -472,13 +464,11 @@ def add_competency_to_jd(
             is_mandatory=_parse_bool(is_mandatory, True),
             notes=notes or None,
         )
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?success=Competency+added",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
         )
@@ -501,13 +491,11 @@ def remove_competency_from_jd(
 
     try:
         jd_svc.remove_competency(coerce_uuid(jd_id), coerce_uuid(competency_id))
-        db.commit()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?success=Competency+removed",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/job-descriptions/{jd_id}?error={str(e)}", status_code=303
         )

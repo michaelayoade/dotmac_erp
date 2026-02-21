@@ -35,6 +35,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -101,8 +105,6 @@ def create_task(
     try:
         svc = TaskService(db, organization_id)
         task = svc.create_task(data.model_dump())
-        db.commit()
-        db.refresh(task)
         return TaskRead.model_validate(task)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -134,8 +136,6 @@ def update_task(
     svc = TaskService(db, organization_id)
     try:
         task = svc.update_task(task_id, data.model_dump(exclude_unset=True))
-        db.commit()
-        db.refresh(task)
         return TaskRead.model_validate(task)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -153,7 +153,6 @@ def delete_task(
     svc = TaskService(db, organization_id)
     try:
         svc.delete_task(task_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -173,7 +172,6 @@ def start_task(
     svc = TaskService(db, organization_id)
     try:
         task = svc.start_task(task_id)
-        db.commit()
         if task.actual_start_date is None:
             raise HTTPException(status_code=500, detail="Task start date was not set")
         return TaskStartResponse(
@@ -197,7 +195,6 @@ def complete_task(
     svc = TaskService(db, organization_id)
     try:
         task = svc.complete_task(task_id)
-        db.commit()
         if task.actual_end_date is None:
             raise HTTPException(status_code=500, detail="Task end date was not set")
         return TaskCompleteResponse(
@@ -223,8 +220,6 @@ def update_progress(
     svc = TaskService(db, organization_id)
     try:
         task = svc.update_progress(task_id, data.progress_percent)
-        db.commit()
-        db.refresh(task)
         return TaskRead.model_validate(task)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -243,8 +238,6 @@ def assign_task(
     svc = TaskService(db, organization_id)
     try:
         task = svc.assign_task(task_id, data.assigned_to_id)
-        db.commit()
-        db.refresh(task)
         return TaskRead.model_validate(task)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -302,8 +295,6 @@ def add_dependency(
             dependency_type=data.dependency_type,
             lag_days=data.lag_days,
         )
-        db.commit()
-        db.refresh(dep)
         return TaskDependencyWithDetails(
             dependency_id=dep.dependency_id,
             task_id=dep.task_id,
@@ -334,6 +325,5 @@ def remove_dependency(
     svc = TaskService(db, organization_id)
     try:
         svc.remove_dependency(task_id, depends_on_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

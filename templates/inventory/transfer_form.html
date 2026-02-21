@@ -1,32 +1,23 @@
 {% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}New Inventory Transfer{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/inventory/transactions" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Transactions</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New Transfer</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/transactions" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Transactions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New Transfer</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto pb-12">
-    <!-- Page Header -->
-    <div class="mb-10 stagger-in">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
-            New Inventory Transfer
-        </h1>
-        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
-            Transfer inventory between warehouses
-        </p>
-    </div>
+    <p class="mb-6 text-sm text-slate-500 dark:text-slate-400">
+        Transfer inventory between warehouses
+    </p>
 
     <form method="post" action="/inventory/transactions/transfer/new" class="space-y-6">
         {{ request.state.csrf_form | safe }}
@@ -35,9 +26,7 @@
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
                 <div class="flex items-center gap-4">
                     <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                        </svg>
+                        {{ icon_svg("switch-horizontal", "h-5 w-5", stroke_width="1.5") }}
                     </div>
                     <div>
                         <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Transfer Details</h2>
@@ -110,9 +99,7 @@
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700 stagger-in" style="animation-delay: 100ms;">
             <a href="/inventory/transactions" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn-primary">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "w-4 h-4 mr-2") }}
                 Record Transfer
             </button>
         </div>

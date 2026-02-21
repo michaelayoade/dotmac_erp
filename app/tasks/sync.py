@@ -12,19 +12,19 @@ import logging
 import uuid
 
 from celery import shared_task
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
-from app.models.sync import IntegrationType, SyncHistory, SyncType
-from app.services.erpnext.client import ERPNextClient, ERPNextConfig
+from app.models.sync import IntegrationType, SyncType
+from app.services.erpnext.client import ERPNextConfig
 from app.services.erpnext.sync.orchestrator import (
     ERPNextSyncOrchestrator,
     MigrationConfig,
 )
 
 logger = logging.getLogger(__name__)
+API_SYNC_DISABLED_MSG = "ERPNext API sync is disabled. Use SQL-based sync only."
 
 
 def _get_erpnext_config(db: "Session", org: Organization) -> ERPNextConfig | None:
@@ -75,10 +75,12 @@ def run_full_erpnext_sync(
     Returns:
         Dict with sync statistics
     """
-    logger.info(
-        "Starting full ERPNext sync for organization %s",
+    logger.warning(
+        "Blocked ERPNext API full sync for organization %s: %s",
         organization_id,
+        API_SYNC_DISABLED_MSG,
     )
+    return {"success": False, "error": API_SYNC_DISABLED_MSG, "disabled": True}
 
     with SessionLocal() as db:
         org = db.get(Organization, uuid.UUID(organization_id))
@@ -147,10 +149,12 @@ def run_incremental_erpnext_sync(
     Returns:
         Dict with sync statistics
     """
-    logger.info(
-        "Starting incremental ERPNext sync for organization %s",
+    logger.warning(
+        "Blocked ERPNext API incremental sync for organization %s: %s",
         organization_id,
+        API_SYNC_DISABLED_MSG,
     )
+    return {"success": False, "error": API_SYNC_DISABLED_MSG, "disabled": True}
 
     with SessionLocal() as db:
         org = db.get(Organization, uuid.UUID(organization_id))
@@ -220,11 +224,13 @@ def sync_single_entity_type(
     Returns:
         Dict with sync statistics
     """
-    logger.info(
-        "Syncing %s for organization %s",
+    logger.warning(
+        "Blocked ERPNext API entity sync (%s) for organization %s: %s",
         entity_type,
         organization_id,
+        API_SYNC_DISABLED_MSG,
     )
+    return {"success": False, "error": API_SYNC_DISABLED_MSG, "disabled": True}
 
     with SessionLocal() as db:
         org = db.get(Organization, uuid.UUID(organization_id))
@@ -281,78 +287,13 @@ def scheduled_hr_sync() -> dict:
     Organizations are found by looking at successful SyncHistory records,
     meaning they must have completed at least one manual sync first.
     """
-    hr_entity_types = [
-        "departments",
-        "designations",
-        "employment_types",
-        "employee_grades",
-        "employees",
-        "leave_types",
-        "shift_types",
-        "leave_allocations",
-        "leave_applications",
-        "attendance",
-    ]
-
-    results = []
-
-    with SessionLocal() as db:
-        # Find organizations that have successfully synced from ERPNext before
-        # Uses subquery to get the most recent sync per organization
-        from sqlalchemy import func as sqlfunc
-
-        recent_syncs = db.execute(
-            select(
-                SyncHistory.organization_id,
-                SyncHistory.created_by_user_id,
-                sqlfunc.max(SyncHistory.started_at).label("last_sync"),
-            )
-            .where(
-                SyncHistory.source_system == "erpnext",
-                SyncHistory.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS"]),
-            )
-            .group_by(SyncHistory.organization_id, SyncHistory.created_by_user_id)
-        ).all()
-
-        for row in recent_syncs:
-            org_id = row.organization_id
-            user_id = row.created_by_user_id
-
-            org = db.get(Organization, org_id)
-            if not org or not org.is_active:
-                continue
-
-            config_data = _get_erpnext_config(db, org)
-            if not config_data:
-                continue
-
-            try:
-                # Dispatch incremental sync task
-                task = run_incremental_erpnext_sync.delay(
-                    str(org_id),
-                    str(user_id),
-                    hr_entity_types,
-                )
-                results.append(
-                    {
-                        "organization_id": str(org_id),
-                        "task_id": task.id,
-                    }
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to dispatch HR sync for org %s: %s",
-                    org_id,
-                    e,
-                )
-                results.append(
-                    {
-                        "organization_id": str(org_id),
-                        "error": str(e),
-                    }
-                )
-
-    return {"organizations_processed": len(results), "results": results}
+    logger.warning("Blocked scheduled ERPNext HR sync: %s", API_SYNC_DISABLED_MSG)
+    return {
+        "organizations_processed": 0,
+        "results": [],
+        "disabled": True,
+        "error": API_SYNC_DISABLED_MSG,
+    }
 
 
 @shared_task
@@ -365,64 +306,13 @@ def scheduled_expense_sync() -> dict:
     Organizations are found by looking at successful SyncHistory records,
     meaning they must have completed at least one manual sync first.
     """
-    expense_entity_types = [
-        "expense_categories",
-        "expense_claims",
-        "projects",
-        "tickets",
-    ]
-
-    results = []
-
-    with SessionLocal() as db:
-        from sqlalchemy import func as sqlfunc
-
-        # Find organizations that have successfully synced from ERPNext before
-        recent_syncs = db.execute(
-            select(
-                SyncHistory.organization_id,
-                SyncHistory.created_by_user_id,
-                sqlfunc.max(SyncHistory.started_at).label("last_sync"),
-            )
-            .where(
-                SyncHistory.source_system == "erpnext",
-                SyncHistory.status.in_(["COMPLETED", "COMPLETED_WITH_ERRORS"]),
-            )
-            .group_by(SyncHistory.organization_id, SyncHistory.created_by_user_id)
-        ).all()
-
-        for row in recent_syncs:
-            org_id = row.organization_id
-            user_id = row.created_by_user_id
-
-            org = db.get(Organization, org_id)
-            if not org or not org.is_active:
-                continue
-
-            config_data = _get_erpnext_config(db, org)
-            if not config_data:
-                continue
-
-            try:
-                task = run_incremental_erpnext_sync.delay(
-                    str(org_id),
-                    str(user_id),
-                    expense_entity_types,
-                )
-                results.append(
-                    {
-                        "organization_id": str(org_id),
-                        "task_id": task.id,
-                    }
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to dispatch expense sync for org %s: %s",
-                    org_id,
-                    e,
-                )
-
-    return {"organizations_processed": len(results), "results": results}
+    logger.warning("Blocked scheduled ERPNext expense sync: %s", API_SYNC_DISABLED_MSG)
+    return {
+        "organizations_processed": 0,
+        "results": [],
+        "disabled": True,
+        "error": API_SYNC_DISABLED_MSG,
+    }
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -447,55 +337,9 @@ def push_expense_claim_to_erpnext(
     Returns:
         Dict with result
     """
-    from app.models.expense.expense_claim import ExpenseClaim
-    from app.services.erpnext.export.expense import ExpenseClaimExportService
-
-    logger.info(
-        "Pushing expense claim %s to ERPNext",
+    logger.warning(
+        "Blocked outbound ERPNext API expense push (claim=%s): %s",
         claim_id,
+        API_SYNC_DISABLED_MSG,
     )
-
-    with SessionLocal() as db:
-        org = db.get(Organization, uuid.UUID(organization_id))
-        if not org:
-            return {"success": False, "error": "Organization not found"}
-
-        config_data = _get_erpnext_config(db, org)
-        if not config_data:
-            return {"success": False, "error": "ERPNext not configured"}
-
-        claim = db.get(ExpenseClaim, uuid.UUID(claim_id))
-        if not claim:
-            return {"success": False, "error": "Expense claim not found"}
-
-        client = ERPNextClient(config_data)
-        try:
-            export_service = ExpenseClaimExportService(
-                db=db,
-                client=client,
-                organization_id=uuid.UUID(organization_id),
-                user_id=uuid.UUID(user_id),
-                company=config_data.company or "",
-            )
-
-            success, error = export_service.export_single(claim)
-
-            if success and submit:
-                # Submit for approval in ERPNext
-                success, error = export_service.submit_claim(claim)
-
-            db.commit()
-
-            return {
-                "success": success,
-                "erpnext_id": claim.erpnext_id,
-                "error": error,
-            }
-
-        except Exception as e:
-            logger.exception("Failed to push expense claim: %s", e)
-            db.rollback()
-            raise self.retry(exc=e)
-
-        finally:
-            client.close()
+    return {"success": False, "error": API_SYNC_DISABLED_MSG, "disabled": True}

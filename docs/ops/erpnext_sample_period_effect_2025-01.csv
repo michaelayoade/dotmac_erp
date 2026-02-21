@@ -1,0 +1,208 @@
+doctype,period_token_hits,coverage_status
+Version,140507,uncovered
+GL Entry,73695,uncovered
+Access Log,35836,uncovered
+Comment,34853,uncovered
+Notification Log,32826,uncovered
+Payment Ledger Entry,31979,uncovered
+Payment Entry,26640,covered
+Deleted Document,23913,uncovered
+Communication Link,19044,uncovered
+ToDo,12672,uncovered
+Communication,12599,uncovered
+Expense Claim Detail,11045,uncovered
+HD Ticket Activity,9988,uncovered
+Bank Transaction,9429,uncovered
+Payment Entry Reference,9243,uncovered
+File,8418,uncovered
+PWA Notification,8320,uncovered
+Stock Entry Detail,7356,uncovered
+Attendance,6924,covered
+Bank Transaction Payments,6888,uncovered
+Stock Ledger Entry,6884,covered
+Sales Invoice,6768,covered
+Sales Invoice Item,6653,uncovered
+HD Ticket,5717,uncovered
+The Attendance,5563,uncovered
+Payment Schedule,5259,uncovered
+Material Request Item,5095,uncovered
+Journal Entry,4732,uncovered
+Sales Taxes and Charges,4376,uncovered
+Expense Claim,4221,covered
+Data Import Log,3544,uncovered
+View Log,3488,uncovered
+Task,2293,covered
+Journal Entry Account,2000,uncovered
+Salary Detail,1912,uncovered
+Material Request,1784,covered
+Stock Entry,1777,uncovered
+Sales Invoice Advance,1704,uncovered
+Purchase Invoice Item,1244,uncovered
+Dynamic Link,977,uncovered
+Leave Ledger Entry,920,uncovered
+DocField,913,uncovered
+Salary Slip,808,uncovered
+Purchase Invoice,751,covered
+Lead,646,uncovered
+Task Depends On,620,uncovered
+DocShare,579,uncovered
+Block Module,513,uncovered
+Purchase Taxes and Charges,488,uncovered
+Leave Allocation,485,uncovered
+Serial and Batch Bundle,443,uncovered
+Quotation,427,uncovered
+Project,356,covered
+Assignment Rule Day,335,uncovered
+Shift Assignment,329,uncovered
+Employee Checkin,324,uncovered
+Has Role,313,uncovered
+Serial No,232,uncovered
+Custom DocPerm,210,uncovered
+Item Default,204,uncovered
+Shift Assignment Schedule,204,uncovered
+UOM Conversion Detail,198,uncovered
+Quotation Item,193,uncovered
+Serial and Batch Entry,193,uncovered
+Property Setter,179,uncovered
+Item,173,covered
+Contact,160,uncovered
+Contact Phone,156,uncovered
+Sales Order Item,141,uncovered
+Sales Order,140,uncovered
+Base station Link,139,uncovered
+Holiday,135,uncovered
+Contact Email,134,uncovered
+Bin,131,uncovered
+DocPerm,129,uncovered
+Address,127,uncovered
+Cabinets Link,125,uncovered
+Document Share Key,120,uncovered
+Leave Application,120,uncovered
+Customer,119,covered
+Bank Statement Import,116,uncovered
+User Select Document Type,102,uncovered
+Purchase Order Item,98,uncovered
+Process Subscription,93,uncovered
+Attendance Request,90,uncovered
+Insights Table Link v3,90,uncovered
+Shift Schedule Assignment,88,uncovered
+User,85,uncovered
+Item Price,75,uncovered
+Supplier,65,covered
+Salary Structure Assignment,60,uncovered
+DocType,58,uncovered
+Insights Table v3,58,uncovered
+Prepared Report,57,uncovered
+Web Form Field,51,uncovered
+Sales Team,46,uncovered
+Dashboard Settings,45,uncovered
+Purchase Order,44,uncovered
+Data Import,36,uncovered
+Employee,34,covered
+Client Script,32,uncovered
+Notification Settings,32,uncovered
+Patch Log,30,uncovered
+Custom Field,29,uncovered
+DefaultValue,26,uncovered
+User Group Member,25,uncovered
+Email Group Member,24,uncovered
+User Social Login,22,uncovered
+User Document Type,21,uncovered
+Insights Query Execution Log,20,uncovered
+Staffing Plan Detail,20,uncovered
+Purchase Invoice Advance,19,uncovered
+Server Script,18,uncovered
+CRM Fields Layout,15,uncovered
+List View Settings,15,uncovered
+Report,13,uncovered
+Warehouse,13,covered
+HD Ticket Type,12,uncovered
+Item Group,12,covered
+Notification,12,uncovered
+Notification Recipient,12,uncovered
+Policy Violations,12,uncovered
+Account,11,covered
+Cabinets,10,uncovered
+Process Deferred Accounting,10,uncovered
+Role Profile,10,uncovered
+Staffing Plan,10,uncovered
+User Permission,10,uncovered
+Workflow Action Permitted Role,10,uncovered
+Dashboard Chart,9,uncovered
+Scheduled Job Type,9,uncovered
+BTS Maintainance,8,uncovered
+Dashboard Chart Link,8,uncovered
+Module Profile,8,uncovered
+User Type Module,8,uncovered
+HD Service Day,7,uncovered
+Designation,6,covered
+Employee Education,6,uncovered
+List Filter,6,uncovered
+Stock Reconciliation,6,uncovered
+CRM Dropdown Item,5,uncovered
+DocType Link,5,uncovered
+Print Format,5,uncovered
+Role,5,uncovered
+Assignment Rule User,4,uncovered
+Custom HTML Block,4,uncovered
+Dashboard,4,uncovered
+Email Template,4,uncovered
+Expected Skill Set,4,uncovered
+Holiday List,4,uncovered
+Interviewer,4,uncovered
+Job Opening,4,uncovered
+Payment Terms Template,4,uncovered
+Payment Terms Template Detail,4,uncovered
+Stock Reconciliation Item,4,uncovered
+Subscription Plan,4,uncovered
+Tag,4,uncovered
+Tag Link,4,uncovered
+Assignment Rule,3,uncovered
+CRM Note,3,uncovered
+DocType State,3,uncovered
+Employee External Work History,3,uncovered
+Letter Head,3,uncovered
+Route History,3,uncovered
+Sales Person,3,uncovered
+Singles,3,uncovered
+UOM,3,uncovered
+Webhook,3,uncovered
+Webhook Header,3,uncovered
+Branch,2,uncovered
+Brand,2,uncovered
+Department,2,covered
+Email Group,2,uncovered
+Email Queue,2,uncovered
+HD Article,2,uncovered
+HD Article Category,2,uncovered
+HD Ticket Priority,2,uncovered
+Interview Round,2,uncovered
+Interview Type,2,uncovered
+Number Card,2,uncovered
+Offer Term,2,uncovered
+Payment Request,2,uncovered
+Project User,2,uncovered
+Scheduler Event,2,uncovered
+Shift Type,2,covered
+Unreconcile Payment Entries,2,uncovered
+User Group,2,uncovered
+Web Form,2,uncovered
+Web Form List Column,2,uncovered
+Web Page,2,uncovered
+Workflow Action Master,2,uncovered
+Currency,1,uncovered
+Fiscal Year,1,uncovered
+HD Service Holiday List,1,uncovered
+HD Service Level Agreement,1,uncovered
+HD Service Level Priority,1,uncovered
+Item Tax,1,uncovered
+Module Def,1,uncovered
+Purchase Taxes and Charges Template,1,uncovered
+Report Filter,1,uncovered
+Shift Location,1,uncovered
+Tax Rule,1,uncovered
+Tax Withholding Rate,1,uncovered
+User Type,1,uncovered
+Website Route Redirect,1,uncovered
+Workspace,1,uncovered
+Workspace Custom Block,1,uncovered

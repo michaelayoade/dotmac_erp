@@ -970,7 +970,7 @@ class BankStatementService:
                     f"Debits ({total_debits}) != Closing ({closing_balance})"
                 )
 
-        db.commit()
+        db.flush()
 
         # Auto-match internal transfers (fire-and-forget — errors don't fail the import)
         try:
@@ -983,7 +983,7 @@ class BankStatementService:
                 db, organization_id, statement.statement_id
             )
             if match_result.matched > 0:
-                db.commit()
+                db.flush()
                 result.auto_matched = match_result.matched
                 logger.info(
                     "Auto-matched %d/%d lines for statement %s",
@@ -1112,7 +1112,7 @@ class BankStatementService:
             )
 
         line.is_matched = True
-        line.matched_at = datetime.utcnow()
+        line.matched_at = datetime.now(UTC)
         line.matched_by = matched_by
         line.matched_journal_line_id = journal_line_id
 
@@ -1126,7 +1126,6 @@ class BankStatementService:
             statement.status = BankStatementStatus.reconciled
 
         db.flush()
-        db.commit()
         db.refresh(line)
         return line
 
@@ -1159,7 +1158,6 @@ class BankStatementService:
             statement.status = BankStatementStatus.processing
 
         db.flush()
-        db.commit()
         db.refresh(line)
         return line
 

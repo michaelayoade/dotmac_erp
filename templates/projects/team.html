@@ -1,4 +1,5 @@
 {% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block title %}Team - {{ project.project_name }}{% endblock %}
 
@@ -9,9 +10,7 @@
         <div>
             <div class="flex items-center gap-2">
                 <a href="/projects/{{ project.project_code }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left") }}
                 </a>
                 <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Project Team</h1>
             </div>
@@ -19,9 +18,7 @@
         </div>
         <button type="button" onclick="document.getElementById('add-member-modal').classList.remove('hidden')"
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-700 transition-colors">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
+            {{ icon_svg("plus", "h-4 w-4") }}
             Add Team Member
         </button>
     </div>
@@ -106,9 +103,9 @@
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
-                        {{ alloc.start_date.strftime('%b %d, %Y') }}
+                        {{ alloc.start_date | format_date }}
                         {% if alloc.end_date %}
-                        - {{ alloc.end_date.strftime('%b %d, %Y') }}
+                        - {{ alloc.end_date | format_date }}
                         {% else %}
                         - Ongoing
                         {% endif %}
@@ -129,10 +126,7 @@
                                   onsubmit="return confirm('End this allocation?');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <button type="submit" class="text-amber-500 hover:text-amber-700 dark:hover:text-amber-300" title="End Allocation">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
-                                    </svg>
+                                    {{ icon_svg("circle", "h-4 w-4") }}
                                 </button>
                             </form>
                             {% endif %}
@@ -140,9 +134,7 @@
                                   onsubmit="return confirm('Delete this allocation? This cannot be undone.');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <button type="submit" class="text-red-500 hover:text-red-700 dark:hover:text-red-300" title="Delete" aria-label="Delete">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                    </svg>
+                                    {{ icon_svg("trash", "h-4 w-4") }}
                                 </button>
                             </form>
                         </div>
@@ -153,9 +145,7 @@
         </table>
         {% else %}
         <div class="py-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+            {{ icon_svg("user-group-lg", "mx-auto h-12 w-12 text-slate-400", stroke_width="1.5") }}
             <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No team members</h3>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Add team members to this project.</p>
         </div>
@@ -174,9 +164,7 @@
                     <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Add Team Member</h3>
                     <button type="button" onclick="document.getElementById('add-member-modal').classList.add('hidden')"
                             class="text-slate-400 hover:text-slate-500" aria-label="Close">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
+                        {{ icon_svg("x-mark") }}
                     </button>
                 </div>
 

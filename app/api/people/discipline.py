@@ -61,6 +61,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -125,7 +129,6 @@ def create_case(
     """Create a new disciplinary case."""
     service = DisciplineService(db)
     case = service.create_case(org_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -175,7 +178,6 @@ def update_case(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.update_case(case_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -195,7 +197,6 @@ def delete_case(
 
     person_id = UUID(auth["person_id"])
     service.delete_case(case_id, deleted_by_id=person_id)
-    db.commit()
 
 
 # =============================================================================
@@ -218,7 +219,6 @@ def issue_query(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.issue_query(case_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -237,7 +237,6 @@ def submit_response(
         raise HTTPException(status_code=404, detail="Case not found")
 
     response = service.record_response(case_id, data)
-    db.commit()
     return CaseResponseRead.model_validate(response)
 
 
@@ -256,7 +255,6 @@ def schedule_hearing(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.schedule_hearing(case_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -275,7 +273,6 @@ def record_hearing_notes(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.record_hearing_notes(case_id, data.hearing_notes)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -294,7 +291,6 @@ def record_decision(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.record_decision(case_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -313,7 +309,6 @@ def file_appeal(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.file_appeal(case_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -332,7 +327,6 @@ def decide_appeal(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.decide_appeal(case_id, data)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -350,7 +344,6 @@ def close_case(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.close_case(case_id)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -368,7 +361,6 @@ def withdraw_case(
         raise HTTPException(status_code=404, detail="Case not found")
 
     case = service.withdraw_case(case_id)
-    db.commit()
     return DisciplinaryCaseRead.model_validate(case)
 
 
@@ -396,7 +388,6 @@ def add_witness(
         raise HTTPException(status_code=404, detail="Case not found")
 
     witness = service.add_witness(case_id, data)
-    db.commit()
     return CaseWitnessRead.model_validate(witness)
 
 
@@ -487,7 +478,6 @@ def upload_document(
             title=title,
             description=description,
         )
-        db.commit()
 
         return {
             "document_id": str(document.document_id),
@@ -582,9 +572,7 @@ def delete_document(
     if document.case_id != case_id:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    deleted = service.delete(org_id, document_id)
-    if deleted:
-        db.commit()
+    service.delete(org_id, document_id)
     return None
 
 
@@ -629,7 +617,6 @@ def generate_query_letter(
             policy_violated=policy_violated,
             response_instructions=response_instructions,
         )
-        db.commit()
 
         return StreamingResponse(
             BytesIO(pdf_bytes),
@@ -697,7 +684,6 @@ def generate_warning_letter(
             organization_name=organization_name,
             improvement_deadline=deadline,
         )
-        db.commit()
 
         return StreamingResponse(
             BytesIO(pdf_bytes),
@@ -751,7 +737,6 @@ def generate_termination_letter(
             case_summary=case_summary,
             organization_name=organization_name,
         )
-        db.commit()
 
         return StreamingResponse(
             BytesIO(pdf_bytes),

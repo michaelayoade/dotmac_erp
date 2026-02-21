@@ -20,7 +20,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
-from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
@@ -258,8 +257,7 @@ class LedgerPostingService(ListResponseMixin):
             batch.correlation_id = request.correlation_id
             db.flush()
 
-        # 9. Get period for year
-        db.get(FiscalPeriod, fiscal_period_id)
+        # 9. Determine posting year
         posting_year = request.posting_date.year
 
         # 10. Create posted_ledger_line records
@@ -371,8 +369,7 @@ class LedgerPostingService(ListResponseMixin):
             select(JournalEntryLine)
             .where(JournalEntryLine.journal_entry_id == journal.journal_entry_id)
             .order_by(JournalEntryLine.line_number)
-        )
-        lines = lines.all()
+        ).all()
 
         entries = []
         for line in lines:
@@ -577,7 +574,7 @@ class LedgerPostingService(ListResponseMixin):
         stmt = (
             stmt.order_by(PostedLedgerLine.posted_at.desc()).limit(limit).offset(offset)
         )
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def list(
@@ -618,7 +615,7 @@ class LedgerPostingService(ListResponseMixin):
         stmt = (
             stmt.order_by(PostingBatch.submitted_at.desc()).limit(limit).offset(offset)
         )
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def post_entry(

@@ -31,6 +31,7 @@ from app.services.common_filters import build_active_filters
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
 from app.services.formatters import format_datetime as _format_datetime
+from app.services.recent_activity import get_recent_activity_for_record
 
 logger = logging.getLogger(__name__)
 
@@ -581,6 +582,12 @@ class MaterialRequestWebService:
                 "can_delete": request.status == MaterialRequestStatus.DRAFT,
                 "items": detail_items,
             },
+            "recent_activity": get_recent_activity_for_record(
+                db,
+                org_id,
+                record=request,
+                limit=10,
+            ),
         }
 
     @staticmethod

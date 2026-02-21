@@ -4,12 +4,12 @@
 {% block page_title %}My Expenses{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">My Expenses</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">My Expenses</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -17,7 +17,7 @@
 <div class="space-y-6" x-data="{ showClaimModal: false }">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Expenses</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Expenses</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Track your expense claims and approvals.</p>
         </div>
         <button type="button" class="coin-button" @click="showClaimModal = true">
@@ -275,27 +275,35 @@
                         <p class="mt-1 text-xs text-slate-400">You can select multiple files.</p>
                     </div>
                     <div>
-                        <label for="project_id" class="form-label">Project (Optional)</label>
-                        <select name="project_id" id="project_id" class="form-select w-full">
-                            <option value="">No project</option>
+                        <label for="project_search" class="form-label">Project (Optional)</label>
+                        <input type="hidden" name="project_id" id="project_id" value="{{ selected_project_id or '' }}">
+                        <input type="text"
+                               id="project_search"
+                               class="form-input w-full"
+                               list="project_typeahead_list"
+                               autocomplete="off"
+                               placeholder="Type project code or name">
+                        <datalist id="project_typeahead_list">
                             {% for proj in projects %}
-                            <option value="{{ proj.project_id }}" {{ 'selected' if selected_project_id and selected_project_id == proj.project_id|string else '' }}>
-                                {{ proj.project_code }} - {{ proj.project_name }}
-                            </option>
+                            <option value="{{ proj.project_code }} - {{ proj.project_name }}" data-id="{{ proj.project_id }}"></option>
                             {% endfor %}
-                        </select>
+                        </datalist>
                         <p class="mt-1 text-xs text-slate-400">Link expense to a project from ERPNext</p>
                     </div>
                     <div>
-                        <label for="ticket_id" class="form-label">Support Ticket (Optional)</label>
-                        <select name="ticket_id" id="ticket_id" class="form-select w-full">
-                            <option value="">No ticket</option>
+                        <label for="ticket_search" class="form-label">Support Ticket (Optional)</label>
+                        <input type="hidden" name="ticket_id" id="ticket_id" value="{{ selected_ticket_id or '' }}">
+                        <input type="text"
+                               id="ticket_search"
+                               class="form-input w-full"
+                               list="ticket_typeahead_list"
+                               autocomplete="off"
+                               placeholder="Type ticket number or subject">
+                        <datalist id="ticket_typeahead_list">
                             {% for ticket in tickets %}
-                            <option value="{{ ticket.ticket_id }}" {{ 'selected' if selected_ticket_id and selected_ticket_id == ticket.ticket_id|string else '' }}>
-                                {{ ticket.ticket_number }} - {{ ticket.subject|truncate(40) }}
-                            </option>
+                            <option value="{{ ticket.ticket_number }} - {{ ticket.subject|truncate(40) }}" data-id="{{ ticket.ticket_id }}"></option>
                             {% endfor %}
-                        </select>
+                        </datalist>
                         <p class="mt-1 text-xs text-slate-400">Link expense to a support ticket from ERPNext</p>
                     </div>
                     <div>
@@ -499,6 +507,34 @@ function setupBankListToggle() {
     nameSelect.addEventListener('change', syncSortCode);
 }
 
+function setupLinkedEntityTypeahead(inputId, hiddenId, listId) {
+    const input = document.getElementById(inputId);
+    const hidden = document.getElementById(hiddenId);
+    const list = document.getElementById(listId);
+    if (!input || !hidden || !list) return;
+
+    const options = Array.from(list.options);
+    const byLabel = new Map(options.map((opt) => [opt.value, opt.dataset.id || '']));
+    const byId = new Map(options.map((opt) => [opt.dataset.id || '', opt.value]));
+
+    const syncHiddenFromInput = () => {
+        hidden.value = byLabel.get(input.value.trim()) || '';
+    };
+
+    const applyInitialLabel = () => {
+        const initialId = (hidden.value || '').trim();
+        if (!initialId) return;
+        input.value = byId.get(initialId) || '';
+    };
+
+    applyInitialLabel();
+    input.addEventListener('input', syncHiddenFromInput);
+    input.addEventListener('change', syncHiddenFromInput);
+    input.addEventListener('blur', syncHiddenFromInput);
+    const form = document.getElementById('expense-claim-form');
+    if (form) form.addEventListener('submit', syncHiddenFromInput);
+}
+
 if (searchInput) searchInput.addEventListener('input', applyFilters);
 if (statusFilter) statusFilter.addEventListener('change', applyFilters);
 if (sortSelect) sortSelect.addEventListener('change', refreshTable);
@@ -515,6 +551,8 @@ document.addEventListener('DOMContentLoaded', function() {
     updateReceiptRequirement();
     refreshTable();
     setupBankListToggle();
+    setupLinkedEntityTypeahead('project_search', 'project_id', 'project_typeahead_list');
+    setupLinkedEntityTypeahead('ticket_search', 'ticket_id', 'ticket_typeahead_list');
 });
 </script>
 

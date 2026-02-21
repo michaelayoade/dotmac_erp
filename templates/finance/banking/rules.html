@@ -1,19 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, empty_state, status_badge, pagination, filter_select_field, stats_card %}
+{% from "components/macros.html" import compact_filters, empty_state, status_badge, pagination, filter_select_field, stats_card, icon_svg %}
 
 {% block page_title %}Transaction Rules{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Transaction Rules</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Transaction Rules</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -22,9 +18,7 @@
     Bulk Duplicate
 </button>
 <a href="/finance/banking/rules/new" data-testid="rules-new" class="btn btn-primary">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4") }}
     New Rule
 </a>
 {% endblock %}
@@ -42,9 +36,7 @@
     <!-- Info Banner -->
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
         <div class="flex items-start gap-3">
-            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("information-circle", "h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5") }}
             <div class="text-sm text-blue-700 dark:text-blue-300">
                 <p class="font-medium">How Transaction Rules Work</p>
                 <p class="mt-1">Rules are evaluated top-to-bottom. Use the arrow buttons to reorder. When a transaction matches a rule's conditions, the specified action is applied. Rules can auto-categorize transactions, flag them for review, or split them across multiple accounts.</p>

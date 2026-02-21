@@ -247,6 +247,80 @@ class APAgingService(ListResponseMixin):
         return results
 
     @staticmethod
+    def build_aging_report(
+        db: Session,
+        organization_id: UUID,
+        as_of_date: date,
+        supplier_id: UUID | None = None,
+    ) -> dict:
+        """Build complete AP aging report response.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            as_of_date: Date for aging calculation
+            supplier_id: Optional filter to single supplier
+
+        Returns:
+            Dict with as_of_date, currency_code, buckets, and totals.
+        """
+        org_summary = APAgingService.calculate_organization_aging(
+            db=db,
+            organization_id=organization_id,
+            as_of_date=as_of_date,
+        )
+
+        if supplier_id:
+            supplier_summaries = [
+                APAgingService.calculate_supplier_aging(
+                    db=db,
+                    organization_id=organization_id,
+                    supplier_id=supplier_id,
+                    as_of_date=as_of_date,
+                )
+            ]
+        else:
+            supplier_summaries = APAgingService.get_aging_by_supplier(
+                db=db,
+                organization_id=organization_id,
+                as_of_date=as_of_date,
+            )
+
+        buckets = [
+            {
+                "supplier_id": s.supplier_id,
+                "supplier_code": s.supplier_code,
+                "supplier_name": s.supplier_name,
+                "current": s.current,
+                "days_1_30": s.current,
+                "days_31_60": s.days_31_60,
+                "days_61_90": s.days_61_90,
+                "over_90": s.over_90,
+                "total": s.total_outstanding,
+            }
+            for s in supplier_summaries
+        ]
+
+        totals = {
+            "supplier_id": UUID(int=0),
+            "supplier_code": "TOTAL",
+            "supplier_name": "Total",
+            "current": org_summary.current,
+            "days_1_30": org_summary.current,
+            "days_31_60": org_summary.days_31_60,
+            "days_61_90": org_summary.days_61_90,
+            "over_90": org_summary.over_90,
+            "total": org_summary.total_outstanding,
+        }
+
+        return {
+            "as_of_date": org_summary.as_of_date,
+            "currency_code": org_summary.currency_code,
+            "buckets": buckets,
+            "totals": totals,
+        }
+
+    @staticmethod
     def create_aging_snapshot(
         db: Session,
         organization_id: UUID,

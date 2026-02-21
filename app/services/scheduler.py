@@ -1,5 +1,5 @@
 import logging
-from typing import Any, TypeVar
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import Select, select
@@ -12,12 +12,13 @@ from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-
 
 def _apply_ordering(
-    query: Select[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Select[T]:
+    query: Select[Any],
+    order_by: str,
+    order_dir: str,
+    allowed_columns: dict[str, Any],
+) -> Select[Any]:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -29,7 +30,7 @@ def _apply_ordering(
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query: Select[T], limit: int, offset: int) -> Select[T]:
+def _apply_pagination(query: Select[Any], limit: int, offset: int) -> Select[Any]:
     return query.limit(limit).offset(offset)
 
 
@@ -71,16 +72,16 @@ class ScheduledTasks(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[ScheduledTask]:
+        allowed_columns = {
+            "created_at": ScheduledTask.created_at,
+            "name": ScheduledTask.name,
+        }
+
         query = select(ScheduledTask)
         if enabled is not None:
             query = query.where(ScheduledTask.enabled == enabled)
-        query = _apply_ordering(
-            query,
-            order_by,
-            order_dir,
-            {"created_at": ScheduledTask.created_at, "name": ScheduledTask.name},
-        )
-        return db.scalars(_apply_pagination(query, limit, offset)).all()
+        query = _apply_ordering(query, order_by, order_dir, allowed_columns)
+        return list(db.scalars(_apply_pagination(query, limit, offset)))
 
     @staticmethod
     def update(

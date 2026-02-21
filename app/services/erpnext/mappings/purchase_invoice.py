@@ -40,6 +40,10 @@ class PurchaseInvoiceMapping(DocTypeMapping):
                     target="_supplier_source_name",
                     required=True,
                 ),
+                FieldMapping(
+                    source="supplier_name",
+                    target="_supplier_display_name",
+                ),
                 # Supplier's own invoice number
                 FieldMapping(
                     source="bill_no",

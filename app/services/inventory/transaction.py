@@ -13,7 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.models.inventory.inventory_lot import InventoryLot
@@ -98,42 +98,37 @@ class InventoryTransactionService(ListResponseMixin):
         wh_id = coerce_uuid(warehouse_id)
 
         # Get current balance
-        current_qty = db.scalar(
-            select(
-                func.sum(
-                    case(
-                        (
-                            InventoryTransaction.transaction_type.in_(
-                                [
-                                    TransactionType.RECEIPT,
-                                    TransactionType.RETURN,
-                                    TransactionType.ASSEMBLY,
-                                ]
-                            ),
-                            InventoryTransaction.quantity,
-                        ),
-                        (
-                            InventoryTransaction.transaction_type.in_(
-                                [
-                                    TransactionType.ISSUE,
-                                    TransactionType.SALE,
-                                    TransactionType.SCRAP,
-                                    TransactionType.DISASSEMBLY,
-                                ]
-                            ),
-                            -InventoryTransaction.quantity,
-                        ),
-                        else_=InventoryTransaction.quantity,
-                    )
-                )
-            ).where(
-                and_(
-                    InventoryTransaction.organization_id == org_id,
-                    InventoryTransaction.item_id == itm_id,
-                    InventoryTransaction.warehouse_id == wh_id,
-                )
+        net_qty_expr = case(
+            (
+                InventoryTransaction.transaction_type.in_(
+                    [
+                        TransactionType.RECEIPT,
+                        TransactionType.RETURN,
+                        TransactionType.ASSEMBLY,
+                    ]
+                ),
+                InventoryTransaction.quantity,
+            ),
+            (
+                InventoryTransaction.transaction_type.in_(
+                    [
+                        TransactionType.ISSUE,
+                        TransactionType.SALE,
+                        TransactionType.SCRAP,
+                        TransactionType.DISASSEMBLY,
+                    ]
+                ),
+                -InventoryTransaction.quantity,
+            ),
+            else_=InventoryTransaction.quantity,
+        )
+        current_qty = db.query(func.sum(net_qty_expr)).filter(
+            and_(
+                InventoryTransaction.organization_id == org_id,
+                InventoryTransaction.item_id == itm_id,
+                InventoryTransaction.warehouse_id == wh_id,
             )
-        ) or Decimal("0")
+        ).scalar() or Decimal("0")
 
         # Get current average cost from item
         item = db.get(Item, itm_id)
@@ -164,41 +159,40 @@ class InventoryTransactionService(ListResponseMixin):
         itm_id = coerce_uuid(item_id)
         wh_id = coerce_uuid(warehouse_id)
 
-        balance = db.scalar(
-            select(
-                func.sum(
-                    case(
-                        (
-                            InventoryTransaction.transaction_type.in_(
-                                [
-                                    TransactionType.RECEIPT,
-                                    TransactionType.RETURN,
-                                    TransactionType.ASSEMBLY,
-                                ]
-                            ),
-                            InventoryTransaction.quantity,
-                        ),
-                        (
-                            InventoryTransaction.transaction_type.in_(
-                                [
-                                    TransactionType.ISSUE,
-                                    TransactionType.SALE,
-                                    TransactionType.SCRAP,
-                                    TransactionType.DISASSEMBLY,
-                                ]
-                            ),
-                            -InventoryTransaction.quantity,
-                        ),
-                        else_=InventoryTransaction.quantity,
-                    )
-                )
-            ).where(
+        net_qty_expr = case(
+            (
+                InventoryTransaction.transaction_type.in_(
+                    [
+                        TransactionType.RECEIPT,
+                        TransactionType.RETURN,
+                        TransactionType.ASSEMBLY,
+                    ]
+                ),
+                InventoryTransaction.quantity,
+            ),
+            (
+                InventoryTransaction.transaction_type.in_(
+                    [
+                        TransactionType.ISSUE,
+                        TransactionType.SALE,
+                        TransactionType.SCRAP,
+                        TransactionType.DISASSEMBLY,
+                    ]
+                ),
+                -InventoryTransaction.quantity,
+            ),
+            else_=InventoryTransaction.quantity,
+        )
+        balance = (
+            db.query(func.sum(net_qty_expr))
+            .filter(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
                     InventoryTransaction.warehouse_id == wh_id,
                 )
             )
+            .scalar()
         )
 
         return balance or Decimal("0")
@@ -547,16 +541,15 @@ class InventoryTransactionService(ListResponseMixin):
 
         # Get lots ordered by received date (oldest first)
         lots = list(
-            db.scalars(
-                select(InventoryLot)
-                .where(
-                    InventoryLot.item_id == itm_id,
-                    InventoryLot.quantity_on_hand > 0,
-                    InventoryLot.is_active == True,
-                    InventoryLot.is_quarantined == False,
-                )
-                .order_by(InventoryLot.received_date.asc())
-            ).all()
+            db.query(InventoryLot)
+            .filter(
+                InventoryLot.item_id == itm_id,
+                InventoryLot.quantity_on_hand > 0,
+                InventoryLot.is_active == True,
+                InventoryLot.is_quarantined == False,
+            )
+            .order_by(InventoryLot.received_date.asc())
+            .all()
         )
 
         total_available = sum(lot.quantity_on_hand for lot in lots)
@@ -983,18 +976,18 @@ class InventoryTransactionService(ListResponseMixin):
         """List inventory transactions with optional filters."""
         from datetime import datetime
 
-        query = select(InventoryTransaction)
+        query = db.query(InventoryTransaction)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 InventoryTransaction.organization_id == coerce_uuid(organization_id)
             )
 
         if item_id:
-            query = query.where(InventoryTransaction.item_id == coerce_uuid(item_id))
+            query = query.filter(InventoryTransaction.item_id == coerce_uuid(item_id))
 
         if warehouse_id:
-            query = query.where(
+            query = query.filter(
                 InventoryTransaction.warehouse_id == coerce_uuid(warehouse_id)
             )
 
@@ -1006,27 +999,31 @@ class InventoryTransactionService(ListResponseMixin):
                 except ValueError:
                     pass  # Invalid type, skip filter
             if isinstance(transaction_type, TransactionType):
-                query = query.where(
+                query = query.filter(
                     InventoryTransaction.transaction_type == transaction_type
                 )
 
         if fiscal_period_id:
-            query = query.where(
+            query = query.filter(
                 InventoryTransaction.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if start_date:
             # Convert date to datetime for comparison
             start_dt = datetime.combine(start_date, datetime.min.time())
-            query = query.where(InventoryTransaction.transaction_date >= start_dt)
+            query = query.filter(InventoryTransaction.transaction_date >= start_dt)
 
         if end_date:
             # End date is inclusive, so use end of day
             end_dt = datetime.combine(end_date, datetime.max.time())
-            query = query.where(InventoryTransaction.transaction_date <= end_dt)
+            query = query.filter(InventoryTransaction.transaction_date <= end_dt)
 
-        query = query.order_by(InventoryTransaction.transaction_date.desc())
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+        return list(
+            query.order_by(InventoryTransaction.transaction_date.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
 
 
 # Module-level singleton instance

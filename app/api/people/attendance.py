@@ -57,6 +57,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -131,7 +135,6 @@ def create_shift_type(
         break_duration_minutes=payload.break_duration_minutes,
         is_active=payload.is_active,
     )
-    db.commit()
     return ShiftTypeRead.model_validate(shift_type)
 
 
@@ -159,7 +162,6 @@ def update_shift_type(
     svc = AttendanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     shift_type = svc.update_shift_type(organization_id, shift_type_id, **update_data)
-    db.commit()
     return ShiftTypeRead.model_validate(shift_type)
 
 
@@ -172,7 +174,6 @@ def delete_shift_type(
     """Delete a shift type."""
     svc = AttendanceService(db)
     svc.delete_shift_type(organization_id, shift_type_id)
-    db.commit()
 
 
 # =============================================================================
@@ -229,7 +230,6 @@ def create_shift_assignment(
         end_date=payload.end_date,
         is_active=payload.is_active,
     )
-    db.commit()
     return ShiftAssignmentRead.model_validate(assignment)
 
 
@@ -266,7 +266,6 @@ def update_shift_assignment(
         shift_assignment_id,
         **update_data,
     )
-    db.commit()
     return ShiftAssignmentRead.model_validate(assignment)
 
 
@@ -281,7 +280,6 @@ def delete_shift_assignment(
     """Deactivate a shift assignment."""
     svc = AttendanceService(db)
     svc.delete_shift_assignment(organization_id, shift_assignment_id)
-    db.commit()
 
 
 # =============================================================================
@@ -346,7 +344,6 @@ def create_attendance(
         marked_by=payload.marked_by,
         leave_application_id=payload.leave_application_id,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -374,7 +371,6 @@ def update_attendance(
     svc = AttendanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     attendance = svc.update_attendance(organization_id, attendance_id, **update_data)
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -387,7 +383,6 @@ def delete_attendance(
     """Delete an attendance record."""
     svc = AttendanceService(db)
     svc.delete_attendance(organization_id, attendance_id)
-    db.commit()
 
 
 # =============================================================================
@@ -412,7 +407,6 @@ def check_in(
         latitude=payload.latitude,
         longitude=payload.longitude,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -432,7 +426,6 @@ def check_out(
         latitude=payload.latitude,
         longitude=payload.longitude,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -451,7 +444,6 @@ def check_in_record(
         check_in_time=payload.check_in_time,
         notes=payload.notes,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -470,7 +462,6 @@ def check_out_record(
         check_out_time=payload.check_out_time,
         notes=payload.notes,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -495,7 +486,6 @@ def bulk_mark_attendance(
         shift_type_id=payload.shift_type_id,
         remarks=payload.remarks,
     )
-    db.commit()
     return {
         "success_count": result["success_count"],
         "failed_count": result["failed_count"],
@@ -559,7 +549,6 @@ def create_attendance_request(
         reason=payload.reason,
         explanation=payload.explanation,
     )
-    db.commit()
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -587,7 +576,6 @@ def update_attendance_request(
     svc = AttendanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     request = svc.update_attendance_request(organization_id, request_id, **update_data)
-    db.commit()
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -600,7 +588,6 @@ def delete_attendance_request(
     """Delete an attendance request."""
     svc = AttendanceService(db)
     svc.delete_attendance_request(organization_id, request_id)
-    db.commit()
 
 
 @router.post("/requests/{request_id}/submit", response_model=AttendanceRequestRead)
@@ -612,7 +599,6 @@ def submit_attendance_request(
     """Submit an attendance request for approval."""
     svc = AttendanceService(db)
     request = svc.submit_attendance_request(organization_id, request_id)
-    db.commit()
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -625,7 +611,6 @@ def approve_attendance_request(
     """Approve an attendance request."""
     svc = AttendanceService(db)
     request = svc.approve_attendance_request(organization_id, request_id)
-    db.commit()
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -638,7 +623,6 @@ def reject_attendance_request(
     """Reject an attendance request."""
     svc = AttendanceService(db)
     request = svc.reject_attendance_request(organization_id, request_id)
-    db.commit()
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -651,7 +635,6 @@ def bulk_approve_attendance_requests(
     """Bulk approve attendance requests."""
     svc = AttendanceService(db)
     result = svc.bulk_approve_attendance_requests(organization_id, payload.request_ids)
-    db.commit()
     return result
 
 
@@ -664,7 +647,6 @@ def bulk_reject_attendance_requests(
     """Bulk reject attendance requests."""
     svc = AttendanceService(db)
     result = svc.bulk_reject_attendance_requests(organization_id, payload.request_ids)
-    db.commit()
     return result
 
 

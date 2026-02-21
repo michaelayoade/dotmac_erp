@@ -92,12 +92,10 @@ def create_skill(
             description=description or None,
             is_language=_parse_bool(is_language),
         )
-        db.commit()
         return RedirectResponse(
             url="/people/hr/skills?success=Skill+created", status_code=303
         )
     except Exception as e:
-        db.rollback()
         context = base_context(request, auth, "Add Skill", "skills", db=db)
         context.update(
             {
@@ -167,12 +165,10 @@ def update_skill(
             description=description or None,
             is_active=_parse_bool(is_active),
         )
-        db.commit()
         return RedirectResponse(
             url="/people/hr/skills?success=Skill+updated", status_code=303
         )
     except Exception as e:
-        db.rollback()
         skill = skill_svc.get_skill(skill_uuid)
         context = base_context(request, auth, "Edit Skill", "skills", db=db)
         context.update(
@@ -207,12 +203,10 @@ def delete_skill(
 
     try:
         skill_svc.delete_skill(coerce_uuid(skill_id))
-        db.commit()
         return RedirectResponse(
             url="/people/hr/skills?success=Skill+deleted", status_code=303
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/people/hr/skills?error={str(e)}", status_code=303
         )

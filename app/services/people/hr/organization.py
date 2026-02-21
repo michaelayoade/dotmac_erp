@@ -1115,6 +1115,7 @@ class OrganizationService:
         )
         self.db.add(location)
         self.db.flush()
+        self.db.refresh(location)
         return location
 
     def update_location(
@@ -1130,6 +1131,7 @@ class OrganizationService:
             location.updated_at = datetime.now(UTC)
         if hasattr(location, "updated_by_id"):
             location.updated_by_id = self.principal.id if self.principal else None
+        self.db.refresh(location)
         return location
 
     def delete_location(self, location_id: uuid.UUID) -> None:

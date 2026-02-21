@@ -290,7 +290,7 @@ class DepreciationService(ListResponseMixin):
         run = DepreciationRun(
             organization_id=org_id,
             fiscal_period_id=period_id,
-            run_number=existing_runs + 1,
+            run_number=int(existing_runs or 0) + 1,
             run_description=description,
             status=DepreciationRunStatus.DRAFT,
             assets_processed=0,
@@ -344,17 +344,18 @@ class DepreciationService(ListResponseMixin):
 
         try:
             # Get all depreciable assets
-            assets = db.scalars(
-                select(Asset).where(
-                    and_(
-                        Asset.organization_id == org_id,
-                        Asset.status == AssetStatus.ACTIVE,
-                        Asset.remaining_life_months > 0,
-                        Asset.net_book_value > Asset.residual_value,
+            assets = list(
+                db.scalars(
+                    select(Asset).where(
+                        and_(
+                            Asset.organization_id == org_id,
+                            Asset.status == AssetStatus.ACTIVE,
+                            Asset.remaining_life_months > 0,
+                            Asset.net_book_value > Asset.residual_value,
+                        )
                     )
                 )
             )
-            assets = assets.all()
 
             total_depreciation = Decimal("0")
             assets_processed = 0
@@ -471,10 +472,13 @@ class DepreciationService(ListResponseMixin):
                 raise HTTPException(status_code=400, detail=result.message)
 
             # Update asset records
-            schedules = db.scalars(
-                select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
+            schedules = list(
+                db.scalars(
+                    select(DepreciationSchedule).where(
+                        DepreciationSchedule.run_id == r_id
+                    )
+                )
             )
-            schedules = schedules.all()
 
             for schedule in schedules:
                 asset = db.get(Asset, schedule.asset_id)
@@ -524,9 +528,11 @@ class DepreciationService(ListResponseMixin):
         if not run or run.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Depreciation run not found")
 
-        return db.scalars(
-            select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
-        ).all()
+        return list(
+            db.scalars(
+                select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
+            )
+        )
 
     @staticmethod
     def get(
@@ -572,7 +578,7 @@ class DepreciationService(ListResponseMixin):
         stmt = (
             stmt.order_by(DepreciationRun.created_at.desc()).limit(limit).offset(offset)
         )
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

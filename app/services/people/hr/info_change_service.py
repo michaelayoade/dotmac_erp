@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models.email_profile import EmailModule
@@ -460,6 +460,46 @@ class InfoChangeService:
     # =========================================================================
     # Query Methods
     # =========================================================================
+
+    def list_requests(
+        self,
+        organization_id: UUID,
+        *,
+        status: InfoChangeStatus | None = None,
+        change_type: InfoChangeType | None = None,
+        employee_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[EmployeeInfoChangeRequest]:
+        """List info change requests with optional filters and eager-loaded employee."""
+        stmt = (
+            select(EmployeeInfoChangeRequest)
+            .options(joinedload(EmployeeInfoChangeRequest.employee))
+            .where(EmployeeInfoChangeRequest.organization_id == organization_id)
+            .order_by(EmployeeInfoChangeRequest.created_at.desc())
+            .limit(limit)
+        )
+        if employee_id:
+            stmt = stmt.where(EmployeeInfoChangeRequest.employee_id == employee_id)
+        if status:
+            stmt = stmt.where(EmployeeInfoChangeRequest.status == status)
+        if change_type:
+            stmt = stmt.where(EmployeeInfoChangeRequest.change_type == change_type)
+        return list(self.db.scalars(stmt).all())
+
+    def get_request_detail(
+        self,
+        organization_id: UUID,
+        request_id: UUID,
+    ) -> EmployeeInfoChangeRequest | None:
+        """Get a single info change request with eager-loaded employee."""
+        return self.db.scalar(
+            select(EmployeeInfoChangeRequest)
+            .options(joinedload(EmployeeInfoChangeRequest.employee))
+            .where(
+                EmployeeInfoChangeRequest.request_id == request_id,
+                EmployeeInfoChangeRequest.organization_id == organization_id,
+            )
+        )
 
     def get_pending_requests(
         self,

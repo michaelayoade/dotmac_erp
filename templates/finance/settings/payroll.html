@@ -1,25 +1,22 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Payroll Settings{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Payroll</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/settings" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Settings</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Payroll</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6 stagger-in">
     <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Payroll Settings</h1>
+        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Payroll Settings</h2>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Configure auto-posting to GL and the account used for rounding adjustments.
         </p>
@@ -28,9 +25,7 @@
     {% if request.query_params.get('saved') %}
     <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-5 w-5 text-green-600 dark:text-green-400") }}
             <p class="text-sm text-green-700 dark:text-green-300">Payroll settings updated successfully.</p>
         </div>
     </div>
@@ -39,9 +34,7 @@
     {% if error %}
     <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
             <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
         </div>
     </div>

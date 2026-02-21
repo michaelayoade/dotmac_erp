@@ -32,6 +32,7 @@ from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
+from app.services.recent_activity import get_recent_activity_for_record
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +415,12 @@ class ExpenseWebService:
                 "can_void": expense.status
                 not in [ExpenseStatus.POSTED, ExpenseStatus.VOID],
             },
+            "recent_activity": get_recent_activity_for_record(
+                db,
+                org_id,
+                record=expense,
+                limit=10,
+            ),
         }
 
     @staticmethod

@@ -156,8 +156,7 @@ class AccountBalanceService(ListResponseMixin):
             )
             db.add(balance)
 
-        db.commit()
-        db.refresh(balance)
+        db.flush()
 
         return balance
 
@@ -245,7 +244,7 @@ class AccountBalanceService(ListResponseMixin):
 
         if aggregate_dimensions:
             # Aggregate balances across dimensions
-            query = (
+            stmt = (
                 select(
                     AccountBalance.account_id,
                     func.sum(
@@ -272,17 +271,19 @@ class AccountBalanceService(ListResponseMixin):
             )
 
             if account_ids:
-                query = query.where(
+                stmt = stmt.where(
                     AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids])
                 )
 
-            results = db.execute(query).all()
+            results = db.execute(stmt).all()
 
             # Get account codes
             acct_ids = [r.account_id for r in results]
-            accounts = db.scalars(
-                select(Account).where(Account.account_id.in_(acct_ids))
-            ).all()
+            accounts = list(
+                db.scalars(
+                    select(Account).where(Account.account_id.in_(acct_ids))
+                ).all()
+            )
             acct_map = {a.account_id: a.account_code for a in accounts}
 
             return [
@@ -305,7 +306,7 @@ class AccountBalanceService(ListResponseMixin):
             ]
         else:
             # Return individual balance records
-            balance_query = select(AccountBalance).where(
+            balance_stmt = select(AccountBalance).where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.fiscal_period_id == period_id,
@@ -314,17 +315,19 @@ class AccountBalanceService(ListResponseMixin):
             )
 
             if account_ids:
-                balance_query = balance_query.where(
+                balance_stmt = balance_stmt.where(
                     AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids])
                 )
 
-            balances = db.scalars(balance_query).all()
+            balances = list(db.scalars(balance_stmt).all())
 
             # Get account codes
             acct_ids = [b.account_id for b in balances]
-            accounts = db.scalars(
-                select(Account).where(Account.account_id.in_(acct_ids))
-            ).all()
+            accounts = list(
+                db.scalars(
+                    select(Account).where(Account.account_id.in_(acct_ids))
+                ).all()
+            )
             acct_map = {a.account_id: a.account_code for a in accounts}
 
             return [
@@ -538,6 +541,177 @@ class AccountBalanceService(ListResponseMixin):
         return count
 
     @staticmethod
+    def get_account_balance_read(
+        db: Session,
+        organization_id: UUID,
+        account_id: UUID,
+        fiscal_period_id: UUID,
+    ) -> dict:
+        """Get account balance with account details for API response.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            account_id: Account ID
+            fiscal_period_id: Period ID
+
+        Returns:
+            Dict with balance and account information
+
+        Raises:
+            ValueError: If balance not found
+        """
+        balance = AccountBalanceService.get_balance(
+            db=db,
+            organization_id=organization_id,
+            account_id=account_id,
+            fiscal_period_id=fiscal_period_id,
+        )
+        if not balance:
+            raise ValueError("Balance not found")
+
+        from app.services.finance.gl.chart_of_accounts import chart_of_accounts_service
+
+        account = chart_of_accounts_service.get(db, str(account_id), organization_id)
+
+        return {
+            "account_id": balance.account_id,
+            "account_code": account.account_code,
+            "account_name": account.account_name,
+            "fiscal_period_id": balance.fiscal_period_id,
+            "opening_balance": balance.opening_debit - balance.opening_credit,
+            "period_debit": balance.period_debit,
+            "period_credit": balance.period_credit,
+            "closing_balance": balance.closing_debit - balance.closing_credit,
+            "currency_code": balance.currency_code,
+        }
+
+    @staticmethod
+    def get_balances_for_accounts(
+        db: Session,
+        organization_id: UUID | str,
+        account_ids: list,
+    ) -> dict:
+        """Calculate current balances for a list of accounts.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            account_ids: List of account IDs
+
+        Returns:
+            Dict mapping account_id to net_balance
+        """
+        from app.models.finance.gl.fiscal_period import PeriodStatus
+
+        if not account_ids:
+            return {}
+
+        # Get latest period balance for each account (including open periods
+        # so that current-period postings are visible on account lists).
+        balances = db.execute(
+            select(
+                AccountBalance.account_id,
+                AccountBalance.net_balance,
+            )
+            .join(
+                FiscalPeriod,
+                AccountBalance.fiscal_period_id == FiscalPeriod.fiscal_period_id,
+            )
+            .where(
+                AccountBalance.account_id.in_(account_ids),
+                AccountBalance.balance_type == BalanceType.ACTUAL,
+                FiscalPeriod.status.in_(
+                    [
+                        PeriodStatus.OPEN,
+                        PeriodStatus.REOPENED,
+                        PeriodStatus.SOFT_CLOSED,
+                        PeriodStatus.HARD_CLOSED,
+                    ]
+                ),
+            )
+            .order_by(FiscalPeriod.end_date.desc())
+        ).all()
+
+        result: dict = {}
+        for acct_id, net_balance in balances:
+            if acct_id not in result:
+                result[acct_id] = net_balance
+
+        return result
+
+    @staticmethod
+    def get_balance_trends(
+        db: Session,
+        organization_id: UUID | str,
+        account_ids: list,
+        periods: int = 6,
+    ) -> dict:
+        """Calculate balance trends over recent periods.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            account_ids: List of account IDs
+            periods: Number of recent periods
+
+        Returns:
+            Dict mapping account_id to list of float balances
+        """
+        from app.models.finance.gl.fiscal_period import PeriodStatus
+
+        if not account_ids:
+            return {}
+
+        # Get recent periods (including open so trends reflect live data)
+        recent_periods = list(
+            db.scalars(
+                select(FiscalPeriod)
+                .where(
+                    FiscalPeriod.organization_id == coerce_uuid(organization_id),
+                    FiscalPeriod.status.in_(
+                        [
+                            PeriodStatus.OPEN,
+                            PeriodStatus.REOPENED,
+                            PeriodStatus.SOFT_CLOSED,
+                            PeriodStatus.HARD_CLOSED,
+                        ]
+                    ),
+                )
+                .order_by(FiscalPeriod.end_date.desc())
+                .limit(periods)
+            ).all()
+        )
+
+        if not recent_periods:
+            return {}
+
+        period_ids = [p.fiscal_period_id for p in recent_periods]
+
+        balances = db.execute(
+            select(
+                AccountBalance.account_id,
+                AccountBalance.fiscal_period_id,
+                AccountBalance.net_balance,
+            ).where(
+                AccountBalance.account_id.in_(account_ids),
+                AccountBalance.fiscal_period_id.in_(period_ids),
+                AccountBalance.balance_type == BalanceType.ACTUAL,
+            )
+        ).all()
+
+        # Build trend data
+        result = {aid: [0.0] * periods for aid in account_ids}
+        period_index = {pid: i for i, pid in enumerate(reversed(period_ids))}
+
+        for acct_id, period_id, net_balance in balances:
+            idx = period_index.get(period_id)
+            if idx is not None:
+                result[acct_id][idx] = float(net_balance)
+
+        return result
+
+    @staticmethod
     def get_ytd_balance(
         db: Session,
         organization_id: UUID,
@@ -622,26 +796,30 @@ class AccountBalanceService(ListResponseMixin):
         Returns:
             List of AccountBalance objects
         """
-        query = select(AccountBalance)
+        stmt = select(AccountBalance)
 
         if organization_id:
-            query = query.where(
+            stmt = stmt.where(
                 AccountBalance.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.where(
+            stmt = stmt.where(
                 AccountBalance.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if account_id:
-            query = query.where(AccountBalance.account_id == coerce_uuid(account_id))
+            stmt = stmt.where(AccountBalance.account_id == coerce_uuid(account_id))
 
         if balance_type:
-            query = query.where(AccountBalance.balance_type == balance_type)
+            stmt = stmt.where(AccountBalance.balance_type == balance_type)
 
-        query = query.order_by(AccountBalance.last_updated_at.desc())
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        stmt = (
+            stmt.order_by(AccountBalance.last_updated_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def get_trial_balance(

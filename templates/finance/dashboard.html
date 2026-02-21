@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import stats_card, empty_state, section_card, status_badge %}
+{% from "components/macros.html" import stats_card, empty_state, section_card, status_badge, icon_svg %}
 
 {% block page_title %}Dashboard{% endblock %}
 
@@ -26,11 +26,9 @@
 
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
             <!-- Revenue -->
-            <div class="stat-hero" data-testid="dashboard-stat-total-revenue">
+            <a href="/finance/ar/invoices" class="stat-hero stat-hero-link" data-testid="dashboard-stat-total-revenue">
                 <div class="stat-hero-icon stat-hero-icon-revenue">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-                    </svg>
+                    {{ icon_svg("trending-up", "w-5 h-5", stroke_width="1.5") }}
                 </div>
                 <span class="stat-hero-label">Revenue</span>
                 <span class="stat-hero-value">{{ stats.total_revenue | default(currency_zero) }}</span>
@@ -46,25 +44,33 @@
                     {{ stats.revenue_trend | abs }}% vs last period
                 </span>
                 {% endif %}
-            </div>
+            </a>
 
             <!-- Expenses -->
-            <div class="stat-hero" data-testid="dashboard-stat-total-expenses">
+            <a href="/finance/reports/income-statement" class="stat-hero stat-hero-link" data-testid="dashboard-stat-total-expenses">
                 <div class="stat-hero-icon stat-hero-icon-expenses">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                    </svg>
+                    {{ icon_svg("cash", "w-5 h-5", stroke_width="1.5") }}
                 </div>
                 <span class="stat-hero-label">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</span>
                 <span class="stat-hero-value">{{ stats.total_expenses | default(currency_zero) }}</span>
-            </div>
+                {% if stats.expenses_trend is not none %}
+                <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.expenses_trend > 0 else 'stat-hero-trend-down' }}">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {% if stats.expenses_trend > 0 %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                        {% else %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                        {% endif %}
+                    </svg>
+                    {{ stats.expenses_trend | abs }}% vs last period
+                </span>
+                {% endif %}
+            </a>
 
             <!-- Net Income -->
-            <div class="stat-hero" data-testid="dashboard-stat-net-income">
+            <a href="/finance/reports/income-statement" class="stat-hero stat-hero-link" data-testid="dashboard-stat-net-income">
                 <div class="stat-hero-icon stat-hero-icon-net-income">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                    </svg>
+                    {{ icon_svg("chart", "w-5 h-5", stroke_width="1.5") }}
                 </div>
                 <span class="stat-hero-label">{% if is_ipsas %}Surplus/Deficit{% else %}Net Income{% endif %}</span>
                 <span class="stat-hero-value">{{ stats.net_income | default(currency_zero) }}</span>
@@ -80,21 +86,32 @@
                     {{ stats.income_trend | abs }}% vs last period
                 </span>
                 {% endif %}
-            </div>
+            </a>
 
             <!-- Cash Flow -->
-            <div class="stat-hero" data-testid="dashboard-stat-cash-flow">
+            <a href="/finance/banking/accounts" class="stat-hero stat-hero-link" data-testid="dashboard-stat-cash-flow">
                 <div class="stat-hero-icon stat-hero-icon-cashflow">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("currency", "w-5 h-5", stroke_width="1.5") }}
                 </div>
                 <span class="stat-hero-label">Net Cash Flow</span>
                 <span class="stat-hero-value">{{ stats.net_cash_flow | default(currency_zero) }}</span>
+                {% if stats.cash_flow_trend is not none %}
+                <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.cash_flow_trend > 0 else 'stat-hero-trend-down' }}">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {% if stats.cash_flow_trend > 0 %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                        {% else %}
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                        {% endif %}
+                    </svg>
+                    {{ stats.cash_flow_trend | abs }}% vs last period
+                </span>
+                {% else %}
                 <span class="stat-hero-trend text-slate-500 dark:text-slate-400">
                     In {{ stats.cash_inflow | default(currency_zero) }} / Out {{ stats.cash_outflow | default(currency_zero) }}
                 </span>
-            </div>
+                {% endif %}
+            </a>
         </div>
 
         <!-- Secondary Metrics Bar -->
@@ -122,9 +139,7 @@
     {% if not subledger_reconciliation.ar_ok or not subledger_reconciliation.ap_ok %}
     <div class="stagger-in bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4" style="animation-delay: 25ms;">
         <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
+            {{ icon_svg("warning", "w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5") }}
             <div class="flex-1">
                 <p class="text-sm font-medium text-amber-800 dark:text-amber-200">Subledger Reconciliation Alert</p>
                 <div class="mt-1 text-sm text-amber-700 dark:text-amber-300 space-y-1">
@@ -436,65 +451,49 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-3">
                 <a href="/finance/reports/trial-balance" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+                        {{ icon_svg("document-report", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Trial Balance</span>
                 </a>
                 <a href="/finance/reports/income-statement" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-                        </svg>
+                        {{ icon_svg("trending-up", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{% if is_ipsas %}Performance{% else %}P&L Statement{% endif %}</span>
                 </a>
                 <a href="/finance/reports/balance-sheet" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                        </svg>
+                        {{ icon_svg("calculator", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{% if is_ipsas %}Financial Position{% else %}Balance Sheet{% endif %}</span>
                 </a>
                 <a href="/finance/reports/cash-flow" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("currency", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Cash Flow</span>
                 </a>
                 <a href="/finance/ar/aging" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
-                        </svg>
+                        {{ icon_svg("banknotes", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">AR Aging</span>
                 </a>
                 <a href="/finance/ap/aging" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                        </svg>
+                        {{ icon_svg("credit-card", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">AP Aging</span>
                 </a>
                 <a href="/finance/banking/reconciliations" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("check-circle", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Bank Recon</span>
                 </a>
                 <a href="/finance/gl/journals" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
-                        <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                        </svg>
+                        {{ icon_svg("book-open", "h-8 w-8 mx-auto", stroke_width="1.5") }}
                     </div>
                     <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Journals</span>
                 </a>

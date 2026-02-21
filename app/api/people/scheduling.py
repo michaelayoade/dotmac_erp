@@ -94,6 +94,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -155,7 +159,6 @@ def create_pattern(
             night_shift_type_id=payload.night_shift_type_id,
             is_active=payload.is_active,
         )
-        db.commit()
         return ShiftPatternRead.model_validate(pattern)
     except Exception as e:
         handle_scheduling_error(e)
@@ -188,7 +191,6 @@ def update_pattern(
     svc = SchedulingService(db)
     update_data = payload.model_dump(exclude_unset=True)
     pattern = svc.update_pattern(organization_id, pattern_id, **update_data)
-    db.commit()
     return ShiftPatternRead.model_validate(pattern)
 
 
@@ -201,7 +203,6 @@ def delete_pattern(
     """Deactivate a shift pattern."""
     svc = SchedulingService(db)
     svc.delete_pattern(organization_id, pattern_id)
-    db.commit()
 
 
 # =============================================================================
@@ -262,7 +263,6 @@ def create_assignment(
         rotation_week_offset=payload.rotation_week_offset,
         is_active=payload.is_active,
     )
-    db.commit()
     return PatternAssignmentRead.model_validate(assignment)
 
 
@@ -283,7 +283,6 @@ def bulk_create_assignments(
         effective_to=payload.effective_to,
         rotation_week_offset=payload.rotation_week_offset,
     )
-    db.commit()
     return result
 
 
@@ -311,7 +310,6 @@ def update_assignment(
     svc = SchedulingService(db)
     update_data = payload.model_dump(exclude_unset=True)
     assignment = svc.update_assignment(organization_id, assignment_id, **update_data)
-    db.commit()
     return PatternAssignmentRead.model_validate(assignment)
 
 
@@ -324,7 +322,6 @@ def delete_assignment(
     """End a pattern assignment."""
     svc = SchedulingService(db)
     svc.delete_assignment(organization_id, assignment_id)
-    db.commit()
 
 
 # =============================================================================
@@ -379,7 +376,6 @@ def generate_schedules(
             department_id=payload.department_id,
             year_month=payload.year_month,
         )
-        db.commit()
         return GenerateScheduleResult(**result)
     except Exception as e:
         handle_scheduling_error(e)
@@ -398,7 +394,6 @@ def publish_schedules(
         department_id=payload.department_id,
         year_month=payload.year_month,
     )
-    db.commit()
     return {
         "year_month": payload.year_month,
         "department_id": str(payload.department_id),
@@ -420,7 +415,6 @@ def delete_month_schedules(
         department_id=department_id,
         year_month=year_month,
     )
-    db.commit()
     return {
         "year_month": year_month,
         "department_id": str(department_id),
@@ -452,7 +446,6 @@ def update_schedule(
     svc = SchedulingService(db)
     update_data = payload.model_dump(exclude_unset=True)
     schedule = svc.update_schedule(organization_id, schedule_id, **update_data)
-    db.commit()
     return ShiftScheduleRead.model_validate(schedule)
 
 
@@ -465,7 +458,6 @@ def delete_schedule(
     """Delete a shift schedule entry (DRAFT only)."""
     svc = SchedulingService(db)
     svc.delete_schedule(organization_id, schedule_id)
-    db.commit()
 
 
 # =============================================================================
@@ -519,7 +511,6 @@ def create_swap_request(
             target_schedule_id=payload.target_schedule_id,
             reason=payload.reason,
         )
-        db.commit()
         return SwapRequestRead.model_validate(request)
     except Exception as e:
         handle_scheduling_error(e)
@@ -599,7 +590,6 @@ def accept_swap_request(
             request_id=request_id,
             accepting_employee_id=employee_id,
         )
-        db.commit()
         return SwapRequestRead.model_validate(request)
     except Exception as e:
         handle_scheduling_error(e)
@@ -622,7 +612,6 @@ def approve_swap_request(
             manager_id=manager_id,
             notes=payload.notes,
         )
-        db.commit()
         return SwapRequestRead.model_validate(request)
     except Exception as e:
         handle_scheduling_error(e)
@@ -645,7 +634,6 @@ def reject_swap_request(
             manager_id=manager_id,
             notes=payload.notes,
         )
-        db.commit()
         return SwapRequestRead.model_validate(request)
     except Exception as e:
         handle_scheduling_error(e)
@@ -666,7 +654,6 @@ def cancel_swap_request(
             request_id=request_id,
             requester_id=requester_id,
         )
-        db.commit()
         return SwapRequestRead.model_validate(request)
     except Exception as e:
         handle_scheduling_error(e)

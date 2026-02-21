@@ -6,7 +6,6 @@ Accounts Payable API endpoints for suppliers, invoices, and payments.
 
 import logging
 from datetime import date
-from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,7 +20,7 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceStatus,
     SupplierInvoiceType,
 )
-from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
+from app.models.finance.ap.supplier_payment import APPaymentStatus
 from app.schemas.finance.ap import (
     APAgingReportRead,
     APInvoiceCreate,
@@ -43,10 +42,8 @@ from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.ap import (
     InvoiceLineInput,
-    PaymentAllocationInput,
     SupplierInput,
     SupplierInvoiceInput,
-    SupplierPaymentInput,
     ap_aging_service,
     ap_posting_adapter,
     supplier_invoice_service,
@@ -65,6 +62,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -328,30 +329,21 @@ def create_ap_payment(
     db: Session = Depends(get_db),
 ):
     """Create a new AP payment."""
-    allocations = [
-        PaymentAllocationInput(
-            invoice_id=alloc.invoice_id,
-            amount=alloc.amount,
-        )
-        for alloc in payload.allocations
-    ]
-    total_amount = sum((alloc.amount for alloc in allocations), Decimal("0"))
-
     try:
-        payment_method = APPaymentMethod(payload.payment_method)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid payment method") from exc
-
-    input_data = SupplierPaymentInput(
-        supplier_id=payload.supplier_id,
-        payment_date=payload.payment_date,
-        payment_method=payment_method,
-        bank_account_id=payload.bank_account_id,
-        currency_code=payload.currency_code,
-        amount=total_amount,
-        reference=payload.reference_number,
-        allocations=allocations,
-    )
+        input_data = supplier_payment_service.build_payment_input(
+            supplier_id=payload.supplier_id,
+            payment_date=payload.payment_date,
+            payment_method_str=payload.payment_method,
+            bank_account_id=payload.bank_account_id,
+            currency_code=payload.currency_code,
+            allocations_raw=[
+                {"invoice_id": a.invoice_id, "amount": a.amount}
+                for a in payload.allocations
+            ],
+            reference=payload.reference_number,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return supplier_payment_service.create_payment(
         db=db,
@@ -448,61 +440,12 @@ def get_ap_aging(
     db: Session = Depends(get_db),
 ):
     """Get AP aging report."""
-    org_summary = ap_aging_service.calculate_organization_aging(
+    return ap_aging_service.build_aging_report(
         db=db,
         organization_id=organization_id,
         as_of_date=as_of_date,
+        supplier_id=supplier_id,
     )
-
-    if supplier_id:
-        supplier_summaries = [
-            ap_aging_service.calculate_supplier_aging(
-                db=db,
-                organization_id=organization_id,
-                supplier_id=supplier_id,
-                as_of_date=as_of_date,
-            )
-        ]
-    else:
-        supplier_summaries = ap_aging_service.get_aging_by_supplier(
-            db=db,
-            organization_id=organization_id,
-            as_of_date=as_of_date,
-        )
-
-    buckets = [
-        {
-            "supplier_id": summary.supplier_id,
-            "supplier_code": summary.supplier_code,
-            "supplier_name": summary.supplier_name,
-            "current": summary.current,
-            "days_1_30": summary.current,
-            "days_31_60": summary.days_31_60,
-            "days_61_90": summary.days_61_90,
-            "over_90": summary.over_90,
-            "total": summary.total_outstanding,
-        }
-        for summary in supplier_summaries
-    ]
-
-    totals = {
-        "supplier_id": UUID(int=0),
-        "supplier_code": "TOTAL",
-        "supplier_name": "Total",
-        "current": org_summary.current,
-        "days_1_30": org_summary.current,
-        "days_31_60": org_summary.days_31_60,
-        "days_61_90": org_summary.days_61_90,
-        "over_90": org_summary.over_90,
-        "total": org_summary.total_outstanding,
-    }
-
-    return {
-        "as_of_date": org_summary.as_of_date,
-        "currency_code": org_summary.currency_code,
-        "buckets": buckets,
-        "totals": totals,
-    }
 
 
 # =============================================================================
@@ -637,8 +580,6 @@ from app.models.finance.ap.payment_batch import (  # noqa: E402  # pragma: allow
     APBatchStatus,
 )
 from app.services.finance.ap import (  # noqa: E402
-    GoodsReceiptInput,
-    GRLineInput,
     goods_receipt_service,
 )
 
@@ -654,25 +595,23 @@ def create_goods_receipt(
     db: Session = Depends(get_db),
 ):
     """Create a goods receipt against a PO."""
-    lines: list[GRLineInput] = []
-    for line in payload.lines:
-        if not line.po_line_id:
-            raise HTTPException(
-                status_code=400, detail="po_line_id required for each line"
-            )
-        lines.append(
-            GRLineInput(
-                po_line_id=line.po_line_id,
-                quantity_received=line.quantity_received,
-                location_id=line.warehouse_id,
-            )
+    try:
+        input_data = goods_receipt_service.build_receipt_input(
+            po_id=payload.po_id,
+            receipt_date=payload.receipt_date,
+            lines_raw=[
+                {
+                    "po_line_id": line.po_line_id,
+                    "quantity_received": line.quantity_received,
+                    "warehouse_id": line.warehouse_id,
+                }
+                for line in payload.lines
+            ],
+            notes=payload.notes,
         )
-    input_data = GoodsReceiptInput(
-        po_id=payload.po_id,
-        receipt_date=payload.receipt_date,
-        notes=payload.notes,
-        lines=lines,
-    )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     return goods_receipt_service.create_receipt(
         db, organization_id, input_data, received_by_user_id
     )

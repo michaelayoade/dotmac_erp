@@ -1,6 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state, compact_filters %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters, icon_svg %}
 
 {% block content %}
 <div class="space-y-6">
@@ -10,9 +10,7 @@
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">View spending against limits by employee</p>
         </div>
         <a href="/expense/limits/rules" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1.5") }}
             Back to Rules
         </a>
     </div>
@@ -157,7 +155,7 @@
                 <tbody>
                     {% for eval in usage_summary.recent_evaluations %}
                     <tr>
-                        <td class="text-slate-600 dark:text-slate-400">{{ eval.evaluated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ eval.evaluated_at | format_datetime }}</td>
                         <td class="font-mono text-slate-900 dark:text-white">{{ eval.claim_id | string | truncate(8, True, '') }}</td>
                         <td class="text-right font-mono text-slate-700 dark:text-slate-300">{{ "{:,.2f}".format(eval.claim_amount) }}</td>
                         <td>
@@ -177,9 +175,7 @@
     {% else %}
     <!-- No Employee Selected -->
     <div class="card p-12 text-center">
-        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-        </svg>
+        {{ icon_svg("user", "mx-auto h-12 w-12 text-slate-400") }}
         <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">Select an Employee</h3>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
             Choose an employee from the dropdown above to view their expense usage and applicable limits.

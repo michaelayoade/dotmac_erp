@@ -100,6 +100,8 @@ class DashboardStats:
     # Trend indicators
     revenue_trend: float | None = None
     income_trend: float | None = None
+    expenses_trend: float | None = None
+    cash_flow_trend: float | None = None
 
 
 @dataclass
@@ -343,6 +345,67 @@ class DashboardService:
         return inflow, outflow, inflow - outflow
 
     @staticmethod
+    def get_cash_flow_trend(
+        db: Session,
+        organization_id: UUID,
+        year: int | None = None,
+        days: int = 30,
+    ) -> float | None:
+        """Calculate period-over-period trend for net cash flow.
+
+        Compares current period net cash flow to prior period of equal length.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            year: Optional year filter (compares to prior year)
+            days: Number of days per period (default 30)
+
+        Returns:
+            Percentage change or None if no prior data.
+        """
+        org_id = coerce_uuid(organization_id)
+        today = date.today()
+
+        if year is not None:
+            current_start, current_end = _year_bounds(year)
+            prev_start, prev_end = _year_bounds(year - 1)
+        else:
+            current_end = today
+            current_start = today - timedelta(days=days)
+            prev_end = current_start - timedelta(days=1)
+            prev_start = prev_end - timedelta(days=days)
+
+        def _net_cash(start: date, end: date) -> Decimal:
+            row = db.execute(
+                select(
+                    func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0).label(
+                        "inflow"
+                    ),
+                    func.coalesce(func.sum(PostedLedgerLine.credit_amount), 0).label(
+                        "outflow"
+                    ),
+                )
+                .join(Account, Account.account_id == PostedLedgerLine.account_id)
+                .where(
+                    PostedLedgerLine.organization_id == org_id,
+                    PostedLedgerLine.posting_date >= start,
+                    PostedLedgerLine.posting_date <= end,
+                    Account.is_cash_equivalent.is_(True),
+                    Account.is_active.is_(True),
+                )
+            ).one()
+            return _safe_decimal(row.inflow) - _safe_decimal(row.outflow)
+
+        current_net = _net_cash(current_start, current_end)
+        prev_net = _net_cash(prev_start, prev_end)
+
+        if prev_net == 0:
+            return None if current_net == 0 else 100.0
+        change = ((current_net - prev_net) / abs(prev_net)) * 100
+        return round(float(change), 1)
+
+    @staticmethod
     def get_subledger_reconciliation(
         db: Session,
         organization_id: UUID,
@@ -453,6 +516,7 @@ class DashboardService:
 
         # Get trend data
         trends = DashboardService.get_revenue_expense_trend(db, org_id, year=year)
+        cash_flow_trend = DashboardService.get_cash_flow_trend(db, org_id, year=year)
 
         return DashboardStats(
             total_revenue=revenue,
@@ -477,6 +541,8 @@ class DashboardService:
             # Trend data
             revenue_trend=trends["revenue_trend"],
             income_trend=trends["income_trend"],
+            expenses_trend=trends["expenses_trend"],
+            cash_flow_trend=cash_flow_trend,
         )
 
     @staticmethod
@@ -1206,6 +1272,7 @@ class DashboardService:
         return {
             "revenue_trend": calc_trend(current_revenue, prev_revenue),
             "income_trend": calc_trend(current_income, prev_income),
+            "expenses_trend": calc_trend(current_expenses, prev_expenses),
         }
 
     @staticmethod

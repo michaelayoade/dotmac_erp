@@ -4,11 +4,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.models.people.hr.info_change_request import (
-    EmployeeInfoChangeRequest,
     InfoChangeStatus,
     InfoChangeType,
 )
@@ -51,22 +49,14 @@ def info_change_requests(
 
     parsed_employee_id = UUID(employee_id) if employee_id else None
 
-    stmt = (
-        select(EmployeeInfoChangeRequest)
-        .options(joinedload(EmployeeInfoChangeRequest.employee))
-        .where(EmployeeInfoChangeRequest.organization_id == org_id)
-        .order_by(EmployeeInfoChangeRequest.created_at.desc())
-        .limit(limit)
+    svc = InfoChangeService(db)
+    requests = svc.list_requests(
+        org_id,
+        status=parsed_status,
+        change_type=parsed_change_type,
+        employee_id=parsed_employee_id,
+        limit=limit,
     )
-
-    if parsed_employee_id:
-        stmt = stmt.where(EmployeeInfoChangeRequest.employee_id == parsed_employee_id)
-    if parsed_status:
-        stmt = stmt.where(EmployeeInfoChangeRequest.status == parsed_status)
-    if parsed_change_type:
-        stmt = stmt.where(EmployeeInfoChangeRequest.change_type == parsed_change_type)
-
-    requests = list(db.scalars(stmt).all())
 
     context = base_context(request, auth, "Info Change Requests", "info-changes", db=db)
     context.update(
@@ -100,14 +90,8 @@ def info_change_request_detail(
         if isinstance(auth.organization_id, UUID)
         else UUID(auth.organization_id)
     )
-    req = db.scalar(
-        select(EmployeeInfoChangeRequest)
-        .options(joinedload(EmployeeInfoChangeRequest.employee))
-        .where(
-            EmployeeInfoChangeRequest.request_id == request_id,
-            EmployeeInfoChangeRequest.organization_id == org_id,
-        )
-    )
+    svc = InfoChangeService(db)
+    req = svc.get_request_detail(org_id, request_id)
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
 
@@ -144,7 +128,6 @@ def approve_info_change_request(
     svc.approve_request(
         org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
     )
-    db.commit()
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Approved",
         status_code=303,
@@ -171,7 +154,6 @@ def reject_info_change_request(
     svc.reject_request(
         org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
     )
-    db.commit()
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Rejected",
         status_code=303,

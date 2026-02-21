@@ -1,25 +1,22 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg %}
 
 {% block page_title %}Loan Types{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/loans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loans</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Loan Types</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/loans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loans</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Loan Types</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/payroll/loans/types/new" class="btn btn-primary group">
-    <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
     New Loan Type
 </a>
 {% endblock %}
@@ -44,9 +41,7 @@
             <div class="flex items-start justify-between gap-3 mb-4">
                 <div class="flex items-center gap-3">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("currency") }}
                     </div>
                     <div>
                         <h3 class="font-semibold text-slate-900 dark:text-white">{{ lt.type_name }}</h3>
@@ -94,14 +89,10 @@
             <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
                 <span class="inline-flex items-center text-xs text-slate-500 dark:text-slate-400">
                     {% if lt.requires_approval %}
-                    <svg class="h-4 w-4 mr-1 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                    </svg>
+                    {{ icon_svg("shield-check", "h-4 w-4 mr-1 text-amber-500") }}
                     Requires approval
                     {% else %}
-                    <svg class="h-4 w-4 mr-1 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
+                    {{ icon_svg("lightning-bolt", "h-4 w-4 mr-1 text-emerald-500") }}
                     Auto-approved
                     {% endif %}
                 </span>
@@ -112,9 +103,7 @@
     </div>
     {% else %}
     <div class="card p-12 text-center">
-        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-        </svg>
+        {{ icon_svg("collection", "mx-auto h-12 w-12 text-slate-400", stroke_width="1.5") }}
         <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No loan types configured</h3>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
             Configure loan types before creating loan applications.

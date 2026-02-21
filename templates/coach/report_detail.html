@@ -10,8 +10,8 @@
 <div class="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
   {{ status_badge(report.report_type) }}
   <span class="font-mono">{{ report.audience | replace('_', ' ') | title }}</span>
-  <span>{{ report.period_start.strftime('%d %b %Y') }} &ndash; {{ report.period_end.strftime('%d %b %Y') }}</span>
-  <span>Generated {{ report.created_at.strftime('%d %b %Y at %H:%M') }}</span>
+  <span>{{ report.period_start | format_date }} &ndash; {{ report.period_end | format_date }}</span>
+  <span>Generated {{ report.created_at | format_datetime }}</span>
   {% if report.model_used %}
   <span class="font-mono">{{ report.model_used }}</span>
   {% endif %}

@@ -1,13 +1,14 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}Remita RRRs{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Remita RRRs</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Remita RRRs</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -16,9 +17,7 @@
     {% if success_message %}
     <div class="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
         <div class="flex items-center gap-2">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check") }}
             {{ success_message }}
         </div>
     </div>
@@ -27,9 +26,7 @@
     {% if error_message %}
     <div class="rounded-lg bg-rose-50 p-4 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
         <div class="flex items-center gap-2">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle") }}
             {{ error_message }}
         </div>
     </div>
@@ -61,18 +58,14 @@
                 {{ request.state.csrf_form | safe }}
                 <button type="submit"
                         class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    {{ icon_svg("refresh", "h-4 w-4") }}
                     Refresh All
                 </button>
             </form>
             {% endif %}
             <a href="/finance/remita/generate"
                class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4") }}
                 Generate RRR
             </a>
         </div>
@@ -148,11 +141,11 @@
                             {{ status_badge(rrr.status.value, size="sm") }}
                         </td>
                         <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                            {{ rrr.generated_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ rrr.generated_at | format_datetime }}
                         </td>
                         <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                             {% if rrr.paid_at %}
-                            {{ rrr.paid_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ rrr.paid_at | format_datetime }}
                             {% else %}
                             -
                             {% endif %}

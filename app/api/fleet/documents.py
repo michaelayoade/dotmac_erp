@@ -29,6 +29,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -89,7 +93,6 @@ def create_document(
     service = DocumentService(db, organization_id)
     try:
         doc = service.create(data)
-        db.commit()
         return DocumentRead.model_validate(doc)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -106,7 +109,6 @@ def update_document(
     service = DocumentService(db, organization_id)
     try:
         doc = service.update(document_id, data)
-        db.commit()
         return DocumentRead.model_validate(doc)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -122,6 +124,5 @@ def delete_document(
     service = DocumentService(db, organization_id)
     try:
         service.delete(document_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

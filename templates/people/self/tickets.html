@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, pagination %}
 
 {% block page_title %}My Tickets{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">My Tickets</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">My Tickets</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -16,7 +17,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tickets</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tickets</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Tickets assigned to you.</p>
         </div>
     </div>
@@ -63,29 +64,19 @@
         </div>
     </div>
 
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 pt-4">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-            Showing {{ (page - 1) * 20 + 1 }} to {{ [page * 20, total] | min }} of {{ total }} tickets
-        </p>
-        <div class="flex items-center gap-2">
-            {% if has_prev %}
-            <a href="?page={{ page - 1 }}" class="btn btn-secondary btn-sm">Previous</a>
-            {% endif %}
-            <span class="text-sm text-slate-600 dark:text-slate-400">Page {{ page }} of {{ total_pages }}</span>
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}" class="btn btn-secondary btn-sm">Next</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=20,
+        show_size_selector=false
+    ) }}
+
     {% else %}
     <div class="card p-12 text-center">
         <div class="flex justify-center mb-4">
             <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("exclamation-circle", "h-8 w-8 text-slate-400") }}
             </div>
         </div>
         <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">No tickets assigned</h3>

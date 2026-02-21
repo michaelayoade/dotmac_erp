@@ -211,6 +211,9 @@ def verify_results() -> None:
 
 
 if __name__ == "__main__":
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     try:
         run_project_sync()
     except Exception as e:

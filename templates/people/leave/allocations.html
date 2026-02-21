@@ -5,14 +5,13 @@
 {% block page_title %}Leave Allocations{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Allocations</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Allocations</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -38,7 +37,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Allocations</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Allocations</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Track leave balances by period.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -214,7 +213,7 @@
                             {{ alloc.leave_type.leave_type_name if alloc.leave_type else alloc.leave_type_id[:8] ~ '...' }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ alloc.from_date.strftime('%d %b %Y') if alloc.from_date else '' }} - {{ alloc.to_date.strftime('%d %b %Y') if alloc.to_date else '' }}
+                            {{ alloc.from_date | format_date if alloc.from_date else '' }} - {{ alloc.to_date | format_date if alloc.to_date else '' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ alloc.total_leaves_allocated }}
@@ -265,7 +264,7 @@
         total_count=total | default(0),
         limit=20,
         show_size_selector=false,
-        filters={{"employee_id": employee_id, "leave_type_id": leave_type_id, "per_page": per_page, "year": year}}
+        filters={"employee_id": employee_id, "leave_type_id": leave_type_id, "per_page": per_page, "year": year}
     ) }}
 
 </div>

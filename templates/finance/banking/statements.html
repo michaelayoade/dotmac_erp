@@ -1,127 +1,250 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, bulk_icon_delete, filter_select_field, filter_custom_select_field, action_buttons, sortable_th %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, live_search, sortable_th, icon_svg %}
 
-{% block page_title %}Bank Statements{% endblock %}
+{% block page_title %}Bank Transactions{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Bank Statements</span>
+    <ol class="flex items-center gap-0">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li><span class="mx-2">/</span><a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400">Banking</a></li>
+        <li><span class="mx-2">/</span><span class="text-slate-900 dark:text-white" aria-current="page">Transactions</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
+{% if account_id %}
+<form method="POST" action="/finance/banking/lines/apply-rules" class="inline">
+    {{ request.state.csrf_form | safe }}
+    <input type="hidden" name="account_id" value="{{ account_id }}">
+    <button type="submit" class="btn btn-secondary btn-sm" title="Apply categorization rules to all unprocessed lines for this account">
+        {{ icon_svg("filter", "h-4 w-4 mr-1.5") }}
+        Apply Rules
+    </button>
+</form>
+{% endif %}
 <a href="/finance/banking/statements/import" data-testid="bank-statements-import" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-    </svg>
+    {{ icon_svg("upload", "h-4 w-4 mr-1.5") }}
     Import Statement
 </a>
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6 page-enter">
-    {# Stats Row #}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {{ stats_card("Total Statements", total_count | default(0), icon="document", color="slate") }}
-        {{ stats_card("Total Lines", total_lines | default(0), icon="list", color="teal") }}
-        {{ stats_card("Matched", matched_lines | default(0), icon="check-circle", color="emerald") }}
-        {{ stats_card("Unmatched", unmatched_lines | default(0), icon="warning", color="amber") }}
+<div class="space-y-4 page-enter">
+
+    {# ── Inline Summary Strip ── #}
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm px-1">
+        <span class="text-slate-500 dark:text-slate-400">
+            <span class="font-semibold text-slate-900 dark:text-white font-mono tabular-nums">{{ total_lines | default(0) }}</span> lines
+        </span>
+        {% if uncategorized_count | default(0) > 0 %}
+        <span class="text-amber-600 dark:text-amber-400">
+            {{ icon_svg("filter", "h-3.5 w-3.5 inline -mt-0.5") }}
+            <span class="font-mono tabular-nums">{{ uncategorized_count }}</span> uncategorized
+        </span>
+        {% endif %}
+        {% if suggested_count | default(0) > 0 %}
+        <span class="text-blue-600 dark:text-blue-400">
+            {{ icon_svg("check-circle", "h-3.5 w-3.5 inline -mt-0.5") }}
+            <span class="font-mono tabular-nums">{{ suggested_count }}</span> suggested
+        </span>
+        {% endif %}
+        <span class="{{ 'text-emerald-600 dark:text-emerald-400' if matched_count | default(0) > 0 else 'text-slate-500 dark:text-slate-400' }}">
+            {{ icon_svg("link", "h-3.5 w-3.5 inline -mt-0.5") }}
+            <span class="font-mono tabular-nums">{{ matched_count | default(0) }}</span> matched
+            {% if unmatched_count | default(0) > 0 %}
+            <span class="text-slate-400 dark:text-slate-500">/</span>
+            <span class="font-mono tabular-nums text-slate-500 dark:text-slate-400">{{ unmatched_count }}</span> unmatched
+            {% endif %}
+        </span>
     </div>
 
-    {# Filters #}
-    {% call(filter_attrs) compact_filters(
+    {# ── Search + Filters (always visible) ── #}
+    {% call(search_attrs) live_search(
+        search=search | default('', true),
         base_url="/finance/banking/statements",
-        active_filters=active_filters | default([]),
-        date_range=true,
-        start_date=start_date | default('', true),
-        end_date=end_date | default('', true)
+        placeholder="Search description, reference, payee...",
+        debounce_ms=300
     ) %}
-    {% call filter_custom_select_field("account_id", "Account", "data-testid='bank-statements-account' " ~ filter_attrs) %}
-    {% for acc in accounts %}
-    <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
-        {{ acc.bank_name }} - {{ acc.account_number }}
-    </option>
-    {% endfor %}
-    {% endcall %}
-    {{ filter_select_field(
-        "status",
-        "Status",
-        status,
-        [
-            {"value": "imported", "label": "Imported"},
-            {"value": "in_progress", "label": "In Progress"},
-            {"value": "reconciled", "label": "Reconciled"}
-        ],
-        'data-testid="bank-statements-status" ' ~ filter_attrs
-    ) }}
+    <select name="account_id" class="form-select w-auto min-w-[180px]" data-testid="bank-statements-account" {{ search_attrs }}>
+        <option value="">All Bank Accounts</option>
+        {% for acc in accounts %}
+        <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+            {{ acc.bank_name }} - {{ acc.account_number }}
+        </option>
+        {% endfor %}
+    </select>
+    <select name="status" class="form-select w-auto min-w-[140px]" {{ search_attrs }}>
+        <option value="">Category Status</option>
+        <option value="SUGGESTED" {{ 'selected' if status == 'SUGGESTED' else '' }}>Suggested</option>
+        <option value="ACCEPTED" {{ 'selected' if status == 'ACCEPTED' else '' }}>Accepted</option>
+        <option value="REJECTED" {{ 'selected' if status == 'REJECTED' else '' }}>Rejected</option>
+        <option value="AUTO_APPLIED" {{ 'selected' if status == 'AUTO_APPLIED' else '' }}>Auto-applied</option>
+        <option value="FLAGGED" {{ 'selected' if status == 'FLAGGED' else '' }}>Flagged</option>
+    </select>
+    <select name="match_status" class="form-select w-auto min-w-[130px]" {{ search_attrs }}>
+        <option value="">Match Status</option>
+        <option value="matched" {{ 'selected' if match_status == 'matched' else '' }}>Matched</option>
+        <option value="unmatched" {{ 'selected' if match_status == 'unmatched' else '' }}>Unmatched</option>
+    </select>
+    <input type="date" name="start_date" value="{{ start_date if start_date else '' }}" class="form-input w-auto" placeholder="From" title="From date" {{ search_attrs }}>
+    <input type="date" name="end_date" value="{{ end_date if end_date else '' }}" class="form-input w-auto" placeholder="To" title="To date" {{ search_attrs }}>
     {% endcall %}
 
-    {# Results Container (HTMX target) #}
-    <div id="results-container" x-data="bulkActions({ entityName: 'statements' })">
+    {# ── Statement Lines Table ── #}
+    <div id="results-container">
     <div class="card">
         <div class="table-container">
-            <table class="table" data-testid="bank-statements-table">
+            <table class="table" data-testid="bank-transactions-table">
                 <thead>
                     <tr>
-                        {{ bulk_select_header() }}
-                        {{ sortable_th("Statement Date", "statement_date", sort, sort_dir) }}
-                        <th scope="col">Statement #</th>
-                        {{ sortable_th("Bank Account", "account_name", sort, sort_dir) }}
-                        <th scope="col">Period</th>
-                        <th scope="col" class="text-right">Opening</th>
-                        <th scope="col" class="text-right">Closing</th>
-                        <th scope="col" class="text-center">Lines</th>
-                        {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
-                        <th scope="col" class="text-right">Actions</th>
+                        {{ sortable_th("Date", "transaction_date", sort, sort_dir) }}
+                        <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">DESCRIPTION</th>
+                        <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden lg:table-cell">REFERENCE</th>
+                        {% if not account_id %}
+                        <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden md:table-cell">ACCOUNT</th>
+                        {% endif %}
+                        {{ sortable_th("Amount", "amount", sort, sort_dir, class="text-right") }}
+                        <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">CATEGORY</th>
+                        <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">GL MATCH</th>
+                        <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden xl:table-cell">STMT</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for stmt in statements %}
+                    {% for txn in transactions %}
                     <tr class="group">
-                        {{ bulk_select_cell(stmt.statement_id) }}
-                        <td class="text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                            {{ stmt.statement_date }}
+                        <td class="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {{ txn.transaction_date }}
                         </td>
+                        <td class="max-w-xs">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ txn.description if txn.description else '' }}</p>
+                            {% if txn.payee_payer %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ txn.payee_payer }}</p>
+                            {% endif %}
+                            {# Show reference inline on smaller screens where REFERENCE column is hidden #}
+                            {% if txn.reference or txn.bank_reference %}
+                            <p class="text-xs font-mono tabular-nums text-slate-400 dark:text-slate-500 truncate lg:hidden">{{ txn.reference if txn.reference else txn.bank_reference }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400 hidden lg:table-cell">
+                            {{ txn.reference if txn.reference else (txn.bank_reference if txn.bank_reference else '') }}
+                        </td>
+                        {% if not account_id %}
+                        <td class="hidden md:table-cell">
+                            <p class="text-sm text-slate-900 dark:text-white truncate max-w-[120px]" title="{{ txn.bank_name }} - {{ txn.account_number }}">{{ txn.bank_name }}</p>
+                        </td>
+                        {% endif %}
+                        <td class="text-right font-mono tabular-nums text-sm font-medium whitespace-nowrap {{ 'text-emerald-700 dark:text-emerald-400' if txn.transaction_type == 'credit' else 'text-rose-700 dark:text-rose-400' }}">
+                            {{ "+" if txn.transaction_type == 'credit' else "-" }}{{ txn.amount }}
+                        </td>
+
+                        {# ── Category column ── #}
                         <td>
-                            <a href="/finance/banking/statements/{{ stmt.statement_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
-                                {{ stmt.statement_number }}
-                            </a>
-                        </td>
-                        <td>
-                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ stmt.bank_name | default("") }}</p>
-                            <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ stmt.account_number | default("") }}</p>
-                        </td>
-                        <td class="text-slate-600 dark:text-slate-400">
-                            {{ stmt.period_start }} - {{ stmt.period_end }}
-                        </td>
-                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ stmt.opening_balance }}</td>
-                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ stmt.closing_balance }}</td>
-                        <td class="text-center">
-                            <span class="text-sm text-slate-600 dark:text-slate-400 tabular-nums">{{ stmt.matched_lines }}/{{ stmt.total_lines }}</span>
-                            <div class="mt-1 h-1.5 w-16 mx-auto rounded-full bg-slate-200 dark:bg-slate-700">
-                                <div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ (stmt.matched_lines / stmt.total_lines * 100) if stmt.total_lines else 0 }}%"></div>
+                            {% if txn.categorization_status == 'SUGGESTED' or txn.categorization_status == 'FLAGGED' %}
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-slate-700 dark:text-slate-300 truncate max-w-[140px]" title="{{ account_map.get(txn.suggested_account_id, '') }}">
+                                        {{ account_map.get(txn.suggested_account_id, 'Unknown') }}
+                                    </span>
+                                    {% if txn.suggested_confidence is not none %}
+                                    {% if txn.suggested_confidence >= 80 %}
+                                    <span class="inline-flex rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-mono tabular-nums text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">{{ txn.suggested_confidence }}%</span>
+                                    {% elif txn.suggested_confidence >= 60 %}
+                                    <span class="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-mono tabular-nums text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{{ txn.suggested_confidence }}%</span>
+                                    {% else %}
+                                    <span class="inline-flex rounded-full bg-rose-100 px-1.5 py-0.5 text-xs font-mono tabular-nums text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">{{ txn.suggested_confidence }}%</span>
+                                    {% endif %}
+                                    {% endif %}
+                                    {{ status_badge(txn.categorization_status, 'sm') }}
+                                </div>
+                                {% if txn.suggested_match_reason %}
+                                <p class="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[180px]" title="{{ txn.suggested_match_reason }}">{{ txn.suggested_match_reason }}</p>
+                                {% endif %}
+                                <div class="flex items-center gap-1">
+                                    <form method="POST" action="/finance/banking/lines/{{ txn.line_id }}/accept" class="inline">
+                                        {{ request.state.csrf_form | safe }}
+                                        <button type="submit" class="inline-flex items-center rounded px-1.5 py-0.5 text-xs text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/30 transition-colors" aria-label="Accept suggestion" title="Accept">
+                                            {{ icon_svg("check", "h-3.5 w-3.5") }}
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="/finance/banking/lines/{{ txn.line_id }}/reject" class="inline">
+                                        {{ request.state.csrf_form | safe }}
+                                        <button type="submit" class="inline-flex items-center rounded px-1.5 py-0.5 text-xs text-rose-700 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-900/30 transition-colors" aria-label="Reject suggestion" title="Reject">
+                                            {{ icon_svg("x-mark", "h-3.5 w-3.5") }}
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
+                            {% elif txn.categorization_status == 'ACCEPTED' %}
+                            <div class="flex items-center gap-1.5">
+                                {{ icon_svg("check", "h-3.5 w-3.5 text-emerald-500") }}
+                                <span class="text-xs text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]" title="{{ account_map.get(txn.suggested_account_id, '') }}">
+                                    {{ account_map.get(txn.suggested_account_id, 'Accepted') }}
+                                </span>
+                            </div>
+                            {% elif txn.categorization_status == 'AUTO_APPLIED' %}
+                            <div class="flex items-center gap-1.5">
+                                {{ icon_svg("check", "h-3.5 w-3.5 text-emerald-500") }}
+                                <span class="text-xs text-emerald-700 dark:text-emerald-400 truncate max-w-[120px]" title="{{ account_map.get(txn.suggested_account_id, '') }}">
+                                    {{ account_map.get(txn.suggested_account_id, 'Applied') }}
+                                </span>
+                                <span class="text-xs text-slate-400 dark:text-slate-500">(auto)</span>
+                            </div>
+                            {% elif txn.categorization_status == 'REJECTED' %}
+                            <span class="text-xs text-slate-400 dark:text-slate-500">Rejected</span>
+                            {% else %}
+                            <span class="text-xs text-slate-300 dark:text-slate-600">&mdash;</span>
+                            {% endif %}
                         </td>
-                        <td class="text-center">
-                            {{ status_badge(stmt.status | default('imported'), 'sm') }}
-                        </td>
+
+                        {# ── GL Match column ── #}
                         <td>
-                            {{ action_buttons(view_href="/finance/banking/statements/" ~ stmt.statement_id) }}
+                            {% if txn.is_matched and txn.match_journal_number %}
+                            <div class="flex items-start gap-1.5">
+                                {{ icon_svg("link", "h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5") }}
+                                <div class="min-w-0">
+                                    <a href="/finance/gl/journals/{{ txn.match_journal_entry_id }}"
+                                       class="text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline truncate block max-w-[130px]"
+                                       title="{{ txn.match_journal_number }}">
+                                        {{ txn.match_journal_number }}
+                                    </a>
+                                    {% if txn.match_counterparty %}
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[130px]" title="{{ txn.match_counterparty }}">{{ txn.match_counterparty }}</p>
+                                    {% endif %}
+                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                        {{ txn.match_source_label if txn.match_source_label else 'Journal' }}
+                                    </span>
+                                </div>
+                            </div>
+                            {% elif txn.is_matched %}
+                            <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                                {{ icon_svg("check", "h-3 w-3") }}
+                                Matched
+                            </span>
+                            {% else %}
+                            <span class="text-xs text-slate-400 dark:text-slate-500">Unmatched</span>
+                            {% endif %}
+                        </td>
+
+                        {# ── Statement link ── #}
+                        <td class="hidden xl:table-cell text-right whitespace-nowrap">
+                            <a href="/finance/banking/statements/{{ txn.statement_id }}"
+                               class="text-xs text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 font-mono tabular-nums"
+                               title="View statement {{ txn.statement_number }}">
+                                {{ txn.statement_number if txn.statement_number else 'View' }}
+                            </a>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="10" class="py-12">
+                        <td colspan="{{ 7 + (0 if account_id else 1) }}" class="py-12">
                             {{ empty_state(
-                                'No bank statements found',
-                                'Import your first bank statement to get started' if not (active_filters | default([])) else 'Try adjusting your filter criteria',
+                                'No bank statement lines found',
+                                'Import a bank statement to see transaction lines here.' if not (active_filters | default([])) else 'Try adjusting your filter criteria.',
                                 'document',
-                                'Import Statement' if not (active_filters | default([])) else none,
-                                '/finance/banking/statements/import' if not (active_filters | default([])) else none
+                                cta_text='Import Statement',
+                                cta_href='/finance/banking/statements/import'
                             ) }}
                         </td>
                     </tr>
@@ -136,31 +259,9 @@
             total_pages=total_pages | default(1),
             total_count=total_count | default(0),
             limit=limit | default(50),
-            filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date, "sort": sort, "sort_dir": sort_dir}
+            filters={"account_id": account_id, "status": status, "match_status": match_status, "search": search, "start_date": start_date, "end_date": end_date, "sort": sort, "sort_dir": sort_dir}
         ) }}
     </div>
-
-    {# Bulk Action Bar #}
-    {{ bulk_action_bar(
-        actions=[
-            {
-                "name": "export",
-                "label": "Export",
-                "endpoint": "/finance/banking/statements/bulk-export",
-                "icon": bulk_icon_export(),
-                "class": "btn-secondary"
-            },
-            {
-                "name": "delete",
-                "label": "Delete",
-                "endpoint": "/finance/banking/statements/bulk-delete",
-                "icon": bulk_icon_delete(),
-                "class": "btn-bulk-danger",
-                "confirm": "Delete selected statements? Only imported/processing statements can be deleted."
-            }
-        ],
-        entity_name="statements"
-    ) }}
     </div>
 </div>
 {% endblock %}

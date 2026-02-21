@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{% if slip %}Edit Salary Slip{% else %}New Salary Slip{% endif %}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Slips</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{% if slip %}Edit{% else %}New{% endif %}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Slips</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{% if slip %}Edit{% else %}New{% endif %}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -17,9 +18,7 @@
     {% if error %}
     <div class="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500") }}
             <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
         </div>
     </div>
@@ -117,9 +116,7 @@
             {% endif %}
             <a href="/people/payroll/slips" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
                 {% if slip %}Update{% else %}Generate{% endif %} Slip
             </button>
         </div>

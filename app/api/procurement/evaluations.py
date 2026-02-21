@@ -25,6 +25,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -72,7 +76,6 @@ def create_evaluation(
     service = BidEvaluationService(db)
     try:
         evaluation = service.create(organization_id, data)
-        db.commit()
         return EvaluationResponse.model_validate(evaluation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -91,7 +94,6 @@ def add_score(
     service = BidEvaluationService(db)
     try:
         score = service.score_bid(organization_id, evaluation_id, data)
-        db.commit()
         return EvaluationScoreResponse.model_validate(score)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -112,7 +114,6 @@ def approve_evaluation(
     user_id = UUID(person_id)
     try:
         evaluation = service.approve(organization_id, evaluation_id, user_id)
-        db.commit()
         return EvaluationResponse.model_validate(evaluation)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

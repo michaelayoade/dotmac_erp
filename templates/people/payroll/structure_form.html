@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{% if structure %}Edit Structure{% else %}New Salary Structure{% endif %}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Structures</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{% if structure %}Edit{% else %}New{% endif %}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/structures" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Structures</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{% if structure %}Edit{% else %}New{% endif %}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -64,9 +65,7 @@
             <div class="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-medium text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus", "h-4 w-4 text-emerald-500") }}
                         Earnings Components
                     </h3>
                     <button type="button" @click="addEarning()" class="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300">
@@ -89,9 +88,7 @@
                                 placeholder="Formula or amount"
                                 class="form-input w-40 text-sm font-mono">
                             <button type="button" @click="removeEarning(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" aria-label="Close">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
+                                {{ icon_svg("x-mark", "h-4 w-4") }}
                             </button>
                         </div>
                     </template>
@@ -106,9 +103,7 @@
             <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-medium text-red-900 dark:text-red-100 flex items-center gap-2">
-                        <svg class="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                        </svg>
+                        {{ icon_svg("minus", "h-4 w-4 text-red-500") }}
                         Deduction Components
                     </h3>
                     <button type="button" @click="addDeduction()" class="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
@@ -131,9 +126,7 @@
                                 placeholder="Formula or amount"
                                 class="form-input w-40 text-sm font-mono">
                             <button type="button" @click="removeDeduction(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" aria-label="Close">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                </svg>
+                                {{ icon_svg("x-mark", "h-4 w-4") }}
                             </button>
                         </div>
                     </template>
@@ -166,9 +159,7 @@
             {% endif %}
             <a href="/people/payroll/structures" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
                 {% if structure %}Update{% else %}Create{% endif %} Structure
             </button>
         </div>

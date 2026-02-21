@@ -1,0 +1,153 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, live_search, sortable_th, icon_svg %}
+
+{% block page_title %}Imported Statements{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-0">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li><span class="mx-2">/</span><a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400">Banking</a></li>
+        <li><span class="mx-2">/</span><span class="text-slate-900 dark:text-white" aria-current="page">Imports</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/banking/statements/import" class="btn btn-primary">
+    {{ icon_svg("upload", "h-4 w-4 mr-1.5") }}
+    Import Statement
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4 page-enter">
+
+    {# ── Inline Summary Strip ── #}
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm px-1">
+        <span class="text-slate-500 dark:text-slate-400">
+            <span class="font-semibold text-slate-900 dark:text-white font-mono tabular-nums">{{ total_count }}</span> statements
+        </span>
+        <span class="text-slate-500 dark:text-slate-400">
+            <span class="font-mono tabular-nums">{{ total_lines }}</span> total lines
+        </span>
+        <span class="{{ 'text-emerald-600 dark:text-emerald-400' if matched_lines > 0 else 'text-slate-500 dark:text-slate-400' }}">
+            {{ icon_svg("link", "h-3.5 w-3.5 inline -mt-0.5") }}
+            <span class="font-mono tabular-nums">{{ matched_lines }}</span> matched
+            {% if unmatched_lines > 0 %}
+            <span class="text-slate-400 dark:text-slate-500">/</span>
+            <span class="font-mono tabular-nums text-slate-500 dark:text-slate-400">{{ unmatched_lines }}</span> unmatched
+            {% endif %}
+        </span>
+    </div>
+
+    {# ── Search + Filters ── #}
+    {% call(search_attrs) live_search(
+        search=search | default('', true),
+        base_url="/finance/banking/statements/imports",
+        placeholder="Search statement number...",
+        debounce_ms=300
+    ) %}
+    <select name="account_id" class="form-select w-auto min-w-[180px]" {{ search_attrs }}>
+        <option value="">All Bank Accounts</option>
+        {% for acc in accounts %}
+        <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+            {{ acc.bank_name }} - {{ acc.account_number }}
+        </option>
+        {% endfor %}
+    </select>
+    <select name="status" class="form-select w-auto min-w-[130px]" {{ search_attrs }}>
+        <option value="">All Status</option>
+        <option value="imported" {{ 'selected' if status == 'imported' else '' }}>Imported</option>
+        <option value="processing" {{ 'selected' if status == 'processing' else '' }}>Processing</option>
+        <option value="closed" {{ 'selected' if status == 'closed' else '' }}>Reconciled</option>
+    </select>
+    <input type="date" name="start_date" value="{{ start_date if start_date else '' }}" class="form-input w-auto" placeholder="From" title="From date" {{ search_attrs }}>
+    <input type="date" name="end_date" value="{{ end_date if end_date else '' }}" class="form-input w-auto" placeholder="To" title="To date" {{ search_attrs }}>
+    {% endcall %}
+
+    {# ── Results ── #}
+    <div id="results-container">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        {{ sortable_th("Date", "statement_date", sort, sort_dir) }}
+                        <th scope="col">STATEMENT #</th>
+                        <th scope="col" class="hidden md:table-cell">BANK ACCOUNT</th>
+                        <th scope="col" class="hidden lg:table-cell">PERIOD</th>
+                        <th scope="col" class="text-right hidden sm:table-cell">OPENING</th>
+                        <th scope="col" class="text-right hidden sm:table-cell">CLOSING</th>
+                        {{ sortable_th("Lines", "total_lines", sort, sort_dir, "text-center") }}
+                        <th scope="col" class="text-center">MATCH</th>
+                        <th scope="col" class="text-center">STATUS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stmt in statements %}
+                    <tr class="group">
+                        <td class="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">{{ stmt.statement_date }}</td>
+                        <td>
+                            <a href="/finance/banking/statements/{{ stmt.statement_id }}" class="font-medium text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 font-mono text-sm">
+                                {{ stmt.statement_number }}
+                            </a>
+                        </td>
+                        <td class="hidden md:table-cell text-sm text-slate-500 dark:text-slate-400">
+                            {{ stmt.bank_name }} - {{ stmt.account_number }}
+                        </td>
+                        <td class="hidden lg:table-cell text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            {{ stmt.period_start }} — {{ stmt.period_end }}
+                        </td>
+                        <td class="text-right font-mono tabular-nums text-sm hidden sm:table-cell {{ 'text-rose-600 dark:text-rose-400' if stmt.opening_balance_raw is not none and stmt.opening_balance_raw < 0 else '' }}">
+                            {{ stmt.opening_balance if stmt.opening_balance else '—' }}
+                        </td>
+                        <td class="text-right font-mono tabular-nums text-sm hidden sm:table-cell {{ 'text-rose-600 dark:text-rose-400' if stmt.closing_balance_raw is not none and stmt.closing_balance_raw < 0 else '' }}">
+                            {{ stmt.closing_balance if stmt.closing_balance else '—' }}
+                        </td>
+                        <td class="text-center">
+                            <span class="font-mono tabular-nums text-sm">{{ stmt.total_lines if stmt.total_lines else 0 }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% set matched = stmt.matched_lines if stmt.matched_lines else 0 %}
+                            {% set total = stmt.total_lines if stmt.total_lines else 0 %}
+                            {% if total > 0 %}
+                                {% set pct = (matched / total * 100) | int %}
+                                <div class="flex items-center gap-2 justify-center">
+                                    <div class="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full {{ 'bg-emerald-500' if pct == 100 else 'bg-blue-500' }}" style="width: {{ pct }}%"></div>
+                                    </div>
+                                    <span class="text-xs font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if pct == 100 else 'text-slate-500 dark:text-slate-400' }}">{{ pct }}%</span>
+                                </div>
+                            {% else %}
+                                <span class="text-xs text-slate-400">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {{ status_badge(stmt.status, 'sm') }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9">
+                            {{ empty_state(
+                                title="No imported statements",
+                                description="Import a bank statement to get started with matching and reconciliation.",
+                                icon="document",
+                                cta_text="Import Statement",
+                                cta_href="/finance/banking/statements/import"
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# ── Pagination ── #}
+        {% if total_pages > 1 %}
+        {{ pagination(page, total_pages, "/finance/banking/statements/imports", extra_params="account_id=" ~ account_id ~ "&status=" ~ status ~ "&search=" ~ search ~ "&start_date=" ~ (start_date if start_date else '') ~ "&end_date=" ~ (end_date if end_date else '') ~ "&limit=" ~ limit) }}
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

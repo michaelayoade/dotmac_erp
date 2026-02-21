@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}Salary Slip {{ slip.slip_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Slips</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ slip.slip_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Salary Slips</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ slip.slip_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -16,9 +17,7 @@
 <div class="flex items-center gap-2">
     {% if slip.status.value == 'DRAFT' %}
     <a href="/people/payroll/slips/{{ slip.slip_id }}/edit" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
         Edit
     </a>
     <form action="/people/payroll/slips/{{ slip.slip_id }}/delete" method="post" class="inline" onsubmit="return confirm('Delete this draft slip?');">
@@ -29,9 +28,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-secondary">
             <span class="btn-hide-on-load flex items-center">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
                 Submit for Approval
             </span>
             <span class="btn-spinner"></span>
@@ -42,9 +39,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-primary">
             <span class="btn-hide-on-load flex items-center">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
                 Approve
             </span>
             <span class="btn-spinner"></span>
@@ -55,17 +50,13 @@
 
     {% if slip.journal_entry_id %}
     <a href="/finance/gl/journals/{{ slip.journal_entry_id }}" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-        </svg>
+        {{ icon_svg("external-link", "h-4 w-4 mr-1.5") }}
         View Journal
     </a>
     {% endif %}
 
     <button onclick="window.print()" class="btn btn-ghost" title="Print Payslip" aria-label="Print Payslip">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-        </svg>
+        {{ icon_svg("printer", "h-4 w-4") }}
     </button>
 </div>
 {% endblock %}
@@ -126,9 +117,7 @@
     <div class="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
         <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50">
-                <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+                {{ icon_svg("x-mark", "h-5 w-5 text-red-500") }}
             </div>
             <div>
                 <p class="font-semibold text-red-700 dark:text-red-300">Cancelled</p>
@@ -147,30 +136,18 @@
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <div class="document-number">{{ slip.slip_number }}</div>
-                    <h1 class="document-title">Salary Slip</h1>
+                    <h2 class="document-title">Salary Slip</h2>
                     <p class="document-subtitle">
-                        Pay Period: {{ slip.start_date.strftime('%B %d') }} – {{ slip.end_date.strftime('%B %d, %Y') }}
+                        Pay Period: {{ slip.start_date.strftime('%B %d') }} – {{ slip.end_date | format_date }}
                     </p>
                 </div>
                 <div class="text-right">
                     {# Status Badge using new badge classes #}
-                    {% if slip.status.value == 'DRAFT' %}
-                    <span class="badge badge-draft"><span class="badge-dot"></span>Draft</span>
-                    {% elif slip.status.value == 'SUBMITTED' %}
-                    <span class="badge badge-pending"><span class="badge-dot"></span>Submitted</span>
-                    {% elif slip.status.value == 'APPROVED' %}
-                    <span class="badge badge-approved"><span class="badge-dot"></span>Approved</span>
-                    {% elif slip.status.value == 'POSTED' %}
-                    <span class="badge badge-posted"><span class="badge-dot"></span>Posted</span>
-                    {% elif slip.status.value == 'PAID' %}
-                    <span class="badge badge-paid"><span class="badge-dot"></span>Paid</span>
-                    {% elif slip.status.value == 'CANCELLED' %}
-                    <span class="badge badge-rejected"><span class="badge-dot"></span>Cancelled</span>
-                    {% endif %}
+                    {{ status_badge(slip.status.value, 'sm') }}
 
                     {% if slip.posted_at %}
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                        Posted {{ slip.posted_at.strftime('%b %d, %Y') }}
+                        Posted {{ slip.posted_at | format_date }}
                     </p>
                     {% endif %}
                 </div>
@@ -227,9 +204,7 @@
                 <div class="document-section">
                     <div class="document-section-title flex items-center justify-between">
                         <span class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                            </svg>
+                            {{ icon_svg("plus", "w-4 h-4 text-emerald-500") }}
                             Earnings
                         </span>
                         <span class="font-mono text-emerald-600 dark:text-emerald-400 normal-case">
@@ -253,9 +228,7 @@
                 <div class="document-section">
                     <div class="document-section-title flex items-center justify-between">
                         <span class="flex items-center gap-2">
-                            <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                            </svg>
+                            {{ icon_svg("minus", "w-4 h-4 text-red-500") }}
                             Deductions
                         </span>
                         <span class="font-mono text-red-600 dark:text-red-400 normal-case">
@@ -311,9 +284,7 @@
         >
             <div class="flex items-center gap-3">
                 <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/50">
-                    <svg class="h-4 w-4 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
-                    </svg>
+                    {{ icon_svg("receipt", "h-4 w-4 text-violet-600 dark:text-violet-400") }}
                 </span>
                 <div>
                     <h3 class="font-semibold text-slate-900 dark:text-white">PAYE Tax Breakdown</h3>
@@ -430,18 +401,13 @@
                         </span>
                         {% if tax_profile.tax_state %}
                         <span class="flex items-center gap-1.5">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
+                            {{ icon_svg("location-marker", "w-4 h-4") }}
                             {{ tax_profile.tax_state }}
                         </span>
                         {% endif %}
                         {% if tax_profile.is_tax_exempt %}
                         <span class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                            </svg>
+                            {{ icon_svg("warning", "w-4 h-4") }}
                             Tax Exempt
                         </span>
                         {% endif %}
@@ -461,9 +427,7 @@
         {% if slip.status.value in ['POSTED', 'PAID'] %}
         <div class="card p-4">
             <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                </svg>
+                {{ icon_svg("credit-card", "w-4 h-4 text-teal-500") }}
                 Payment Information
             </h4>
             <div class="space-y-2 text-sm">
@@ -492,7 +456,7 @@
                 {% if slip.paid_at %}
                 <div class="flex justify-between">
                     <span class="text-slate-500 dark:text-slate-400">Paid On</span>
-                    <span class="text-slate-900 dark:text-white">{{ slip.paid_at.strftime('%B %d, %Y') }}</span>
+                    <span class="text-slate-900 dark:text-white">{{ slip.paid_at | format_date }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -502,32 +466,30 @@
         {# Audit Trail #}
         <div class="card p-4">
             <h4 class="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "w-4 h-4 text-slate-400") }}
                 Audit Trail
             </h4>
             <div class="space-y-2 text-sm">
                 <div class="flex justify-between">
                     <span class="text-slate-500 dark:text-slate-400">Created</span>
-                    <span class="text-slate-900 dark:text-white">{{ slip.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+                    <span class="text-slate-900 dark:text-white">{{ slip.created_at | format_datetime }}</span>
                 </div>
                 {% if slip.submitted_at %}
                 <div class="flex justify-between">
                     <span class="text-slate-500 dark:text-slate-400">Submitted</span>
-                    <span class="text-slate-900 dark:text-white">{{ slip.submitted_at.strftime('%b %d, %Y %H:%M') }}</span>
+                    <span class="text-slate-900 dark:text-white">{{ slip.submitted_at | format_datetime }}</span>
                 </div>
                 {% endif %}
                 {% if slip.approved_at %}
                 <div class="flex justify-between">
                     <span class="text-slate-500 dark:text-slate-400">Approved</span>
-                    <span class="text-slate-900 dark:text-white">{{ slip.approved_at.strftime('%b %d, %Y %H:%M') }}</span>
+                    <span class="text-slate-900 dark:text-white">{{ slip.approved_at | format_datetime }}</span>
                 </div>
                 {% endif %}
                 {% if slip.posted_at %}
                 <div class="flex justify-between">
                     <span class="text-slate-500 dark:text-slate-400">Posted to GL</span>
-                    <span class="text-slate-900 dark:text-white">{{ slip.posted_at.strftime('%b %d, %Y %H:%M') }}</span>
+                    <span class="text-slate-900 dark:text-white">{{ slip.posted_at | format_datetime }}</span>
                 </div>
                 {% endif %}
                 {% if slip.journal_entry_id %}

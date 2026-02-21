@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.banking.bank_account import BankAccount
@@ -644,9 +644,7 @@ class RunWebService:
             ):
                 # Delete associated slips first
                 db.execute(
-                    SalarySlip.__table__.delete().where(
-                        SalarySlip.payroll_entry_id == e_id
-                    )
+                    delete(SalarySlip).where(SalarySlip.payroll_entry_id == e_id)
                 )
                 db.delete(entry)
                 db.commit()

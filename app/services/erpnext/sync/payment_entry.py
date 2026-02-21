@@ -13,6 +13,7 @@ Handles dedup against Splynx-originated payments via splynx_id.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -21,6 +22,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.customer_payment import (
     CustomerPayment,
     PaymentMethod,
@@ -75,6 +78,61 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
         self._mapping = PaymentEntryMapping()
         self._ref_mapping = PaymentEntryReferenceMapping()
         self._payment_cache: dict[str, CustomerPayment] = {}
+        self._customer_exact_lookup: dict[str, uuid.UUID] | None = None
+        self._customer_norm_lookup: dict[str, uuid.UUID] | None = None
+
+    @staticmethod
+    def _normalize_party_name(value: str | None) -> str:
+        if not value:
+            return ""
+        norm = value.strip().lower()
+        norm = norm.replace("&", "and")
+        norm = re.sub(r"\s+", " ", norm)
+        norm = re.sub(r"\s*-\s*\d+$", "", norm)  # "Name - 1"
+        norm = re.sub(r"\s+\d+\)$", ")", norm)  # "(Name 1)" -> "(Name)"
+        return norm
+
+    def _ensure_customer_lookups(self) -> None:
+        if (
+            self._customer_exact_lookup is not None
+            and self._customer_norm_lookup is not None
+        ):
+            return
+
+        rows = self.db.execute(
+            select(
+                Customer.customer_id,
+                Customer.customer_code,
+                Customer.legal_name,
+                Customer.trading_name,
+                Customer.erpnext_id,
+            ).where(Customer.organization_id == self.organization_id)
+        ).all()
+
+        exact: dict[str, uuid.UUID] = {}
+        norm_multi: dict[str, set[uuid.UUID]] = {}
+
+        for row in rows:
+            customer_id = row.customer_id
+            for key in (row.erpnext_id, row.customer_code):
+                if key and key not in exact:
+                    exact[str(key)] = customer_id
+
+            for key in (
+                row.erpnext_id,
+                row.customer_code,
+                row.legal_name,
+                row.trading_name,
+            ):
+                nk = self._normalize_party_name(key)
+                if not nk:
+                    continue
+                norm_multi.setdefault(nk, set()).add(customer_id)
+
+        norm_unique = {k: next(iter(v)) for k, v in norm_multi.items() if len(v) == 1}
+
+        self._customer_exact_lookup = exact
+        self._customer_norm_lookup = norm_unique
 
     def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch Payment Entries with references."""
@@ -140,6 +198,86 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
 
     def _resolve_account_id(self, account_source_name: str | None) -> uuid.UUID | None:
         return self._resolve_entity_id(account_source_name, "Account")
+
+    def _resolve_customer_id(self, source_name: str | None) -> uuid.UUID | None:
+        """Resolve Customer by sync_entity first, then direct customer fields."""
+        if not source_name:
+            return None
+
+        candidate = self._resolve_entity_id(source_name, "Customer")
+        if candidate and self.db.get(Customer, candidate):
+            return candidate
+
+        self._ensure_customer_lookups()
+        assert self._customer_exact_lookup is not None
+        assert self._customer_norm_lookup is not None
+
+        if source_name in self._customer_exact_lookup:
+            return self._customer_exact_lookup[source_name]
+
+        source_norm = self._normalize_party_name(source_name)
+        if source_norm in self._customer_norm_lookup:
+            return self._customer_norm_lookup[source_norm]
+
+        # Fallback for truncated external IDs: allow short prefix differences.
+        prefix_candidates: set[uuid.UUID] = set()
+        for key, customer_id in self._customer_norm_lookup.items():
+            if not source_norm:
+                break
+            if key.startswith(source_norm) or source_norm.startswith(key):
+                if abs(len(key) - len(source_norm)) <= 3:
+                    prefix_candidates.add(customer_id)
+        if len(prefix_candidates) == 1:
+            return next(iter(prefix_candidates))
+
+        customer = self.db.scalar(
+            select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                Customer.erpnext_id == source_name,
+            )
+        )
+        if customer:
+            return customer.customer_id
+
+        customer = self.db.scalar(
+            select(Customer).where(
+                Customer.organization_id == self.organization_id,
+                Customer.customer_code == source_name,
+            )
+        )
+        if customer:
+            return customer.customer_id
+
+        return None
+
+    def _resolve_supplier_id(self, source_name: str | None) -> uuid.UUID | None:
+        """Resolve Supplier by sync_entity first, then direct supplier fields."""
+        if not source_name:
+            return None
+
+        candidate = self._resolve_entity_id(source_name, "Supplier")
+        if candidate and self.db.get(Supplier, candidate):
+            return candidate
+
+        supplier = self.db.scalar(
+            select(Supplier).where(
+                Supplier.organization_id == self.organization_id,
+                Supplier.erpnext_id == source_name,
+            )
+        )
+        if supplier:
+            return supplier.supplier_id
+
+        supplier = self.db.scalar(
+            select(Supplier).where(
+                Supplier.organization_id == self.organization_id,
+                Supplier.supplier_code == source_name,
+            )
+        )
+        if supplier:
+            return supplier.supplier_id
+
+        return None
 
     def _map_payment_method(self, mode: str | None) -> PaymentMethod:
         if not mode:
@@ -239,7 +377,7 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
         data.pop("_reference_date", None)
         data.pop("_custom_expense_claim", None)
 
-        supplier_id = self._resolve_entity_id(supplier_source, "Supplier")
+        supplier_id = self._resolve_supplier_id(supplier_source)
         if not supplier_id:
             raise ValueError(f"Supplier '{supplier_source}' not found")
 
@@ -436,6 +574,16 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             )
             return None
 
+        # Unsupported types (e.g. Internal Transfer) should be skipped.
+        if payment_type not in {"Receive", "Pay"}:
+            result.skipped_count += 1
+            logger.info(
+                "Skipping Payment Entry %s: unsupported payment_type=%s",
+                source_name,
+                payment_type,
+            )
+            return None
+
         if payment_type == "Receive" and (party_type != "Customer" or not party_source):
             # Skip unsupported AR payment-party combinations (e.g. Internal Transfer).
             result.skipped_count += 1
@@ -495,23 +643,13 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             # than failing the whole run. We still want AP/Employee payments to
             # sync even if AR master data is incomplete.
             if payment_type == "Receive" and party_type == "Customer" and party_source:
-                from app.models.finance.ar.customer import Customer
-
-                customer_id = self._resolve_entity_id(party_source, "Customer")
-                if not customer_id:
+                customer_id = self._resolve_customer_id(party_source)
+                if customer_id is None:
                     result.skipped_count += 1
                     logger.warning(
                         "Skipping AR Payment Entry %s: Customer '%s' not mapped",
                         source_name,
                         party_source,
-                    )
-                    return None
-                if not self.db.get(Customer, customer_id):
-                    result.skipped_count += 1
-                    logger.warning(
-                        "Skipping AR Payment Entry %s: mapped customer_id %s not found in ar.customer",
-                        source_name,
-                        customer_id,
                     )
                     return None
 
@@ -566,7 +704,7 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             return existing
 
         # Resolve customer
-        customer_id = self._resolve_entity_id(customer_source, "Customer")
+        customer_id = self._resolve_customer_id(customer_source)
         if not customer_id:
             raise ValueError(f"Customer '{customer_source}' not found")
 

@@ -31,7 +31,7 @@ def build_receipt_query(
     from_date = parse_date(start_date)
     to_date = parse_date(end_date)
 
-    query = (
+    query: Query[CustomerPayment] = (
         Query([CustomerPayment], session=db)
         .join(Customer, CustomerPayment.customer_id == Customer.customer_id)
         .filter(CustomerPayment.organization_id == org_id)

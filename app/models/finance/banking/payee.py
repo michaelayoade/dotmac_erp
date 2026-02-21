@@ -4,7 +4,10 @@ Payee Master Model.
 Stores recognized payees/payers for auto-categorization of bank transactions.
 """
 
+from __future__ import annotations
+
 import enum
+import re
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -135,22 +138,32 @@ class Payee(Base):
     # Notes
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    @staticmethod
+    def word_boundary_match(pattern: str, text: str) -> bool:
+        """Check if *pattern* appears in *text* as a whole-word match.
+
+        Uses ``re`` word boundaries (``\\b``) so that short patterns like
+        ``"UBA"`` do **not** match inside ``"aatzubairu@gmail.com"``.
+        """
+        escaped = re.escape(pattern)
+        return bool(re.search(rf"\b{escaped}\b", text, re.IGNORECASE))
+
     def matches_name(self, transaction_description: str) -> bool:
         """Check if a transaction description matches this payee."""
         if not transaction_description:
             return False
 
-        desc_upper = transaction_description.upper()
-
-        # Check main name
-        if self.payee_name.upper() in desc_upper:
+        # Check main name (word-boundary match)
+        if self.word_boundary_match(self.payee_name, transaction_description):
             return True
 
-        # Check patterns
+        # Check patterns (word-boundary match)
         if self.name_patterns:
-            patterns = [p.strip().upper() for p in self.name_patterns.split("|")]
+            patterns = [p.strip() for p in self.name_patterns.split("|")]
             for pattern in patterns:
-                if pattern and pattern in desc_upper:
+                if pattern and self.word_boundary_match(
+                    pattern, transaction_description
+                ):
                     return True
 
         return False

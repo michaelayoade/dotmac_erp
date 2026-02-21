@@ -31,6 +31,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -94,7 +98,6 @@ def create_maintenance(
     service = MaintenanceService(db, organization_id)
     try:
         record = service.create(data)
-        db.commit()
         return MaintenanceRead.model_validate(record)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -111,7 +114,6 @@ def update_maintenance(
     service = MaintenanceService(db, organization_id)
     try:
         record = service.update(maintenance_id, data)
-        db.commit()
         return MaintenanceRead.model_validate(record)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -129,7 +131,6 @@ def start_maintenance(
     service = MaintenanceService(db, organization_id)
     try:
         record = service.start(maintenance_id)
-        db.commit()
         return MaintenanceRead.model_validate(record)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -148,7 +149,6 @@ def complete_maintenance(
     service = MaintenanceService(db, organization_id)
     try:
         record = service.complete(maintenance_id, data)
-        db.commit()
         return MaintenanceRead.model_validate(record)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -167,7 +167,6 @@ def cancel_maintenance(
     service = MaintenanceService(db, organization_id)
     try:
         record = service.cancel(maintenance_id, reason)
-        db.commit()
         return MaintenanceRead.model_validate(record)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

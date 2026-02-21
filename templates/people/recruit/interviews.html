@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Interviews{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Interviews</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Interviews</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,13 +18,11 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Interviews</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Interviews</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Schedule and manage candidate interviews</p>
         </div>
         <a href="/people/recruit/interviews/new" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
+            {{ icon_svg("calendar", "h-4 w-4 mr-1") }}
             Schedule Interview
         </a>
     </div>
@@ -96,7 +94,7 @@
                     {% for interview in interviews %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onclick="window.location='/people/recruit/interviews/{{ interview.interview_id }}'">
                         <td class="px-4 py-3 text-sm">
-                            <div class="font-medium text-slate-900 dark:text-white">{{ interview.scheduled_from.strftime('%b %d, %Y') }}</div>
+                            <div class="font-medium text-slate-900 dark:text-white">{{ interview.scheduled_from | format_date }}</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ interview.scheduled_from.strftime('%I:%M %p') }} - {{ interview.interview_type | replace('_', ' ') }}</div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
@@ -140,21 +138,14 @@
     </div>
     {% endif %}
 
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
-            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
-        </p>
-        <div class="flex gap-2">
-            {% if has_prev %}
-            <a href="?page={{ page - 1 }}&status={{ status | default('', true) }}&job_opening_id={{ job_opening_id | default('', true) }}&applicant_id={{ applicant_id | default('', true) }}&start_date={{ start_date | default('', true) }}&end_date={{ end_date | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
-            {% endif %}
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}&status={{ status | default('', true) }}&job_opening_id={{ job_opening_id | default('', true) }}&applicant_id={{ applicant_id | default('', true) }}&start_date={{ start_date | default('', true) }}&end_date={{ end_date | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=20,
+        show_size_selector=false,
+        filters={"applicant_id": applicant_id, "end_date": end_date, "job_opening_id": job_opening_id, "start_date": start_date, "status": status}
+    ) }}
+
 </div>
 {% endblock %}

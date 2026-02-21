@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block title %}My Tasks - {{ brand.name | default("Dotmac") }}{% endblock %}
 
 {% block body %}
@@ -11,9 +11,7 @@
             <div class="flex h-16 items-center justify-between">
                 <div class="flex items-center gap-4">
                     <a href="/dashboard" class="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                        </svg>
+                        {{ icon_svg("arrow-left") }}
                     </a>
                     <div>
                         <h1 class="text-xl font-semibold text-slate-900 dark:text-white">My Tasks</h1>
@@ -30,9 +28,7 @@
         {% if no_employee %}
         <!-- No Employee Record -->
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 text-center">
-            <svg class="h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-            </svg>
+            {{ icon_svg("user", "h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4", stroke_width="1.5") }}
             <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">No Employee Record</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 Your account is not linked to an employee record. Please contact HR.
@@ -45,9 +41,7 @@
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("clock", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('PENDING', 0) }}</p>
@@ -59,9 +53,7 @@
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
+                        {{ icon_svg("lightning-bolt", "h-5 w-5 text-blue-600 dark:text-blue-400") }}
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('IN_PROGRESS', 0) }}</p>
@@ -73,9 +65,7 @@
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('COMPLETED', 0) }}</p>
@@ -87,9 +77,7 @@
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-                        <svg class="h-5 w-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                        </svg>
+                        {{ icon_svg("warning", "h-5 w-5 text-rose-600 dark:text-rose-400") }}
                     </div>
                     <div>
                         <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ summary.get('EXPIRED', 0) + summary.get('CANCELLED', 0) }}</p>
@@ -174,13 +162,7 @@
                                         </p>
                                         {% endif %}
                                         <div class="mt-2 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-500">
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full
-                                                {% if task.status == 'PENDING' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                                                {% elif task.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                                                {% elif task.status == 'COMPLETED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                                                {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                                {{ task.status | replace("_", " ") | title }}
-                                            </span>
+                                            {{ status_badge(task.status, 'sm') }}
                                             {{ status_badge(task.module, size="sm") }}
                                             <span class="{% if task.is_overdue %}text-rose-600 dark:text-rose-400 font-medium{% endif %}">
                                                 {{ task.due_display }}
@@ -196,9 +178,7 @@
                                             <button type="submit"
                                                     class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-emerald-700 bg-emerald-100 hover:bg-emerald-200 dark:text-emerald-400 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 transition-colors"
                                                     title="Mark Complete">
-                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                                </svg>
+                                                {{ icon_svg("check", "h-4 w-4") }}
                                             </button>
                                         </form>
                                         <form action="/tasks/{{ task.id }}/snooze" method="post" class="inline">
@@ -207,18 +187,14 @@
                                             <button type="submit"
                                                     class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-amber-700 bg-amber-100 hover:bg-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 transition-colors"
                                                     title="Snooze 1 day">
-                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                                </svg>
+                                                {{ icon_svg("clock", "h-4 w-4") }}
                                             </button>
                                         </form>
                                         {% endif %}
                                         <a href="{{ task.action_url }}"
                                            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors"
                                            title="View Details">
-                                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                            </svg>
+                                            {{ icon_svg("chevron-right", "h-4 w-4") }}
                                         </a>
                                     </div>
                                 </div>
@@ -235,9 +211,7 @@
                 {% if has_previous %}
                 <a href="/tasks?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_priority %}priority={{ current_priority }}&{% endif %}page={{ page - 1 }}"
                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left", "h-4 w-4 mr-1") }}
                     Previous
                 </a>
                 {% else %}
@@ -250,9 +224,7 @@
                 <a href="/tasks?{% if current_status %}status={{ current_status }}&{% endif %}{% if current_priority %}priority={{ current_priority }}&{% endif %}page={{ page + 1 }}"
                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors">
                     Next
-                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                    </svg>
+                    {{ icon_svg("chevron-right", "h-4 w-4 ml-1") }}
                 </a>
                 {% else %}
                 <span></span>
@@ -263,9 +235,7 @@
             {% else %}
             <!-- Empty State -->
             <div class="px-4 py-16 text-center">
-                <svg class="h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                </svg>
+                {{ icon_svg("clipboard-check", "h-16 w-16 mx-auto text-slate-300 dark:text-slate-600 mb-4", stroke_width="1.5") }}
                 <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">No tasks found</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     {% if current_status or current_priority %}

@@ -1,6 +1,13 @@
 """
 Tests for ChartOfAccountsService.
+
+Mocking strategy: The service uses SQLAlchemy 2.0 select()-based queries.
+We mock db.scalar() / db.scalars() directly. For create_account, the
+validate_unique_code helper still uses db.query() internally, so we keep
+the mock_db.query chain for that specific case.
 """
+
+from __future__ import annotations
 
 from uuid import uuid4
 
@@ -44,8 +51,10 @@ class TestCreateAccount:
         self, service, mock_db, org_id, sample_account_input
     ):
         """Test successful account creation."""
-        # No existing account
+        # validate_unique_code uses db.query().filter().first() internally
         mock_db.query.return_value.filter.return_value.first.return_value = None
+        # Fallback in validate_unique_code also uses db.scalar
+        mock_db.scalar.return_value = None
 
         service.create_account(mock_db, org_id, sample_account_input)
 
@@ -63,6 +72,7 @@ class TestCreateAccount:
             organization_id=org_id,
             account_code=sample_account_input.account_code,
         )
+        # validate_unique_code uses db.query().filter().first()
         mock_db.query.return_value.filter.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
@@ -81,7 +91,9 @@ class TestCreateAccount:
             is_multi_currency=True,
             default_currency_code="EUR",
         )
+        # validate_unique_code uses db.query().filter().first()
         mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalar.return_value = None
 
         service.create_account(mock_db, org_id, input_data)
 
@@ -200,7 +212,8 @@ class TestGetAccountByCode:
     def test_get_by_code_success(self, service, mock_db, org_id):
         """Test getting account by code."""
         account = MockAccount(organization_id=org_id, account_code="1000")
-        mock_db.query.return_value.filter.return_value.first.return_value = account
+        # Service uses db.scalar(select(...).where(...))
+        mock_db.scalar.return_value = account
 
         result = service.get_by_code(mock_db, org_id, "1000")
 
@@ -210,7 +223,8 @@ class TestGetAccountByCode:
         """Test getting non-existent account by code."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        # Service uses db.scalar(select(...).where(...))
+        mock_db.scalar.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.get_by_code(mock_db, org_id, "9999")
@@ -224,7 +238,8 @@ class TestListAccounts:
     def test_list_all_accounts(self, service, mock_db, org_id):
         """Test listing all accounts."""
         accounts = [MockAccount(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
+        # Service uses db.scalars(stmt) (no .all())
+        mock_db.scalars.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id))
 
@@ -234,7 +249,7 @@ class TestListAccounts:
         """Test listing accounts with category filter."""
         category_id = uuid4()
         accounts = [MockAccount(organization_id=org_id, category_id=category_id)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
+        mock_db.scalars.return_value = accounts
 
         result = service.list(
             mock_db, organization_id=str(org_id), category_id=str(category_id)
@@ -245,7 +260,7 @@ class TestListAccounts:
     def test_list_with_active_filter(self, service, mock_db, org_id):
         """Test listing active accounts only."""
         accounts = [MockAccount(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
+        mock_db.scalars.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id), is_active=True)
 
@@ -254,7 +269,7 @@ class TestListAccounts:
     def test_list_with_search(self, service, mock_db, org_id):
         """Test listing accounts with search term."""
         accounts = [MockAccount(organization_id=org_id, account_name="Cash")]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
+        mock_db.scalars.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id), search="Cash")
 
@@ -263,7 +278,7 @@ class TestListAccounts:
     def test_list_with_pagination(self, service, mock_db, org_id):
         """Test listing accounts with pagination."""
         accounts = [MockAccount(organization_id=org_id)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = accounts
+        mock_db.scalars.return_value = accounts
 
         result = service.list(mock_db, organization_id=str(org_id), limit=10, offset=5)
 

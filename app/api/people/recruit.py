@@ -62,6 +62,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -164,7 +168,6 @@ def create_job_opening(
         education_requirements=payload.education_requirements,
         status=payload.status,
     )
-    db.commit()
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -196,7 +199,6 @@ def update_job_opening(
     svc = RecruitmentService(db)
     update_data = payload.model_dump(exclude_unset=True)
     job_opening = svc.update_job_opening(organization_id, job_opening_id, **update_data)
-    db.commit()
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -209,7 +211,6 @@ def delete_job_opening(
     """Delete a job opening."""
     svc = RecruitmentService(db)
     svc.delete_job_opening(organization_id, job_opening_id)
-    db.commit()
 
 
 # Job opening actions
@@ -222,7 +223,6 @@ def publish_job_opening(
     """Publish a job opening."""
     svc = RecruitmentService(db)
     job_opening = svc.publish_job_opening(organization_id, job_opening_id)
-    db.commit()
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -235,7 +235,6 @@ def close_job_opening(
     """Close a job opening."""
     svc = RecruitmentService(db)
     job_opening = svc.close_job_opening(organization_id, job_opening_id)
-    db.commit()
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -248,7 +247,6 @@ def hold_job_opening(
     """Put a job opening on hold."""
     svc = RecruitmentService(db)
     job_opening = svc.hold_job_opening(organization_id, job_opening_id)
-    db.commit()
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -261,7 +259,6 @@ def reopen_job_opening(
     """Reopen a job opening."""
     svc = RecruitmentService(db)
     job_opening = svc.reopen_job_opening(organization_id, job_opening_id)
-    db.commit()
     return JobOpeningRead.model_validate(job_opening)
 
 
@@ -342,7 +339,6 @@ def create_applicant(
         cover_letter=payload.cover_letter,
         resume_url=payload.resume_url,
     )
-    db.commit()
     return JobApplicantRead.model_validate(applicant)
 
 
@@ -370,7 +366,6 @@ def update_applicant(
     svc = RecruitmentService(db)
     update_data = payload.model_dump(exclude_unset=True)
     applicant = svc.update_applicant(organization_id, applicant_id, **update_data)
-    db.commit()
     return JobApplicantRead.model_validate(applicant)
 
 
@@ -383,7 +378,6 @@ def delete_applicant(
     """Delete a job applicant."""
     svc = RecruitmentService(db)
     svc.delete_applicant(organization_id, applicant_id)
-    db.commit()
 
 
 # Pipeline actions
@@ -402,7 +396,6 @@ def advance_applicant(
         to_status=payload.status,
         notes=payload.notes,
     )
-    db.commit()
     return JobApplicantRead.model_validate(applicant)
 
 
@@ -420,7 +413,6 @@ def reject_applicant(
         applicant_id=applicant_id,
         reason=reason,
     )
-    db.commit()
     return JobApplicantRead.model_validate(applicant)
 
 
@@ -484,7 +476,6 @@ def schedule_interview(
         location=payload.location,
         meeting_link=payload.meeting_link,
     )
-    db.commit()
     svc.send_interview_invitation(organization_id, interview)
     return InterviewRead.model_validate(interview)
 
@@ -513,7 +504,6 @@ def update_interview(
     svc = RecruitmentService(db)
     update_data = payload.model_dump(exclude_unset=True)
     interview = svc.update_interview(organization_id, interview_id, **update_data)
-    db.commit()
     if any(
         key in update_data
         for key in (
@@ -537,7 +527,6 @@ def cancel_interview(
     """Cancel an interview."""
     svc = RecruitmentService(db)
     svc.cancel_interview(organization_id, interview_id)
-    db.commit()
 
 
 # Interview actions
@@ -559,7 +548,6 @@ def submit_interview_feedback(
         strengths=payload.strengths,
         weaknesses=payload.weaknesses,
     )
-    db.commit()
     return InterviewRead.model_validate(interview)
 
 
@@ -631,7 +619,6 @@ def create_job_offer(
         terms_and_conditions=payload.terms_and_conditions,
         notes=payload.notes,
     )
-    db.commit()
     return JobOfferRead.model_validate(offer)
 
 
@@ -657,7 +644,6 @@ def update_job_offer(
     svc = RecruitmentService(db)
     update_data = payload.model_dump(exclude_unset=True)
     offer = svc.update_job_offer(organization_id, offer_id, **update_data)
-    db.commit()
     return JobOfferRead.model_validate(offer)
 
 
@@ -671,7 +657,6 @@ def extend_offer(
     """Extend/send a job offer."""
     svc = RecruitmentService(db)
     offer = svc.extend_offer(organization_id, offer_id)
-    db.commit()
     return JobOfferRead.model_validate(offer)
 
 
@@ -684,7 +669,6 @@ def accept_offer(
     """Accept a job offer."""
     svc = RecruitmentService(db)
     offer = svc.accept_offer(organization_id, offer_id)
-    db.commit()
     return JobOfferRead.model_validate(offer)
 
 
@@ -697,7 +681,6 @@ def delete_job_offer(
     """Delete a job offer."""
     svc = RecruitmentService(db)
     svc.delete_job_offer(organization_id, offer_id)
-    db.commit()
 
 
 @router.post("/offers/{offer_id}/decline", response_model=JobOfferRead)
@@ -710,7 +693,6 @@ def decline_offer(
     """Decline a job offer."""
     svc = RecruitmentService(db)
     offer = svc.decline_offer(organization_id, offer_id, reason=reason)
-    db.commit()
     return JobOfferRead.model_validate(offer)
 
 
@@ -728,7 +710,6 @@ def convert_to_employee(
         offer_id,
         date_of_joining=date_of_joining,
     )
-    db.commit()
     return {
         "message": "Employee created successfully",
         "employee_id": str(employee_id),

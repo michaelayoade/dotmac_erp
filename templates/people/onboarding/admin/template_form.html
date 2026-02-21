@@ -3,16 +3,14 @@
 {% block page_title %}{{ 'Edit Template' if template else 'New Template' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/onboarding" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Onboarding</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/onboarding/templates" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Templates</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if template else 'New' }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/onboarding" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Onboarding</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/onboarding/templates" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Templates</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if template else 'New' }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 

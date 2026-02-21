@@ -1,21 +1,21 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}Fiscal Periods{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Fiscal Periods</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Fiscal Periods</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/finance/gl/periods/new"
    class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4") }}
     New Period
 </a>
 {% endblock %}
@@ -75,11 +75,11 @@
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead class="bg-slate-50 dark:bg-slate-900/40">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Dates</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Action</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Dates</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
@@ -92,16 +92,7 @@
                             {{ period.start_date }} - {{ period.end_date }}
                         </td>
                         <td class="px-4 py-3">
-                            {% if period.status == 'OPEN' %}
-                            <span class="inline-flex h-2 w-2 rounded-full bg-green-500" title="Open"></span>
-                            {% elif period.status == 'SOFT_CLOSED' %}
-                            <span class="inline-flex h-2 w-2 rounded-full bg-yellow-500" title="Soft Closed"></span>
-                            {% elif period.status == 'HARD_CLOSED' %}
-                            <span class="inline-flex h-2 w-2 rounded-full bg-slate-400" title="Hard Closed"></span>
-                            {% else %}
-                            <span class="inline-flex h-2 w-2 rounded-full bg-blue-500" title="{{ period.status }}"></span>
-                            {% endif %}
-                            <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">{{ period.status }}</span>
+                            {{ status_badge(period.status, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                             Standard
@@ -143,14 +134,10 @@
     </div>
     {% else %}
     <div class="rounded-xl border border-slate-200 bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-800/50">
-        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
+        {{ icon_svg("calendar", "mx-auto h-12 w-12 text-slate-400") }}
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No fiscal years configured</p>
         <a href="/finance/gl/periods/new" class="mt-4 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-            <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-            </svg>
+            {{ icon_svg("plus", "mr-1 h-4 w-4") }}
             Create your first fiscal year
         </a>
     </div>

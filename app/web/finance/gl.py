@@ -89,11 +89,20 @@ async def export_all_accounts(
 def view_account(
     request: Request,
     account_id: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Account detail page."""
-    return gl_web_service.account_detail_response(request, auth, db, account_id)
+    return gl_web_service.account_detail_response(
+        request,
+        auth,
+        db,
+        account_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get("/accounts/{account_id}/edit", response_class=HTMLResponse)

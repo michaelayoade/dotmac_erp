@@ -3,14 +3,13 @@
 {% block page_title %}Edit Expense Claim{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/expenses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Expenses</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Edit Claim</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/expenses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Expenses</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Edit Claim</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,7 +17,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Edit Expense Claim</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Edit Expense Claim</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Update items for draft claims only.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">

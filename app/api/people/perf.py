@@ -60,6 +60,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -133,7 +137,6 @@ def create_appraisal_cycle(
         include_probation_employees=payload.include_probation_employees,
         min_tenure_months=payload.min_tenure_months,
     )
-    db.commit()
     return AppraisalCycleRead.model_validate(cycle)
 
 
@@ -159,7 +162,6 @@ def update_appraisal_cycle(
     svc = PerformanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     cycle = svc.update_cycle(organization_id, cycle_id, **update_data)
-    db.commit()
     return AppraisalCycleRead.model_validate(cycle)
 
 
@@ -172,7 +174,6 @@ def delete_appraisal_cycle(
     """Delete an appraisal cycle."""
     svc = PerformanceService(db)
     svc.delete_cycle(organization_id, cycle_id)
-    db.commit()
 
 
 # Cycle workflow actions
@@ -185,7 +186,6 @@ def start_cycle(
     """Start an appraisal cycle."""
     svc = PerformanceService(db)
     cycle = svc.start_cycle(organization_id, cycle_id)
-    db.commit()
     return AppraisalCycleRead.model_validate(cycle)
 
 
@@ -198,7 +198,6 @@ def close_cycle(
     """Close an appraisal cycle."""
     svc = PerformanceService(db)
     cycle = svc.close_cycle(organization_id, cycle_id)
-    db.commit()
     return AppraisalCycleRead.model_validate(cycle)
 
 
@@ -259,7 +258,6 @@ def create_appraisal_template(
         is_active=payload.is_active,
         kras=[kra.model_dump() for kra in payload.kras],
     )
-    db.commit()
     return AppraisalTemplateRead.model_validate(template)
 
 
@@ -289,7 +287,6 @@ def update_appraisal_template(
     if "kras" in update_data and update_data["kras"] is not None:
         update_data["kras"] = [kra.model_dump() for kra in update_data["kras"]]
     template = svc.update_template(organization_id, template_id, **update_data)
-    db.commit()
     return AppraisalTemplateRead.model_validate(template)
 
 
@@ -302,7 +299,6 @@ def delete_appraisal_template(
     """Delete an appraisal template."""
     svc = PerformanceService(db)
     svc.delete_template(organization_id, template_id)
-    db.commit()
 
 
 # =============================================================================
@@ -361,7 +357,6 @@ def create_kra(
         measurement_criteria=payload.measurement_criteria,
         is_active=payload.is_active,
     )
-    db.commit()
     return KRARead.model_validate(kra)
 
 
@@ -387,7 +382,6 @@ def update_kra(
     svc = PerformanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     kra = svc.update_kra(organization_id, kra_id, **update_data)
-    db.commit()
     return KRARead.model_validate(kra)
 
 
@@ -400,7 +394,6 @@ def delete_kra(
     """Delete a KRA."""
     svc = PerformanceService(db)
     svc.delete_kra(organization_id, kra_id)
-    db.commit()
 
 
 # =============================================================================
@@ -467,7 +460,6 @@ def create_kpi(
         notes=payload.notes,
         description=payload.description,
     )
-    db.commit()
     return KPIRead.model_validate(kpi)
 
 
@@ -493,7 +485,6 @@ def update_kpi(
     svc = PerformanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     kpi = svc.update_kpi(organization_id, kpi_id, **update_data)
-    db.commit()
     return KPIRead.model_validate(kpi)
 
 
@@ -506,7 +497,6 @@ def delete_kpi(
     """Delete a KPI."""
     svc = PerformanceService(db)
     svc.delete_kpi(organization_id, kpi_id)
-    db.commit()
 
 
 # =============================================================================
@@ -562,7 +552,6 @@ def create_appraisal(
         template_id=payload.template_id,
         kra_scores=[score.model_dump() for score in payload.kra_scores],
     )
-    db.commit()
     return AppraisalRead.model_validate(appraisal)
 
 
@@ -590,7 +579,6 @@ def update_appraisal(
     svc = PerformanceService(db)
     update_data = payload.model_dump(exclude_unset=True)
     appraisal = svc.update_appraisal(organization_id, appraisal_id, **update_data)
-    db.commit()
     return AppraisalRead.model_validate(appraisal)
 
 
@@ -603,7 +591,6 @@ def delete_appraisal(
     """Delete an appraisal (only draft status)."""
     svc = PerformanceService(db)
     svc.delete_appraisal(organization_id, appraisal_id)
-    db.commit()
 
 
 # =============================================================================
@@ -630,7 +617,6 @@ def submit_self_assessment(
         development_needs=payload.development_needs,
         kra_ratings=[r.model_dump() for r in payload.kra_ratings],
     )
-    db.commit()
     return AppraisalRead.model_validate(appraisal)
 
 
@@ -651,7 +637,6 @@ def submit_manager_review(
         manager_recommendations=payload.manager_recommendations,
         kra_ratings=[r.model_dump() for r in payload.kra_ratings],
     )
-    db.commit()
     return AppraisalRead.model_validate(appraisal)
 
 
@@ -671,7 +656,6 @@ def submit_calibration(
         calibration_notes=payload.calibration_notes,
         rating_label=payload.rating_label,
     )
-    db.commit()
     return AppraisalRead.model_validate(appraisal)
 
 
@@ -731,7 +715,6 @@ def finalize_scorecard(
     """Finalize and generate scorecard for a completed appraisal."""
     svc = PerformanceService(db)
     scorecard = svc.finalize_scorecard(organization_id, appraisal_id)
-    db.commit()
     return ScorecardRead.model_validate(scorecard)
 
 

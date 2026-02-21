@@ -174,6 +174,7 @@ class MilestoneService:
 
         self.db.add(milestone)
         self.db.flush()
+        self.db.refresh(milestone)
         return milestone
 
     def update_milestone(self, milestone_id: uuid.UUID, data: dict) -> Milestone:
@@ -195,6 +196,7 @@ class MilestoneService:
         if self.principal and hasattr(self.principal, "person_id"):
             milestone.updated_by_id = self.principal.person_id
 
+        self.db.refresh(milestone)
         return milestone
 
     def delete_milestone(self, milestone_id: uuid.UUID) -> bool:

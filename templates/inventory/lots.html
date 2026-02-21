@@ -1,15 +1,14 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, empty_state, status_badge, live_search %}
+{% from "components/macros.html" import pagination, empty_state, status_badge, live_search, icon_svg %}
 
 {% block page_title %}Lots & Serial Numbers{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Lots & Serial Numbers</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Lots & Serial Numbers</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,9 +19,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                    </svg>
+                    {{ icon_svg("tag") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_count | default(0) }}</p>
@@ -33,9 +30,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ available_count | default(0) }}</p>
@@ -46,9 +41,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ expiring_count | default(0) }}</p>
@@ -59,9 +52,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                    </svg>
+                    {{ icon_svg("ban") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ quarantine_count | default(0) }}</p>
@@ -75,9 +66,7 @@
     {% if expiring_lots | default([]) | length > 0 %}
     <div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
         <div class="flex items-start gap-3">
-            <svg class="h-5 w-5 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
+            {{ icon_svg("warning", "h-5 w-5 text-amber-500 mt-0.5") }}
             <div>
                 <p class="font-medium text-amber-800 dark:text-amber-300">Lots Expiring Within 30 Days</p>
                 <p class="mt-1 text-sm text-amber-700 dark:text-amber-400">{{ expiring_lots | length }} lot(s) will expire soon. Review and take action.</p>
@@ -150,7 +139,7 @@
                             {{ '{:,.2f}'.format(lot.remaining_quantity or 0) }}
                         </td>
                         <td class="{{ 'text-rose-600 font-medium' if lot.expiry_date and lot.expiry_date < now else ('text-amber-600' if lot.expiry_date and (lot.expiry_date - now).days <= 30 else '') }}">
-                            {{ lot.expiry_date.strftime('%Y-%m-%d') if lot.expiry_date else '-' }}
+                            {{ lot.expiry_date | format_date if lot.expiry_date else '-' }}
                         </td>
                         <td>
                             {% if lot.is_quarantined %}
@@ -165,9 +154,7 @@
                         </td>
                         <td>
                             <a href="/inventory/lots/{{ lot.lot_id }}" class="text-slate-400 hover:text-amber-600 dark:hover:text-amber-400">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                </svg>
+                                {{ icon_svg("chevron-right") }}
                             </a>
                         </td>
                     </tr>

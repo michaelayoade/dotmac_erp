@@ -1,14 +1,15 @@
 {% extends "procurement/base_procurement.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Vendor Prequalification - {{ vendor.supplier_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/procurement/vendors" class="hover:text-amber-600 transition-colors">Vendors</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ vendor.supplier_name }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/vendors" class="hover:text-amber-600 transition-colors">Vendors</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ vendor.supplier_name }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,14 +19,14 @@
     <form method="post" action="/procurement/vendors/{{ vendor.prequalification_id }}/approve" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            {{ icon_svg("check", "h-4 w-4 mr-2") }}
             Approve
         </button>
     </form>
     <form method="post" action="/procurement/vendors/{{ vendor.prequalification_id }}/reject" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
-            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            {{ icon_svg("x-mark", "h-4 w-4 mr-2") }}
             Reject
         </button>
     </form>
@@ -64,7 +65,7 @@
             </div>
             <div>
                 <span class="text-slate-500 dark:text-slate-400">Reviewed:</span>
-                <p class="font-semibold text-slate-900 dark:text-white">{{ vendor.reviewed_at.strftime('%Y-%m-%d') if vendor.reviewed_at else 'Pending' }}</p>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ vendor.reviewed_at | format_date if vendor.reviewed_at else 'Pending' }}</p>
             </div>
         </div>
     </div>
@@ -80,7 +81,7 @@
                 <div class="flex items-center gap-3">
                     {% if item.compliant %}
                     <div class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                        <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-600 dark:text-emerald-400") }}
                     </div>
                     {% elif item.compliant is none %}
                     <div class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
@@ -88,7 +89,7 @@
                     </div>
                     {% else %}
                     <div class="flex-shrink-0 w-6 h-6 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-                        <svg class="h-4 w-4 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        {{ icon_svg("x-mark", "h-4 w-4 text-rose-600 dark:text-rose-400") }}
                     </div>
                     {% endif %}
                     <div>

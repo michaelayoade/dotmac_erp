@@ -75,14 +75,16 @@ class ChartOfAccountsService(ListResponseMixin):
         """Ensure default account categories exist and return active categories."""
         org_id = coerce_uuid(organization_id)
 
-        categories = db.scalars(
-            select(AccountCategory)
-            .where(
-                AccountCategory.organization_id == org_id,
-                AccountCategory.is_active.is_(True),
+        categories = list(
+            db.scalars(
+                select(AccountCategory)
+                .where(
+                    AccountCategory.organization_id == org_id,
+                    AccountCategory.is_active.is_(True),
+                )
+                .order_by(AccountCategory.category_code)
             )
-            .order_by(AccountCategory.category_code)
-        ).all()
+        )
 
         if categories:
             return categories
@@ -116,14 +118,16 @@ class ChartOfAccountsService(ListResponseMixin):
         db.add_all(seeded)
         db.commit()
 
-        return db.scalars(
-            select(AccountCategory)
-            .where(
-                AccountCategory.organization_id == org_id,
-                AccountCategory.is_active.is_(True),
+        return list(
+            db.scalars(
+                select(AccountCategory)
+                .where(
+                    AccountCategory.organization_id == org_id,
+                    AccountCategory.is_active.is_(True),
+                )
+                .order_by(AccountCategory.category_code)
             )
-            .order_by(AccountCategory.category_code)
-        ).all()
+        )
 
     @staticmethod
     def build_input_from_payload(
@@ -592,26 +596,26 @@ class ChartOfAccountsService(ListResponseMixin):
         Returns:
             List of Account objects
         """
-        query = select(Account)
+        stmt = select(Account)
 
         if organization_id:
-            query = query.where(Account.organization_id == coerce_uuid(organization_id))
+            stmt = stmt.where(Account.organization_id == coerce_uuid(organization_id))
 
         if category_id:
-            query = query.where(Account.category_id == coerce_uuid(category_id))
+            stmt = stmt.where(Account.category_id == coerce_uuid(category_id))
 
         if account_type:
-            query = query.where(Account.account_type == account_type)
+            stmt = stmt.where(Account.account_type == account_type)
 
         if is_active is not None:
-            query = query.where(Account.is_active == is_active)
+            stmt = stmt.where(Account.is_active == is_active)
 
         if is_posting_allowed is not None:
-            query = query.where(Account.is_posting_allowed == is_posting_allowed)
+            stmt = stmt.where(Account.is_posting_allowed == is_posting_allowed)
 
         if search:
             pattern = f"%{search}%"
-            query = query.where(
+            stmt = stmt.where(
                 or_(
                     Account.account_code.ilike(pattern),
                     Account.account_name.ilike(pattern),
@@ -619,8 +623,8 @@ class ChartOfAccountsService(ListResponseMixin):
                 )
             )
 
-        query = query.order_by(Account.account_code)
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        stmt = stmt.order_by(Account.account_code).limit(limit).offset(offset)
+        return list(db.scalars(stmt))
 
     @staticmethod
     def suggest_next_code(
@@ -692,8 +696,15 @@ class ChartOfAccountsService(ListResponseMixin):
 
             if numeric_part:
                 next_num = int(numeric_part) + 1
-                # Pad to at least 4 digits
-                suggested = str(next_num).zfill(4)
+                # Ensure we don't cross into the next IFRS category range
+                # e.g., 1xxx must stay < 2000, 2xxx < 3000, etc.
+                prefix_digit = int(prefix)
+                ceiling = (prefix_digit + 1) * 1000
+                if next_num >= ceiling:
+                    suggested = None  # Exhausted range for this category
+                else:
+                    # Pad to at least 4 digits
+                    suggested = str(next_num).zfill(4)
             else:
                 # Fallback: start at prefix + 001
                 suggested = f"{prefix}001"

@@ -1,19 +1,15 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}Journal Entry{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/gl/journals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Journal Entries</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ entry.journal_number if entry else "Journal" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/gl/journals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Journal Entries</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ entry.journal_number if entry else "Journal" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -22,27 +18,21 @@
 <div class="flex flex-wrap items-center gap-2">
     {# Print button - always available #}
     <button type="button" onclick="window.print()" class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-        </svg>
+        {{ icon_svg("printer", "h-4 w-4") }}
         Print
     </button>
 
     {# DRAFT status actions #}
     {% if entry.status == 'DRAFT' %}
     <a href="/finance/gl/journals/{{ entry.journal_entry_id }}/edit" class="btn btn-secondary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4") }}
         Edit
     </a>
     <form method="POST" action="/finance/gl/journals/{{ entry.journal_entry_id }}/post" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-success btn-loading">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            {{ icon_svg("document", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Post to Ledger</span>
         </button>
     </form>
@@ -51,9 +41,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-danger-outline btn-loading">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-            </svg>
+            {{ icon_svg("trash", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Delete</span>
         </button>
     </form>
@@ -65,9 +53,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-success btn-loading">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            {{ icon_svg("document", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Post to Ledger</span>
         </button>
     </form>
@@ -80,9 +66,7 @@
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-warning-outline btn-loading">
             <span class="btn-spinner"></span>
-            <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-            </svg>
+            {{ icon_svg("reply", "h-4 w-4 btn-hide-on-load") }}
             <span class="btn-hide-on-load">Reverse Entry</span>
         </button>
     </form>
@@ -90,9 +74,7 @@
 
     {# Always show New Journal button #}
     <a href="/finance/gl/journals/new" class="btn btn-primary">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4") }}
         New Entry
     </a>
 </div>
@@ -103,9 +85,7 @@
 {% if error %}
 <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
     <div class="flex items-center gap-3">
-        <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500") }}
         <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ error }}</p>
     </div>
 </div>
@@ -131,9 +111,7 @@
     <div class="workflow-step {% if is_complete or (step.key == 'POSTED' and entry.status == 'POSTED') %}workflow-step-complete{% elif is_current %}workflow-step-current{% endif %}">
         <div class="workflow-step-number">
             {% if is_complete or (step.key == 'POSTED' and entry.status in ['POSTED', 'REVERSED']) %}
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-4 w-4") }}
             {% else %}
             {{ loop.index }}
             {% endif %}
@@ -150,9 +128,7 @@
 {% if entry.status == 'REVERSED' %}
 <div class="mb-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20 print:border print:border-amber-400">
     <div class="flex items-center gap-3">
-        <svg class="h-6 w-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-        </svg>
+        {{ icon_svg("reply", "h-6 w-6 text-amber-500") }}
         <div>
             <p class="font-semibold text-amber-700 dark:text-amber-400">Journal Entry Reversed</p>
             <p class="text-sm text-amber-600 dark:text-amber-500">
@@ -172,9 +148,7 @@
 {% if entry.is_reversal and entry.original_entry_id %}
 <div class="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
     <div class="flex items-center gap-3">
-        <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("information-circle", "h-5 w-5 text-blue-500") }}
         <p class="text-sm text-blue-700 dark:text-blue-400">
             This is a reversal entry for
             <a href="/finance/gl/journals/{{ entry.original_entry_id }}" class="font-medium underline hover:no-underline">
@@ -202,21 +176,13 @@
                     {% if entry.source_module %}
                     <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
                         {% if entry.source_module == 'MANUAL' %}
-                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                        </svg>
+                        {{ icon_svg("edit", "h-3 w-3") }}
                         {% elif entry.source_module in ['AP', 'AR'] %}
-                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+                        {{ icon_svg("document", "h-3 w-3") }}
                         {% elif entry.source_module == 'PAYROLL' %}
-                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
+                        {{ icon_svg("cash", "h-3 w-3") }}
                         {% else %}
-                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                        </svg>
+                        {{ icon_svg("collection", "h-3 w-3") }}
                         {% endif %}
                         {{ entry.source_module }}
                     </span>
@@ -237,7 +203,7 @@
                 </div>
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Posting Date</div>
-                    <div class="mt-1 font-medium text-slate-900 dark:text-white">{{ entry.posting_date | default("-") }}</div>
+                    <div class="mt-1 font-medium text-slate-900 dark:text-white">{{ entry.posting_date if entry.posting_date else "-" }}</div>
                 </div>
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Period</div>
@@ -277,16 +243,16 @@
                                     <div class="text-xs text-slate-400">Ref: {{ line.reference }}</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-4 py-3 text-right text-sm font-mono {% if line.debit_amount and line.debit_amount != 0 %}font-medium text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                                <td class="px-4 py-3 text-right text-sm font-mono tabular-nums {% if line.debit_amount and line.debit_amount != 0 %}font-medium text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
                                     {% if line.debit_amount and line.debit_amount != 0 %}
-                                    {{ line.debit_amount }}
+                                    {{ line.debit_amount | format_currency }}
                                     {% else %}
                                     -
                                     {% endif %}
                                 </td>
-                                <td class="px-4 py-3 text-right text-sm font-mono sm:pr-0 {% if line.credit_amount and line.credit_amount != 0 %}font-medium text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
+                                <td class="px-4 py-3 text-right text-sm font-mono tabular-nums sm:pr-0 {% if line.credit_amount and line.credit_amount != 0 %}font-medium text-slate-900 dark:text-white{% else %}text-slate-400{% endif %}">
                                     {% if line.credit_amount and line.credit_amount != 0 %}
-                                    {{ line.credit_amount }}
+                                    {{ line.credit_amount | format_currency }}
                                     {% else %}
                                     -
                                     {% endif %}
@@ -295,9 +261,7 @@
                             {% else %}
                             <tr>
                                 <td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">
-                                    <svg class="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
+                                    {{ icon_svg("document", "mx-auto h-8 w-8 text-slate-300 dark:text-slate-600") }}
                                     <p class="mt-2">No journal lines</p>
                                 </td>
                             </tr>
@@ -314,25 +278,21 @@
                 <div class="space-y-1">
                     <div class="flex items-center gap-4">
                         <span class="text-sm text-slate-500 dark:text-slate-400">Total Debit:</span>
-                        <span class="font-mono font-semibold text-slate-900 dark:text-white">{{ entry.total_debit | default("0.00") }}</span>
+                        <span class="font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ entry.total_debit | format_currency }}</span>
                     </div>
                     <div class="flex items-center gap-4">
                         <span class="text-sm text-slate-500 dark:text-slate-400">Total Credit:</span>
-                        <span class="font-mono font-semibold text-slate-900 dark:text-white">{{ entry.total_credit | default("0.00") }}</span>
+                        <span class="font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ entry.total_credit | format_currency }}</span>
                     </div>
                 </div>
                 {# Balance Check #}
                 {% set is_balanced = entry.total_debit == entry.total_credit %}
                 <div class="flex items-center gap-2 rounded-lg px-4 py-2 {% if is_balanced %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-red-50 dark:bg-red-900/20{% endif %}">
                     {% if is_balanced %}
-                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-5 w-5 text-emerald-500") }}
                     <span class="text-sm font-medium text-emerald-700 dark:text-emerald-400">Balanced</span>
                     {% else %}
-                    <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500") }}
                     <span class="text-sm font-medium text-red-700 dark:text-red-400">Out of Balance</span>
                     {% endif %}
                 </div>
@@ -344,16 +304,12 @@
     {% if entry.source_document_type and entry.source_document_id %}
     <div class="card">
         <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-            </svg>
+            {{ icon_svg("link", "h-4 w-4") }}
             Source Document
         </h3>
         <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">
-                <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-5 w-5 text-slate-500") }}
             </div>
             <div>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">{{ entry.source_document_type }}</p>
@@ -371,9 +327,7 @@
         {% if entry.notes %}
         <div class="card">
             <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-                </svg>
+                {{ icon_svg("chat", "h-4 w-4") }}
                 Notes
             </h3>
             <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ entry.notes }}</p>
@@ -382,9 +336,7 @@
         {% if entry.internal_notes %}
         <div class="card print:hidden">
             <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                </svg>
+                {{ icon_svg("lock-closed", "h-4 w-4") }}
                 Internal Notes
             </h3>
             <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{{ entry.internal_notes }}</p>
@@ -409,9 +361,7 @@
                 @click="expanded = !expanded"
                 class="flex w-full items-center justify-between text-left">
             <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "h-4 w-4") }}
                 Audit Trail
             </h3>
             <svg class="h-5 w-5 text-slate-400 transition-transform" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -422,9 +372,7 @@
             {% if entry.created_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-3 w-3") }}
                 </span>
                 <span>Created {{ entry.created_at }}{% if entry.created_by %} by {{ entry.created_by }}{% endif %}</span>
             </div>
@@ -432,9 +380,7 @@
             {% if entry.approved_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                    <svg class="h-3 w-3 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-3 w-3 text-emerald-600 dark:text-emerald-400") }}
                 </span>
                 <span>Approved {{ entry.approved_at }}{% if entry.approved_by %} by {{ entry.approved_by }}{% endif %}</span>
             </div>
@@ -442,9 +388,7 @@
             {% if entry.posted_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-                    <svg class="h-3 w-3 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-3 w-3 text-purple-600 dark:text-purple-400") }}
                 </span>
                 <span>Posted {{ entry.posted_at }}{% if entry.posted_by %} by {{ entry.posted_by }}{% endif %}</span>
             </div>
@@ -452,9 +396,7 @@
             {% if entry.reversed_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-                    <svg class="h-3 w-3 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-                    </svg>
+                    {{ icon_svg("reply", "h-3 w-3 text-amber-600 dark:text-amber-400") }}
                 </span>
                 <span>Reversed {{ entry.reversed_at }}{% if entry.reversed_by %} by {{ entry.reversed_by }}{% endif %}</span>
             </div>
@@ -462,9 +404,7 @@
             {% if entry.updated_at and entry.updated_at != entry.created_at %}
             <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                 <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                    </svg>
+                    {{ icon_svg("edit", "h-3 w-3") }}
                 </span>
                 <span>Last updated {{ entry.updated_at }}</span>
             </div>
@@ -503,14 +443,10 @@
 {% else %}
 {# Journal entry not found state #}
 <div class="empty-state">
-    <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-    </svg>
+    {{ icon_svg("document", "mx-auto h-12 w-12 text-slate-400") }}
     <p class="mt-2 text-sm text-slate-500">Journal entry not found</p>
     <a href="/finance/gl/journals" class="mt-4 inline-flex items-center text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
-        <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-        </svg>
+        {{ icon_svg("arrow-left", "mr-1 h-4 w-4") }}
         Back to Journal Entries
     </a>
 </div>

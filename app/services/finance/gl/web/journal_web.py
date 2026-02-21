@@ -228,16 +228,17 @@ class JournalWebService:
                 entry = None
 
         # Get available accounts for selection
-        accounts = db.scalars(
-            select(Account)
-            .where(
-                Account.organization_id == org_id,
-                Account.is_active.is_(True),
-                Account.is_posting_allowed.is_(True),
+        accounts = list(
+            db.scalars(
+                select(Account)
+                .where(
+                    Account.organization_id == org_id,
+                    Account.is_active.is_(True),
+                    Account.is_posting_allowed.is_(True),
+                )
+                .order_by(Account.account_code)
             )
-            .order_by(Account.account_code)
         )
-        accounts = accounts.all()
 
         accounts_view = [
             {

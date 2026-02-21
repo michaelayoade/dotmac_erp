@@ -49,6 +49,7 @@ from app.services.people.hr import (
     TerminationData,
 )
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
+from app.services.recent_activity import get_recent_activity_for_record
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -236,7 +237,7 @@ class HRWebService:
         """Return employee stats for dashboard widgets."""
         org_id = coerce_uuid(auth.organization_id)
         svc = EmployeeService(db, org_id)
-        return svc.get_employee_stats()
+        return dict(svc.get_employee_stats())
 
     async def create_employee_response(
         self,
@@ -944,13 +945,15 @@ class HRWebService:
                     ),
                 }
 
-        credentials = []
+        credentials: list[UserCredential] = []
         if employee.person_id:
-            credentials = db.scalars(
-                select(UserCredential)
-                .where(UserCredential.person_id == employee.person_id)
-                .order_by(UserCredential.created_at.asc())
-            ).all()
+            credentials = list(
+                db.scalars(
+                    select(UserCredential)
+                    .where(UserCredential.person_id == employee.person_id)
+                    .order_by(UserCredential.created_at.asc())
+                )
+            )
 
         # Fetch salary structure assignments for this employee (eager load structure)
         salary_assignments = db.scalars(
@@ -983,6 +986,12 @@ class HRWebService:
         return {
             **base_context(request, auth, "Employee Details", "employees"),
             "employee": employee,
+            "recent_activity": get_recent_activity_for_record(
+                db,
+                org_id,
+                record=employee,
+                limit=10,
+            ),
             "person": person,
             "department": dept,
             "designation": desig,

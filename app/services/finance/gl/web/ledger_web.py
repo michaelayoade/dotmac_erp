@@ -106,15 +106,16 @@ class LedgerWebService:
         total_debit, total_credit = totals or (Decimal("0"), Decimal("0"))
 
         # Fetch lines ordered by posting date and posted_at
-        lines = db.scalars(
-            stmt.order_by(
-                PostedLedgerLine.posting_date.desc(),
-                PostedLedgerLine.posted_at.desc(),
+        lines = list(
+            db.scalars(
+                stmt.order_by(
+                    PostedLedgerLine.posting_date.desc(),
+                    PostedLedgerLine.posted_at.desc(),
+                )
+                .limit(limit)
+                .offset(offset)
             )
-            .limit(limit)
-            .offset(offset)
         )
-        lines = lines.all()
 
         # Get account info if single account selected
         selected_account = None
@@ -122,12 +123,13 @@ class LedgerWebService:
             selected_account = db.get(Account, acct_id)
 
         # Get all accounts for dropdown
-        accounts = db.scalars(
-            select(Account)
-            .where(Account.organization_id == org_id, Account.is_active == True)
-            .order_by(Account.account_code)
+        accounts = list(
+            db.scalars(
+                select(Account)
+                .where(Account.organization_id == org_id, Account.is_active == True)
+                .order_by(Account.account_code)
+            )
         )
-        accounts = accounts.all()
 
         # Get account names for display (batch lookup)
         account_ids = {line.account_id for line in lines}

@@ -31,7 +31,8 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
+from datetime import date
+from typing import Any, Protocol
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,6 +49,11 @@ ERPNEXT_URL = os.environ.get("ERPNEXT_URL", "https://erp.dotmac.ng")
 ERPNEXT_API_KEY = os.environ.get("ERPNEXT_API_KEY", "")
 ERPNEXT_API_SECRET = os.environ.get("ERPNEXT_API_SECRET", "")
 ERPNEXT_COMPANY = "Dotmac Technologies"
+ERPNEXT_SQL_HOST = os.environ.get("ERPNEXT_SQL_HOST", "127.0.0.1")
+ERPNEXT_SQL_PORT = int(os.environ.get("ERPNEXT_SQL_PORT", "3307"))
+ERPNEXT_SQL_USER = os.environ.get("ERPNEXT_SQL_USER", "root")
+ERPNEXT_SQL_PASSWORD = os.environ.get("ERPNEXT_SQL_PASSWORD", "root")
+ERPNEXT_SQL_DATABASE = os.environ.get("ERPNEXT_SQL_DATABASE", "erpnext_temp")
 
 WORKERS = int(os.environ.get("SYNC_WORKERS", "20"))
 BATCH_SIZE = int(os.environ.get("SYNC_BATCH_SIZE", "200"))
@@ -57,75 +63,251 @@ BATCH_SIZE = int(os.environ.get("SYNC_BATCH_SIZE", "200"))
 _thread_local = threading.local()
 
 
-def _make_config():
-    from app.services.erpnext.client import ERPNextConfig
+class ERPNextSource(Protocol):
+    """Read-only ERPNext source used by sync fetch phase."""
 
-    return ERPNextConfig(
-        url=ERPNEXT_URL,
-        api_key=ERPNEXT_API_KEY,
-        api_secret=ERPNEXT_API_SECRET,
-        company=ERPNEXT_COMPANY,
-        timeout=60.0,
-    )
+    def list_documents(
+        self,
+        doctype: str,
+        filters: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
+        order_by: str | None = None,
+        limit_start: int = 0,
+        limit_page_length: int = 500,
+    ) -> list[dict[str, Any]]: ...
+
+    def get_document(self, doctype: str, name: str) -> dict[str, Any] | None: ...
+
+    def test_connection(self) -> dict[str, Any]: ...
 
 
-def _get_thread_client():
-    """Get a thread-local ERPNext client (one per thread, reused)."""
-    from app.services.erpnext.client import ERPNextClient
+class APIERPNextSource:
+    """ERPNext API-based source."""
 
-    if not hasattr(_thread_local, "client"):
-        _thread_local.client = ERPNextClient(_make_config())
-        # Trigger lazy client init
-        _ = _thread_local.client.client
-    return _thread_local.client
+    @staticmethod
+    def _make_config():
+        from app.services.erpnext.client import ERPNextConfig
+
+        return ERPNextConfig(
+            url=ERPNEXT_URL,
+            api_key=ERPNEXT_API_KEY,
+            api_secret=ERPNEXT_API_SECRET,
+            company=ERPNEXT_COMPANY,
+            timeout=60.0,
+        )
+
+    def _get_thread_client(self):
+        from app.services.erpnext.client import ERPNextClient
+
+        if not hasattr(_thread_local, "client"):
+            _thread_local.client = ERPNextClient(self._make_config())
+            _ = _thread_local.client.client
+        return _thread_local.client
+
+    def list_documents(
+        self,
+        doctype: str,
+        filters: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
+        order_by: str | None = None,
+        limit_start: int = 0,
+        limit_page_length: int = 500,
+    ) -> list[dict[str, Any]]:
+        from app.services.erpnext.client import ERPNextClient
+
+        with ERPNextClient(self._make_config()) as client:
+            return client.list_documents(
+                doctype=doctype,
+                filters=filters or {},
+                fields=fields or ["name"],
+                order_by=order_by or "name asc",
+                limit_start=limit_start,
+                limit_page_length=limit_page_length,
+            )
+
+    def get_document(self, doctype: str, name: str) -> dict[str, Any] | None:
+        return self._get_thread_client().get_document(doctype, name)
+
+    def test_connection(self) -> dict[str, Any]:
+        from app.services.erpnext.client import ERPNextClient
+
+        with ERPNextClient(self._make_config()) as client:
+            return client.test_connection()
+
+
+class SQLEngineERPNextSource:
+    """ERPNext SQL source (for local imported dump)."""
+
+    _DOC_TABLE = {
+        "Sales Invoice": "tabSales Invoice",
+        "Purchase Invoice": "tabPurchase Invoice",
+        "Payment Entry": "tabPayment Entry",
+        "Journal Entry": "tabJournal Entry",
+    }
+    _CHILD_TABLES = {
+        "Sales Invoice": {"items": "tabSales Invoice Item"},
+        "Purchase Invoice": {"items": "tabPurchase Invoice Item"},
+        "Payment Entry": {"references": "tabPayment Entry Reference"},
+        "Journal Entry": {"accounts": "tabJournal Entry Account"},
+    }
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        user: str,
+        password: str,
+        database: str,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
+
+    def _get_thread_conn(self) -> Any:
+        import pymysql
+
+        if not hasattr(_thread_local, "sql_conn"):
+            _thread_local.sql_conn = pymysql.connect(
+                host=self.host,
+                port=self.port,
+                user=self.user,
+                password=self.password,
+                database=self.database,
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=True,
+                connect_timeout=20,
+            )
+        return _thread_local.sql_conn
+
+    @staticmethod
+    def _table_for_doctype(doctype: str) -> str:
+        if doctype in SQLEngineERPNextSource._DOC_TABLE:
+            return SQLEngineERPNextSource._DOC_TABLE[doctype]
+        return f"tab{doctype}"
+
+    def list_documents(
+        self,
+        doctype: str,
+        filters: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
+        order_by: str | None = None,
+        limit_start: int = 0,
+        limit_page_length: int = 500,
+    ) -> list[dict[str, Any]]:
+        table = self._table_for_doctype(doctype)
+        select_fields = fields or ["name"]
+        cols = ", ".join(f"`{col}`" for col in select_fields)
+        query = [f"SELECT {cols} FROM `{table}`"]
+        params: list[Any] = []
+
+        where_parts: list[str] = []
+        for key, value in (filters or {}).items():
+            if (
+                isinstance(value, (list, tuple))
+                and len(value) == 2
+                and isinstance(value[0], str)
+            ):
+                operator = value[0].strip()
+                if operator not in {"=", "!=", ">", ">=", "<", "<="}:
+                    raise ValueError(f"Unsupported SQL filter operator: {operator}")
+                where_parts.append(f"`{key}` {operator} %s")
+                params.append(value[1])
+            else:
+                where_parts.append(f"`{key}` = %s")
+                params.append(value)
+
+        if where_parts:
+            query.append("WHERE " + " AND ".join(where_parts))
+
+        query.append(f"ORDER BY {order_by or 'name asc'}")
+        query.append("LIMIT %s OFFSET %s")
+        params.extend([limit_page_length, limit_start])
+
+        sql = " ".join(query)
+        with self._get_thread_conn().cursor() as cur:
+            cur.execute(sql, params)
+            return list(cur.fetchall() or [])
+
+    def get_document(self, doctype: str, name: str) -> dict[str, Any] | None:
+        table = self._table_for_doctype(doctype)
+        with self._get_thread_conn().cursor() as cur:
+            cur.execute(f"SELECT * FROM `{table}` WHERE `name` = %s", (name,))
+            doc = cur.fetchone()
+            if not doc:
+                return None
+
+            child_tables = self._CHILD_TABLES.get(doctype, {})
+            for child_key, child_table in child_tables.items():
+                cur.execute(
+                    f"SELECT * FROM `{child_table}` WHERE `parent` = %s "
+                    "ORDER BY `idx` ASC",
+                    (name,),
+                )
+                doc[child_key] = list(cur.fetchall() or [])
+
+            return doc
+
+    def test_connection(self) -> dict[str, Any]:
+        with self._get_thread_conn().cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS total FROM `tabSales Invoice` WHERE `docstatus` = 1"
+            )
+            row = cur.fetchone() or {"total": 0}
+            return {
+                "user": self.user,
+                "database": self.database,
+                "sales_invoice_submitted": int(row["total"]),
+            }
 
 
 # ── Parallel fetch infrastructure ───────────────────────────────────
 
 
 def list_all_names(
+    source: ERPNextSource,
     doctype: str,
     filters: dict[str, Any] | None = None,
     fields: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """List all document names/fields via paginated batch API."""
-    from app.services.erpnext.client import ERPNextClient
-
+    """List all document names/fields via paginated source."""
     all_docs: list[dict[str, Any]] = []
-    with ERPNextClient(_make_config()) as client:
-        offset = 0
-        page_size = 500
-        while True:
-            batch = client.list_documents(
-                doctype=doctype,
-                filters=filters or {},
-                fields=fields or ["name"],
-                order_by="name asc",
-                limit_start=offset,
-                limit_page_length=page_size,
-            )
-            if not batch:
-                break
-            all_docs.extend(batch)
-            offset += page_size
-            if len(batch) < page_size:
-                break
-            if offset % 5000 == 0:
-                logger.info("  Listed %d %s so far...", offset, doctype)
+    offset = 0
+    page_size = 500
+    while True:
+        batch = source.list_documents(
+            doctype=doctype,
+            filters=filters or {},
+            fields=fields or ["name"],
+            order_by="name asc",
+            limit_start=offset,
+            limit_page_length=page_size,
+        )
+        if not batch:
+            break
+        all_docs.extend(batch)
+        offset += page_size
+        if len(batch) < page_size:
+            break
+        if offset % 5000 == 0:
+            logger.info("  Listed %d %s so far...", offset, doctype)
     return all_docs
 
 
-def fetch_full_doc(doctype: str, name: str) -> dict[str, Any] | None:
+def fetch_full_doc(
+    source: ERPNextSource, doctype: str, name: str
+) -> dict[str, Any] | None:
     """Fetch a single full document (runs in thread pool)."""
     try:
-        client = _get_thread_client()
-        return client.get_document(doctype, name)
+        return source.get_document(doctype, name)
     except Exception as e:
         logger.debug("Failed to fetch %s %s: %s", doctype, name, e)
         return None
 
 
 def parallel_fetch_docs(
+    source: ERPNextSource,
     doctype: str,
     names: list[str],
     max_workers: int = WORKERS,
@@ -143,7 +325,8 @@ def parallel_fetch_docs(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_name = {
-            executor.submit(fetch_full_doc, doctype, name): name for name in names
+            executor.submit(fetch_full_doc, source, doctype, name): name
+            for name in names
         }
         for future in as_completed(future_to_name):
             fetched += 1
@@ -184,7 +367,7 @@ def parallel_fetch_docs(
 
 
 def _get_already_synced(db, org_id: uuid.UUID, source_doctype: str) -> set[str]:
-    """Load names already in sync_entity (to skip re-fetching)."""
+    """Load names with SYNCED status (FAILED rows must be retried)."""
     from sqlalchemy import select
 
     from app.models.sync import SyncEntity
@@ -195,6 +378,7 @@ def _get_already_synced(db, org_id: uuid.UUID, source_doctype: str) -> set[str]:
                 SyncEntity.organization_id == org_id,
                 SyncEntity.source_system == "erpnext",
                 SyncEntity.source_doctype == source_doctype,
+                SyncEntity.sync_status == "SYNCED",
             )
         )
         .scalars()
@@ -227,7 +411,12 @@ def _resolve_accounts(
 
 
 def sync_sales_invoices(
-    db, org_id: uuid.UUID, user_id: uuid.UUID, workers: int
+    source: ERPNextSource,
+    db,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    workers: int,
+    from_date: date | None = None,
 ) -> dict[str, int]:
     """Sync Sales Invoices with parallel fetch."""
     from app.services.erpnext.sync.base import SyncResult
@@ -241,7 +430,10 @@ def sync_sales_invoices(
     filters: dict[str, Any] = {}
     if ERPNEXT_COMPANY:
         filters["company"] = ERPNEXT_COMPANY
+    if from_date:
+        filters["posting_date"] = [">=", from_date.isoformat()]
     docs_list = list_all_names(
+        source,
         "Sales Invoice",
         filters=filters,
         fields=[
@@ -280,9 +472,7 @@ def sync_sales_invoices(
         return stats
 
     # Phase 3: Parallel fetch full documents
-    full_docs = parallel_fetch_docs(
-        "Sales Invoice", names_to_fetch, max_workers=workers
-    )
+    full_docs = parallel_fetch_docs(source, "Sales Invoice", names_to_fetch, workers)
 
     # Phase 4: Sequential DB write
     logger.info("Phase 4: Writing %d records to database...", len(full_docs))
@@ -300,9 +490,8 @@ def sync_sales_invoices(
         try:
             savepoint = db.begin_nested()
             try:
-                entity = svc._sync_single_record(doc, result)
-                if entity:
-                    batch_count += 1
+                svc._sync_single_record(doc, result)
+                batch_count += 1
                 savepoint.commit()
             except Exception:
                 savepoint.rollback()
@@ -352,7 +541,12 @@ def sync_sales_invoices(
 
 
 def sync_purchase_invoices(
-    db, org_id: uuid.UUID, user_id: uuid.UUID, workers: int
+    source: ERPNextSource,
+    db,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    workers: int,
+    from_date: date | None = None,
 ) -> dict[str, int]:
     """Sync Purchase Invoices with parallel fetch."""
     from app.services.erpnext.sync.base import SyncResult
@@ -365,7 +559,9 @@ def sync_purchase_invoices(
     filters: dict[str, Any] = {}
     if ERPNEXT_COMPANY:
         filters["company"] = ERPNEXT_COMPANY
-    docs_list = list_all_names("Purchase Invoice", filters=filters)
+    if from_date:
+        filters["posting_date"] = [">=", from_date.isoformat()]
+    docs_list = list_all_names(source, "Purchase Invoice", filters=filters)
     logger.info("  Found %d Purchase Invoices", len(docs_list))
 
     already_synced = _get_already_synced(db, org_id, "Purchase Invoice")
@@ -378,9 +574,7 @@ def sync_purchase_invoices(
         logger.info("Nothing to sync!")
         return stats
 
-    full_docs = parallel_fetch_docs(
-        "Purchase Invoice", names_to_fetch, max_workers=workers
-    )
+    full_docs = parallel_fetch_docs(source, "Purchase Invoice", names_to_fetch, workers)
 
     logger.info("Phase 4: Writing %d records to database...", len(full_docs))
     svc = PurchaseInvoiceSyncService(db, org_id, user_id)
@@ -397,9 +591,8 @@ def sync_purchase_invoices(
         try:
             savepoint = db.begin_nested()
             try:
-                entity = svc._sync_single_record(doc, result)
-                if entity:
-                    batch_count += 1
+                svc._sync_single_record(doc, result)
+                batch_count += 1
                 savepoint.commit()
             except Exception:
                 savepoint.rollback()
@@ -443,7 +636,12 @@ def sync_purchase_invoices(
 
 
 def sync_payment_entries(
-    db, org_id: uuid.UUID, user_id: uuid.UUID, workers: int
+    source: ERPNextSource,
+    db,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    workers: int,
+    from_date: date | None = None,
 ) -> dict[str, int]:
     """Sync Payment Entries (AR + AP) with parallel fetch."""
     from app.services.erpnext.sync.base import SyncResult
@@ -455,7 +653,9 @@ def sync_payment_entries(
     filters: dict[str, Any] = {"docstatus": 1}  # Only submitted
     if ERPNEXT_COMPANY:
         filters["company"] = ERPNEXT_COMPANY
-    docs_list = list_all_names("Payment Entry", filters=filters)
+    if from_date:
+        filters["posting_date"] = [">=", from_date.isoformat()]
+    docs_list = list_all_names(source, "Payment Entry", filters=filters)
     logger.info("  Found %d Payment Entries", len(docs_list))
 
     already_synced = _get_already_synced(db, org_id, "Payment Entry")
@@ -468,9 +668,7 @@ def sync_payment_entries(
         logger.info("Nothing to sync!")
         return stats
 
-    full_docs = parallel_fetch_docs(
-        "Payment Entry", names_to_fetch, max_workers=workers
-    )
+    full_docs = parallel_fetch_docs(source, "Payment Entry", names_to_fetch, workers)
 
     logger.info("Phase 4: Writing %d records to database...", len(full_docs))
     svc = PaymentEntrySyncService(db, org_id, user_id)
@@ -486,9 +684,8 @@ def sync_payment_entries(
         try:
             savepoint = db.begin_nested()
             try:
-                entity = svc._sync_single_record(doc, result)
-                if entity:
-                    batch_count += 1
+                svc._sync_single_record(doc, result)
+                batch_count += 1
                 savepoint.commit()
             except Exception:
                 savepoint.rollback()
@@ -532,7 +729,12 @@ def sync_payment_entries(
 
 
 def sync_journal_entries(
-    db, org_id: uuid.UUID, user_id: uuid.UUID, workers: int
+    source: ERPNextSource,
+    db,
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    workers: int,
+    from_date: date | None = None,
 ) -> dict[str, int]:
     """Sync Journal Entries with parallel fetch."""
     from app.services.erpnext.sync.base import SyncResult
@@ -544,7 +746,9 @@ def sync_journal_entries(
     filters: dict[str, Any] = {"docstatus": 1}  # Only submitted
     if ERPNEXT_COMPANY:
         filters["company"] = ERPNEXT_COMPANY
-    docs_list = list_all_names("Journal Entry", filters=filters)
+    if from_date:
+        filters["posting_date"] = [">=", from_date.isoformat()]
+    docs_list = list_all_names(source, "Journal Entry", filters=filters)
     logger.info("  Found %d Journal Entries", len(docs_list))
 
     already_synced = _get_already_synced(db, org_id, "Journal Entry")
@@ -557,9 +761,7 @@ def sync_journal_entries(
         logger.info("Nothing to sync!")
         return stats
 
-    full_docs = parallel_fetch_docs(
-        "Journal Entry", names_to_fetch, max_workers=workers
-    )
+    full_docs = parallel_fetch_docs(source, "Journal Entry", names_to_fetch, workers)
 
     logger.info("Phase 4: Writing %d records to database...", len(full_docs))
     svc = JournalEntrySyncService(db, org_id, user_id)
@@ -575,9 +777,8 @@ def sync_journal_entries(
         try:
             savepoint = db.begin_nested()
             try:
-                entity = svc._sync_single_record(doc, result)
-                if entity:
-                    batch_count += 1
+                svc._sync_single_record(doc, result)
+                batch_count += 1
                 savepoint.commit()
             except Exception:
                 savepoint.rollback()
@@ -663,6 +864,21 @@ def main() -> None:
         "--user-id",
         help="User ID (UUID), auto-detected if omitted",
     )
+    parser.add_argument(
+        "--source",
+        choices=["sql"],
+        default="sql",
+        help="Read ERPNext from SQL dump DB (default: sql)",
+    )
+    parser.add_argument("--sql-host", default=ERPNEXT_SQL_HOST)
+    parser.add_argument("--sql-port", type=int, default=ERPNEXT_SQL_PORT)
+    parser.add_argument("--sql-user", default=ERPNEXT_SQL_USER)
+    parser.add_argument("--sql-password", default=ERPNEXT_SQL_PASSWORD)
+    parser.add_argument("--sql-database", default=ERPNEXT_SQL_DATABASE)
+    parser.add_argument(
+        "--from-date",
+        help="Only sync records on/after this date (YYYY-MM-DD)",
+    )
 
     args = parser.parse_args()
 
@@ -671,6 +887,16 @@ def main() -> None:
         entities = SYNC_ORDER
     else:
         entities = [e for e in SYNC_ORDER if e in args.entities]
+
+    from_date: date | None = None
+    if args.from_date:
+        try:
+            from_date = date.fromisoformat(args.from_date)
+        except ValueError:
+            logger.error(
+                "Invalid --from-date format (expected YYYY-MM-DD): %s", args.from_date
+            )
+            sys.exit(2)
 
     # Connect to DB
     from app.db import SessionLocal
@@ -710,15 +936,22 @@ def main() -> None:
         logger.info("Organization: %s", org_id)
         logger.info("User: %s", user_id)
         logger.info("Workers: %d", args.workers)
+        logger.info("Source: %s", args.source)
+        logger.info("From date: %s", from_date.isoformat() if from_date else "none")
         logger.info("Entities: %s", ", ".join(entities))
         logger.info("=" * 60)
 
-        # Test connection
-        from app.services.erpnext.client import ERPNextClient
+        source: ERPNextSource
+        source = SQLEngineERPNextSource(
+            host=args.sql_host,
+            port=args.sql_port,
+            user=args.sql_user,
+            password=args.sql_password,
+            database=args.sql_database,
+        )
 
-        with ERPNextClient(_make_config()) as client:
-            result = client.test_connection()
-            logger.info("Connected to ERPNext as: %s", result.get("user"))
+        result = source.test_connection()
+        logger.info("ERPNext source connection: %s", result)
 
         # Run syncs
         all_stats: dict[str, dict[str, int]] = {}
@@ -728,7 +961,14 @@ def main() -> None:
             logger.info("=" * 60)
 
             t0 = time.time()
-            stats = SYNC_FUNCTIONS[entity](db, org_id, user_id, args.workers)
+            stats = SYNC_FUNCTIONS[entity](
+                source,
+                db,
+                org_id,
+                user_id,
+                args.workers,
+                from_date=from_date,
+            )
             elapsed = time.time() - t0
 
             all_stats[entity] = stats

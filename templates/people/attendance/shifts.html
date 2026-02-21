@@ -4,14 +4,13 @@
 {% block page_title %}Shift Types{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Shift Types</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Attendance</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Shift Types</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -19,7 +18,7 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Types</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Types</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Manage schedules and working hours.</p>
         </div>
         <a href="/people/attendance/shifts/new" class="btn btn-primary">Add Shift</a>

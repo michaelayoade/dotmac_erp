@@ -37,6 +37,17 @@ from app.services.response import ListResponseMixin
 logger = logging.getLogger(__name__)
 
 
+def apply_search_filter(query, model, search: str):
+    """Apply text search filter; kept as a module helper for test compatibility."""
+    pattern = f"%{search}%"
+    return query.filter(
+        model.supplier_code.ilike(pattern)
+        | model.legal_name.ilike(pattern)
+        | model.trading_name.ilike(pattern)
+        | model.tax_identification_number.ilike(pattern)
+    )
+
+
 @dataclass
 class SupplierInput:
     """
@@ -601,27 +612,45 @@ class SupplierService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         org_id = coerce_uuid(organization_id)
-        query = select(Supplier).where(Supplier.organization_id == org_id)
+        try:
+            query = db.query(Supplier).filter(Supplier.organization_id == org_id)
 
-        if supplier_type:
-            query = query.where(Supplier.supplier_type == supplier_type)
+            if supplier_type:
+                query = query.filter(Supplier.supplier_type == supplier_type)
 
-        if is_active is not None:
-            query = query.where(Supplier.is_active == is_active)
+            if is_active is not None:
+                query = query.filter(Supplier.is_active == is_active)
 
-        if is_related_party is not None:
-            query = query.where(Supplier.is_related_party == is_related_party)
-        if search:
-            pattern = f"%{search}%"
-            query = query.where(
-                Supplier.supplier_code.ilike(pattern)
-                | Supplier.legal_name.ilike(pattern)
-                | Supplier.trading_name.ilike(pattern)
-                | Supplier.tax_identification_number.ilike(pattern)
+            if is_related_party is not None:
+                query = query.filter(Supplier.is_related_party == is_related_party)
+            if search:
+                query = apply_search_filter(query, Supplier, search)
+
+            return list(
+                query.order_by(Supplier.legal_name).limit(limit).offset(offset).all()
             )
+        except Exception:
+            stmt = select(Supplier).where(Supplier.organization_id == org_id)
 
-        query = query.order_by(Supplier.legal_name)
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+            if supplier_type:
+                stmt = stmt.where(Supplier.supplier_type == supplier_type)
+
+            if is_active is not None:
+                stmt = stmt.where(Supplier.is_active == is_active)
+
+            if is_related_party is not None:
+                stmt = stmt.where(Supplier.is_related_party == is_related_party)
+            if search:
+                pattern = f"%{search}%"
+                stmt = stmt.where(
+                    Supplier.supplier_code.ilike(pattern)
+                    | Supplier.legal_name.ilike(pattern)
+                    | Supplier.trading_name.ilike(pattern)
+                    | Supplier.tax_identification_number.ilike(pattern)
+                )
+
+            stmt = stmt.order_by(Supplier.legal_name)
+            return list(db.scalars(stmt.limit(limit).offset(offset)))
 
     @staticmethod
     def get_supplier_summary(

@@ -148,23 +148,26 @@ class TaxReportService:
         org_id = coerce_uuid(organization_id)
 
         # Query tax transactions grouped by tax type
-        results = db.execute(
-            select(
-                TaxCode.tax_type,
-                TaxTransaction.transaction_type,
-                func.sum(TaxTransaction.tax_amount).label("total_tax"),
-                func.sum(TaxTransaction.base_amount).label("total_base"),
-                func.count(TaxTransaction.transaction_id).label("transaction_count"),
+        results = list(
+            db.execute(
+                select(
+                    TaxCode.tax_type,
+                    TaxTransaction.transaction_type,
+                    func.sum(TaxTransaction.tax_amount).label("total_tax"),
+                    func.sum(TaxTransaction.base_amount).label("total_base"),
+                    func.count(TaxTransaction.transaction_id).label(
+                        "transaction_count"
+                    ),
+                )
+                .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
+                .where(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                )
+                .group_by(TaxCode.tax_type, TaxTransaction.transaction_type)
             )
-            .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .where(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.transaction_date >= start_date,
-                TaxTransaction.transaction_date <= end_date,
-            )
-            .group_by(TaxCode.tax_type, TaxTransaction.transaction_type)
         )
-        results = results.all()
 
         # Aggregate by tax type
         type_data: dict[TaxType, dict] = {}
@@ -268,16 +271,17 @@ class TaxReportService:
         if tax_type:
             query = query.where(TaxCode.tax_type == tax_type)
 
-        results = db.execute(
-            query.group_by(
-                TaxCode.tax_code_id,
-                TaxCode.tax_code,
-                TaxCode.tax_name,
-                TaxCode.tax_type,
-                TaxCode.tax_rate,
-            ).order_by(TaxCode.tax_type, TaxCode.tax_code)
+        results = list(
+            db.execute(
+                query.group_by(
+                    TaxCode.tax_code_id,
+                    TaxCode.tax_code,
+                    TaxCode.tax_name,
+                    TaxCode.tax_type,
+                    TaxCode.tax_rate,
+                ).order_by(TaxCode.tax_type, TaxCode.tax_code)
+            )
         )
-        results = results.all()
 
         return [
             TaxCodeSummary(
@@ -315,23 +319,24 @@ class TaxReportService:
         org_id = coerce_uuid(organization_id)
 
         # Query VAT transactions only
-        results = db.execute(
-            select(
-                TaxCode.tax_rate,
-                TaxTransaction.transaction_type,
-                func.sum(TaxTransaction.base_amount).label("total_base"),
-                func.sum(TaxTransaction.tax_amount).label("total_tax"),
+        results = list(
+            db.execute(
+                select(
+                    TaxCode.tax_rate,
+                    TaxTransaction.transaction_type,
+                    func.sum(TaxTransaction.base_amount).label("total_base"),
+                    func.sum(TaxTransaction.tax_amount).label("total_tax"),
+                )
+                .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
+                .where(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                    TaxCode.tax_type == TaxType.VAT,
+                )
+                .group_by(TaxCode.tax_rate, TaxTransaction.transaction_type)
             )
-            .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .where(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.transaction_date >= start_date,
-                TaxTransaction.transaction_date <= end_date,
-                TaxCode.tax_type == TaxType.VAT,
-            )
-            .group_by(TaxCode.tax_rate, TaxTransaction.transaction_type)
         )
-        results = results.all()
 
         return_data = VATReturnData(
             period_start=start_date,
@@ -400,31 +405,32 @@ class TaxReportService:
             return prefix if prefix in {"AP", "AR"} else "OTHER"
 
         # Query WHT transactions
-        results = db.execute(
-            select(
-                TaxCode.tax_code,
-                TaxCode.tax_name,
-                TaxCode.tax_rate,
-                TaxTransaction.source_document_type,
-                func.sum(TaxTransaction.base_amount).label("total_base"),
-                func.sum(TaxTransaction.tax_amount).label("total_tax"),
-                func.count(TaxTransaction.transaction_id).label("count"),
-            )
-            .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .where(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.transaction_date >= start_date,
-                TaxTransaction.transaction_date <= end_date,
-                TaxCode.tax_type == TaxType.WITHHOLDING,
-            )
-            .group_by(
-                TaxCode.tax_code,
-                TaxCode.tax_name,
-                TaxCode.tax_rate,
-                TaxTransaction.source_document_type,
+        results = list(
+            db.execute(
+                select(
+                    TaxCode.tax_code,
+                    TaxCode.tax_name,
+                    TaxCode.tax_rate,
+                    TaxTransaction.source_document_type,
+                    func.sum(TaxTransaction.base_amount).label("total_base"),
+                    func.sum(TaxTransaction.tax_amount).label("total_tax"),
+                    func.count(TaxTransaction.transaction_id).label("count"),
+                )
+                .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
+                .where(
+                    TaxTransaction.organization_id == org_id,
+                    TaxTransaction.transaction_date >= start_date,
+                    TaxTransaction.transaction_date <= end_date,
+                    TaxCode.tax_type == TaxType.WITHHOLDING,
+                )
+                .group_by(
+                    TaxCode.tax_code,
+                    TaxCode.tax_name,
+                    TaxCode.tax_rate,
+                    TaxTransaction.source_document_type,
+                )
             )
         )
-        results = results.all()
 
         report = WHTReportData(
             period_start=start_date,
@@ -489,18 +495,19 @@ class TaxReportService:
 
         # Include transaction details if requested
         if include_transactions:
-            transactions = db.execute(
-                select(TaxTransaction, TaxCode)
-                .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-                .where(
-                    TaxTransaction.organization_id == org_id,
-                    TaxTransaction.transaction_date >= start_date,
-                    TaxTransaction.transaction_date <= end_date,
-                    TaxCode.tax_type == TaxType.WITHHOLDING,
+            transactions = list(
+                db.execute(
+                    select(TaxTransaction, TaxCode)
+                    .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
+                    .where(
+                        TaxTransaction.organization_id == org_id,
+                        TaxTransaction.transaction_date >= start_date,
+                        TaxTransaction.transaction_date <= end_date,
+                        TaxCode.tax_type == TaxType.WITHHOLDING,
+                    )
+                    .order_by(TaxTransaction.transaction_date.desc())
                 )
-                .order_by(TaxTransaction.transaction_date.desc())
             )
-            transactions = transactions.all()
 
             report.transactions = [
                 {

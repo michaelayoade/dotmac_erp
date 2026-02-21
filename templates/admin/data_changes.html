@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{%- from "components/macros.html" import status_badge, pagination as render_pagination, live_search %}
+{%- from "components/macros.html" import status_badge, pagination as render_pagination, live_search, icon_svg, pagination %}
 
 {% block page_title %}Data Changes{% endblock %}
 {% block page_subtitle %}Field-level audit trail with tamper detection{% endblock %}
@@ -95,9 +95,7 @@
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
                                 {% if log.has_hash %}
-                                <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Hash chain verified">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                                </svg>
+                                {{ icon_svg("shield-check", "h-4 w-4 text-emerald-500") }}
                                 {% endif %}
                                 {% if log.reason %}
                                 <span class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[120px]" title="{{ log.reason }}">{{ log.reason }}</span>
@@ -106,9 +104,7 @@
                                 <span class="text-xs text-slate-500 dark:text-slate-400">{{ log.user_name }}</span>
                                 <span class="text-xs text-slate-400 font-mono" title="User ID">{{ log.user_id[:8] }}...</span>
                                 {% endif %}
-                                <svg class="h-4 w-4 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                </svg>
+                                {{ icon_svg("chevron-down", "h-4 w-4 text-slate-400 ml-auto") }}
                             </div>
                         </td>
                     </tr>
@@ -187,43 +183,16 @@
                 search=search
             ) }}
 
-        {% if pagination.total_pages > 1 %}
-        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <p class="text-sm text-slate-600 dark:text-slate-400">
-                    Showing {{ pagination.start }} to {{ pagination.end }} of {{ pagination.total }} changes
-                </p>
-                <div class="flex items-center gap-2">
-                    {% if pagination.has_prev %}
-                    <a href="/admin/data-changes?page={{ pagination.page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if module_filter %}&module={{ module_filter }}{% endif %}{% if entity_filter %}&entity={{ entity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
-                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                        Previous
-                    </a>
-                    {% endif %}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total | default(0),
+            limit=20,
+            show_size_selector=false,
+            search=search | default(''),
+            filters={"action": action_filter, "entity": entity_filter, "module": module_filter, "search": search}
+        ) }}
 
-                    <div class="flex items-center gap-1">
-                        {% for p in pagination.pages %}
-                        {% if p == '...' %}
-                        <span class="px-3 py-1.5 text-sm text-slate-400">...</span>
-                        {% else %}
-                        <a href="/admin/data-changes?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if module_filter %}&module={{ module_filter }}{% endif %}{% if entity_filter %}&entity={{ entity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
-                           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if p == pagination.page %}bg-accent-500 text-white{% else %}text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
-                            {{ p }}
-                        </a>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-
-                    {% if pagination.has_next %}
-                    <a href="/admin/data-changes?page={{ pagination.page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if module_filter %}&module={{ module_filter }}{% endif %}{% if entity_filter %}&entity={{ entity_filter }}{% endif %}{% if action_filter %}&action={{ action_filter }}{% endif %}"
-                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                        Next
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
     </div>
 </div>

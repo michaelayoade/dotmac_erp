@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
 _ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_UUID_SEGMENT_PATTERN = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
 
 
 class Pagination(TypedDict):
@@ -149,6 +152,94 @@ def _parse_success_filter(value: str | None) -> bool | None:
     if value == "failed":
         return False
     return None
+
+
+def _humanize_token(value: str | None) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return "-"
+    text = raw.replace("_", " ").replace("-", " ").strip()
+    if not text:
+        return "-"
+    return text.title()
+
+
+def _humanize_actor_type(value: str | None) -> str:
+    mapping = {
+        "user": "User",
+        "system": "System",
+        "service": "Service",
+        "api_key": "API Key",
+    }
+    key = (value or "").strip().lower()
+    return mapping.get(key, _humanize_token(value))
+
+
+def _humanize_http_action(action: str | None) -> str:
+    raw = (action or "").strip().upper()
+    mapping = {
+        "GET": "Read",
+        "POST": "Create",
+        "PUT": "Replace",
+        "PATCH": "Update",
+        "DELETE": "Delete",
+    }
+    if raw in mapping:
+        return f"{mapping[raw]} ({raw})"
+    return _humanize_token(action)
+
+
+def _humanize_path(path: str | None) -> str:
+    raw = (path or "").strip()
+    if not raw:
+        return "-"
+    if not raw.startswith("/"):
+        return _humanize_token(raw)
+    aliases = {
+        "ap": "AP",
+        "ar": "AR",
+        "gl": "GL",
+        "hr": "HR",
+        "pm": "PM",
+        "api": "API",
+    }
+    parts: list[str] = []
+    for segment in raw.split("/"):
+        seg = segment.strip()
+        if not seg:
+            continue
+        if _UUID_SEGMENT_PATTERN.match(seg) or seg.isdigit():
+            parts.append("ID")
+            continue
+        mapped = aliases.get(seg.lower())
+        parts.append(mapped if mapped else _humanize_token(seg))
+    return " / ".join(parts) if parts else "-"
+
+
+def _format_request_summary(
+    action: str | None,
+    metadata: dict | None,
+    request_id: str | None,
+) -> str:
+    data = metadata if isinstance(metadata, dict) else {}
+    path = str(data.get("path") or "").strip()
+    query = data.get("query")
+    query_text = ""
+    if isinstance(query, dict) and query:
+        query_text = urlencode(query, doseq=True)
+    elif query:
+        query_text = str(query).strip()
+    method = (action or "").strip().upper()
+    method_prefix = f"{method} " if method else ""
+
+    if path:
+        summary = f"{method_prefix}{path}"
+        if query_text:
+            summary = f"{summary}?{query_text}"
+        return _truncate(summary, 140)
+    if request_id:
+        return f"Request {request_id}"
+    return "-"
 
 
 def _setting_value_display(setting: DomainSetting) -> str:
@@ -2488,9 +2579,9 @@ class AdminWebService:
                 )
             )
 
-        actor_type_value = _parse_actor_type(actor_type)
-        if actor_type_value:
-            conditions.append(AuditEvent.actor_type == actor_type_value)
+        actor_type_filter_value = _parse_actor_type(actor_type)
+        if actor_type_filter_value:
+            conditions.append(AuditEvent.actor_type == actor_type_filter_value)
 
         success_value = _parse_success_filter(status)
         if success_value is not None:
@@ -2553,20 +2644,42 @@ class AdminWebService:
                 else:
                     actor_name = "Unknown User"
 
+            event_actor_type_value = event.actor_type.value if event.actor_type else ""
+            request_summary = _format_request_summary(
+                event.action,
+                event.metadata_,
+                event.request_id,
+            )
+            request_meta = []
+            if event.request_id:
+                request_meta.append(f"Request {event.request_id}")
+            if event.ip_address:
+                request_meta.append(f"IP {event.ip_address}")
+            entity_source = (
+                event.metadata_.get("path")
+                if isinstance(event.metadata_, dict)
+                else event.entity_type
+            )
+
             events_view.append(
                 {
                     "event_id": event.id,
                     "occurred_at": _format_datetime(event.occurred_at),
-                    "actor_type": event.actor_type.value,
+                    "actor_type": event_actor_type_value,
+                    "actor_type_label": _humanize_actor_type(event_actor_type_value),
                     "actor_id": event.actor_id,
                     "actor_name": actor_name,
                     "action": event.action,
+                    "action_label": _humanize_http_action(event.action),
                     "entity_type": event.entity_type,
+                    "entity_label": _humanize_path(str(entity_source or "")),
                     "entity_id": event.entity_id,
                     "status_code": event.status_code,
                     "is_success": event.is_success,
                     "request_id": event.request_id,
                     "ip_address": event.ip_address,
+                    "request_summary": request_summary,
+                    "request_meta": " | ".join(request_meta) if request_meta else "-",
                 }
             )
 
@@ -2578,7 +2691,9 @@ class AdminWebService:
             "pagination": pagination,
             "search": search_value,
             "status_filter": status or "",
-            "actor_type_filter": actor_type_value.value if actor_type_value else "",
+            "actor_type_filter": (
+                actor_type_filter_value.value if actor_type_filter_value else ""
+            ),
             "actor_types": [value.value for value in AuditActorType],
         }
 

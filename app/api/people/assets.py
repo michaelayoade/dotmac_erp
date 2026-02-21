@@ -33,6 +33,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -97,7 +101,6 @@ def issue_asset(
         condition_on_issue=payload.condition_on_issue,
         notes=payload.notes,
     )
-    db.commit()
     return AssetAssignmentRead.model_validate(assignment)
 
 
@@ -117,7 +120,6 @@ def return_asset(
         condition_on_return=payload.condition_on_return,
         notes=payload.notes,
     )
-    db.commit()
     return AssetAssignmentRead.model_validate(assignment)
 
 
@@ -141,5 +143,4 @@ def transfer_asset(
         condition_on_issue=payload.condition_on_issue,
         notes=payload.notes,
     )
-    db.commit()
     return AssetAssignmentRead.model_validate(assignment)

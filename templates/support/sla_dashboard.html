@@ -1,34 +1,26 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}SLA Dashboard{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">SLA Dashboard</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/support/tickets" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">SLA Dashboard</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <div class="flex items-center gap-2">
     <a href="/support/reports/breaches" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-        </svg>
+        {{ icon_svg("warning", "h-4 w-4 mr-1.5") }}
         View All Breaches
     </a>
     <a href="/support/reports/aging" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("clock", "h-4 w-4 mr-1.5") }}
         Aging Report
     </a>
 </div>
@@ -48,9 +40,7 @@
                 <input type="date" name="date_to" id="date_to" value="{{ date_to }}" class="form-input">
             </div>
             <button type="submit" class="btn btn-primary h-10">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
+                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
                 Update
             </button>
         </form>
@@ -68,9 +58,7 @@
                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ metrics.resolved_tickets }} resolved, {{ metrics.open_tickets }} open</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                    </svg>
+                    {{ icon_svg("clipboard", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -106,9 +94,7 @@
                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ metrics.resolution_met }} met, {{ metrics.resolution_breached }} breached</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-6 w-6") }}
                 </div>
             </div>
             {# Progress bar #}
@@ -131,9 +117,7 @@
                     </p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -144,9 +128,7 @@
         <div class="card overflow-hidden">
             <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                    <svg class="h-5 w-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-5 w-5 text-rose-500") }}
                     Breached Tickets
                     {% if breached_count > 0 %}
                     {{ status_badge(breached_count, size="sm") }}
@@ -190,9 +172,7 @@
             {% else %}
             <div class="px-5 py-8 text-center">
                 <div class="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
-                    <svg class="h-6 w-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-6 w-6 text-emerald-600 dark:text-emerald-400") }}
                 </div>
                 <p class="text-sm text-slate-500 dark:text-slate-400">No breached tickets! Great work.</p>
             </div>
@@ -203,9 +183,7 @@
         <div class="card overflow-hidden">
             <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                    <svg class="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-5 w-5 text-amber-500") }}
                     Ticket Aging (Open)
                 </h3>
                 <a href="/support/reports/aging" class="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400">View all</a>

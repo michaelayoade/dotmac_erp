@@ -1,6 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block title %}Expenses - {{ project.project_name }}{% endblock %}
 
 {% block content %}
@@ -10,9 +10,7 @@
         <div>
             <div class="flex items-center gap-2">
                 <a href="/projects/{{ project.project_code }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left") }}
                 </a>
                 <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Project Expenses</h1>
             </div>
@@ -117,9 +115,7 @@
                 {% else %}
                 <tr>
                     <td colspan="6" class="px-6 py-12 text-center">
-                        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
+                        {{ icon_svg("cash", "mx-auto h-12 w-12 text-slate-400") }}
                         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No expenses linked to this project</p>
                     </td>
                 </tr>
@@ -131,9 +127,7 @@
     <!-- Note -->
     <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/20">
         <div class="flex items-start gap-3">
-            <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("information-circle", "h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5") }}
             <div>
                 <p class="text-sm text-amber-800 dark:text-amber-200">
                     This is a read-only view of expenses linked to this project. To create or manage expense claims, use the Expense module.

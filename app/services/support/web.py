@@ -24,6 +24,7 @@ from app.models.person import Person
 from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.services.common import coerce_uuid
 from app.services.dropdown import dropdown_service
+from app.services.recent_activity import get_recent_activity_for_record
 from app.services.support.attachment import attachment_service
 from app.services.support.category import category_service
 from app.services.support.comment import comment_service
@@ -491,6 +492,12 @@ class SupportWebService:
                 request, auth, f"Ticket {ticket.ticket_number}", "support", db=db
             ),
             "ticket": formatted,
+            "recent_activity": get_recent_activity_for_record(
+                db,
+                org_id,
+                record=ticket,
+                limit=10,
+            ),
             "employees": employees,
             "linked_tasks": linked_tasks,
             "activity_timeline": activity_timeline,

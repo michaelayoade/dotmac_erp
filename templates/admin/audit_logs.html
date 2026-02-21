@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{%- from "components/macros.html" import status_badge, pagination as render_pagination, live_search %}
+{%- from "components/macros.html" import status_badge, pagination as render_pagination, live_search, pagination %}
 
 {% block page_title %}Audit Logs{% endblock %}
 {% block page_subtitle %}Review activity across the platform{% endblock %}
@@ -46,14 +46,19 @@
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ event.occurred_at }}</td>
                         <td class="px-6 py-4">
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ event.actor_name }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ event.actor_type | upper }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ event.actor_type_label }}</p>
                             {% if event.actor_id %}
                             <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.actor_id }}</p>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ event.action }}</td>
                         <td class="px-6 py-4">
-                            <p class="text-sm text-slate-600 dark:text-slate-400">{{ event.entity_type | replace('_', ' ') | title }}</p>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">{{ event.action_label }}</p>
+                            {% if event.action %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.action }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="text-sm text-slate-600 dark:text-slate-400">{{ event.entity_label }}</p>
                             {% if event.entity_id %}
                             <p class="text-xs text-slate-500 dark:text-slate-500 font-mono">{{ event.entity_id }}</p>
                             {% endif %}
@@ -66,8 +71,8 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4">
-                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.request_id | default('-') }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ event.ip_address | default('-') }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.request_summary }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ event.request_meta }}</p>
                         </td>
                     </tr>
                     {% else %}
@@ -93,43 +98,16 @@
                 search=search
             ) }}
 
-        {% if pagination.total_pages > 1 %}
-        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <p class="text-sm text-slate-600 dark:text-slate-400">
-                    Showing {{ pagination.start }} to {{ pagination.end }} of {{ pagination.total }} events
-                </p>
-                <div class="flex items-center gap-2">
-                    {% if pagination.has_prev %}
-                    <a href="/admin/audit-logs?page={{ pagination.page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if actor_type_filter %}&actor_type={{ actor_type_filter }}{% endif %}"
-                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                        Previous
-                    </a>
-                    {% endif %}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total | default(0),
+            limit=20,
+            show_size_selector=false,
+            search=search | default(''),
+            filters={"actor_type": actor_type_filter, "search": search, "status": status_filter}
+        ) }}
 
-                    <div class="flex items-center gap-1">
-                        {% for p in pagination.pages %}
-                        {% if p == '...' %}
-                        <span class="px-3 py-1.5 text-sm text-slate-400">...</span>
-                        {% else %}
-                        <a href="/admin/audit-logs?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if actor_type_filter %}&actor_type={{ actor_type_filter }}{% endif %}"
-                           class="px-3 py-1.5 rounded-lg text-sm font-medium {% if p == pagination.page %}bg-accent-500 text-white{% else %}text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700{% endif %}">
-                            {{ p }}
-                        </a>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-
-                    {% if pagination.has_next %}
-                    <a href="/admin/audit-logs?page={{ pagination.page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if actor_type_filter %}&actor_type={{ actor_type_filter }}{% endif %}"
-                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                        Next
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
     </div>
 </div>

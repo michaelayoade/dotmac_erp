@@ -5,14 +5,13 @@
 {% block page_title %}Shift Schedules{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/scheduling" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scheduling</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Schedules</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/scheduling" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Scheduling</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Schedules</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,7 +19,7 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Schedules</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Shift Schedules</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">View and manage monthly shift schedules.</p>
         </div>
         <div class="flex gap-2">
@@ -56,13 +55,7 @@
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
             <span class="text-sm text-slate-600 dark:text-slate-400">Status:</span>
-            {% if schedule_status == 'DRAFT' %}
-            <span class="inline-flex rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Draft</span>
-            {% elif schedule_status == 'PUBLISHED' %}
-            <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Published</span>
-            {% else %}
-            {{ status_badge(schedule_status) }}
-            {% endif %}
+            {{ status_badge(schedule_status, 'sm') }}
         </div>
         {% if schedule_status == 'DRAFT' %}
         <form method="post" action="/people/scheduling/schedules/publish" class="inline">
@@ -107,13 +100,7 @@
                             <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ schedule.shift_code }}</div>
                         </td>
                         <td class="px-4 py-3">
-                            {% if schedule.status == 'DRAFT' %}
-                            <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Draft</span>
-                            {% elif schedule.status == 'PUBLISHED' %}
-                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Published</span>
-                            {% else %}
-                            {{ status_badge(schedule.status, size="sm") }}
-                            {% endif %}
+                            {{ status_badge(schedule.status, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-right">
                             {% if schedule.status == 'DRAFT' %}

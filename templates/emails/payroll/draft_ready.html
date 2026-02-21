@@ -114,7 +114,7 @@
                 </tr>
                 <tr>
                     <th>Period</th>
-                    <td>{{ entry.start_date.strftime('%d %b %Y') }} - {{ entry.end_date.strftime('%d %b %Y') }}</td>
+                    <td>{{ entry.start_date | format_date }} - {{ entry.end_date | format_date }}</td>
                 </tr>
                 <tr>
                     <th>Employees Included</th>

@@ -1,32 +1,27 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import empty_state, status_badge %}
+{% from "components/macros.html" import empty_state, status_badge, icon_svg %}
 
 {% block page_title %}Depreciation Schedule{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Depreciation Schedule</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Depreciation Schedule</span></li>
+    </ol>
 </nav>
+{% endblock %}
+
+{% block header_actions %}
+<button class="btn btn-primary">
+    {{ icon_svg("calculator", "h-4 w-4") }}
+    Run Depreciation
+</button>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Depreciation Schedule</h1>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">View and run depreciation calculations</p>
-        </div>
-        <button class="btn btn-primary">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-            </svg>
-            Run Depreciation
-        </button>
-    </div>
+    <p class="text-sm text-slate-500 dark:text-slate-400">View and run depreciation calculations</p>
 
     {% if depreciation_runs %}
     <div class="card">

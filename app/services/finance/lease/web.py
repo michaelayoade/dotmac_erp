@@ -245,7 +245,7 @@ class LeaseWebService:
         status_value = _parse_status(status)
         classification = _parse_classification(lease_type)
 
-        query = Query([LeaseContract], session=db).filter(
+        query: Query[LeaseContract] = Query([LeaseContract], session=db).filter(
             LeaseContract.organization_id == org_id
         )
 

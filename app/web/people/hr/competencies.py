@@ -101,12 +101,10 @@ def create_competency(
             level_4_description=level_4_description or None,
             level_5_description=level_5_description or None,
         )
-        db.commit()
         return RedirectResponse(
             url="/people/hr/competencies?success=Competency+created", status_code=303
         )
     except Exception as e:
-        db.rollback()
         context = base_context(request, auth, "Add Competency", "competencies", db=db)
         context.update(
             {
@@ -229,12 +227,10 @@ def update_competency(
                 "is_active": _parse_bool(is_active, True),
             },
         )
-        db.commit()
         return RedirectResponse(
             url="/people/hr/competencies?success=Competency+updated", status_code=303
         )
     except Exception as e:
-        db.rollback()
         competency = comp_svc.get_competency(coerce_uuid(competency_id))
         context = base_context(request, auth, "Edit Competency", "competencies", db=db)
         context.update(

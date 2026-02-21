@@ -1,14 +1,15 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Onboarding Dashboard{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Onboarding</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Onboarding</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -16,9 +17,7 @@
 <div class="flex items-center gap-3">
     <a href="/people/hr/onboarding/templates" class="btn btn-secondary">Manage Templates</a>
     <a href="/people/hr/onboarding/employees" class="btn btn-primary group">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
+        {{ icon_svg("user-group", "h-4 w-4 mr-1.5") }}
         View All Onboardings
     </a>
 </div>
@@ -38,9 +37,7 @@
                     <p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">{{ active_count }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -54,9 +51,7 @@
                     <p class="text-3xl font-bold {% if overdue_count > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} mt-1">{{ overdue_count }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -70,9 +65,7 @@
                     <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ completed_this_month }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -86,9 +79,7 @@
                     <p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">{{ template_count }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                    </svg>
+                    {{ icon_svg("clipboard-check", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -133,9 +124,7 @@
                 </ul>
                 {% else %}
                 <div class="p-8 text-center">
-                    <svg class="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calendar", "mx-auto h-12 w-12 text-slate-400 dark:text-slate-500") }}
                     <p class="mt-4 text-slate-500 dark:text-slate-400">No upcoming starts in the next 7 days</p>
                 </div>
                 {% endif %}
@@ -155,16 +144,14 @@
                     <li>
                         <a href="/people/hr/onboarding/employees/{{ ob.onboarding_id }}" class="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
+                                {{ icon_svg("check-circle") }}
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="font-medium text-slate-900 dark:text-white truncate">
                                     {{ ob.employee.first_name if ob.employee else 'Unknown' }} {{ ob.employee.last_name if ob.employee else '' }}
                                 </p>
                                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                                    Completed {{ ob.actual_completion_date.strftime('%b %d, %Y') if ob.actual_completion_date else 'recently' }}
+                                    Completed {{ ob.actual_completion_date | format_date if ob.actual_completion_date else 'recently' }}
                                 </p>
                             </div>
                         </a>
@@ -173,9 +160,7 @@
                 </ul>
                 {% else %}
                 <div class="p-8 text-center">
-                    <svg class="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "mx-auto h-12 w-12 text-slate-400 dark:text-slate-500") }}
                     <p class="mt-4 text-slate-500 dark:text-slate-400">No completed onboardings yet</p>
                 </div>
                 {% endif %}
@@ -192,36 +177,28 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <a href="/people/hr/onboarding/templates/new" class="flex items-center gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:bg-teal-50/50 dark:hover:bg-teal-900/20 transition-colors group">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400 group-hover:bg-violet-200 dark:group-hover:bg-violet-900/50 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus") }}
                     </div>
                     <span class="font-medium text-slate-700 dark:text-slate-200">New Template</span>
                 </a>
 
                 <a href="/people/hr/onboarding/employees?status=PENDING" class="flex items-center gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:bg-teal-50/50 dark:hover:bg-teal-900/20 transition-colors group">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("clock") }}
                     </div>
                     <span class="font-medium text-slate-700 dark:text-slate-200">Pending Onboardings</span>
                 </a>
 
                 <a href="/people/hr/onboarding/employees?status=IN_PROGRESS" class="flex items-center gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:bg-teal-50/50 dark:hover:bg-teal-900/20 transition-colors group">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 group-hover:bg-sky-200 dark:group-hover:bg-sky-900/50 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
+                        {{ icon_svg("refresh") }}
                     </div>
                     <span class="font-medium text-slate-700 dark:text-slate-200">In Progress</span>
                 </a>
 
                 <a href="/people/hr/onboarding/templates" class="flex items-center gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-600 hover:bg-teal-50/50 dark:hover:bg-teal-900/20 transition-colors group">
                     <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-600 transition-colors">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                        </svg>
+                        {{ icon_svg("clipboard") }}
                     </div>
                     <span class="font-medium text-slate-700 dark:text-slate-200">Manage Templates</span>
                 </a>

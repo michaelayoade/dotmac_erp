@@ -28,8 +28,11 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 
 
-def ifrs_label(category: IFRSCategory) -> str:
-    """Get a human-readable label for an IFRS category."""
+def ifrs_label(category: IFRSCategory | str | None) -> str:
+    """Get a human-readable label for an IFRS category.
+
+    Accepts either an IFRSCategory enum or the raw persisted string value.
+    """
     label_map = {
         IFRSCategory.ASSETS: "ASSET",
         IFRSCategory.LIABILITIES: "LIABILITY",
@@ -38,6 +41,13 @@ def ifrs_label(category: IFRSCategory) -> str:
         IFRSCategory.EXPENSES: "EXPENSE",
         IFRSCategory.OTHER_COMPREHENSIVE_INCOME: "OCI",
     }
+    if category is None:
+        return ""
+    if isinstance(category, str) and not isinstance(category, IFRSCategory):
+        try:
+            category = IFRSCategory(category)
+        except ValueError:
+            return category
     return label_map.get(category, category.value)
 
 

@@ -34,6 +34,10 @@ def get_db():  # noqa: ANN201
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

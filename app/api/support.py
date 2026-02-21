@@ -45,6 +45,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -188,9 +192,6 @@ def create_ticket(
         opening_date=data.opening_date,
     )
 
-    db.commit()
-    db.refresh(ticket)
-
     return TicketRead.model_validate(ticket)
 
 
@@ -225,9 +226,6 @@ def update_ticket(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ticket not found",
         )
-
-    db.commit()
-    db.refresh(ticket)
 
     return TicketRead.model_validate(ticket)
 
@@ -264,9 +262,6 @@ def update_ticket_status(
             detail=error,
         )
 
-    db.commit()
-    db.refresh(ticket)
-
     return TicketRead.model_validate(ticket)
 
 
@@ -296,9 +291,6 @@ def assign_ticket(
             detail="Ticket not found",
         )
 
-    db.commit()
-    db.refresh(ticket)
-
     return TicketRead.model_validate(ticket)
 
 
@@ -327,9 +319,6 @@ def resolve_ticket(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error,
         )
-
-    db.commit()
-    db.refresh(ticket)
 
     return TicketRead.model_validate(ticket)
 

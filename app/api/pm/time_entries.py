@@ -32,6 +32,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -122,8 +126,6 @@ def log_time(
     svc = TimeEntryService(db, organization_id)
     try:
         entry = svc.log_time(data.model_dump())
-        db.commit()
-        db.refresh(entry)
         return TimeEntryRead.model_validate(entry)
     except (ValidationError, NotFoundError) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -227,8 +229,6 @@ def update_time_entry(
     svc = TimeEntryService(db, organization_id)
     try:
         entry = svc.update_entry(entry_id, data.model_dump(exclude_unset=True))
-        db.commit()
-        db.refresh(entry)
         return TimeEntryRead.model_validate(entry)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -246,7 +246,6 @@ def delete_time_entry(
     svc = TimeEntryService(db, organization_id)
     try:
         svc.delete_entry(entry_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValidationError as e:

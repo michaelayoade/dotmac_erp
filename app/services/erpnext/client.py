@@ -6,6 +6,7 @@ Supports bidirectional sync for migration scenarios.
 """
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -48,6 +49,16 @@ class ERPNextClient:
     """
 
     def __init__(self, config: ERPNextConfig):
+        api_enabled = os.environ.get("ERPNEXT_API_ENABLED", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not api_enabled:
+            raise ERPNextError(
+                "ERPNext API is disabled in this environment. Use SQL-based sync.",
+            )
         self.config = config
         self._client: httpx.Client | None = None
 

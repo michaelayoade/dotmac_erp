@@ -5,14 +5,13 @@
 {% block page_title %}Leave Applications{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Applications</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Leave</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Applications</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -38,7 +37,7 @@
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Applications</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Applications</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Review and track leave requests.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -179,7 +178,7 @@
                             <a href="/people/leave/applications/{{ app.application_id }}" class="hover:text-violet-600 dark:hover:text-violet-400">
                                 <div class="text-sm font-medium text-slate-900 dark:text-white">{{ app.application_id|string|truncate(8, True, '') }}...</div>
                                 <div class="text-xs text-slate-500 dark:text-slate-400">
-                                    {{ app.created_at.strftime("%d %b %Y") if app.created_at else "" }}
+                                    {{ app.created_at | format_date if app.created_at else "" }}
                                 </div>
                             </a>
                         </td>
@@ -190,7 +189,7 @@
                             {{ app.leave_type.leave_type_name if app.leave_type else app.leave_type_id|string|truncate(8, True, '') ~ '...' }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ app.from_date.strftime('%d %b') if app.from_date else '' }} - {{ app.to_date.strftime('%d %b %Y') if app.to_date else '' }}
+                            {{ app.from_date.strftime('%d %b') if app.from_date else '' }} - {{ app.to_date | format_date if app.to_date else '' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ app.total_leave_days }}
@@ -222,7 +221,7 @@
         total_count=total | default(0),
         limit=20,
         show_size_selector=false,
-        filters={{"employee_id": employee_id, "end_date": end_date, "leave_type_id": leave_type_id, "start_date": start_date, "status": status}}
+        filters={"employee_id": employee_id, "end_date": end_date, "leave_type_id": leave_type_id, "start_date": start_date, "status": status}
     ) }}
 
 </div>

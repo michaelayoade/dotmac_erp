@@ -1,22 +1,22 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field, sortable_th, list_header_actions %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field, sortable_th, list_header_actions, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, icon_svg %}
 
 {% block page_title %}Bank Accounts{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Bank Accounts</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Bank Accounts</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 {{ list_header_actions(
     new_url="/finance/banking/accounts/new",
-    new_label="New Bank Account"
+    new_label="New Bank Account",
+    export_url="/finance/banking/accounts/export"
 ) }}
 {% endblock %}
 
@@ -52,6 +52,7 @@
             <table class="table" data-testid="bank-accounts-table">
                 <thead>
                     <tr>
+                        {{ bulk_select_header() }}
                         {{ sortable_th("Bank", "bank_name", sort, sort_dir) }}
                         {{ sortable_th("Account", "account_name", sort, sort_dir) }}
                         <th scope="col">Type</th>
@@ -65,6 +66,7 @@
                 <tbody>
                     {% for account in accounts %}
                     <tr class="group">
+                        {{ bulk_select_cell(account.bank_account_id) }}
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ account.bank_name }}</p>
                             <p class="text-xs text-slate-500 dark:text-slate-400">{{ account.branch_name }}</p>
@@ -105,7 +107,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="py-12">
+                        <td colspan="9" class="py-12">
                             {{ empty_state(
                                 'No bank accounts found',
                                 'Get started by adding your first bank account' if not (search or status) else 'Try adjusting your search or filter criteria',
@@ -131,5 +133,18 @@
         ) }}
     </div>
     </div>{# /results-container #}
+
+    {{ bulk_action_bar(
+        actions=[
+            {
+                "name": "export",
+                "label": "Export",
+                "endpoint": "/finance/banking/accounts/bulk-export",
+                "icon": bulk_icon_export(),
+                "class": "btn-secondary"
+            }
+        ],
+        entity_name="accounts"
+    ) }}
 </div>
 {% endblock %}

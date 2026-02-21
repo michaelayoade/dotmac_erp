@@ -388,7 +388,7 @@ class LegalEntityService(ListResponseMixin):
         if consolidation_method:
             stmt = stmt.where(LegalEntity.consolidation_method == consolidation_method)
 
-        return db.scalars(stmt.order_by(LegalEntity.entity_code)).all()
+        return list(db.scalars(stmt.order_by(LegalEntity.entity_code)))
 
     @staticmethod
     def get_carrying_value_of_goodwill(
@@ -418,7 +418,7 @@ class LegalEntityService(ListResponseMixin):
         if entity_id:
             stmt = stmt.where(LegalEntity.entity_id == coerce_uuid(entity_id))
 
-        entities = db.scalars(stmt).all()
+        entities = list(db.scalars(stmt))
 
         total_goodwill = Decimal("0")
         for entity in entities:
@@ -475,7 +475,7 @@ class LegalEntityService(ListResponseMixin):
             stmt = stmt.where(LegalEntity.country_code == country_code)
 
         stmt = stmt.order_by(LegalEntity.entity_code).limit(limit).offset(offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

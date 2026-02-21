@@ -58,11 +58,11 @@
                     </div>
                     <div>
                         <dt class="text-slate-500 dark:text-slate-400">Offer Valid Until</dt>
-                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.valid_until.strftime('%b %d, %Y') }}</dd>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.valid_until | format_date }}</dd>
                     </div>
                     <div>
                         <dt class="text-slate-500 dark:text-slate-400">Expected Start Date</dt>
-                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.expected_joining_date.strftime('%b %d, %Y') }}</dd>
+                        <dd class="font-medium text-slate-900 dark:text-white">{{ offer.expected_joining_date | format_date }}</dd>
                     </div>
                 </dl>
             </div>

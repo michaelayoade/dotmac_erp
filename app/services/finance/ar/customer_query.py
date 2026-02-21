@@ -27,7 +27,9 @@ def build_customer_query(
     elif status == "inactive":
         is_active = False
 
-    query = Query([Customer], session=db).filter(Customer.organization_id == org_id)
+    query: Query[Customer] = Query([Customer], session=db).filter(
+        Customer.organization_id == org_id
+    )
 
     if is_active is not None:
         query = query.filter(Customer.is_active == is_active)

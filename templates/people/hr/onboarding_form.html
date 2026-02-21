@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}New Onboarding - {{ person.first_name }} {{ person.last_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees/{{ employee.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">New Onboarding</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees/{{ employee.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">{{ employee.employee_code }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">New Onboarding</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -37,7 +37,7 @@
                         <div class="text-sm text-slate-500 dark:text-slate-400">
                             {{ employee.employee_code }}
                             {% if employee.date_of_joining %}
-                            &bull; Joining {{ employee.date_of_joining.strftime('%d %b %Y') }}
+                            &bull; Joining {{ employee.date_of_joining | format_date }}
                             {% endif %}
                         </div>
                     </div>
@@ -70,9 +70,7 @@
                 &larr; Back to Employee
             </a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
                 Create Onboarding
             </button>
         </div>

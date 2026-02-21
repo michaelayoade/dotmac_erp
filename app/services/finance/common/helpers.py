@@ -120,7 +120,10 @@ def validate_unique_code(
         if pk_column is not None:
             filters.append(pk_column != coerce_uuid(exclude_id))
 
-    existing = db.scalar(select(model_class).where(and_(*filters)))
+    try:
+        existing = db.query(model_class).filter(and_(*filters)).first()
+    except Exception:
+        existing = db.scalar(select(model_class).where(and_(*filters)))
 
     if existing:
         display_name = entity_name or get_entity_display_name(model_class)
@@ -207,11 +210,18 @@ def get_org_scoped_entity_by_field(
     if org_column is None:
         raise ValueError(f"Model {model_class.__name__} has no 'organization_id' field")
 
-    entity = db.scalar(
-        select(model_class).where(
-            and_(org_column == org_id, field_column == field_value)
+    try:
+        entity = (
+            db.query(model_class)
+            .filter(and_(org_column == org_id, field_column == field_value))
+            .first()
         )
-    )
+    except Exception:
+        entity = db.scalar(
+            select(model_class).where(
+                and_(org_column == org_id, field_column == field_value)
+            )
+        )
 
     if entity is None and raise_on_missing:
         display_name = entity_name or get_entity_display_name(model_class)

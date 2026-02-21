@@ -12,7 +12,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_fx.exchange_rate import ExchangeRate
@@ -44,6 +43,104 @@ class FXService(ListResponseMixin):
     Supports multiple rate types (SPOT, AVERAGE, CLOSING) and automatic
     conversion to functional currency.
     """
+
+    @staticmethod
+    def lookup_spot_rate(
+        db: Session,
+        organization_id: UUID,
+        to_currency: str,
+        effective_date: date | None = None,
+    ) -> dict:
+        """
+        Look up the latest SPOT rate for a target currency relative
+        to the organization's functional currency.
+
+        Returns a dict with rate info (always 200, rate=None when not found).
+        """
+        from sqlalchemy import and_, select
+
+        org_id = coerce_uuid(organization_id)
+        effective = effective_date or date.today()
+
+        org = db.get(Organization, org_id)
+        if not org or not org.functional_currency_code:
+            return {
+                "rate": None,
+                "message": "Organization functional currency not configured",
+            }
+
+        from_currency: str = org.functional_currency_code
+
+        if from_currency.upper() == to_currency.upper():
+            return {
+                "rate": "1",
+                "inverse_rate": "1",
+                "effective_date": str(effective),
+                "source": "identity",
+            }
+
+        rate_type_stmt = select(ExchangeRateType).where(
+            and_(
+                ExchangeRateType.organization_id == org_id,
+                ExchangeRateType.type_code == "SPOT",
+            )
+        )
+        rate_type = db.scalar(rate_type_stmt)
+        if not rate_type:
+            return {"rate": None, "message": "No SPOT rate type configured"}
+
+        direct_stmt = (
+            select(ExchangeRate)
+            .where(
+                and_(
+                    ExchangeRate.organization_id == org_id,
+                    ExchangeRate.from_currency_code == from_currency,
+                    ExchangeRate.to_currency_code == to_currency.upper(),
+                    ExchangeRate.rate_type_id == rate_type.rate_type_id,
+                    ExchangeRate.effective_date <= effective,
+                )
+            )
+            .order_by(ExchangeRate.effective_date.desc())
+            .limit(1)
+        )
+        direct = db.scalar(direct_stmt)
+
+        if direct:
+            return {
+                "rate": str(direct.exchange_rate),
+                "inverse_rate": str(direct.inverse_rate),
+                "effective_date": str(direct.effective_date),
+                "source": direct.source.value if direct.source else "MANUAL",
+            }
+
+        inverse_stmt = (
+            select(ExchangeRate)
+            .where(
+                and_(
+                    ExchangeRate.organization_id == org_id,
+                    ExchangeRate.from_currency_code == to_currency.upper(),
+                    ExchangeRate.to_currency_code == from_currency,
+                    ExchangeRate.rate_type_id == rate_type.rate_type_id,
+                    ExchangeRate.effective_date <= effective,
+                )
+            )
+            .order_by(ExchangeRate.effective_date.desc())
+            .limit(1)
+        )
+        inverse = db.scalar(inverse_stmt)
+
+        if inverse:
+            return {
+                "rate": str(inverse.inverse_rate),
+                "inverse_rate": str(inverse.exchange_rate),
+                "effective_date": str(inverse.effective_date),
+                "source": inverse.source.value if inverse.source else "MANUAL",
+            }
+
+        return {
+            "rate": None,
+            "message": f"No rate found for {from_currency}/{to_currency.upper()}",
+        }
 
     @staticmethod
     def get_rate(
@@ -88,13 +185,11 @@ class FXService(ListResponseMixin):
             return rate
 
         # Get the rate type
-        rate_type = db.scalar(
-            select(ExchangeRateType).where(
-                and_(
-                    ExchangeRateType.organization_id == org_id,
-                    ExchangeRateType.type_code == rate_type_code,
-                )
-            )
+        rate_type = (
+            db.query(ExchangeRateType)
+            .filter(ExchangeRateType.organization_id == org_id)
+            .filter(ExchangeRateType.type_code == rate_type_code)
+            .first()
         )
 
         if not rate_type:
@@ -104,39 +199,31 @@ class FXService(ListResponseMixin):
             )
 
         # Try direct rate first
-        direct_rate = db.scalars(
-            select(ExchangeRate)
-            .where(
-                and_(
-                    ExchangeRate.organization_id == org_id,
-                    ExchangeRate.from_currency_code == from_currency,
-                    ExchangeRate.to_currency_code == to_currency,
-                    ExchangeRate.rate_type_id == rate_type.rate_type_id,
-                    ExchangeRate.effective_date <= effective_date,
-                )
-            )
+        direct_rate = (
+            db.query(ExchangeRate)
+            .filter(ExchangeRate.organization_id == org_id)
+            .filter(ExchangeRate.from_currency_code == from_currency)
+            .filter(ExchangeRate.to_currency_code == to_currency)
+            .filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+            .filter(ExchangeRate.effective_date <= effective_date)
             .order_by(ExchangeRate.effective_date.desc())
+            .first()
         )
-        direct_rate = direct_rate.first()
 
         if direct_rate:
             return direct_rate
 
         # Try inverse rate
-        inverse_rate = db.scalars(
-            select(ExchangeRate)
-            .where(
-                and_(
-                    ExchangeRate.organization_id == org_id,
-                    ExchangeRate.from_currency_code == to_currency,
-                    ExchangeRate.to_currency_code == from_currency,
-                    ExchangeRate.rate_type_id == rate_type.rate_type_id,
-                    ExchangeRate.effective_date <= effective_date,
-                )
-            )
+        inverse_rate = (
+            db.query(ExchangeRate)
+            .filter(ExchangeRate.organization_id == org_id)
+            .filter(ExchangeRate.from_currency_code == to_currency)
+            .filter(ExchangeRate.to_currency_code == from_currency)
+            .filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+            .filter(ExchangeRate.effective_date <= effective_date)
             .order_by(ExchangeRate.effective_date.desc())
+            .first()
         )
-        inverse_rate = inverse_rate.first()
 
         if inverse_rate:
             # Create synthetic rate from inverse
@@ -326,13 +413,11 @@ class FXService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        rate_type = db.scalar(
-            select(ExchangeRateType).where(
-                and_(
-                    ExchangeRateType.organization_id == org_id,
-                    ExchangeRateType.is_default == True,  # noqa: E712
-                )
-            )
+        rate_type = (
+            db.query(ExchangeRateType)
+            .filter(ExchangeRateType.organization_id == org_id)
+            .filter(ExchangeRateType.is_default == True)  # noqa: E712
+            .first()
         )
 
         if not rate_type:
@@ -411,13 +496,11 @@ class FXService(ListResponseMixin):
             )
 
         # Get the rate type
-        rate_type = db.scalar(
-            select(ExchangeRateType).where(
-                and_(
-                    ExchangeRateType.organization_id == org_id,
-                    ExchangeRateType.type_code == rate_type_code,
-                )
-            )
+        rate_type = (
+            db.query(ExchangeRateType)
+            .filter(ExchangeRateType.organization_id == org_id)
+            .filter(ExchangeRateType.type_code == rate_type_code)
+            .first()
         )
 
         if not rate_type:
@@ -473,44 +556,42 @@ class FXService(ListResponseMixin):
         Returns:
             List of ExchangeRate objects
         """
-        stmt = select(ExchangeRate)
+        stmt = db.query(ExchangeRate)
 
         if organization_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 ExchangeRate.organization_id == coerce_uuid(organization_id)
             )
 
         if from_currency:
-            stmt = stmt.where(ExchangeRate.from_currency_code == from_currency)
+            stmt = stmt.filter(ExchangeRate.from_currency_code == from_currency)
 
         if to_currency:
-            stmt = stmt.where(ExchangeRate.to_currency_code == to_currency)
+            stmt = stmt.filter(ExchangeRate.to_currency_code == to_currency)
 
         if from_date:
-            stmt = stmt.where(ExchangeRate.effective_date >= from_date)
+            stmt = stmt.filter(ExchangeRate.effective_date >= from_date)
 
         if to_date:
-            stmt = stmt.where(ExchangeRate.effective_date <= to_date)
+            stmt = stmt.filter(ExchangeRate.effective_date <= to_date)
 
         if rate_type_code and organization_id:
             org_id = coerce_uuid(organization_id)
-            rate_type = db.scalar(
-                select(ExchangeRateType).where(
-                    and_(
-                        ExchangeRateType.organization_id == org_id,
-                        ExchangeRateType.type_code == rate_type_code,
-                    )
-                )
+            rate_type = (
+                db.query(ExchangeRateType)
+                .filter(ExchangeRateType.organization_id == org_id)
+                .filter(ExchangeRateType.type_code == rate_type_code)
+                .first()
             )
             if rate_type:
-                stmt = stmt.where(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+                stmt = stmt.filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
 
-        stmt = (
+        return (
             stmt.order_by(ExchangeRate.effective_date.desc())
             .limit(limit)
             .offset(offset)
+            .all()
         )
-        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

@@ -1,22 +1,16 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ "Edit Payee" if payee else "New Payee" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/payees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payees</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if payee else "New" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/payees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payees</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if payee else "New" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -44,7 +38,7 @@
                     <select id="payee_type" name="payee_type" required
                             class="form-select">
                         {% for t in payee_types %}
-                        <option value="{{ t }}" {{ 'selected' if payee and payee.payee_type == t else '' }}>{{ t | title }}</option>
+                        <option value="{{ t.value }}" {{ 'selected' if payee and payee.payee_type and payee.payee_type.value == t.value else '' }}>{{ t.label }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -108,7 +102,7 @@
                         <option value="">No Tax Code</option>
                         {% for tax in tax_codes %}
                         <option value="{{ tax.tax_code_id }}" {{ 'selected' if payee and payee.default_tax_code_id == tax.tax_code_id else '' }}>
-                            {{ tax.code }} - {{ tax.name }}
+                            {{ tax.tax_code }} - {{ tax.tax_name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -131,7 +125,7 @@
                         <option value="">No Supplier Link</option>
                         {% for supplier in suppliers %}
                         <option value="{{ supplier.supplier_id }}" {{ 'selected' if payee and payee.supplier_id == supplier.supplier_id else '' }}>
-                            {{ supplier.supplier_code }} - {{ supplier.supplier_name }}
+                            {{ supplier.supplier_code }} - {{ supplier.legal_name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -143,7 +137,7 @@
                         <option value="">No Customer Link</option>
                         {% for customer in customers %}
                         <option value="{{ customer.customer_id }}" {{ 'selected' if payee and payee.customer_id == customer.customer_id else '' }}>
-                            {{ customer.customer_code }} - {{ customer.customer_name }}
+                            {{ customer.customer_code }} - {{ customer.legal_name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -171,13 +165,13 @@
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Last Matched</p>
                     <p class="text-lg font-semibold text-slate-900 dark:text-white">
-                        {{ payee.last_matched_at.strftime('%Y-%m-%d %H:%M') if payee.last_matched_at else 'Never' }}
+                        {{ payee.last_matched_at | format_datetime if payee.last_matched_at else 'Never' }}
                     </p>
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Created</p>
                     <p class="text-lg font-semibold text-slate-900 dark:text-white">
-                        {{ payee.created_at.strftime('%Y-%m-%d') if payee.created_at else '-' }}
+                        {{ payee.created_at | format_date if payee.created_at else '-' }}
                     </p>
                 </div>
             </div>

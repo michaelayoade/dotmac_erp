@@ -25,6 +25,21 @@ from app.services.procurement.thresholds import determine_procurement_method
 
 logger = logging.getLogger(__name__)
 
+PLAN_EXPORT_COLUMNS: list[str] = [
+    "plan_number",
+    "fiscal_year",
+    "title",
+    "currency_code",
+    "line_number",
+    "description",
+    "budget_line_code",
+    "budget_id",
+    "estimated_value",
+    "procurement_method",
+    "planned_quarter",
+    "category",
+]
+
 
 class ProcurementPlanService:
     """Service for procurement plan management."""
@@ -195,3 +210,102 @@ class ProcurementPlanService:
         self.db.flush()
         logger.info("Approved procurement plan %s", plan.plan_number)
         return plan
+
+    def export_plans_data(
+        self,
+        org_id: UUID,
+        status_filter: str | None = None,
+        fiscal_year: str | None = None,
+        columns: list[str] | None = None,
+    ) -> tuple[list[str], list[list[object]]]:
+        """Build detailed per-item export data for procurement plans.
+
+        Each plan item becomes one row.  Plans with no items still produce
+        a single row with blank item columns.
+
+        Args:
+            org_id: Organization ID
+            status_filter: Optional status filter
+            fiscal_year: Optional fiscal year filter
+            columns: Header column names to use (defaults to PLAN_EXPORT_COLUMNS)
+
+        Returns:
+            Tuple of (headers, rows) for CSV/XLSX export.
+        """
+        from sqlalchemy.orm import selectinload
+
+        stmt = (
+            select(ProcurementPlan)
+            .where(ProcurementPlan.organization_id == org_id)
+            .options(selectinload(ProcurementPlan.items))
+            .order_by(ProcurementPlan.created_at.desc())
+        )
+        if status_filter:
+            try:
+                stmt = stmt.where(
+                    ProcurementPlan.status == ProcurementPlanStatus(status_filter)
+                )
+            except ValueError:
+                pass
+        if fiscal_year:
+            stmt = stmt.where(ProcurementPlan.fiscal_year == fiscal_year)
+
+        plans = list(self.db.scalars(stmt).all())
+        headers = columns or PLAN_EXPORT_COLUMNS
+
+        rows: list[list[object]] = []
+        empty_item = [""] * 8  # 8 item-level columns
+        for plan in plans:
+            plan_prefix: list[object] = [
+                plan.plan_number,
+                plan.fiscal_year,
+                plan.title,
+                plan.currency_code,
+            ]
+            if plan.items:
+                for item in plan.items:
+                    rows.append(
+                        plan_prefix
+                        + [
+                            item.line_number,
+                            item.description,
+                            item.budget_line_code or "",
+                            str(item.budget_id) if item.budget_id else "",
+                            item.estimated_value,
+                            item.procurement_method.value
+                            if item.procurement_method
+                            else "",
+                            item.planned_quarter,
+                            item.category or "",
+                        ]
+                    )
+            else:
+                rows.append(plan_prefix + empty_item)
+        return headers, rows
+
+    def find_duplicate_plan_numbers(
+        self,
+        org_id: UUID,
+        plan_numbers: list[str],
+    ) -> list[str]:
+        """Check which plan numbers already exist.
+
+        Args:
+            org_id: Organization ID
+            plan_numbers: List of plan numbers to check
+
+        Returns:
+            List of plan numbers that already exist.
+        """
+        if not plan_numbers:
+            return []
+
+        existing = list(
+            self.db.scalars(
+                select(ProcurementPlan.plan_number).where(
+                    ProcurementPlan.organization_id == org_id,
+                    ProcurementPlan.plan_number.in_(plan_numbers),
+                )
+            ).all()
+        )
+        return existing

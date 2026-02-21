@@ -1,16 +1,16 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}Info Change Request{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/info-changes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Info Change Requests</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Request</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/info-changes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Info Change Requests</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Request</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,17 +18,11 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Info Change Request</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Info Change Request</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Review and approve employee updates.</p>
         </div>
         <div>
-            {% if request_item.status.value == 'PENDING' %}
-            <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">Pending</span>
-            {% elif request_item.status.value == 'APPROVED' %}
-            <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">Approved</span>
-            {% elif request_item.status.value == 'REJECTED' %}
-            <span class="inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-900/50 dark:text-rose-300">Rejected</span>
-            {% endif %}
+            {{ status_badge(request_item.status.value, 'sm') }}
         </div>
     </div>
 
@@ -64,7 +58,7 @@
                 <div>
                     <p class="text-slate-500 dark:text-slate-400">Submitted</p>
                     <p class="text-slate-900 dark:text-white font-medium">
-                        {{ request_item.created_at.strftime('%b %d, %Y %H:%M') if request_item.created_at else '-' }}
+                        {{ request_item.created_at | format_datetime if request_item.created_at else '-' }}
                     </p>
                 </div>
                 <div>

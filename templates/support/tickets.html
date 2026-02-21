@@ -1,36 +1,29 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import live_search, pagination, icon_svg %}
 
 {% block page_title %}Support Tickets{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Support Tickets</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/support/dashboard" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Support</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Support Tickets</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <div class="flex items-center gap-2">
     <a href="/support/dashboard" class="btn btn-secondary" title="SLA Dashboard">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
+        {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
         SLA Dashboard
     </a>
     <a href="/support/tickets/archived" class="btn btn-secondary" title="View archived tickets">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-        </svg>
+        {{ icon_svg("archive", "h-4 w-4 mr-1.5") }}
         Archived
     </a>
     <a href="/support/tickets/new" class="btn btn-primary group">
-        <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
         New Ticket
     </a>
 </div>
@@ -42,9 +35,7 @@
     {% if request.query_params.get('bulk_status') == 'success' or request.query_params.get('bulk_assign') == 'success' or request.query_params.get('bulk_archive') == 'success' %}
     <div class="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
             <p class="text-sm text-emerald-700 dark:text-emerald-300">
                 Bulk operation completed successfully.
                 {% if request.query_params.get('updated') %}Updated {{ request.query_params.get('updated') }} ticket(s).{% endif %}
@@ -62,9 +53,7 @@
     {% if error_param %}
     <div class="p-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
+            {{ icon_svg("warning", "h-5 w-5 text-rose-600 dark:text-rose-400") }}
             <p class="text-sm text-rose-700 dark:text-rose-300">
                 {% if error_param == 'no_tickets_selected' %}
                 Please select at least one ticket to perform bulk operations.
@@ -95,9 +84,7 @@
                     <p class="text-3xl font-bold text-sky-600 dark:text-sky-400 mt-1">{{ stats.open | default(0) }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                    </svg>
+                    {{ icon_svg("inbox", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -111,9 +98,7 @@
                     <p class="text-3xl font-bold text-rose-600 dark:text-rose-400 mt-1">{{ stats.urgent | default(0) }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -127,9 +112,7 @@
                     <p class="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{{ stats.on_hold | default(0) }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("pause-circle", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -143,9 +126,7 @@
                     <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.resolved | default(0) }}</p>
                 </div>
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-6 w-6") }}
                 </div>
             </div>
         </div>
@@ -212,9 +193,7 @@
                 {# Bulk Status Update #}
                 <div class="relative" x-data="{ open: false }">
                     <button @click="open = !open" type="button" class="btn btn-secondary btn-sm">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
+                        {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
                         Change Status
                     </button>
                     <div x-show="open" @click.away="open = false" x-cloak
@@ -237,9 +216,7 @@
                 {# Bulk Assign #}
                 <div class="relative" x-data="{ open: false }">
                     <button @click="open = !open" type="button" class="btn btn-secondary btn-sm">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
+                        {{ icon_svg("user", "h-4 w-4 mr-1.5") }}
                         Assign To
                     </button>
                     <div x-show="open" @click.away="open = false" x-cloak
@@ -263,9 +240,7 @@
                 {# Bulk Archive #}
                 <div class="relative" x-data="{ confirmOpen: false }" @keydown.escape.window="confirmOpen = false">
                     <button @click="confirmOpen = true" type="button" class="btn btn-secondary btn-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-                        </svg>
+                        {{ icon_svg("archive", "h-4 w-4 mr-1.5") }}
                         Archive
                     </button>
                     {# Confirmation Dialog #}
@@ -386,17 +361,12 @@
                                 <a href="{{ ticket.ticket_url }}"
                                    class="p-2 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:text-amber-400 dark:hover:bg-amber-900/30 transition-colors"
                                    title="View details" aria-label="View details">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
+                                    {{ icon_svg("eye", "h-4 w-4") }}
                                 </a>
                                 <a href="{{ ticket.ticket_edit_url }}"
                                    class="p-2 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:text-sky-400 dark:hover:bg-sky-900/30 transition-colors"
                                    title="Edit ticket" aria-label="Edit ticket">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
+                                    {{ icon_svg("edit", "h-4 w-4") }}
                                 </a>
                             </div>
                         </td>
@@ -419,9 +389,7 @@
         {# Empty State #}
         <div class="px-6 py-16 text-center">
             <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-amber-100 to-amber-50 dark:from-amber-900/30 dark:to-amber-900/10 flex items-center justify-center mb-6">
-                <svg class="h-12 w-12 text-amber-500 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                </svg>
+                {{ icon_svg("inbox", "h-12 w-12 text-amber-500 dark:text-amber-400", stroke_width="1.5") }}
             </div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No tickets yet</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
@@ -433,9 +401,7 @@
             </p>
             <div class="flex items-center justify-center gap-3">
                 <a href="/support/tickets/new" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
                     New Ticket
                 </a>
                 {% if search or selected_status or selected_priority or selected_assigned_to %}

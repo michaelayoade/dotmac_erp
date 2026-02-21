@@ -131,7 +131,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if self._supplier_names is None:
             from app.models.finance.ap.supplier import Supplier
 
-            rows = (
+            rows: list[tuple[UUID, str | None, str | None]] = (
                 Query(
                     [
                         Supplier.supplier_id,
@@ -160,7 +160,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if field_name == "supplier_name":
             return self._resolve_supplier_name(entity.supplier_id)
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get supplier invoice export filename."""

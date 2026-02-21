@@ -13,7 +13,6 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.lease.lease_asset import LeaseAsset
@@ -268,8 +267,8 @@ class LeaseCalculationService(ListResponseMixin):
         if not contract:
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
-        liability = db.scalar(
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        liability = (
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
 
         if not liability:
@@ -352,8 +351,8 @@ class LeaseCalculationService(ListResponseMixin):
         if not contract:
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
-        liability = db.scalar(
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        liability = (
+            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
         )
 
         if not liability:
@@ -395,7 +394,7 @@ class LeaseCalculationService(ListResponseMixin):
         """
         ls_id = coerce_uuid(lease_id)
 
-        asset = db.scalar(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id))
+        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
         if not asset:
             raise HTTPException(status_code=404, detail="Lease asset not found")
@@ -417,6 +416,122 @@ class LeaseCalculationService(ListResponseMixin):
             return Decimal("0")
 
         return min(depreciation, max_depreciation)
+
+    @staticmethod
+    def calculate_lease_summary(
+        db: Session,
+        lease_id: UUID,
+        organization_id: UUID,
+        calculation_date: date,
+    ) -> dict:
+        """Calculate complete lease summary including ROU asset value.
+
+        Args:
+            db: Database session
+            lease_id: Lease contract ID
+            organization_id: Organization scope
+            calculation_date: As-of date for calculation
+
+        Returns:
+            Dict with lease_id, calculation_date, present_value_payments,
+            initial_direct_costs, rou_asset_value, lease_liability,
+            monthly_depreciation.
+
+        Raises:
+            ValueError: If lease contract not found.
+        """
+        from app.services.finance.lease.lease_contract import lease_contract_service
+
+        contract = lease_contract_service.get(db, str(lease_id), organization_id)
+        if not contract:
+            raise ValueError("Lease contract not found")
+
+        liability = LeaseCalculationService.calculate_initial_liability(db, contract)
+        rou_asset_value = (
+            liability.total_liability
+            + contract.initial_direct_costs
+            - contract.lease_incentives_received
+            + contract.restoration_obligation
+        )
+
+        try:
+            monthly_depreciation = LeaseCalculationService.calculate_rou_depreciation(
+                db=db,
+                lease_id=lease_id,
+                periods=1,
+            )
+        except HTTPException:
+            monthly_depreciation = Decimal("0")
+
+        return {
+            "lease_id": lease_id,
+            "calculation_date": calculation_date,
+            "present_value_payments": liability.total_liability,
+            "initial_direct_costs": contract.initial_direct_costs,
+            "rou_asset_value": rou_asset_value,
+            "lease_liability": liability.total_liability,
+            "monthly_depreciation": monthly_depreciation,
+        }
+
+    @staticmethod
+    def get_schedule_summary(
+        db: Session,
+        lease_id: UUID,
+        organization_id: UUID,
+    ) -> dict:
+        """Get amortization schedule with totals.
+
+        Args:
+            db: Database session
+            lease_id: Lease contract ID
+            organization_id: Organization scope
+
+        Returns:
+            Dict with lease_id, lease_code, total_payments, total_interest,
+            total_principal, and lines list.
+
+        Raises:
+            ValueError: If lease contract not found.
+        """
+        from app.services.finance.lease.lease_contract import lease_contract_service
+
+        contract = lease_contract_service.get(db, str(lease_id), organization_id)
+        if not contract:
+            raise ValueError("Lease contract not found")
+
+        schedule = LeaseCalculationService.generate_amortization_schedule(
+            db=db, lease_id=lease_id
+        )
+
+        lines = []
+        total_payments = Decimal("0")
+        total_interest = Decimal("0")
+        total_principal = Decimal("0")
+
+        for entry in schedule:
+            lines.append(
+                {
+                    "period_number": entry.period,
+                    "payment_date": entry.payment_date,
+                    "payment_amount": entry.payment_amount,
+                    "interest_expense": entry.interest_expense,
+                    "principal_reduction": entry.principal_reduction,
+                    "opening_liability": entry.opening_balance,
+                    "closing_liability": entry.closing_balance,
+                }
+            )
+            total_payments += entry.payment_amount
+            total_interest += entry.interest_expense
+            total_principal += entry.principal_reduction
+
+        return {
+            "lease_id": lease_id,
+            "lease_code": contract.lease_number,
+            "total_payments": total_payments,
+            "total_interest": total_interest,
+            "total_principal": total_principal,
+            "lines": lines,
+        }
 
 
 # Module-level singleton instance

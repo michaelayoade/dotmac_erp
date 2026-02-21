@@ -318,7 +318,7 @@ class DomainSettings(ListResponseMixin):
             {"created_at": DomainSetting.created_at, "key": DomainSetting.key},
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
     def update(
         self,
@@ -639,12 +639,13 @@ def list_setting_history(
             stmt = stmt.where(DomainSettingHistory.key == key)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    items = db.scalars(
-        stmt.order_by(DomainSettingHistory.changed_at.desc())
-        .limit(limit)
-        .offset(offset)
+    items = list(
+        db.scalars(
+            stmt.order_by(DomainSettingHistory.changed_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
     )
-    items = items.all()
 
     return items, int(total or 0)
 

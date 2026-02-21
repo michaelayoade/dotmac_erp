@@ -1,16 +1,16 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}Reimburse Expense{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/expense/claims" class="hover:text-primary-600 dark:hover:text-primary-400">Expense Claims</a>
-    <span class="mx-2">/</span>
-    <a href="/expense/claims/{{ expense_claim.claim_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ expense_claim.claim_number }}</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Reimburse</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/expense/claims" class="hover:text-primary-600 dark:hover:text-primary-400">Expense Claims</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/expense/claims/{{ expense_claim.claim_id }}" class="hover:text-primary-600 dark:hover:text-primary-400">{{ expense_claim.claim_number }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Reimburse</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -19,10 +19,7 @@
     <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-800/50">
         <div class="mb-6 text-center">
             <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/25">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("currency", "h-8 w-8") }}
             </div>
             <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Reimburse Expense Claim</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Transfer funds via Paystack</p>
@@ -40,12 +37,7 @@
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-sm text-slate-500 dark:text-slate-400">Status</span>
-                <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium
-                    {% if expense_claim.status.value == 'APPROVED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                    {% elif expense_claim.status.value == 'PAID' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                    {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300{% endif %}">
-                    {{ expense_claim.status.value }}
-                </span>
+                {{ status_badge(expense_claim.status.value, 'sm') }}
             </div>
             <div class="flex items-center justify-between">
                 <span class="text-sm text-slate-500 dark:text-slate-400">Submission Date</span>
@@ -83,9 +75,7 @@
         {% elif can_retry_transfer %}
         <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
             <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 flex-shrink-0 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-amber-500 mt-0.5") }}
                 <div class="flex-1">
                     <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Transfer not completed</p>
                     <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">
@@ -93,9 +83,7 @@
                     </p>
                     <button type="button" id="retryTransferBtn" onclick="retryTransfer('{{ active_intent_id }}')"
                             class="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:from-violet-700 hover:to-purple-700 hover:shadow-xl hover:shadow-violet-500/30 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
+                        {{ icon_svg("refresh", "h-4 w-4") }}
                         <span id="retryBtnText">Retry Transfer</span>
                     </button>
                 </div>
@@ -104,9 +92,7 @@
         {% elif not can_reimburse %}
         <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
             <div class="flex items-center gap-3">
-                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-amber-500") }}
                 <div>
                     <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Cannot reimburse this claim</p>
                     <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">
@@ -118,9 +104,7 @@
         {% elif not paystack_enabled %}
         <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
             <div class="flex items-center gap-3">
-                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-amber-500") }}
                 <div>
                     <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Paystack not enabled</p>
                     <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">Please contact support to enable Paystack payments.</p>
@@ -130,9 +114,7 @@
         {% elif not transfers_enabled %}
         <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
             <div class="flex items-center gap-3">
-                <svg class="h-5 w-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-amber-500") }}
                 <div>
                     <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Transfers not enabled</p>
                     <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">Paystack transfers must be enabled for expense reimbursements.</p>
@@ -173,9 +155,7 @@
             <div id="accountNameContainer" class="hidden">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Name</label>
                 <div class="mt-1 flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2.5 dark:border-emerald-700 dark:bg-emerald-900/20">
-                    <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-5 w-5 text-emerald-500") }}
                     <span id="accountName" class="text-sm font-medium text-emerald-700 dark:text-emerald-400"></span>
                 </div>
             </div>
@@ -186,18 +166,13 @@
 
             <button type="button" id="resolveBtn" onclick="resolveAccount()"
                     class="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
+                {{ icon_svg("search", "h-4 w-4") }}
                 <span id="resolveBtnText">Verify Account</span>
             </button>
 
             <button type="button" id="initiateBtn" onclick="initiateTransfer()" disabled
                     class="w-full hidden items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:from-violet-700 hover:to-purple-700 hover:shadow-xl hover:shadow-violet-500/30 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("currency") }}
                 <span id="initiateBtnText">Initiate Transfer</span>
             </button>
         </form>

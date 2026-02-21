@@ -267,8 +267,7 @@ class ARInvoiceService(ListResponseMixin):
         # Pre-calculate taxes for all lines
         line_tax_results: list[LineCalculationResult | None] = []
         for line in input.lines:
-            line_amount = line.quantity * line.unit_price - line.discount_amount
-            subtotal += line_amount
+            gross_line_amount = line.quantity * line.unit_price - line.discount_amount
 
             # Build list of tax codes (support both new and legacy format)
             effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
@@ -280,14 +279,17 @@ class ARInvoiceService(ListResponseMixin):
                 line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
-                    line_amount=line_amount,
+                    line_amount=gross_line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
                 line_tax_results.append(line_tax_result)
+                # Use net_amount for subtotal (handles inclusive tax extraction)
+                subtotal += line_tax_result.net_amount
                 tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
+                subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
 
@@ -340,17 +342,20 @@ class ARInvoiceService(ListResponseMixin):
 
         # Create lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
-            line_amount = (
+            gross_line_amount = (
                 line_input.quantity * line_input.unit_price - line_input.discount_amount
             )
-            if input.invoice_type == InvoiceType.CREDIT_NOTE:
-                line_amount = -abs(line_amount)
 
             # Get the pre-calculated tax result for this line
             tax_result = line_tax_results[idx - 1]
+            # Use net_amount so line_amount reflects revenue (after inclusive tax extraction)
+            net_line_amount = tax_result.net_amount if tax_result else gross_line_amount
             line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
-            if input.invoice_type == InvoiceType.CREDIT_NOTE and tax_result:
-                line_tax_total = -abs(line_tax_total)
+
+            if input.invoice_type == InvoiceType.CREDIT_NOTE:
+                net_line_amount = -abs(net_line_amount)
+                if tax_result:
+                    line_tax_total = -abs(line_tax_total)
 
             # Get primary tax code ID for legacy compatibility (first tax code)
             effective_tax_codes = (
@@ -371,7 +376,7 @@ class ARInvoiceService(ListResponseMixin):
                 description=line_input.description,
                 quantity=line_input.quantity,
                 unit_price=line_input.unit_price,
-                line_amount=line_amount,
+                line_amount=net_line_amount,
                 discount_amount=line_input.discount_amount,
                 tax_code_id=primary_tax_code_id,  # Primary tax for backwards compatibility
                 tax_amount=line_tax_total,  # Total of all taxes on this line
@@ -491,10 +496,9 @@ class ARInvoiceService(ListResponseMixin):
         line_tax_results: list[LineCalculationResult | None] = []
 
         for line_input in input.lines:
-            line_amount = (
+            gross_line_amount = (
                 line_input.quantity * line_input.unit_price - line_input.discount_amount
             )
-            subtotal += line_amount
 
             # Determine tax codes: prefer new multi-tax field, fall back to legacy single field
             effective_tax_codes = (
@@ -510,14 +514,16 @@ class ARInvoiceService(ListResponseMixin):
                 line_tax_result = TaxCalculationService.calculate_line_taxes(
                     db=db,
                     organization_id=org_id,
-                    line_amount=line_amount,
+                    line_amount=gross_line_amount,
                     tax_code_ids=effective_tax_codes,
                     transaction_date=input.invoice_date,
                 )
                 line_tax_results.append(line_tax_result)
+                subtotal += line_tax_result.net_amount
                 tax_total += line_tax_result.total_tax
             else:
                 line_tax_results.append(None)
+                subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
 
@@ -558,16 +564,19 @@ class ARInvoiceService(ListResponseMixin):
 
         # Create new lines and their tax records
         for idx, line_input in enumerate(input.lines, start=1):
-            line_amount = (
+            # Get the pre-calculated tax result for this line
+            tax_result = line_tax_results[idx - 1]
+            gross_line_amount = (
                 line_input.quantity * line_input.unit_price - line_input.discount_amount
             )
-            if input.invoice_type == InvoiceType.CREDIT_NOTE:
-                line_amount = -abs(line_amount)
-
-            tax_result = line_tax_results[idx - 1]
+            # Use net_amount so line_amount reflects revenue (after inclusive tax extraction)
+            net_line_amount = tax_result.net_amount if tax_result else gross_line_amount
             line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
-            if input.invoice_type == InvoiceType.CREDIT_NOTE and tax_result:
-                line_tax_total = -abs(line_tax_total)
+
+            if input.invoice_type == InvoiceType.CREDIT_NOTE:
+                net_line_amount = -abs(net_line_amount)
+                if tax_result:
+                    line_tax_total = -abs(line_tax_total)
 
             effective_tax_codes = (
                 list(line_input.tax_code_ids) if line_input.tax_code_ids else []
@@ -587,7 +596,7 @@ class ARInvoiceService(ListResponseMixin):
                 description=line_input.description,
                 quantity=line_input.quantity,
                 unit_price=line_input.unit_price,
-                line_amount=line_amount,
+                line_amount=net_line_amount,
                 discount_amount=line_input.discount_amount,
                 tax_code_id=primary_tax_code_id,
                 tax_amount=line_tax_total,
@@ -1205,17 +1214,32 @@ class ARInvoiceService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Find posted invoices past due date
-        invoices = db.scalars(
-            select(Invoice).where(
-                and_(
-                    Invoice.organization_id == org_id,
-                    Invoice.status.in_(
-                        [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
-                    ),
-                    Invoice.due_date < ref_date,
+        try:
+            invoices = (
+                db.query(Invoice)
+                .filter(
+                    and_(
+                        Invoice.organization_id == org_id,
+                        Invoice.status.in_(
+                            [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
+                        ),
+                        Invoice.due_date < ref_date,
+                    )
                 )
+                .all()
             )
-        ).all()
+        except Exception:
+            invoices = db.scalars(
+                select(Invoice).where(
+                    and_(
+                        Invoice.organization_id == org_id,
+                        Invoice.status.in_(
+                            [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
+                        ),
+                        Invoice.due_date < ref_date,
+                    )
+                )
+            ).all()
 
         count = 0
         for invoice in invoices:
@@ -1291,11 +1315,12 @@ class ARInvoiceService(ListResponseMixin):
         if not invoice or invoice.organization_id != org_id:
             raise NotFoundError("Invoice not found")
 
-        return db.scalars(
-            select(InvoiceLine)
-            .where(InvoiceLine.invoice_id == inv_id)
+        return (
+            db.query(InvoiceLine)
+            .filter(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
-        ).all()
+            .all()
+        )
 
     @staticmethod
     def list(
@@ -1336,33 +1361,32 @@ class ARInvoiceService(ListResponseMixin):
 
         # Build query with eager loading to prevent N+1 queries
         # joinedload for single object (customer), selectinload for collections (lines)
-        query = (
-            select(Invoice)
-            .options(joinedload(Invoice.customer))  # Eager load customer (1:1)
-            .where(Invoice.organization_id == org_id)
-        )
+        query = db.query(Invoice).options(
+            joinedload(Invoice.customer)
+        )  # Eager load customer (1:1)
+        query = query.filter(Invoice.organization_id == org_id)
 
         # Optionally eager load lines (heavier, only when needed)
         if include_lines:
             query = query.options(selectinload(Invoice.lines))
 
         if customer_id:
-            query = query.where(Invoice.customer_id == coerce_uuid(customer_id))
+            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.where(Invoice.status == status)
+            query = query.filter(Invoice.status == status)
 
         if invoice_type:
-            query = query.where(Invoice.invoice_type == invoice_type)
+            query = query.filter(Invoice.invoice_type == invoice_type)
 
         if from_date:
-            query = query.where(Invoice.invoice_date >= from_date)
+            query = query.filter(Invoice.invoice_date >= from_date)
 
         if to_date:
-            query = query.where(Invoice.invoice_date <= to_date)
+            query = query.filter(Invoice.invoice_date <= to_date)
 
         if overdue_only:
-            query = query.where(
+            query = query.filter(
                 and_(
                     Invoice.due_date < date.today(),
                     Invoice.status.in_(
@@ -1376,7 +1400,7 @@ class ARInvoiceService(ListResponseMixin):
             )
 
         query = query.order_by(Invoice.invoice_date.desc())
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return query.limit(limit).offset(offset).all()
 
     @staticmethod
     def delete_invoice(

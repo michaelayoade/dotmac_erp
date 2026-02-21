@@ -1,26 +1,25 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Trial balance{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Trial balance</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Trial balance</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
+<a href="/finance/reports/trial-balance/export?as_of_date={{ as_of_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export CSV
+</a>
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-    </svg>
+    {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>
 {% endblock %}
@@ -32,12 +31,10 @@
         <form method="get" class="flex flex-wrap items-end gap-4">
             <div class="flex-1 min-w-[200px]">
                 <label class="form-label">As of date</label>
-                <input type="date" name="as_of_date" value="{{ as_of_date }}" class="form-input">
+                <input type="date" name="as_of_date" value="{{ as_of_date_iso }}" class="form-input">
             </div>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
+                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
                 Refresh
             </button>
         </form>
@@ -57,16 +54,12 @@
         <div class="flex justify-center mb-6 print:hidden">
             {% if is_balanced %}
             <span class="badge badge-success">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1") }}
                 Balanced
             </span>
             {% else %}
             <span class="badge badge-danger">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-4 w-4 mr-1") }}
                 Out of balance
             </span>
             {% endif %}
@@ -173,9 +166,7 @@
         {% if not assets and not liabilities and not equity and not revenue and not expenses %}
         <div class="empty-state">
             <div class="empty-state-icon">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document-report", "h-8 w-8") }}
             </div>
             <h3 class="empty-state-title">No Data Available</h3>
             <p class="empty-state-description">No account balances found for the selected period. Make sure you have posted journal entries.</p>

@@ -21,7 +21,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 from starlette.responses import Response
@@ -132,7 +132,7 @@ def _format_currency(
     currency: str | None = None,
 ) -> str:
     """Format currency with em-dash for None values."""
-    return _base_format_currency(amount, currency, none_value="\u2014")
+    return str(_base_format_currency(amount, currency, none_value="\u2014"))
 
 
 def _parse_account_status(value: str | None) -> BankAccountStatus | None:
@@ -371,6 +371,53 @@ def _line_amount(line: BankReconciliationLine) -> Decimal:
     if amount is None:
         return Decimal("0")
     return Decimal(str(amount))
+
+
+def _gl_line_as_transaction(
+    line: JournalEntryLine,
+    entry: JournalEntry,
+    bank_account: BankAccount,
+    currency: str,
+    metadata: PaymentMetadata | None = None,
+) -> dict[str, Any]:
+    """Transform a GL journal line into a transaction dict for the statements template.
+
+    For a bank *asset* account:
+    - Debit = money flowing IN  → displayed as CR (credit to the bank)
+    - Credit = money flowing OUT → displayed as DR (debit from the bank)
+    """
+    debit = line.debit_amount or Decimal("0")
+    credit = line.credit_amount or Decimal("0")
+
+    if debit > 0:
+        txn_type = "credit"  # money in
+        amount = debit
+    else:
+        txn_type = "debit"  # money out
+        amount = credit
+
+    src_type = getattr(entry, "source_document_type", None) or ""
+    source_label = _SOURCE_TYPE_LABELS.get(src_type, "Journal")
+
+    counterparty = ""
+    if metadata and metadata.counterparty_name:
+        counterparty = metadata.counterparty_name
+
+    return {
+        "transaction_date": _format_date(entry.entry_date),
+        "description": line.description or entry.description or "",
+        "reference": entry.journal_number or "",
+        "bank_name": bank_account.bank_name or "",
+        "account_number": bank_account.account_number or "",
+        "bank_account_id": str(bank_account.bank_account_id),
+        "transaction_type": txn_type,
+        "amount": _format_currency(amount, currency),
+        "raw_amount": float(amount),
+        "payee_payer": counterparty,
+        "source_label": source_label,
+        "journal_entry_id": str(entry.journal_entry_id),
+        "is_matched": None,
+    }
 
 
 def _build_active_filters(
@@ -784,83 +831,288 @@ class BankingWebService:
         limit: int = 50,
         sort: str | None = None,
         sort_dir: str | None = None,
+        match_status: str | None = None,
+        search: str | None = None,
     ) -> dict:
+        """Build context for flat bank statement lines page.
+
+        Shows bank account summary cards and imported BankStatementLine
+        rows across all statements, with categorization and match status.
+        """
+        from app.models.finance.banking.bank_statement import CategorizationStatus
+
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
 
-        status_value = _parse_statement_status(status)
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        conditions: list[Any] = [BankStatement.organization_id == org_id]
-        stmt = (
-            select(BankStatement)
-            .join(
-                BankAccount,
-                BankStatement.bank_account_id == BankAccount.bank_account_id,
-            )
-            .where(*conditions)
+        # ── Bank accounts (always shown as summary cards) ──
+        accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.bank_name, BankAccount.account_number)
+            ).all()
         )
+        account_views = [_account_view(a) for a in accounts]
 
+        # Map bank_account_id → BankAccount for enriching line views
+        bank_map: dict[UUID, BankAccount] = {a.bank_account_id: a for a in accounts}
+
+        # ── Base conditions for BankStatementLine query ──
+        base_conditions: list[Any] = [
+            BankStatement.organization_id == org_id,
+        ]
         if account_id:
-            stmt = stmt.where(BankStatement.bank_account_id == coerce_uuid(account_id))
-            conditions.append(BankStatement.bank_account_id == coerce_uuid(account_id))
-        if status_value:
-            stmt = stmt.where(BankStatement.status == status_value)
-            conditions.append(BankStatement.status == status_value)
+            base_conditions.append(
+                BankStatement.bank_account_id == coerce_uuid(account_id)
+            )
         if from_date:
-            stmt = stmt.where(BankStatement.statement_date >= from_date)
-            conditions.append(BankStatement.statement_date >= from_date)
+            base_conditions.append(BankStatementLine.transaction_date >= from_date)
         if to_date:
-            stmt = stmt.where(BankStatement.statement_date <= to_date)
-            conditions.append(BankStatement.statement_date <= to_date)
+            base_conditions.append(BankStatementLine.transaction_date <= to_date)
+        if status:
+            try:
+                cat_status = CategorizationStatus(status)
+                base_conditions.append(
+                    BankStatementLine.categorization_status == cat_status
+                )
+            except ValueError:
+                pass  # ignore invalid status filter
+        if match_status == "matched":
+            base_conditions.append(BankStatementLine.is_matched.is_(True))
+        elif match_status == "unmatched":
+            base_conditions.append(BankStatementLine.is_matched.is_(False))
 
-        total_count = (
-            db.scalar(select(func.count(BankStatement.statement_id)).where(*conditions))
-            or 0
+        search_term = (search or "").strip()
+        if search_term:
+            like_pat = f"%{search_term}%"
+            base_conditions.append(
+                or_(
+                    BankStatementLine.description.ilike(like_pat),
+                    BankStatementLine.reference.ilike(like_pat),
+                    BankStatementLine.payee_payer.ilike(like_pat),
+                    BankStatementLine.bank_reference.ilike(like_pat),
+                )
+            )
+
+        join_clause = BankStatementLine.statement_id == BankStatement.statement_id
+
+        # Count
+        count_stmt = (
+            select(func.count(BankStatementLine.line_id))
+            .join(BankStatement, join_clause)
+            .where(*base_conditions)
         )
-        statement_sort_map: dict[str, Any] = {
-            "statement_date": BankStatement.statement_date,
-            "account_name": BankAccount.account_name,
-            "status": BankStatement.status,
+        total_count = db.scalar(count_stmt) or 0
+
+        # Aggregates for stat cards
+        agg_stmt = (
+            select(
+                func.count(BankStatementLine.line_id).label("total"),
+                func.count(
+                    case(
+                        (
+                            BankStatementLine.categorization_status.is_(None),
+                            BankStatementLine.line_id,
+                        ),
+                    )
+                ).label("uncategorized"),
+                func.count(
+                    case(
+                        (
+                            BankStatementLine.categorization_status.in_(
+                                [
+                                    "SUGGESTED",
+                                    "FLAGGED",
+                                ]
+                            ),
+                            BankStatementLine.line_id,
+                        ),
+                    )
+                ).label("suggested"),
+                func.count(
+                    case(
+                        (
+                            BankStatementLine.is_matched.is_(True),
+                            BankStatementLine.line_id,
+                        ),
+                    )
+                ).label("matched"),
+                func.count(
+                    case(
+                        (
+                            BankStatementLine.is_matched.is_(False),
+                            BankStatementLine.line_id,
+                        ),
+                    )
+                ).label("unmatched"),
+            )
+            .join(BankStatement, join_clause)
+            .where(*base_conditions)
+        )
+        agg_row = db.execute(agg_stmt).one()
+        total_lines = agg_row.total or 0
+        uncategorized_count = agg_row.uncategorized or 0
+        suggested_count = agg_row.suggested or 0
+        matched_count = agg_row.matched or 0
+        unmatched_count = agg_row.unmatched or 0
+
+        # Fetch paginated statement lines
+        txn_sort_map: dict[str, Any] = {
+            "transaction_date": BankStatementLine.transaction_date,
+            "amount": BankStatementLine.amount,
+            "description": BankStatementLine.description,
         }
-        stmt = apply_sort(
-            stmt,
+        txn_stmt = (
+            select(BankStatementLine, BankStatement)
+            .join(BankStatement, join_clause)
+            .where(*base_conditions)
+        )
+        txn_stmt = apply_sort(
+            txn_stmt,
             sort,
             sort_dir,
-            statement_sort_map,
-            default=BankStatement.statement_date.desc(),
+            txn_sort_map,
+            default=BankStatementLine.transaction_date.desc(),
         )
-        statements = db.scalars(stmt.limit(limit).offset(offset)).all()
+        rows = db.execute(txn_stmt.limit(limit).offset(offset)).all()
 
-        accounts = db.scalars(
-            select(BankAccount)
-            .where(BankAccount.organization_id == org_id)
-            .order_by(BankAccount.bank_name, BankAccount.account_number)
-        ).all()
+        # Build line view dicts enriched with bank account info
+        transactions: list[dict[str, Any]] = []
+        suggested_account_ids: set[UUID] = set()
+        matched_jl_ids: set[UUID] = set()
+        for line, stmt in rows:
+            bank_acct = bank_map.get(stmt.bank_account_id)
+            currency = stmt.currency_code or (
+                bank_acct.currency_code if bank_acct else "NGN"
+            )
+            txn = _statement_line_view(line, currency)
+            txn["statement_id"] = str(stmt.statement_id)
+            txn["statement_number"] = stmt.statement_number or ""
+            txn["bank_name"] = bank_acct.bank_name if bank_acct else ""
+            txn["account_number"] = bank_acct.account_number if bank_acct else ""
+            txn["bank_account_id"] = str(stmt.bank_account_id)
+            transactions.append(txn)
+            if line.suggested_account_id:
+                suggested_account_ids.add(line.suggested_account_id)
+            if line.matched_journal_line_id:
+                matched_jl_ids.add(line.matched_journal_line_id)
 
-        total_lines = sum(statement.total_lines or 0 for statement in statements)
-        matched_lines = sum(statement.matched_lines or 0 for statement in statements)
-        unmatched_lines = sum(
-            statement.unmatched_lines or 0 for statement in statements
-        )
+        # Batch-resolve matched journal entry info
+        match_detail_map: dict[str, dict[str, str]] = {}
+        if matched_jl_ids:
+            jl_rows = db.execute(
+                select(JournalEntryLine, JournalEntry)
+                .join(
+                    JournalEntry,
+                    JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+                )
+                .where(JournalEntryLine.line_id.in_(list(matched_jl_ids)))
+            ).all()
+
+            # Batch-resolve payment metadata for source labels
+            md_pairs: list[tuple[str | None, UUID | None]] = [
+                (
+                    getattr(je, "source_document_type", None),
+                    getattr(je, "source_document_id", None),
+                )
+                for _jl, je in jl_rows
+            ]
+            md_map = resolve_payment_metadata_batch(db, md_pairs)
+
+            for jl, je in jl_rows:
+                doc_id = getattr(je, "source_document_id", None)
+                meta = md_map.get(doc_id) if doc_id else None
+                src_type = getattr(je, "source_document_type", None) or ""
+                source_label = _SOURCE_TYPE_LABELS.get(src_type, "Journal")
+                counterparty = ""
+                if meta and meta.counterparty_name:
+                    counterparty = meta.counterparty_name
+                match_detail_map[str(jl.line_id)] = {
+                    "journal_entry_id": str(je.journal_entry_id),
+                    "journal_number": je.journal_number or "",
+                    "source_label": source_label,
+                    "counterparty": counterparty,
+                }
+
+        # Enrich transactions with match details
+        for txn in transactions:
+            jl_id = txn.get("matched_journal_line_id")
+            detail = match_detail_map.get(jl_id or "") if jl_id else None
+            if detail:
+                txn["match_journal_entry_id"] = detail["journal_entry_id"]
+                txn["match_journal_number"] = detail["journal_number"]
+                txn["match_source_label"] = detail["source_label"]
+                txn["match_counterparty"] = detail["counterparty"]
+
+        # Build account name map for suggested accounts
+        account_map: dict[str, str] = {}
+        if suggested_account_ids:
+            gl_accounts = db.scalars(
+                select(Account).where(
+                    Account.account_id.in_(list(suggested_account_ids))
+                )
+            ).all()
+            account_map = {
+                str(a.account_id): f"{a.account_code} - {a.account_name}"
+                for a in gl_accounts
+            }
+
+        # Always show the Category column so the workflow is discoverable
+        has_category_data = True
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
-        account_views = [_account_view(account) for account in accounts]
+        # Status filter labels
+        cat_status_labels: dict[str, str] = {
+            "SUGGESTED": "Suggested",
+            "ACCEPTED": "Accepted",
+            "REJECTED": "Rejected",
+            "AUTO_APPLIED": "Auto-applied",
+            "FLAGGED": "Flagged",
+        }
+        match_status_labels: dict[str, str] = {
+            "matched": "Matched",
+            "unmatched": "Unmatched",
+        }
+
         active_filters = _build_active_filters(
             account_id=account_id,
             accounts=account_views,
             status=status,
             start_date=start_date,
             end_date=end_date,
+            status_labels=cat_status_labels,
         )
+        if match_status and match_status in match_status_labels:
+            active_filters.append(
+                {
+                    "name": "match_status",
+                    "value": match_status,
+                    "display_value": match_status_labels[match_status],
+                }
+            )
+        if search_term:
+            active_filters.append(
+                {
+                    "name": "search",
+                    "value": search_term,
+                    "display_value": f'Search: "{search_term}"',
+                }
+            )
 
         return {
-            "statements": [_statement_view(statement) for statement in statements],
+            "transactions": transactions,
             "accounts": account_views,
             "account_id": account_id,
             "status": status,
+            "match_status": match_status,
+            "search": search_term,
             "sort": sort,
             "sort_dir": sort_dir,
             "start_date": start_date,
@@ -871,8 +1123,12 @@ class BankingWebService:
             "total_count": total_count,
             "total_pages": total_pages,
             "total_lines": total_lines,
-            "matched_lines": matched_lines,
-            "unmatched_lines": unmatched_lines,
+            "uncategorized_count": uncategorized_count,
+            "suggested_count": suggested_count,
+            "matched_count": matched_count,
+            "unmatched_count": unmatched_count,
+            "has_category_data": has_category_data,
+            "account_map": account_map,
             "active_filters": active_filters,
         }
 
@@ -1551,6 +1807,8 @@ class BankingWebService:
             "payee_type": payee_type or "",
             "selected_type": payee_type or "",
             "active_filters": active_filters,
+            "page": page,
+            "limit": per_page,
             "total_count": total,
             "total_pages": total_pages,
             "pagination": {
@@ -1572,20 +1830,50 @@ class BankingWebService:
 
         org_id = coerce_uuid(organization_id)
 
-        # Get GL accounts for dropdown
-        accounts = db.scalars(
-            select(Account)
-            .where(Account.organization_id == org_id, Account.is_active.is_(True))
-            .order_by(Account.account_code)
-        ).all()
+        # Get GL accounts for dropdown (template uses model objects)
+        gl_accounts = list(
+            db.scalars(
+                select(Account)
+                .where(
+                    Account.organization_id == org_id,
+                    Account.is_active.is_(True),
+                )
+                .order_by(Account.account_code)
+            ).all()
+        )
 
-        account_options = [
-            {
-                "value": str(a.account_id),
-                "label": f"{a.account_code} - {a.account_name}",
-            }
-            for a in accounts
-        ]
+        # Tax codes for dropdown
+        from app.models.finance.tax.tax_code import TaxCode
+
+        tax_codes = list(
+            db.scalars(
+                select(TaxCode)
+                .where(
+                    TaxCode.organization_id == org_id,
+                    TaxCode.is_active.is_(True),
+                )
+                .order_by(TaxCode.tax_code)
+            ).all()
+        )
+
+        # Suppliers and customers for optional linking
+        from app.models.finance.ap.supplier import Supplier
+        from app.models.finance.ar.customer import Customer
+
+        suppliers = list(
+            db.scalars(
+                select(Supplier)
+                .where(Supplier.organization_id == org_id)
+                .order_by(Supplier.legal_name)
+            ).all()
+        )
+        customers = list(
+            db.scalars(
+                select(Customer)
+                .where(Customer.organization_id == org_id)
+                .order_by(Customer.legal_name)
+            ).all()
+        )
 
         payee = None
         if payee_id:
@@ -1593,28 +1881,17 @@ class BankingWebService:
             if payee and payee.organization_id != org_id:
                 payee = None
 
-        payee_data = None
-        if payee:
-            payee_data = {
-                "payee_id": str(payee.payee_id),
-                "payee_name": payee.payee_name,
-                "payee_type": payee.payee_type.value if payee.payee_type else "",
-                "name_patterns": payee.name_patterns or "",
-                "default_account_id": str(payee.default_account_id)
-                if payee.default_account_id
-                else "",
-                "notes": payee.notes or "",
-                "is_active": payee.is_active,
-            }
-
         return {
-            "payee": payee_data,
+            "payee": payee,
             "is_edit": payee is not None,
             "payee_types": [
                 {"value": t.value, "label": t.value.replace("_", " ").title()}
                 for t in PayeeType
             ],
-            "accounts": account_options,
+            "gl_accounts": gl_accounts,
+            "tax_codes": tax_codes,
+            "suppliers": suppliers,
+            "customers": customers,
         }
 
     # =========================================================================
@@ -1744,6 +2021,8 @@ class BankingWebService:
             "active_count": active_count,
             "auto_apply_count": auto_apply_count,
             "total_matches": total_matches,
+            "page": page,
+            "limit": per_page,
             "total_count": total,
             "total_pages": total_pages,
             "pagination": {
@@ -2198,6 +2477,7 @@ class BankingWebService:
         search: str | None,
         status: str | None,
         page: int,
+        limit: int = 50,
         sort: str | None = None,
         sort_dir: str | None = None,
     ) -> HTMLResponse:
@@ -2209,6 +2489,7 @@ class BankingWebService:
                 search=search,
                 status=status,
                 page=page,
+                limit=limit,
                 sort=sort,
                 sort_dir=sort_dir,
             )
@@ -2296,10 +2577,13 @@ class BankingWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        limit: int = 50,
         sort: str | None = None,
         sort_dir: str | None = None,
+        match_status: str | None = None,
+        search: str | None = None,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Statements", "banking", db=db)
+        context = base_context(request, auth, "Bank Transactions", "banking", db=db)
         context.update(
             self.list_statements_context(
                 db,
@@ -2309,12 +2593,179 @@ class BankingWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                limit=limit,
                 sort=sort,
                 sort_dir=sort_dir,
+                match_status=match_status,
+                search=search,
             )
         )
         return templates.TemplateResponse(
             request, "finance/banking/statements.html", context
+        )
+
+    @staticmethod
+    def list_statement_imports_context(
+        db: Session,
+        organization_id: str,
+        account_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        page: int,
+        limit: int = 25,
+        sort: str | None = None,
+        sort_dir: str | None = None,
+        search: str | None = None,
+    ) -> dict:
+        """Build context for statement imports list (header-level view).
+
+        Shows imported BankStatement headers grouped by bank account,
+        each linking to the per-statement detail/matching page.
+        """
+        org_id = coerce_uuid(organization_id)
+        offset = (page - 1) * limit
+
+        from_date = _parse_date(start_date)
+        to_date = _parse_date(end_date)
+
+        # ── Bank accounts for filter dropdown ──
+        accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.bank_name, BankAccount.account_number)
+            ).all()
+        )
+
+        # ── Statement headers query ──
+        stmt = (
+            select(BankStatement)
+            .join(
+                BankAccount,
+                BankStatement.bank_account_id == BankAccount.bank_account_id,
+            )
+            .where(BankStatement.organization_id == org_id)
+        )
+
+        if account_id:
+            stmt = stmt.where(BankStatement.bank_account_id == coerce_uuid(account_id))
+        parsed_status = _parse_statement_status(status)
+        if parsed_status:
+            stmt = stmt.where(BankStatement.status == parsed_status)
+        if from_date:
+            stmt = stmt.where(BankStatement.statement_date >= from_date)
+        if to_date:
+            stmt = stmt.where(BankStatement.statement_date <= to_date)
+        if search:
+            stmt = stmt.where(BankStatement.statement_number.ilike(f"%{search}%"))
+
+        # ── Sorting ──
+        sort_col = sort or "statement_date"
+        col_map: dict[str, Any] = {
+            "statement_date": BankStatement.statement_date,
+            "statement_number": BankStatement.statement_number,
+            "total_lines": BankStatement.total_lines,
+        }
+        order_col = col_map.get(sort_col, BankStatement.statement_date)
+        if (sort_dir or "desc").lower() == "asc":
+            stmt = stmt.order_by(order_col.asc())
+        else:
+            stmt = stmt.order_by(order_col.desc())
+
+        # ── Count + paginate ──
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_count: int = db.scalar(count_stmt) or 0
+        total_pages = max(1, (total_count + limit - 1) // limit)
+
+        statements = list(db.scalars(stmt.offset(offset).limit(limit)).all())
+
+        # ── Aggregates ──
+        total_lines = sum(s.total_lines or 0 for s in statements)
+        matched_lines = sum(s.matched_lines or 0 for s in statements)
+
+        # ── Active filters ──
+        active_filters: list[dict[str, str]] = []
+        base_params = ""
+        if account_id:
+            acct = next(
+                (a for a in accounts if str(a.bank_account_id) == account_id),
+                None,
+            )
+            label = (
+                f"{acct.bank_name} - {acct.account_number}"
+                if acct
+                else "Selected Account"
+            )
+            active_filters.append({"label": label, "param": "account_id"})
+            base_params += f"&account_id={account_id}"
+        if status:
+            active_filters.append(
+                {
+                    "label": f"Status: {status.replace('_', ' ').title()}",
+                    "param": "status",
+                }
+            )
+        if search:
+            active_filters.append({"label": f'Search: "{search}"', "param": "search"})
+
+        return {
+            "statements": [_statement_view(s) for s in statements],
+            "accounts": [_account_view(a) for a in accounts],
+            "account_id": account_id or "",
+            "status": status or "",
+            "search": search or "",
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+            "sort": sort_col,
+            "sort_dir": sort_dir or "desc",
+            "page": page,
+            "limit": limit,
+            "offset": offset,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "total_lines": total_lines,
+            "matched_lines": matched_lines,
+            "unmatched_lines": total_lines - matched_lines,
+            "active_filters": active_filters,
+        }
+
+    def list_statement_imports_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        page: int,
+        limit: int = 25,
+        sort: str | None = None,
+        sort_dir: str | None = None,
+        search: str | None = None,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Imported Statements", "banking", db=db)
+        context.update(
+            self.list_statement_imports_context(
+                db,
+                str(auth.organization_id),
+                account_id=account_id,
+                status=status,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+                limit=limit,
+                sort=sort,
+                sort_dir=sort_dir,
+                search=search,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/banking/statement_imports.html", context
         )
 
     def statement_import_form_response(
@@ -2930,7 +3381,8 @@ class BankingWebService:
         date_format_key = org.date_format
         if not isinstance(date_format_key, str):
             return None
-        return DATE_FORMAT_MAP.get(date_format_key)
+        date_format = DATE_FORMAT_MAP.get(date_format_key)
+        return str(date_format) if date_format is not None else None
 
     @staticmethod
     def _format_validation_errors(exc: ValidationError) -> list[str]:
@@ -3058,6 +3510,150 @@ class BankingWebService:
 
         return RedirectResponse(
             url=f"/finance/banking/statements/{statement_id}?success=Suggestion+rejected",
+            status_code=303,
+        )
+
+    # ------------------------------------------------------------------
+    # Flat-view response methods (operate on lines across all statements)
+    # ------------------------------------------------------------------
+
+    def apply_rules_flat_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> RedirectResponse:
+        """Apply categorization rules to all unprocessed lines for a bank account."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        service = TransactionCategorizationService()
+        result = service.apply_rules_to_account(db, org_id, coerce_uuid(account_id))
+        db.commit()
+
+        msg = (
+            f"{result.categorized_count}+suggested,"
+            f"{result.high_confidence_count}+auto-applied,"
+            f"{result.no_match_count}+no+match"
+        )
+        return RedirectResponse(
+            url=f"/finance/banking/statements?account_id={account_id}&success={msg}",
+            status_code=303,
+        )
+
+    def accept_suggestion_flat_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        line_id: str,
+    ) -> RedirectResponse:
+        """Accept a categorization suggestion from the flat lines view."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Resolve the line's bank account for redirect
+        line = (
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    BankStatementLine.line_id == coerce_uuid(line_id),
+                    BankStatement.organization_id == org_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        account_id = ""
+        if line:
+            stmt = db.get(BankStatement, line.statement_id)
+            if stmt:
+                account_id = str(stmt.bank_account_id)
+
+        service = TransactionCategorizationService()
+        try:
+            service.accept_suggestion(
+                db, org_id, coerce_uuid(line_id), accepted_by=auth.person_id
+            )
+            db.commit()
+        except ValueError as exc:
+            logger.warning("Accept suggestion (flat) failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/statements?account_id={account_id}&error={exc}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=(
+                f"/finance/banking/statements?account_id={account_id}"
+                "&success=Suggestion+accepted"
+            ),
+            status_code=303,
+        )
+
+    def reject_suggestion_flat_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        line_id: str,
+    ) -> RedirectResponse:
+        """Reject a categorization suggestion from the flat lines view."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Resolve the line's bank account for redirect
+        line = (
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    BankStatementLine.line_id == coerce_uuid(line_id),
+                    BankStatement.organization_id == org_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        account_id = ""
+        if line:
+            stmt = db.get(BankStatement, line.statement_id)
+            if stmt:
+                account_id = str(stmt.bank_account_id)
+
+        service = TransactionCategorizationService()
+        try:
+            service.reject_suggestion(db, org_id, coerce_uuid(line_id))
+            db.commit()
+        except ValueError as exc:
+            logger.warning("Reject suggestion (flat) failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/statements?account_id={account_id}&error={exc}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=(
+                f"/finance/banking/statements?account_id={account_id}"
+                "&success=Suggestion+rejected"
+            ),
             status_code=303,
         )
 
@@ -3661,6 +4257,83 @@ class BankingWebService:
         )
         return await service.bulk_export(req.ids, req.format)
 
+    async def bulk_export_accounts_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> Response:
+        """Handle bulk export bank accounts request."""
+        from app.schemas.bulk_actions import BulkExportRequest
+        from app.services.finance.banking.bulk import get_account_bulk_service
+
+        body = await request.json()
+        req = BulkExportRequest(**body)
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.bulk_export(req.ids, req.format)
+
+    async def export_all_accounts_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+    ) -> Response:
+        """Export all bank accounts matching filters."""
+        from app.services.finance.banking.bulk import get_account_bulk_service
+
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.export_all(search=search, status=status)
+
+    async def bulk_export_payees_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> Response:
+        """Handle bulk export payees request."""
+        from app.schemas.bulk_actions import BulkExportRequest
+        from app.services.finance.banking.bulk import get_payee_bulk_service
+
+        body = await request.json()
+        req = BulkExportRequest(**body)
+        service = get_payee_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.bulk_export(req.ids, req.format)
+
+    async def export_all_payees_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        payee_type: str = "",
+    ) -> Response:
+        """Export all payees matching filters."""
+        from app.services.finance.banking.bulk import get_payee_bulk_service
+
+        service = get_payee_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        extra_filters: dict[str, str] = {}
+        if payee_type:
+            extra_filters["payee_type"] = payee_type
+        return await service.export_all(
+            search=search, extra_filters=extra_filters if extra_filters else None
+        )
+
     def list_reconciliations_response(
         self,
         request: Request,
@@ -3671,6 +4344,7 @@ class BankingWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        limit: int = 50,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Bank Reconciliations", "banking", db=db)
         context.update(
@@ -3682,6 +4356,7 @@ class BankingWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                limit=limit,
             )
         )
         return templates.TemplateResponse(
@@ -3758,6 +4433,7 @@ class BankingWebService:
         search: str | None,
         payee_type: str | None,
         page: int,
+        limit: int = 25,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Payees", "banking", db=db)
         context.update(
@@ -3767,6 +4443,7 @@ class BankingWebService:
                 search=search,
                 payee_type=payee_type,
                 page=page,
+                per_page=limit,
             )
         )
         return templates.TemplateResponse(
@@ -3811,6 +4488,7 @@ class BankingWebService:
         db: Session,
         rule_type: str | None,
         page: int,
+        limit: int = 25,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Transaction Rules", "banking", db=db)
         context.update(
@@ -3819,6 +4497,7 @@ class BankingWebService:
                 str(auth.organization_id),
                 rule_type=rule_type,
                 page=page,
+                per_page=limit,
             )
         )
         return templates.TemplateResponse(
@@ -4548,6 +5227,199 @@ class BankingWebService:
                 url=f"/finance/banking/payees/{payee_id}?error={exc}",
                 status_code=303,
             )
+
+    # =========================================================================
+    # Dashboard
+    # =========================================================================
+
+    @staticmethod
+    def dashboard_context(
+        db: Session,
+        organization_id: str,
+    ) -> dict[str, Any]:
+        """Build context for the banking dashboard page."""
+        org_id = coerce_uuid(organization_id)
+
+        # ── Account totals ──
+        accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.bank_name, BankAccount.account_name)
+            ).all()
+        )
+
+        total_balance = sum(
+            (a.last_statement_balance or Decimal("0") for a in accounts),
+            Decimal("0"),
+        )
+
+        # ── Unreconciled transaction count ──
+        gl_account_ids = [a.gl_account_id for a in accounts if a.gl_account_id]
+
+        unreconciled_count = 0
+        if gl_account_ids:
+            # Count posted GL lines against bank accounts that are unmatched
+            # (no matching bank statement line)
+            unreconciled_count = (
+                db.scalar(
+                    select(func.count(JournalEntryLine.line_id))
+                    .join(
+                        JournalEntry,
+                        JournalEntryLine.journal_entry_id
+                        == JournalEntry.journal_entry_id,
+                    )
+                    .where(
+                        JournalEntry.organization_id == org_id,
+                        JournalEntry.status == JournalStatus.POSTED,
+                        JournalEntryLine.account_id.in_(gl_account_ids),
+                        ~JournalEntryLine.line_id.in_(
+                            select(BankStatementLine.matched_journal_line_id).where(
+                                BankStatementLine.matched_journal_line_id.isnot(None)
+                            )
+                        ),
+                    )
+                )
+                or 0
+            )
+
+        # ── MTD inflows/outflows ──
+        today = date.today()
+        month_start = today.replace(day=1)
+        inflows_mtd = Decimal("0")
+        outflows_mtd = Decimal("0")
+
+        if gl_account_ids:
+            mtd_row = db.execute(
+                select(
+                    func.coalesce(
+                        func.sum(JournalEntryLine.debit_amount), Decimal("0")
+                    ).label("total_debits"),
+                    func.coalesce(
+                        func.sum(JournalEntryLine.credit_amount), Decimal("0")
+                    ).label("total_credits"),
+                )
+                .join(
+                    JournalEntry,
+                    JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+                )
+                .where(
+                    JournalEntry.organization_id == org_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntryLine.account_id.in_(gl_account_ids),
+                    JournalEntry.entry_date >= month_start,
+                    JournalEntry.entry_date <= today,
+                )
+            ).one()
+            # For bank asset accounts: debit = money in, credit = money out
+            inflows_mtd = mtd_row.total_debits or Decimal("0")
+            outflows_mtd = mtd_row.total_credits or Decimal("0")
+
+        # ── Reconciliation status ──
+        recon_counts: dict[ReconciliationStatus, int] = {
+            row[0]: row[1]
+            for row in db.execute(
+                select(
+                    BankReconciliation.status,
+                    func.count(BankReconciliation.reconciliation_id),
+                )
+                .where(BankReconciliation.organization_id == org_id)
+                .group_by(BankReconciliation.status)
+            ).all()
+        }
+
+        # ── Recent transactions (last 10) ──
+        recent_transactions: list[dict[str, Any]] = []
+        if gl_account_ids:
+            gl_to_bank: dict[UUID, BankAccount] = {}
+            for acct in accounts:
+                if acct.gl_account_id and acct.gl_account_id not in gl_to_bank:
+                    gl_to_bank[acct.gl_account_id] = acct
+
+            txn_stmt = (
+                select(JournalEntryLine, JournalEntry)
+                .join(
+                    JournalEntry,
+                    JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+                )
+                .where(
+                    JournalEntry.organization_id == org_id,
+                    JournalEntry.status == JournalStatus.POSTED,
+                    JournalEntryLine.account_id.in_(gl_account_ids),
+                )
+                .order_by(JournalEntry.entry_date.desc())
+                .limit(10)
+            )
+            rows = db.execute(txn_stmt).all()
+
+            # Batch-resolve payment metadata
+            metadata_pairs = [
+                (
+                    getattr(entry, "source_document_type", None),
+                    getattr(entry, "source_document_id", None),
+                )
+                for _line, entry in rows
+            ]
+            metadata_map = resolve_payment_metadata_batch(db, metadata_pairs)
+
+            for line, entry in rows:
+                bank_acct = gl_to_bank.get(line.account_id)
+                if not bank_acct:
+                    continue
+                currency = bank_acct.currency_code or "NGN"
+                doc_id = getattr(entry, "source_document_id", None)
+                meta = metadata_map.get(doc_id) if doc_id else None
+                txn = _gl_line_as_transaction(line, entry, bank_acct, currency, meta)
+                recent_transactions.append(txn)
+
+        # ── Account balances for display ──
+        account_balances = [
+            {
+                "bank_account_id": a.bank_account_id,
+                "bank_name": a.bank_name,
+                "account_name": a.account_name,
+                "account_number": a.account_number,
+                "currency_code": a.currency_code,
+                "balance": _format_currency(a.last_statement_balance, a.currency_code),
+                "last_reconciled_date": _format_date(a.last_reconciled_date),
+                "status": a.status.value if a.status else "",
+            }
+            for a in accounts
+        ]
+
+        org_currency = accounts[0].currency_code if accounts else "NGN"
+
+        return {
+            "total_balance": _format_currency(total_balance, org_currency),
+            "unreconciled_count": unreconciled_count,
+            "inflows_mtd": _format_currency(inflows_mtd, org_currency),
+            "outflows_mtd": _format_currency(outflows_mtd, org_currency),
+            "recent_transactions": recent_transactions,
+            "account_balances": account_balances,
+            "account_count": len(accounts),
+            "recon_draft": recon_counts.get(ReconciliationStatus.draft, 0),
+            "recon_pending_review": recon_counts.get(
+                ReconciliationStatus.pending_review, 0
+            ),
+            "recon_approved": recon_counts.get(ReconciliationStatus.approved, 0),
+            "recon_rejected": recon_counts.get(ReconciliationStatus.rejected, 0),
+        }
+
+    def dashboard_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """Render the banking dashboard page."""
+        context = base_context(request, auth, "Banking", "banking", db=db)
+        context.update(self.dashboard_context(db, str(auth.organization_id)))
+        return templates.TemplateResponse(
+            request, "finance/banking/dashboard.html", context
+        )
 
 
 banking_web_service = BankingWebService()

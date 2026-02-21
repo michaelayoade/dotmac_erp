@@ -73,12 +73,19 @@ class BulkActionService(ABC, Generic[T]):
 
         coerced_ids = [coerce_uuid(id) for id in ids]
 
-        return select(self.model).where(
-            and_(
-                org_col == self.organization_id,
-                id_col.in_(coerced_ids),
+        try:
+            return (
+                self.db.query(self.model)
+                .filter(org_col == self.organization_id)
+                .filter(id_col.in_(coerced_ids))
             )
-        )
+        except Exception:
+            return select(self.model).where(
+                and_(
+                    org_col == self.organization_id,
+                    id_col.in_(coerced_ids),
+                )
+            )
 
     def _get_entities(self, ids: list[UUID]) -> list[T]:
         """
@@ -90,7 +97,10 @@ class BulkActionService(ABC, Generic[T]):
         Returns:
             List of entity instances
         """
-        return cast(list[T], self.db.scalars(self._get_base_query(ids)).all())
+        query = self._get_base_query(ids)
+        if hasattr(query, "all"):
+            return cast(list[T], query.all())
+        return cast(list[T], self.db.scalars(query).all())
 
     @abstractmethod
     def can_delete(self, entity: T) -> tuple[bool, str]:

@@ -1,23 +1,16 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 
 {% block page_title %}Maintenance Details{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/fleet/maintenance" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Maintenance</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Details</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet/maintenance" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Maintenance</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Details</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -28,10 +21,7 @@
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div class="flex items-start gap-4">
                 <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg">
-                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
+                    {{ icon_svg("cog", "h-7 w-7") }}
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-display">{{ record.maintenance_type | replace('_', ' ') | title }}</h2>
@@ -60,11 +50,11 @@
                 <dl class="grid grid-cols-2 gap-4">
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Scheduled Date</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.scheduled_date.strftime('%b %d, %Y') }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.scheduled_date | format_date }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Completed Date</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.completed_date.strftime('%b %d, %Y') if record.completed_date else '-' }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.completed_date | format_date if record.completed_date else '-' }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Odometer at Service</dt>
@@ -72,7 +62,7 @@
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Next Service Date</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.next_service_date.strftime('%b %d, %Y') if record.next_service_date else '-' }}</dd>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.next_service_date | format_date if record.next_service_date else '-' }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Next Service Odometer</dt>
@@ -152,11 +142,11 @@
     <!-- Back -->
     <div class="flex items-center gap-3">
         <a href="/fleet/maintenance" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-2") }}
             Back to Maintenance
         </a>
     </div>
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

@@ -398,7 +398,7 @@ class TransactionCategorizationService:
         conditions: dict,
         line: BankStatementLine,
     ) -> tuple[int, str] | None:
-        """Evaluate payee pattern match."""
+        """Evaluate payee pattern match (word-boundary aware)."""
         patterns = conditions.get("patterns", [])
         # Also support legacy single "payee_name" field
         legacy_name = conditions.get("payee_name", "")
@@ -407,14 +407,13 @@ class TransactionCategorizationService:
         case_sensitive = conditions.get("case_sensitive", False)
 
         search_text = f"{line.payee_payer or ''} {line.description or ''}"
-        if not case_sensitive:
-            search_text = search_text.upper()
+        flags = 0 if case_sensitive else re.IGNORECASE
 
         for pattern in patterns:
             if not pattern:
                 continue
-            check_pattern = pattern if case_sensitive else pattern.upper()
-            if check_pattern in search_text:
+            escaped = re.escape(pattern)
+            if re.search(rf"\b{escaped}\b", search_text, flags):
                 return (90, f"Payee pattern matched: {pattern}")
 
         return None
@@ -587,18 +586,18 @@ class TransactionCategorizationService:
         search_upper = search_text.upper()
         name_upper = payee.payee_name.upper()
 
-        # Exact name match = 95%
-        if name_upper in search_upper:
+        # Exact name match = 95% (word-boundary aware)
+        if Payee.word_boundary_match(payee.payee_name, search_text):
             # Higher confidence if it's at the start
             if search_upper.startswith(name_upper):
                 return 95
             return 90
 
-        # Pattern match = 80-85%
+        # Pattern match = 80-85% (word-boundary aware)
         if payee.name_patterns:
-            patterns = [p.strip().upper() for p in payee.name_patterns.split("|")]
+            patterns = [p.strip() for p in payee.name_patterns.split("|")]
             for pattern in patterns:
-                if pattern and pattern in search_upper:
+                if pattern and Payee.word_boundary_match(pattern, search_text):
                     return 85
 
         return 75
@@ -648,7 +647,6 @@ class TransactionCategorizationService:
         Returns:
             BatchCategorizationResult with processing counts.
         """
-        from app.models.finance.banking.bank_statement import CategorizationStatus
 
         # Fetch lines that haven't been categorized yet and aren't matched
         lines = list(
@@ -664,6 +662,80 @@ class TransactionCategorizationService:
             .scalars()
             .all()
         )
+
+        batch = self._process_categorization_batch(db, organization_id, lines)
+
+        db.flush()
+        logger.info(
+            "Applied rules to statement %s: %d lines, %d categorized, "
+            "%d auto-applied, %d no match",
+            statement_id,
+            batch.total_lines,
+            batch.categorized_count,
+            batch.high_confidence_count,
+            batch.no_match_count,
+        )
+        return batch
+
+    def apply_rules_to_account(
+        self,
+        db: Session,
+        organization_id: UUID,
+        bank_account_id: UUID,
+        applied_by: UUID | None = None,
+    ) -> BatchCategorizationResult:
+        """Run categorization rules against unprocessed lines for a bank account.
+
+        Queries across all statements for the given bank account, processing
+        lines that haven't been categorized yet and aren't matched.
+
+        Returns:
+            BatchCategorizationResult with processing counts.
+        """
+        lines = list(
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    BankStatement.organization_id == organization_id,
+                    BankStatement.bank_account_id == bank_account_id,
+                    BankStatementLine.is_matched.is_(False),
+                    BankStatementLine.categorization_status.is_(None),
+                )
+                .order_by(
+                    BankStatementLine.transaction_date,
+                    BankStatementLine.line_number,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        batch = self._process_categorization_batch(db, organization_id, lines)
+
+        db.flush()
+        logger.info(
+            "Applied rules to account %s: %d lines, %d categorized, "
+            "%d auto-applied, %d no match",
+            bank_account_id,
+            batch.total_lines,
+            batch.categorized_count,
+            batch.high_confidence_count,
+            batch.no_match_count,
+        )
+        return batch
+
+    def _process_categorization_batch(
+        self,
+        db: Session,
+        organization_id: UUID,
+        lines: list[BankStatementLine],
+    ) -> BatchCategorizationResult:
+        """Shared batch loop: categorize lines, persist suggestions, auto-apply.
+
+        Does NOT flush — callers are responsible for flushing/committing.
+        """
+        from app.models.finance.banking.bank_statement import CategorizationStatus
 
         batch = BatchCategorizationResult(total_lines=len(lines))
 
@@ -709,16 +781,6 @@ class TransactionCategorizationService:
             else:
                 batch.low_confidence_count += 1
 
-        db.flush()
-        logger.info(
-            "Applied rules to statement %s: %d lines, %d categorized, "
-            "%d auto-applied, %d no match",
-            statement_id,
-            batch.total_lines,
-            batch.categorized_count,
-            batch.high_confidence_count,
-            batch.no_match_count,
-        )
         return batch
 
     def accept_suggestion(

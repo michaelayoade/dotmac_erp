@@ -1010,8 +1010,11 @@ class ExpensePostingAdapter:
         from app.models.finance.gl.account import Account
 
         org = db.get(Organization, organization_id)
-        if org and hasattr(org, "employee_payable_account_id"):
+        if org:
             acc_id: UUID | None = getattr(org, "employee_payable_account_id", None)
+            if not acc_id:
+                # Backward-compatible org setting name used in tests/config seeds.
+                acc_id = getattr(org, "salary_payable_account_id", None)
             if acc_id:
                 return acc_id
 

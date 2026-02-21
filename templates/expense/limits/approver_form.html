@@ -1,12 +1,11 @@
 {% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block content %}
 <div class="space-y-6">
     <div class="flex items-center gap-4">
         <a href="/expense/limits/approvers" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left") }}
         </a>
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">

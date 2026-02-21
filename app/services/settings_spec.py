@@ -755,6 +755,16 @@ SETTINGS_SPECS: list[SettingSpec] = [
         label="Ministerial Threshold (NGN)",
         description="Maximum value for Ministerial Tenders Board (PPA 2007 default: 1,000,000,000)",
     ),
+    # Settings Domain: App-level configuration content
+    SettingSpec(
+        domain=SettingDomain.settings,
+        key="help_center_content_json",
+        env_var=None,
+        value_type=SettingValueType.json,
+        default=None,
+        label="Help Center Content Override",
+        description="Optional JSON override for /help manuals, journeys, workflows, and troubleshooting.",
+    ),
     # Payroll Domain Settings
     SettingSpec(
         domain=SettingDomain.payroll,

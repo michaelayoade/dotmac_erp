@@ -35,11 +35,10 @@ def build_item_query(
     """
     org_id = coerce_uuid(organization_id)
 
-    query = (
-        Query([Item], session=db)
-        .join(ItemCategory, Item.category_id == ItemCategory.category_id)
-        .filter(Item.organization_id == org_id)
+    query = db.query(Item).join(
+        ItemCategory, Item.category_id == ItemCategory.category_id
     )
+    query = query.filter(Item.organization_id == org_id)
 
     category_id = _try_uuid(category)
     if category_id:

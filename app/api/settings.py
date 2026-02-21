@@ -48,6 +48,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -630,7 +634,6 @@ def get_or_create_branding(
     service = BrandingService(db)
     user_id = auth.get("user_id") if auth else None
     branding = service.get_or_create(org_id, user_id)
-    db.commit()
     return branding
 
 
@@ -651,7 +654,6 @@ def create_branding(
     user_id = auth.get("user_id") if auth else None
     try:
         branding = service.create(payload, user_id)
-        db.commit()
         return branding
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -674,7 +676,6 @@ def update_branding(
     branding = service.update(branding_id, payload)
     if not branding:
         raise HTTPException(status_code=404, detail="Branding not found")
-    db.commit()
     return branding
 
 
@@ -693,7 +694,6 @@ def delete_branding(
     service = BrandingService(db)
     if not service.delete(branding_id):
         raise HTTPException(status_code=404, detail="Branding not found")
-    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

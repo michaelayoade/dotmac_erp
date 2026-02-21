@@ -1,0 +1,7 @@
+category_name,default_useful_life_months,depreciation_method,notes
+ICT Equipment,60,STRAIGHT_LINE,"Desktops, laptops, routers, switches, network devices"
+Power Equipment,48,STRAIGHT_LINE,"Inverters, batteries, solar/control units; adjust batteries lower if needed"
+Motor Vehicle,60,STRAIGHT_LINE,Cars and light vehicles
+Furniture & Fittings,84,STRAIGHT_LINE,Office furniture and fittings
+Technical Tools,36,STRAIGHT_LINE,Specialized tools/splicers; validate with engineering
+Other Fixed Asset,60,STRAIGHT_LINE,Fallback pending asset-specific policy

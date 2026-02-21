@@ -1,15 +1,15 @@
 {% extends "procurement/base_procurement.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}Requisition {{ requisition.requisition_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <a href="/procurement/requisitions" class="hover:text-amber-600 transition-colors">Requisitions</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ requisition.requisition_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/procurement/requisitions" class="hover:text-amber-600 transition-colors">Requisitions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ requisition.requisition_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,7 +18,7 @@
 <form method="post" action="/procurement/requisitions/{{ requisition.requisition_id }}/submit" class="inline">
     {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-primary">
-        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        {{ icon_svg("chevron-right", "h-4 w-4 mr-2") }}
         Submit for Approval
     </button>
 </form>
@@ -54,7 +54,7 @@
             </div>
             <div>
                 <span class="text-slate-500 dark:text-slate-400">Created:</span>
-                <p class="font-semibold text-slate-900 dark:text-white">{{ requisition.created_at.strftime('%Y-%m-%d') }}</p>
+                <p class="font-semibold text-slate-900 dark:text-white">{{ requisition.created_at | format_date }}</p>
             </div>
         </div>
         {% if requisition.justification %}
@@ -120,7 +120,7 @@
                 <div class="flex-shrink-0 w-2 h-2 rounded-full {% if approval.decision == 'APPROVED' %}bg-emerald-500{% elif approval.decision == 'REJECTED' %}bg-rose-500{% else %}bg-amber-500{% endif %}"></div>
                 <div>
                     <span class="font-medium text-slate-900 dark:text-white">{{ approval.decision }}</span>
-                    <span class="text-slate-500 dark:text-slate-400">by {{ approval.approver_name }} on {{ approval.decided_at.strftime('%Y-%m-%d %H:%M') if approval.decided_at else 'Pending' }}</span>
+                    <span class="text-slate-500 dark:text-slate-400">by {{ approval.approver_name }} on {{ approval.decided_at | format_datetime if approval.decided_at else 'Pending' }}</span>
                     {% if approval.comments %}<p class="text-slate-500 dark:text-slate-400 mt-0.5">{{ approval.comments }}</p>{% endif %}
                 </div>
             </div>
@@ -128,5 +128,7 @@
         </div>
     </div>
     {% endif %}
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

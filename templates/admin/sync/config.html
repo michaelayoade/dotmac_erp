@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}ERPNext Integration{% endblock %}
 {% block page_subtitle %}Configure ERPNext sync credentials{% endblock %}
@@ -8,9 +9,7 @@
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm">
         <a href="/admin/sync" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">Sync Management</a>
-        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
+        {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
         <span class="text-slate-900 dark:text-white font-medium">Configuration</span>
     </nav>
 
@@ -18,9 +17,7 @@
     {% if request.query_params.get('success') %}
     <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-900/20">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
             <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') | urldecode }}</p>
         </div>
     </div>
@@ -29,9 +26,7 @@
     {% if request.query_params.get('error') %}
     <div class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-900/20">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
             <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') | urldecode }}</p>
         </div>
     </div>
@@ -132,9 +127,7 @@
 
                 <div class="flex items-center gap-4 pt-4">
                     <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4") }}
                         Save Configuration
                     </button>
                     <a href="/admin/sync" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
@@ -150,14 +143,12 @@
                 <form action="/admin/sync/config/test" method="post">
                     <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                     <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
+                        {{ icon_svg("lightning-bolt", "h-4 w-4") }}
                         Test Connection
                     </button>
                 </form>
                 {% if config.last_verified_at %}
-                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Last verified: {{ config.last_verified_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Last verified: {{ config.last_verified_at | format_datetime }}</p>
                 {% endif %}
             </div>
             {% endif %}
@@ -196,51 +187,35 @@
                 <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">The following data types can be synced from ERPNext:</p>
                 <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-300">
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Chart of Accounts
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Customers & Suppliers
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Items & Warehouses
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Material Requests
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Fixed Assets
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Employees & HR Data
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Projects & Tasks
                     </li>
                     <li class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "h-4 w-4 text-emerald-500") }}
                         Support Tickets
                     </li>
                 </ul>
@@ -260,7 +235,7 @@
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-sm text-slate-600 dark:text-slate-300">Last Updated</span>
-                        <span class="text-sm text-slate-500 dark:text-slate-400">{{ config.updated_at.strftime('%Y-%m-%d %H:%M') if config.updated_at else config.created_at.strftime('%Y-%m-%d %H:%M') if config.created_at else '-' }}</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400">{{ config.updated_at | format_datetime if config.updated_at else config.created_at | format_datetime if config.created_at else '-' }}</span>
                     </div>
                 </div>
             </div>

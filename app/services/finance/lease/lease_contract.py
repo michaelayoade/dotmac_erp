@@ -13,7 +13,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -468,7 +467,7 @@ class LeaseContractService(ListResponseMixin):
     ) -> LeaseLiability | None:
         """Get the lease liability for a contract."""
         ls_id = coerce_uuid(lease_id)
-        return db.scalar(select(LeaseLiability).where(LeaseLiability.lease_id == ls_id))
+        return db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
 
     @staticmethod
     def get_asset(
@@ -477,7 +476,7 @@ class LeaseContractService(ListResponseMixin):
     ) -> LeaseAsset | None:
         """Get the ROU asset for a contract."""
         ls_id = coerce_uuid(lease_id)
-        return db.scalar(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id))
+        return db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
 
     @staticmethod
     def list(
@@ -491,29 +490,29 @@ class LeaseContractService(ListResponseMixin):
         offset: int = 0,
     ) -> list[LeaseContract]:
         """List lease contracts with optional filters."""
-        query = select(LeaseContract)
+        query = db.query(LeaseContract)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 LeaseContract.organization_id == coerce_uuid(organization_id)
             )
 
         if classification:
-            query = query.where(LeaseContract.classification == classification)
+            query = query.filter(LeaseContract.classification == classification)
 
         if status:
-            query = query.where(LeaseContract.status == status)
+            query = query.filter(LeaseContract.status == status)
 
         if lessor_supplier_id:
-            query = query.where(
+            query = query.filter(
                 LeaseContract.lessor_supplier_id == coerce_uuid(lessor_supplier_id)
             )
 
         if is_lessee is not None:
-            query = query.where(LeaseContract.is_lessee == is_lessee)
+            query = query.filter(LeaseContract.is_lessee == is_lessee)
 
         query = query.order_by(LeaseContract.commencement_date.desc())
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+        return list(query.limit(limit).offset(offset).all())
 
 
 # Module-level singleton instance

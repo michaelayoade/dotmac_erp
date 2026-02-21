@@ -8,10 +8,8 @@ import logging
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models.person import Person
 from app.services.finance.ap.web import ap_web_service
 from app.web.deps import WebAuthContext, get_db, require_finance_access
 
@@ -75,41 +73,13 @@ def people_search(
     if org_id is None:
         return JSONResponse({"items": []}, status_code=401)
 
-    term = q.strip()
-    if not term:
-        return JSONResponse({"items": []})
-
-    search_term = f"%{term}%"
-    people = (
-        db.query(Person)
-        .filter(
-            Person.organization_id == org_id,
-            or_(
-                Person.first_name.ilike(search_term),
-                Person.last_name.ilike(search_term),
-                Person.display_name.ilike(search_term),
-                Person.email.ilike(search_term),
-            ),
-        )
-        .order_by(Person.first_name.asc(), Person.last_name.asc())
-        .limit(limit)
-        .all()
+    payload = ap_web_service.people_search(
+        db=db,
+        organization_id=str(org_id),
+        query=q,
+        limit=limit,
     )
-
-    items = []
-    for person in people:
-        name = person.display_name or f"{person.first_name} {person.last_name}".strip()
-        status = "Active" if person.is_active else "Inactive"
-        items.append(
-            {
-                "ref": str(person.id),
-                "label": f"{name} <{person.email}> ({status})",
-                "name": name,
-                "email": person.email,
-            }
-        )
-
-    return JSONResponse({"items": items})
+    return JSONResponse(payload)
 
 
 @router.get("/suppliers/new", response_class=HTMLResponse)

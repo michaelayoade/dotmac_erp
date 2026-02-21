@@ -181,7 +181,6 @@ def generate_rrr(
                 source_type=source_type,
                 source_id=UUID(source_id),
             )
-        db.commit()
         return RedirectResponse(
             f"/finance/remita/{rrr.id}?success={'linked' if source_type and source_id else '1'}",
             status_code=303,
@@ -206,7 +205,6 @@ def generate_rrr(
             context,
         )
     except Exception as e:
-        db.rollback()
         context.update(web_service.generate_form_context_with_org(auth.organization_id))
         context["error"] = f"Error generating RRR: {str(e)}"
         return templates.TemplateResponse(
@@ -275,9 +273,7 @@ def refresh_status(
             organization_id=auth.organization_id,
             rrr_id=rrr_id,
         )
-        db.commit()
     except (ValueError, RemitaError) as e:
-        db.rollback()
         # Redirect with error
         return RedirectResponse(
             f"/finance/remita/{rrr_id}?error={str(e)}",
@@ -311,9 +307,7 @@ def mark_paid(
             payment_reference=payment_reference,
             payment_channel=payment_channel,
         )
-        db.commit()
     except ValueError as e:
-        db.rollback()
         return RedirectResponse(
             f"/finance/remita/{rrr_id}?error={str(e)}",
             status_code=303,
@@ -345,9 +339,7 @@ def link_source(
             source_type=source_type,
             source_id=source_uuid,
         )
-        db.commit()
     except ValueError as e:
-        db.rollback()
         return RedirectResponse(
             f"/finance/remita/{rrr_id}?error={str(e)}",
             status_code=303,
@@ -404,7 +396,6 @@ def refresh_all_pending(
 
     try:
         results = service.refresh_pending_statuses(auth.organization_id)
-        db.commit()
 
         # Build message
         parts = []
@@ -425,7 +416,6 @@ def refresh_all_pending(
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             f"/finance/remita?error={str(e)}",
             status_code=303,
@@ -449,9 +439,7 @@ def cancel_rrr(
             organization_id=auth.organization_id,
             rrr_id=rrr_id,
         )
-        db.commit()
     except ValueError as e:
-        db.rollback()
         return RedirectResponse(
             f"/finance/remita/{rrr_id}?error={str(e)}",
             status_code=303,

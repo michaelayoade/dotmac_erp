@@ -1,24 +1,22 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}PAYE Calculator (NTA 2025){% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">PAYE Calculator</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/slips" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">PAYE Calculator</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/payroll/tax/bands" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-    </svg>
+    {{ icon_svg("list-bullet", "h-4 w-4 mr-1.5") }}
     View Tax Bands
 </a>
 {% endblock %}
@@ -144,9 +142,7 @@
 
             <div class="pt-4">
                 <button type="submit" class="btn btn-primary w-full">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calculator", "h-4 w-4 mr-2") }}
                     Calculate PAYE
                 </button>
             </div>
@@ -253,9 +249,7 @@
         {# No calculation yet #}
         <div class="card px-6 py-16 text-center">
             <div class="mx-auto w-20 h-20 rounded-full bg-gradient-to-br from-teal-100 to-emerald-50 dark:from-teal-900/30 dark:to-emerald-900/10 flex items-center justify-center mb-6">
-                <svg class="h-10 w-10 text-teal-500 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                </svg>
+                {{ icon_svg("calculator", "h-10 w-10 text-teal-500 dark:text-teal-400", stroke_width="1.5") }}
             </div>
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Ready to Calculate</h3>
             <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
@@ -266,9 +260,7 @@
         {% if not has_bands %}
         <div class="card p-4 border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-900/20">
             <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5") }}
                 <div>
                     <h4 class="font-medium text-amber-800 dark:text-amber-200">Tax bands not configured</h4>
                     <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">

@@ -1,19 +1,15 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 {% block page_title %}{{ order.so_number if order else 'Sales Order Not Found' }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/sales-orders" class="hover:text-slate-700 dark:hover:text-slate-300">Sales Orders</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ order.so_number if order else 'Not Found' }}</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/sales-orders" class="hover:text-slate-700 dark:hover:text-slate-300">Sales Orders</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ order.so_number if order else 'Not Found' }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -24,9 +20,7 @@
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/submit" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
             Submit
         </button>
     </form>
@@ -36,9 +30,7 @@
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/approve" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
             Approve
         </button>
     </form>
@@ -48,9 +40,7 @@
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/confirm" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
             Confirm
         </button>
     </form>
@@ -58,9 +48,7 @@
 
     {% if order.can_ship %}
     <a href="/finance/sales-orders/{{ order.so_id }}/ship" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-        </svg>
+        {{ icon_svg("switch-horizontal", "h-4 w-4 mr-1.5") }}
         Ship
     </a>
     {% endif %}
@@ -69,9 +57,7 @@
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/create-invoice" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
+            {{ icon_svg("document", "h-4 w-4 mr-1.5") }}
             Create Invoice
         </button>
     </form>
@@ -81,9 +67,7 @@
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/hold" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("pause-circle", "h-4 w-4 mr-1.5") }}
             Hold
         </button>
     </form>
@@ -93,10 +77,7 @@
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/release" class="inline">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("play", "h-4 w-4 mr-1.5") }}
             Release
         </button>
     </form>
@@ -104,9 +85,7 @@
 
     {% if order.can_cancel %}
     <button type="button" onclick="document.getElementById('cancel-modal').showModal()" class="btn btn-danger-outline">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
+        {{ icon_svg("x-mark", "h-4 w-4 mr-1.5") }}
         Cancel
     </button>
     {% endif %}
@@ -118,9 +97,7 @@
 {% if not order %}
 <div class="card p-12 text-center">
     <div class="text-slate-400 dark:text-slate-500 mb-4">
-        <svg class="h-16 w-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
+        {{ icon_svg("emoji-sad", "h-16 w-16 mx-auto") }}
     </div>
     <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-300">Sales Order Not Found</h3>
     <p class="text-slate-500 dark:text-slate-400 mt-2">The requested sales order could not be found.</p>

@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 
 {% block page_title %}Feature Flags{% endblock %}
 {% block page_subtitle %}Enable or disable system features{% endblock %}
@@ -9,16 +9,14 @@
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <a href="/admin/settings/hub" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Settings</a>
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
+        {{ icon_svg("chevron-right", "h-4 w-4") }}
         <span class="font-medium text-slate-900 dark:text-white">Feature Flags</span>
     </nav>
 
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Feature Flags</h1>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Feature Flags</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Enable or disable optional features across the entire system.
             </p>
@@ -29,9 +27,7 @@
     {% if request.query_params.get('success') %}
     <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-5 w-5 text-green-600 dark:text-green-400") }}
             <p class="text-sm text-green-700 dark:text-green-300">Feature flag updated successfully.</p>
         </div>
     </div>
@@ -41,9 +37,7 @@
     {% if error %}
     <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
             <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
         </div>
     </div>
@@ -76,9 +70,7 @@
         </div>
         {% else %}
         <div class="p-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/>
-            </svg>
+            {{ icon_svg("flag", "mx-auto h-12 w-12 text-slate-400") }}
             <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No feature flags available</h3>
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Feature flags will appear here when configured.</p>
         </div>
@@ -88,9 +80,7 @@
     <!-- Note -->
     <div class="rounded-lg bg-blue-50 border border-blue-200 p-4 dark:bg-blue-900/20 dark:border-blue-800">
         <div class="flex gap-3">
-            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("information-circle", "h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5") }}
             <div class="text-sm text-blue-700 dark:text-blue-300">
                 <p class="font-medium">About Feature Flags</p>
                 <p class="mt-1">Feature flags affect all users in your organization. Disabling a feature will hide related menu items and prevent access to that functionality.</p>
@@ -101,9 +91,7 @@
     <!-- Back Link -->
     <div class="pt-4">
         <a href="/admin/settings/hub" class="inline-flex items-center text-sm text-accent-600 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300">
-            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
             Back to Settings
         </a>
     </div>

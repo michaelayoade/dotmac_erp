@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/macros.html" import topbar, success_banner %}
+{% from "components/macros.html" import topbar, success_banner, icon_svg %}
 
 {% block head %}
 <meta name="currency" content="NGN">
@@ -34,6 +34,7 @@
                     if (path === href || (segments.length >= 2 && path.startsWith(href + '/'))) {
                         link.classList.remove('text-slate-600', 'dark:text-slate-400');
                         link.classList.add('text-violet-800', 'bg-violet-50/50', 'font-medium', 'dark:text-violet-200', 'dark:bg-violet-900/20');
+                        link.setAttribute('aria-current', 'page');
                     }
                 });
             });
@@ -100,11 +101,10 @@
             {% if "people" in modules %}
             <!-- Dashboard Link -->
             <a href="/people"
+               :aria-current="activeModule === 'dashboard' ? 'page' : false"
                :class="activeModule === 'dashboard' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all mb-2">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
-                </svg>
+                {{ icon_svg("view-boards", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Dashboard</span>
             </a>
 
@@ -117,9 +117,7 @@
                 <button @click="open = !open"
                         :class="['employees','departments','designations','employment-types','grades','locations','skills','competencies','job-descriptions','onboarding','handbook','info-changes'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
+                    {{ icon_svg("user", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Human Resources</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -145,9 +143,7 @@
                 <button @click="open = !open"
                         :class="['payslips','structures','components','payroll'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Payroll</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -167,9 +163,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'leave' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calendar", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Leave</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -189,9 +183,7 @@
                 <button @click="open = !open"
                         :class="['attendance','attendance-requests'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Attendance</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -250,9 +242,7 @@
                 <button @click="open = !open"
                         :class="['scheduling','scheduling-patterns','scheduling-assignments','scheduling-schedules','scheduling-swaps'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                    {{ icon_svg("calendar", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Scheduling</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -294,9 +284,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'discipline' || activeModule === 'hr-discipline' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Discipline</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -346,54 +334,42 @@
             <a href="/people/self/attendance"
                :class="activeModule === 'self-attendance' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all mb-2">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("clock", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Attendance</span>
             </a>
 
             <a href="/people/self/leave"
                :class="activeModule === 'self-leave' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
+                {{ icon_svg("calendar", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Leave</span>
             </a>
 
             <a href="/people/self/payslips"
                :class="activeModule === 'self-payslips' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Payslips</span>
             </a>
 
             <a href="/people/self/expenses"
                :class="activeModule === 'self-expenses' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
+                {{ icon_svg("cash", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Expenses</span>
             </a>
 
             <a href="/people/self/tax-info"
                :class="activeModule === 'self-tax-info' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("currency", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Info</span>
             </a>
 
             <a href="/people/self/discipline"
                :class="activeModule === 'self-discipline' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>My Discipline Cases</span>
             </a>
 
@@ -406,9 +382,7 @@
             <a href="/people/self/team/leave"
                :class="activeModule === 'self-team-leave' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                </svg>
+                {{ icon_svg("user", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Team Leave</span>
             </a>
             {% endif %}
@@ -417,9 +391,7 @@
             <a href="/people/self/team/expenses"
                :class="activeModule === 'self-team-expenses' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Team Expenses</span>
             </a>
             {% endif %}

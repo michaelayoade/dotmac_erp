@@ -7,14 +7,16 @@ Syncs ERPNext Purchase Invoices → ap.supplier_invoice + ap.supplier_invoice_li
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
@@ -38,7 +40,7 @@ _STATUS_MAP: dict[str, SupplierInvoiceStatus] = {
     "Partly Paid": SupplierInvoiceStatus.PARTIALLY_PAID,
     "Paid": SupplierInvoiceStatus.PAID,
     "Return": SupplierInvoiceStatus.VOID,
-    "Debit Note Issued": SupplierInvoiceStatus.VOID,
+    "Debit Note Issued": SupplierInvoiceStatus.APPROVED,
     "Cancelled": SupplierInvoiceStatus.VOID,
 }
 
@@ -59,6 +61,8 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
         self._mapping = PurchaseInvoiceMapping()
         self._item_mapping = PurchaseInvoiceItemMapping()
         self._invoice_cache: dict[str, SupplierInvoice] = {}
+        self._supplier_exact_lookup: dict[str, uuid.UUID] | None = None
+        self._supplier_norm_lookup: dict[str, uuid.UUID] | None = None
         # Injected by orchestrator
         self.ap_control_account_id: uuid.UUID | None = None
 
@@ -124,6 +128,107 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
     def _resolve_account_id(self, account_source_name: str | None) -> uuid.UUID | None:
         return self._resolve_entity_id(account_source_name, "Account")
 
+    @staticmethod
+    def _normalize_party_name(value: str | None) -> str:
+        if not value:
+            return ""
+        norm = value.strip().lower()
+        norm = norm.replace("&", "and")
+        norm = re.sub(r"\s+", " ", norm)
+        norm = re.sub(r"\s*-\s*\d+$", "", norm)
+        norm = re.sub(r"\s+\d+\)$", ")", norm)
+        return norm
+
+    def _ensure_supplier_lookups(self) -> None:
+        if (
+            self._supplier_exact_lookup is not None
+            and self._supplier_norm_lookup is not None
+        ):
+            return
+
+        rows = self.db.execute(
+            select(
+                Supplier.supplier_id,
+                Supplier.supplier_code,
+                Supplier.legal_name,
+                Supplier.trading_name,
+                Supplier.erpnext_id,
+            ).where(Supplier.organization_id == self.organization_id)
+        ).all()
+
+        exact: dict[str, uuid.UUID] = {}
+        norm_multi: dict[str, set[uuid.UUID]] = {}
+
+        for row in rows:
+            supplier_id = row.supplier_id
+            for key in (row.erpnext_id, row.supplier_code):
+                if key and key not in exact:
+                    exact[str(key)] = supplier_id
+
+            for key in (
+                row.erpnext_id,
+                row.supplier_code,
+                row.legal_name,
+                row.trading_name,
+            ):
+                nk = self._normalize_party_name(key)
+                if not nk:
+                    continue
+                norm_multi.setdefault(nk, set()).add(supplier_id)
+
+        norm_unique = {k: next(iter(v)) for k, v in norm_multi.items() if len(v) == 1}
+        self._supplier_exact_lookup = exact
+        self._supplier_norm_lookup = norm_unique
+
+    def _resolve_supplier_id(self, source_name: str | None) -> uuid.UUID | None:
+        if not source_name:
+            return None
+
+        candidate = self._resolve_entity_id(source_name, "Supplier")
+        if candidate and self.db.get(Supplier, candidate):
+            return candidate
+
+        self._ensure_supplier_lookups()
+        assert self._supplier_exact_lookup is not None
+        assert self._supplier_norm_lookup is not None
+
+        if source_name in self._supplier_exact_lookup:
+            return self._supplier_exact_lookup[source_name]
+
+        source_norm = self._normalize_party_name(source_name)
+        if source_norm in self._supplier_norm_lookup:
+            return self._supplier_norm_lookup[source_norm]
+
+        prefix_candidates: set[uuid.UUID] = set()
+        for key, supplier_id in self._supplier_norm_lookup.items():
+            if not source_norm:
+                break
+            if key.startswith(source_norm) or source_norm.startswith(key):
+                if abs(len(key) - len(source_norm)) <= 3:
+                    prefix_candidates.add(supplier_id)
+        if len(prefix_candidates) == 1:
+            return next(iter(prefix_candidates))
+
+        supplier = self.db.scalar(
+            select(Supplier).where(
+                Supplier.organization_id == self.organization_id,
+                Supplier.erpnext_id == source_name,
+            )
+        )
+        if supplier:
+            return supplier.supplier_id
+
+        supplier = self.db.scalar(
+            select(Supplier).where(
+                Supplier.organization_id == self.organization_id,
+                Supplier.supplier_code == source_name,
+            )
+        )
+        if supplier:
+            return supplier.supplier_id
+
+        return None
+
     def _map_status(self, data: dict[str, Any]) -> SupplierInvoiceStatus:
         docstatus = data.get("_docstatus", 0)
         erpnext_status = data.get("_erpnext_status", "")
@@ -162,6 +267,43 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
 
             return f"PINV-{int(time.time())}"
 
+    @staticmethod
+    def _calculate_line_taxes(
+        items_data: list[dict[str, Any]],
+        total_tax_amount: Decimal,
+    ) -> list[Decimal]:
+        """Allocate invoice-level tax to lines, preserving explicit line taxes."""
+        if not items_data:
+            return []
+
+        total_tax = Decimal(total_tax_amount or 0)
+        explicit_taxes = [Decimal(item.get("tax_amount") or 0) for item in items_data]
+        line_amounts = [Decimal(item.get("line_amount") or 0) for item in items_data]
+
+        remaining = total_tax - sum(explicit_taxes, Decimal("0"))
+        allocated = [tax for tax in explicit_taxes]
+        total_line_amount = sum(line_amounts, Decimal("0"))
+
+        if remaining != 0:
+            if total_line_amount > 0:
+                distributed = Decimal("0")
+                for idx, line_amount in enumerate(line_amounts):
+                    if idx == len(line_amounts) - 1:
+                        share = remaining - distributed
+                    else:
+                        share = (remaining * line_amount / total_line_amount).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_UP
+                        )
+                        distributed += share
+                    allocated[idx] += share
+            else:
+                allocated[-1] += remaining
+
+        return [
+            amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            for amount in allocated
+        ]
+
     def _create_invoice_lines(
         self, invoice_id: uuid.UUID, items_data: list[dict[str, Any]]
     ) -> None:
@@ -198,15 +340,20 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
         data.pop("_source_name", None)
         data.pop("_source_modified", None)
         supplier_source = data.pop("_supplier_source_name", None)
+        supplier_display = data.pop("_supplier_display_name", None)
         items_data = data.pop("_items", [])
         data.pop("_cost_center_source_name", None)
         data.pop("_project_source_name", None)
         data.pop("_bill_date", None)
 
         # Resolve supplier
-        supplier_id = self._resolve_entity_id(supplier_source, "Supplier")
+        supplier_id = self._resolve_supplier_id(supplier_source)
+        if not supplier_id and supplier_display:
+            supplier_id = self._resolve_supplier_id(supplier_display)
         if not supplier_id:
-            raise ValueError(f"Supplier '{supplier_source}' not found in sync_entity")
+            raise ValueError(
+                f"Supplier '{supplier_source or supplier_display}' not found in sync_entity"
+            )
 
         # Map status and type
         status = self._map_status(data)
@@ -272,6 +419,7 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
         data.pop("_source_name", None)
         data.pop("_source_modified", None)
         data.pop("_supplier_source_name", None)
+        data.pop("_supplier_display_name", None)
         data.pop("_items", [])
         data.pop("_cost_center_source_name", None)
         data.pop("_project_source_name", None)

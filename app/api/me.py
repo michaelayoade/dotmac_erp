@@ -47,6 +47,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -183,7 +187,6 @@ def create_leave_application(
         half_day_date=payload.half_day_date,
         reason=payload.reason,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -222,7 +225,6 @@ def cancel_leave_application(
         application_id=application_id,
         reason=reason,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -302,7 +304,6 @@ def approve_team_leave(
         application_id=application_id,
         approver_id=person_id,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -335,7 +336,6 @@ def reject_team_leave(
         approver_id=person_id,
         reason=reason or "Rejected",
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -491,7 +491,6 @@ def my_check_in(
         check_in_time=payload.check_in_time,
         notes=payload.notes,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 
@@ -517,7 +516,6 @@ def my_check_out(
         check_out_time=payload.check_out_time,
         notes=payload.notes,
     )
-    db.commit()
     return AttendanceRead.model_validate(attendance)
 
 

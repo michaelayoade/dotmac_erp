@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Inventory Push to CRM{% endblock %}
 {% block page_subtitle %}Push inventory data from ERP to DotMac CRM{% endblock %}
@@ -8,9 +9,7 @@
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm">
         <a href="/admin/sync/crm" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">CRM Sync</a>
-        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
+        {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
         <span class="text-slate-900 dark:text-white font-medium">Inventory Push</span>
     </nav>
 
@@ -18,9 +17,7 @@
     {% if request.query_params.get('success') %}
     <div class="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/30 p-4">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "h-5 w-5 text-emerald-500") }}
             <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ request.query_params.get('success') }}</p>
         </div>
     </div>
@@ -29,9 +26,7 @@
     {% if request.query_params.get('error') %}
     <div class="rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30 p-4">
         <div class="flex items-center gap-3">
-            <svg class="h-5 w-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
+            {{ icon_svg("x-mark", "h-5 w-5 text-red-500") }}
             <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ request.query_params.get('error') }}</p>
         </div>
     </div>
@@ -48,9 +43,7 @@
                     <div class="flex items-center justify-between p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                         <div class="flex items-center gap-3">
                             <div class="flex h-10 w-10 items-center justify-center rounded-lg {% if is_configured %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% endif %}">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                </svg>
+                                {{ icon_svg("link") }}
                             </div>
                             <div>
                                 <p class="text-sm font-medium text-slate-900 dark:text-white">
@@ -140,9 +133,7 @@
                         <button type="submit" {% if not is_configured %}disabled{% endif %}
                                 class="px-6 py-2.5 rounded-xl text-sm font-semibold {% if is_configured %}bg-primary-600 text-white hover:bg-primary-700{% else %}bg-slate-200 text-slate-400 cursor-not-allowed{% endif %} transition">
                             <span class="flex items-center gap-2">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                                </svg>
+                                {{ icon_svg("cloud-upload", "h-4 w-4") }}
                                 Push to CRM
                             </span>
                         </button>

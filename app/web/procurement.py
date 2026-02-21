@@ -19,19 +19,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import DataError, IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import (
     ContractStatus,
     ProcurementMethod,
-    ProcurementPlanStatus,
-    RequisitionStatus,
     RFQStatus,
     UrgencyLevel,
 )
 from app.models.procurement.procurement_contract import ProcurementContract
-from app.models.procurement.procurement_plan import ProcurementPlan
-from app.models.procurement.purchase_requisition import PurchaseRequisition
 from app.models.procurement.rfq import RequestForQuotation
 from app.schemas.procurement.contract import ContractCreate
 from app.schemas.procurement.procurement_plan import (
@@ -435,66 +431,19 @@ def plan_export(
     if fmt == "xlsx" and not _xlsx_available():
         fmt = "csv"
 
-    query = (
-        select(ProcurementPlan)
-        .where(ProcurementPlan.organization_id == auth.organization_id)
-        .options(selectinload(ProcurementPlan.items))
-        .order_by(ProcurementPlan.created_at.desc())
+    plan_service = ProcurementPlanService(db)
+    headers, rows = plan_service.export_plans_data(
+        org_id=auth.organization_id,
+        status_filter=status,
+        fiscal_year=fiscal_year,
+        columns=IMPORT_ALL_COLUMNS,
     )
-    if status:
-        try:
-            query = query.where(ProcurementPlan.status == ProcurementPlanStatus(status))
-        except ValueError:
-            pass
-    if fiscal_year:
-        query = query.where(ProcurementPlan.fiscal_year == fiscal_year)
-
-    plans = list(db.scalars(query).all())
-    rows: list[list[object]] = []
-    for plan in plans:
-        if plan.items:
-            for item in plan.items:
-                rows.append(
-                    [
-                        plan.plan_number,
-                        plan.fiscal_year,
-                        plan.title,
-                        plan.currency_code,
-                        item.line_number,
-                        item.description,
-                        item.budget_line_code or "",
-                        str(item.budget_id) if item.budget_id else "",
-                        item.estimated_value,
-                        item.procurement_method.value
-                        if item.procurement_method
-                        else "",
-                        item.planned_quarter,
-                        item.category or "",
-                    ]
-                )
-        else:
-            rows.append(
-                [
-                    plan.plan_number,
-                    plan.fiscal_year,
-                    plan.title,
-                    plan.currency_code,
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
-                ]
-            )
 
     filename = "procurement_plans_export"
     if fmt == "csv":
         csv_output = StringIO()
         writer = csv.writer(csv_output)
-        writer.writerow(IMPORT_ALL_COLUMNS)
+        writer.writerow(headers)
         writer.writerows(rows)
         return Response(
             csv_output.getvalue(),
@@ -509,7 +458,7 @@ def plan_export(
         return Response("XLSX support requires openpyxl", status_code=500)
     workbook = openpyxl.Workbook()
     sheet = workbook.active
-    sheet.append(IMPORT_ALL_COLUMNS)
+    sheet.append(headers)
     for row in rows:
         sheet.append(row)
     workbook.save(xlsx_output)
@@ -751,19 +700,14 @@ async def plan_import(
             msg = quote("; ".join(errors[:8]) + f"; and {len(errors) - 8} more")
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
 
-    existing = set(
-        db.scalars(
-            select(ProcurementPlan.plan_number).where(
-                ProcurementPlan.organization_id == auth.organization_id
-            )
-        ).all()
+    service = ProcurementPlanService(db)
+    duplicates = service.find_duplicate_plan_numbers(
+        auth.organization_id, list(plans.keys())
     )
-    duplicates = [num for num in plans if num in existing]
     if duplicates:
         msg = quote("Plan number(s) already exist: " + ", ".join(sorted(duplicates)))
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
 
-    service = ProcurementPlanService(db)
     created_count = 0
     try:
         for plan_data in plans.values():
@@ -776,9 +720,7 @@ async def plan_import(
             )
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
-        db.commit()
     except (ValidationError, ValueError) as exc:
-        db.rollback()
         msg = quote(f"Import failed: {str(exc)}")
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
 
@@ -911,63 +853,19 @@ def requisition_export(
     if fmt == "xlsx" and not _xlsx_available():
         fmt = "csv"
 
-    query = (
-        select(PurchaseRequisition)
-        .where(PurchaseRequisition.organization_id == auth.organization_id)
-        .options(selectinload(PurchaseRequisition.lines))
-        .order_by(PurchaseRequisition.created_at.desc())
+    req_service = RequisitionService(db)
+    headers, rows = req_service.export_requisitions_data(
+        org_id=auth.organization_id,
+        status_filter=status,
+        urgency_filter=urgency,
+        columns=REQUISITION_ALL_COLUMNS,
     )
-    if status:
-        try:
-            query = query.where(PurchaseRequisition.status == RequisitionStatus(status))
-        except ValueError:
-            pass
-    if urgency:
-        try:
-            query = query.where(PurchaseRequisition.urgency == UrgencyLevel(urgency))
-        except ValueError:
-            pass
-
-    requisitions = list(db.scalars(query).all())
-    rows: list[list[object]] = []
-    for req in requisitions:
-        header_values = [
-            req.requisition_number,
-            req.requisition_date.isoformat() if req.requisition_date else "",
-            str(req.requester_id),
-            str(req.department_id) if req.department_id else "",
-            req.urgency.value if req.urgency else "",
-            req.justification or "",
-            req.currency_code,
-            str(req.material_request_id) if req.material_request_id else "",
-            str(req.plan_item_id) if req.plan_item_id else "",
-        ]
-        if req.lines:
-            for line in req.lines:
-                rows.append(
-                    header_values
-                    + [
-                        line.line_number,
-                        str(line.item_id) if line.item_id else "",
-                        line.description,
-                        line.quantity,
-                        line.uom or "",
-                        line.estimated_unit_price,
-                        line.estimated_amount,
-                        str(line.expense_account_id) if line.expense_account_id else "",
-                        str(line.cost_center_id) if line.cost_center_id else "",
-                        str(line.project_id) if line.project_id else "",
-                        line.delivery_date.isoformat() if line.delivery_date else "",
-                    ]
-                )
-        else:
-            rows.append(header_values + ["", "", "", "", "", "", "", "", "", "", ""])
 
     filename = "requisitions_export"
     if fmt == "csv":
         csv_output = StringIO()
         writer = csv.writer(csv_output)
-        writer.writerow(REQUISITION_ALL_COLUMNS)
+        writer.writerow(headers)
         writer.writerows(rows)
         return Response(
             csv_output.getvalue(),
@@ -982,7 +880,7 @@ def requisition_export(
         return Response("XLSX support requires openpyxl", status_code=500)
     workbook = openpyxl.Workbook()
     sheet = workbook.active
-    sheet.append(REQUISITION_ALL_COLUMNS)
+    sheet.append(headers)
     for row in rows:
         sheet.append(row)
     workbook.save(xlsx_output)
@@ -1291,14 +1189,10 @@ async def requisition_import(
             url=f"/procurement/requisitions?error={msg}", status_code=303
         )
 
-    existing = set(
-        db.scalars(
-            select(PurchaseRequisition.requisition_number).where(
-                PurchaseRequisition.organization_id == auth.organization_id
-            )
-        ).all()
+    service = RequisitionService(db)
+    duplicates = service.find_duplicate_requisition_numbers(
+        auth.organization_id, list(requisitions.keys())
     )
-    duplicates = [num for num in requisitions if num in existing]
     if duplicates:
         msg = quote(
             "Requisition number(s) already exist: " + ", ".join(sorted(duplicates))
@@ -1306,8 +1200,6 @@ async def requisition_import(
         return RedirectResponse(
             url=f"/procurement/requisitions?error={msg}", status_code=303
         )
-
-    service = RequisitionService(db)
     created_count = 0
     try:
         for req_data in requisitions.values():
@@ -1327,9 +1219,7 @@ async def requisition_import(
             )
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
-        db.commit()
     except (ValidationError, ValueError) as exc:
-        db.rollback()
         msg = quote(f"Import failed: {str(exc)}")
         return RedirectResponse(
             url=f"/procurement/requisitions?error={msg}", status_code=303
@@ -1785,9 +1675,7 @@ async def rfq_import(
             )
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
-        db.commit()
     except (ValidationError, ValueError) as exc:
-        db.rollback()
         msg = quote(f"Import failed: {str(exc)}")
         return RedirectResponse(url=f"/procurement/rfqs?error={msg}", status_code=303)
 
@@ -2353,9 +2241,7 @@ async def contract_import(
             )
             service.create(auth.organization_id, data, auth.user_id)
             created_count += 1
-        db.commit()
     except (ValidationError, ValueError) as exc:
-        db.rollback()
         msg = quote(f"Import failed: {str(exc)}")
         return RedirectResponse(
             url=f"/procurement/contracts?error={msg}", status_code=303
@@ -2454,7 +2340,6 @@ async def contract_create(
 
         service = ContractService(db)
         contract = service.create(auth.organization_id, data, auth.user_id)
-        db.commit()
         return RedirectResponse(
             url=f"/procurement/contracts/{contract.contract_id}?created=Contract+created",
             status_code=303,
@@ -2465,13 +2350,11 @@ async def contract_create(
         ValueError,
         PydanticValidationError,
     ) as exc:
-        db.rollback()
         return RedirectResponse(
             url=f"/procurement/contracts/new?error={quote(str(exc))}",
             status_code=303,
         )
     except IntegrityError as exc:
-        db.rollback()
         message = str(getattr(exc, "orig", exc))
         if "uq_proc_contract_org_number" in message:
             msg = "Contract number already exists. Please choose a different number."
@@ -2482,13 +2365,11 @@ async def contract_create(
             status_code=303,
         )
     except DataError:
-        db.rollback()
         return RedirectResponse(
             url="/procurement/contracts/new?error=Some+fields+have+invalid+values",
             status_code=303,
         )
     except Exception:
-        db.rollback()
         return RedirectResponse(
             url="/procurement/contracts/new?error=Unable+to+save+contract",
             status_code=303,
@@ -2713,9 +2594,7 @@ def prequalification_create(
             nsitf_compliance=nsitf_compliance_val,
         )
         service.create(auth.organization_id, data)
-        db.commit()
     except ValidationError as exc:
-        db.rollback()
         msg = quote(str(exc))
         return RedirectResponse(
             url=f"/procurement/vendors/prequalification/new?error={msg}",

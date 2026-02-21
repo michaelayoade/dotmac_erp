@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block title %}Page Not Found{% endblock %}
 
@@ -16,15 +17,11 @@
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="javascript:history.back()" class="btn btn-secondary">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                </svg>
+                {{ icon_svg("arrow-left", "w-4 h-4 mr-2") }}
                 Go Back
             </a>
             <a href="/dashboard" class="btn btn-primary">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                </svg>
+                {{ icon_svg("home", "w-4 h-4 mr-2") }}
                 Dashboard
             </a>
         </div>

@@ -47,6 +47,7 @@ from app.services.finance.ap.web.base import (
     invoice_line_view,
     invoice_status_label,
     logger,
+    recent_activity_view,
     supplier_display_name,
     supplier_form_view,
     supplier_option_view,
@@ -474,6 +475,7 @@ class InvoiceWebService:
             tax_map = {tax.tax_code_id: tax for tax in tax_codes}
 
         vat_by_line: dict[UUID, Decimal] = {}
+        inclusive_tax_by_line: dict[UUID, Decimal] = {}
         vat_labels_by_line: dict[UUID, set[str]] = {}
         line_ids = [line.line_id for line in lines]
         if line_ids:
@@ -489,14 +491,26 @@ class InvoiceWebService:
                 )
             ).all()
             for line_tax, tax_code in vat_taxes:
+                tax_amount = line_tax.tax_amount or Decimal("0")
+                tax_rate = line_tax.tax_rate
+                if not isinstance(tax_rate, Decimal):
+                    try:
+                        tax_rate = Decimal(str(tax_rate))
+                    except Exception:
+                        tax_rate = Decimal("0")
+
                 vat_by_line[line_tax.line_id] = (
-                    vat_by_line.get(line_tax.line_id, Decimal("0"))
-                    + line_tax.tax_amount
+                    vat_by_line.get(line_tax.line_id, Decimal("0")) + tax_amount
                 )
+                if line_tax.is_inclusive:
+                    inclusive_tax_by_line[line_tax.line_id] = (
+                        inclusive_tax_by_line.get(line_tax.line_id, Decimal("0"))
+                        + tax_amount
+                    )
                 rate_label = (
-                    f"{(line_tax.tax_rate * 100).quantize(Decimal('0.01'))}%"
-                    if line_tax.tax_rate < 1
-                    else f"{line_tax.tax_rate}%"
+                    f"{(tax_rate * 100).quantize(Decimal('0.01'))}%"
+                    if tax_rate < 1
+                    else f"{tax_rate}%"
                 )
                 vat_labels_by_line.setdefault(line_tax.line_id, set()).add(
                     f"{tax_code.tax_code} {rate_label}"
@@ -509,6 +523,14 @@ class InvoiceWebService:
                 line_view["tax_code"] = tax.tax_code
                 line_view["tax_name"] = tax.tax_name
                 line_view["tax_type"] = tax.tax_type.value
+
+            inclusive_tax = inclusive_tax_by_line.get(line.line_id, Decimal("0"))
+            if inclusive_tax > 0:
+                display_amount = (line.line_amount or Decimal("0")) + inclusive_tax
+                line_view["display_line_amount_raw"] = float(display_amount)
+                line_view["display_line_amount"] = format_currency(
+                    display_amount, invoice.currency_code
+                )
 
             vat_amount = vat_by_line.get(line.line_id, Decimal("0"))
             if vat_amount == 0 and tax and tax.tax_type in {TaxType.VAT, TaxType.GST}:
@@ -527,9 +549,8 @@ class InvoiceWebService:
                 line_view["vat_amount"] = format_currency(
                     vat_amount, invoice.currency_code
                 )
-                line_view["vat_label"] = ", ".join(
-                    sorted(vat_labels_by_line[line.line_id])
-                )
+                labels = vat_labels_by_line.get(line.line_id, set())
+                line_view["vat_label"] = ", ".join(sorted(labels)) if labels else None
             else:
                 line_view["vat_amount_raw"] = 0.0
                 line_view["vat_amount"] = None
@@ -558,12 +579,47 @@ class InvoiceWebService:
         ]
 
         logger.debug("invoice_detail_context: found %d lines", len(lines_view))
+        recent_activity = recent_activity_view(
+            db,
+            org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(invoice.invoice_id),
+            limit=10,
+        )
+
+        invoice_view = invoice_detail_view(invoice, supplier)
+        inclusive_vat_total = sum(inclusive_tax_by_line.values(), Decimal("0"))
+        if inclusive_vat_total > 0:
+            display_subtotal = (invoice.subtotal or Decimal("0")) + inclusive_vat_total
+            display_tax_added = (
+                invoice.tax_amount or Decimal("0")
+            ) - inclusive_vat_total
+            if display_tax_added < 0:
+                display_tax_added = Decimal("0")
+            invoice_view["display_subtotal_raw"] = float(display_subtotal)
+            invoice_view["display_subtotal"] = format_currency(
+                display_subtotal, invoice.currency_code
+            )
+            invoice_view["display_tax_amount_raw"] = float(display_tax_added)
+            invoice_view["display_tax_amount"] = format_currency(
+                display_tax_added, invoice.currency_code
+            )
+            invoice_view["display_tax_added_raw"] = float(display_tax_added)
+            invoice_view["display_tax_added"] = format_currency(
+                display_tax_added, invoice.currency_code
+            )
+            invoice_view["display_tax_included_raw"] = float(inclusive_vat_total)
+            invoice_view["display_tax_included"] = format_currency(
+                inclusive_vat_total, invoice.currency_code
+            )
 
         return {
-            "invoice": invoice_detail_view(invoice, supplier),
+            "invoice": invoice_view,
             "supplier": supplier_form_view(supplier) if supplier else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "recent_activity": recent_activity,
         }
 
     @staticmethod

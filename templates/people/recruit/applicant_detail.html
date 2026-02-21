@@ -1,15 +1,15 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}{{ applicant.full_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/recruit/applicants" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Applicants</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ applicant.application_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/recruit/applicants" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Applicants</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ applicant.application_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -23,7 +23,7 @@
                     {{ applicant.full_name[:2] | upper }}
                 </div>
                 <div>
-                    <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ applicant.full_name }}</h1>
+                    <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ applicant.full_name }}</h2>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ applicant.application_number }}</p>
                 </div>
             </div>
@@ -57,7 +57,7 @@
         </div>
         <div class="card p-4">
             <div class="text-sm text-slate-500 dark:text-slate-400">Applied On</div>
-            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ applicant.applied_on.strftime('%d %b %Y') if applicant.applied_on else '-' }}</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ applicant.applied_on | format_date if applicant.applied_on else '-' }}</div>
         </div>
         <div class="card p-4">
             <div class="text-sm text-slate-500 dark:text-slate-400">Experience</div>
@@ -140,7 +140,7 @@
                     </div>
                     <div>
                         <div class="text-slate-500 dark:text-slate-400">Date of Birth</div>
-                        <div class="text-slate-900 dark:text-white">{{ applicant.date_of_birth.strftime('%d %b %Y') if applicant.date_of_birth else '-' }}</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.date_of_birth | format_date if applicant.date_of_birth else '-' }}</div>
                     </div>
                 </div>
             </div>
@@ -206,7 +206,7 @@
                     <div class="p-4 flex items-center justify-between">
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">{{ interview.round.value | replace('_', ' ') | title }}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ interview.scheduled_from.strftime('%d %b %Y %H:%M') if interview.scheduled_from else '-' }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ interview.scheduled_from | format_datetime if interview.scheduled_from else '-' }}</div>
                         </div>
                         <div class="flex items-center gap-2">
                             {% if interview.rating %}
@@ -235,7 +235,7 @@
                     <div class="p-4 flex items-center justify-between">
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">{{ offer.offer_number }}</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ offer.offer_date.strftime('%d %b %Y') if offer.offer_date else '-' }} &bull; {{ "{:,.2f}".format(offer.base_salary) }} {{ offer.currency_code }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ offer.offer_date | format_date if offer.offer_date else '-' }} &bull; {{ "{:,.2f}".format(offer.base_salary) }} {{ offer.currency_code }}</div>
                         </div>
                         {{ status_badge(offer.status.value, size="sm") }}
                     </div>
@@ -259,16 +259,14 @@
                     </div>
                     <div>
                         <div class="text-slate-500 dark:text-slate-400">Applied</div>
-                        <div class="text-slate-900 dark:text-white">{{ applicant.created_at.strftime('%d %b %Y %H:%M') if applicant.created_at else '-' }}</div>
+                        <div class="text-slate-900 dark:text-white">{{ applicant.created_at | format_datetime if applicant.created_at else '-' }}</div>
                     </div>
                     {% if applicant.resume_url %}
                     <div>
                         <div class="text-slate-500 dark:text-slate-400">Resume</div>
                         <a href="{{ applicant.resume_url }}" target="_blank" class="text-violet-600 hover:text-violet-700 flex items-center gap-1">
                             View Resume
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                            </svg>
+                            {{ icon_svg("external-link", "h-4 w-4") }}
                         </a>
                     </div>
                     {% endif %}

@@ -26,6 +26,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -104,7 +108,6 @@ def update_task_status(
     organization_id = UUID(auth["organization_id"])
     svc = WorkflowTaskService(db)
     task = svc.update_status(organization_id, task_id, payload.status)
-    db.commit()
     return WorkflowTaskRead.model_validate(task)
 
 
@@ -118,7 +121,6 @@ def complete_task(
     organization_id = UUID(auth["organization_id"])
     svc = WorkflowTaskService(db)
     task = svc.complete_task(organization_id, task_id)
-    db.commit()
     return WorkflowTaskRead.model_validate(task)
 
 
@@ -133,5 +135,4 @@ def snooze_task(
     organization_id = UUID(auth["organization_id"])
     svc = WorkflowTaskService(db)
     task = svc.snooze_task(organization_id, task_id, days=payload.days)
-    db.commit()
     return WorkflowTaskRead.model_validate(task)

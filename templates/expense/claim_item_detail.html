@@ -1,38 +1,31 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 
-{% block page_title %}Expense Item{% endblock %}
+{% block page_title %}Item {{ item.sequence }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/expense/claims/list" class="hover:text-slate-700 dark:hover:text-slate-300">Claims</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/expense/claims/{{ claim.claim_id }}" class="hover:text-slate-700 dark:hover:text-slate-300">{{ claim.claim_number }}</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Item {{ item.sequence }}</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/expense/claims/list" class="hover:text-slate-700 dark:hover:text-slate-300">Claims</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/expense/claims/{{ claim.claim_id }}" class="hover:text-slate-700 dark:hover:text-slate-300">{{ claim.claim_number }}</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Item {{ item.sequence }}</span></li>
+    </ol>
 </nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-3">
+    {{ status_badge(claim.status.value if claim.status else 'DRAFT') }}
+    <a href="/expense/claims/{{ claim.claim_id }}" class="btn btn-secondary">Back to Claim</a>
+</div>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
     <div class="card p-6">
         <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Item {{ item.sequence }}</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">{{ claim.claim_number }} • {{ item.category.category_name if item.category else 'Uncategorized' }}</p>
-            </div>
-            <div class="flex items-center gap-3">
-                {{ status_badge(claim.status.value if claim.status else 'DRAFT') }}
-                <a href="/expense/claims/{{ claim.claim_id }}" class="btn btn-secondary">Back to Claim</a>
-            </div>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ claim.claim_number }} • {{ item.category.category_name if item.category else 'Uncategorized' }}</p>
         </div>
         <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>

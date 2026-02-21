@@ -4,26 +4,20 @@
 {% block page_title %}{{ "Edit Item" if item else "New Item" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a>
-    {{ icon_svg("chevron-right", "h-4 w-4") }}
-    <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Items</a>
-    {{ icon_svg("chevron-right", "h-4 w-4") }}
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if item else "New" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Items</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if item else "New" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto pb-12">
-    <!-- Page Header -->
-    <div class="mb-10 stagger-in" style="animation-delay: 0ms;">
-        <h1 class="text-3xl font-bold text-slate-900 dark:text-white font-display tracking-tight">
-            {{ "Edit Item" if item else "New Inventory Item" }}
-        </h1>
-        <p class="mt-2 text-lg text-slate-600 dark:text-slate-400">
-            {{ "Update item information and settings" if item else "Add a new item to your inventory catalog" }}
-        </p>
-    </div>
+    <p class="mb-6 text-sm text-slate-500 dark:text-slate-400">
+        {{ "Update item information and settings" if item else "Add a new item to your inventory catalog" }}
+    </p>
 
     <form method="post"
           action="{{ '/inventory/items/' ~ item.item_id ~ '/edit' if item else '/inventory/items/new' }}"

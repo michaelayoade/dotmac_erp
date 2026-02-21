@@ -103,7 +103,7 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
         if self._customer_names is None:
             from app.models.finance.ar.customer import Customer
 
-            rows = (
+            rows: list[tuple[UUID, str | None, str | None]] = (
                 Query(
                     [
                         Customer.customer_id,

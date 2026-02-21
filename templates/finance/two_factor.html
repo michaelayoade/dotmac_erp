@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block content %}
 <div class="px-6 py-8">
@@ -6,9 +7,7 @@
     <!-- Header -->
     <div class="stagger-in" style="animation-delay: 0ms;">
         <a href="/profile" class="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 mb-4 transition-colors">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-            </svg>
+            {{ icon_svg("chevron-left", "w-4 h-4") }}
             Back to profile
         </a>
         <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Two-factor authentication</h1>
@@ -28,9 +27,7 @@
         <div class="card p-6">
             <div class="flex items-start gap-4">
                 <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                    </svg>
+                    {{ icon_svg("shield-check", "w-6 h-6") }}
                 </div>
                 <div class="flex-1">
                     <div class="flex items-center gap-2">
@@ -42,7 +39,7 @@
                     </p>
                     {% if primary_method and primary_method.last_used_at %}
                     <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
-                        Last used: {{ primary_method.last_used_at.strftime('%b %d, %Y at %H:%M') }}
+                        Last used: {{ primary_method.last_used_at | format_datetime }}
                     </p>
                     {% endif %}
                 </div>
@@ -71,7 +68,7 @@
                                 {{ method.label or 'Authenticator App' }}
                             </p>
                             <p class="text-xs text-slate-500 dark:text-slate-400">
-                                Added {{ method.created_at.strftime('%b %d, %Y') }}
+                                Added {{ method.created_at | format_date }}
                                 {% if method.is_primary %}
                                 <span class="text-teal-600 dark:text-teal-400">- Primary</span>
                                 {% endif %}
@@ -111,9 +108,7 @@
         <div class="card p-6">
             <div class="flex items-start gap-4 mb-6">
                 <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                    </svg>
+                    {{ icon_svg("lock-closed", "w-6 h-6") }}
                 </div>
                 <div>
                     <h3 class="font-semibold text-slate-900 dark:text-white">Two-factor authentication is not enabled</h3>
@@ -131,23 +126,17 @@
                         <h4 class="font-medium text-slate-900 dark:text-white mb-2">What you'll need:</h4>
                         <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
                             <li class="flex items-start gap-2">
-                                <svg class="w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                </svg>
+                                {{ icon_svg("check", "w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0") }}
                                 An authenticator app on your phone (Google Authenticator, Authy, 1Password, etc.)
                             </li>
                             <li class="flex items-start gap-2">
-                                <svg class="w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                </svg>
+                                {{ icon_svg("check", "w-4 h-4 text-teal-500 mt-0.5 flex-shrink-0") }}
                                 About 2 minutes to complete setup
                             </li>
                         </ul>
                     </div>
                         <button onclick="startSetup()" class="btn btn-teal w-full sm:w-auto">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                        </svg>
+                        {{ icon_svg("lock-closed", "w-4 h-4") }}
                         Set up two-factor authentication
                     </button>
                 </div>
@@ -182,9 +171,7 @@
                                         Loading...
                                     </code>
                                     <button onclick="copySecret()" class="btn btn-secondary btn-sm" title="Copy to clipboard" aria-label="Copy to clipboard">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                                        </svg>
+                                        {{ icon_svg("duplicate", "w-4 h-4") }}
                                     </button>
                                 </div>
                             </div>
@@ -195,9 +182,7 @@
                         <button onclick="cancelSetup()" class="btn btn-secondary">Cancel</button>
                         <button onclick="showVerifyStep()" class="btn btn-teal">
                             Continue
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                            </svg>
+                            {{ icon_svg("chevron-right", "w-4 h-4") }}
                         </button>
                     </div>
                 </div>
@@ -226,9 +211,7 @@
 
                     <div class="flex justify-between pt-4 border-t border-slate-100 dark:border-slate-700">
                         <button onclick="showQRStep()" class="btn btn-secondary">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                            </svg>
+                            {{ icon_svg("chevron-left", "w-4 h-4") }}
                             Back
                         </button>
                         <button onclick="verifyCode()" class="btn btn-teal" id="verify-btn">
@@ -249,9 +232,7 @@
     <div class="stagger-in" style="animation-delay: 200ms;">
         <div class="card p-6 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("information-circle", "w-4 h-4 text-teal-500") }}
                 How two-factor authentication works
             </h3>
             <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">

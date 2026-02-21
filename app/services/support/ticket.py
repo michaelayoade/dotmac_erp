@@ -304,6 +304,7 @@ class TicketService:
         db.flush()
 
         logger.info(f"Created ticket {ticket_number} for org {org_id}")
+        db.refresh(ticket)
         return ticket
 
     def update_ticket(
@@ -455,6 +456,7 @@ class TicketService:
 
         ticket.updated_by_id = uid
         db.flush()
+        db.refresh(ticket)
 
         return ticket
 
@@ -561,6 +563,7 @@ class TicketService:
                     actor_id=uid,
                 )
 
+        db.refresh(ticket)
         return ticket, None
 
     def assign_ticket(
@@ -614,6 +617,7 @@ class TicketService:
                 actor_id=coerce_uuid(user_id),
             )
 
+        db.refresh(ticket)
         return ticket
 
     def resolve_ticket(

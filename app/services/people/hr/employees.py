@@ -1023,6 +1023,7 @@ class EmployeeService:
         )
         self.db.add(credential)
         self.db.flush()
+        self.db.refresh(credential)
         return credential
 
     def delete_employee(self, employee_id: uuid.UUID) -> None:

@@ -8,6 +8,7 @@ from app.tasks.analytics import (
     refresh_workforce_metrics,
 )
 from app.tasks.audit import log_audit_event
+from app.tasks.audit_integrity import verify_audit_hash_chain
 from app.tasks.automation import (
     execute_workflow_action,
     process_recurring_templates,
@@ -64,6 +65,9 @@ from app.tasks.hr import (
     process_probation_ending_notifications,
     process_work_anniversary_notifications,
 )
+from app.tasks.notifications import (
+    process_pending_notification_emails,
+)
 from app.tasks.outbox_relay import (
     cleanup_published_outbox_events,
     relay_outbox_events,
@@ -80,6 +84,9 @@ from app.tasks.performance import (
     generate_cycle_appraisals,
     process_cycle_phase_transitions,
     sync_all_cycle_progress,
+)
+from app.tasks.project_sla import (
+    process_project_sla_breaches,
 )
 from app.tasks.splynx import (
     cleanup_stale_splynx_sync_history,
@@ -181,6 +188,10 @@ __all__ = [
     "reconcile_payment_allocations",
     "fix_unbalanced_posted_journals",
     "run_data_health_check",
+    # Notification tasks
+    "process_pending_notification_emails",
+    # Project SLA tasks
+    "process_project_sla_breaches",
     # Outbox relay tasks
     "relay_outbox_events",
     "cleanup_published_outbox_events",

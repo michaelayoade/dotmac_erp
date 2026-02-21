@@ -24,6 +24,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -76,7 +80,6 @@ def create_contract(
     user_id = UUID(person_id)
     try:
         contract = service.create(organization_id, data, user_id)
-        db.commit()
         return ContractResponse.model_validate(contract)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -93,7 +96,6 @@ def update_contract(
     service = ContractService(db)
     try:
         contract = service.update(organization_id, contract_id, data)
-        db.commit()
         return ContractResponse.model_validate(contract)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -132,7 +134,6 @@ def activate_contract(
             fiscal_period_id=fiscal_period_id,
             appropriation_id=appropriation_id,
         )
-        db.commit()
         return ContractResponse.model_validate(contract)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -150,7 +151,6 @@ def complete_contract(
     service = ContractService(db)
     try:
         contract = service.complete(organization_id, contract_id)
-        db.commit()
         return ContractResponse.model_validate(contract)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -187,7 +187,6 @@ def generate_invoice_from_contract(
             expense_account_id=expense_account_id,
             payment_terms_days=payment_terms_days,
         )
-        db.commit()
         return {
             "invoice_id": str(invoice.invoice_id),
             "invoice_number": invoice.invoice_number,
@@ -208,7 +207,6 @@ def terminate_contract(
     service = ContractService(db)
     try:
         contract = service.terminate(organization_id, contract_id)
-        db.commit()
         return ContractResponse.model_validate(contract)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

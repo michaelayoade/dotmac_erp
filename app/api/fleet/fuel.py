@@ -30,6 +30,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -101,7 +105,6 @@ def create_fuel_log(
     service = FuelService(db, organization_id)
     try:
         log = service.create(data)
-        db.commit()
         return FuelLogRead.model_validate(log)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -120,7 +123,6 @@ def update_fuel_log(
     service = FuelService(db, organization_id)
     try:
         log = service.update(fuel_log_id, data)
-        db.commit()
         return FuelLogRead.model_validate(log)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -136,6 +138,5 @@ def delete_fuel_log(
     service = FuelService(db, organization_id)
     try:
         service.delete(fuel_log_id)
-        db.commit()
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

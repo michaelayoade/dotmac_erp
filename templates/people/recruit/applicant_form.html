@@ -1,21 +1,22 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ "Edit Applicant" if applicant else "New Applicant" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/recruit/applicants" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Applicants</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if applicant else "New" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/recruit/applicants" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Applicants</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if applicant else "New" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     <div>
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ "Edit Applicant" if applicant else "New Applicant" }}</h1>
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ "Edit Applicant" if applicant else "New Applicant" }}</h2>
         <p class="text-sm text-slate-500 dark:text-slate-400">{{ "Update applicant information" if applicant else "Add a new job applicant" }}</p>
     </div>
 
@@ -220,9 +221,7 @@
         <div class="p-6 flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="{{ '/people/recruit/applicants/' ~ applicant.applicant_id if applicant else '/people/recruit/applicants' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "h-4 w-4 mr-1") }}
                 {{ "Update Applicant" if applicant else "Add Applicant" }}
             </button>
         </div>

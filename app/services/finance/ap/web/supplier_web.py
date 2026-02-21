@@ -35,6 +35,7 @@ from app.services.finance.ap.web.base import (
     get_accounts,
     invoice_status_label,
     logger,
+    recent_activity_view,
     supplier_detail_view,
     supplier_form_view,
     supplier_list_view,
@@ -96,6 +97,72 @@ class SupplierWebService:
                     "payment_terms_days": supplier.payment_terms_days or 30,
                 }
             )
+        return {"items": items}
+
+    @staticmethod
+    def people_search(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 25,
+    ) -> dict:
+        """Search people by name/email for comment @mentions.
+
+        Uses SQLAlchemy 2.0 ``select()`` syntax instead of ``db.query()``.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            query: Search term
+            limit: Max results
+
+        Returns:
+            Dict with ``items`` list of person dicts.
+        """
+        from sqlalchemy import or_
+        from sqlalchemy import select as sa_select
+
+        from app.models.person import Person
+
+        term = query.strip()
+        if not term:
+            return {"items": []}
+
+        org_id = coerce_uuid(organization_id)
+        search_term = f"%{term}%"
+
+        people = list(
+            db.scalars(
+                sa_select(Person)
+                .where(
+                    Person.organization_id == org_id,
+                    or_(
+                        Person.first_name.ilike(search_term),
+                        Person.last_name.ilike(search_term),
+                        Person.display_name.ilike(search_term),
+                        Person.email.ilike(search_term),
+                    ),
+                )
+                .order_by(Person.first_name.asc(), Person.last_name.asc())
+                .limit(limit)
+            ).all()
+        )
+
+        items = []
+        for person in people:
+            name = (
+                person.display_name or f"{person.first_name} {person.last_name}".strip()
+            )
+            person_status = "Active" if person.is_active else "Inactive"
+            items.append(
+                {
+                    "ref": str(person.id),
+                    "label": f"{name} <{person.email}> ({person_status})",
+                    "name": name,
+                    "email": person.email,
+                }
+            )
+
         return {"items": items}
 
     @staticmethod
@@ -495,6 +562,14 @@ class SupplierWebService:
             "purchase_orders": purchase_orders_view,
             "goods_receipts": goods_receipts_view,
             "attachments": attachments_view,
+            "recent_activity": recent_activity_view(
+                db,
+                org_id,
+                table_schema="ap",
+                table_name="supplier",
+                record_id=str(supplier.supplier_id),
+                limit=10,
+            ),
         }
 
     @staticmethod

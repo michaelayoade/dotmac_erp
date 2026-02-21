@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block content %}
 <div class="px-6 py-8">
@@ -8,9 +9,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <a href="/profile" class="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-teal-600 dark:text-slate-400 dark:hover:text-teal-400 mb-4 transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
+                    {{ icon_svg("chevron-left", "w-4 h-4") }}
                     Back to profile
                 </a>
                 <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Active sessions</h1>
@@ -22,9 +21,7 @@
             <button onclick="revokeAllOtherSessions()"
                     class="btn btn-secondary self-start sm:self-auto"
                     id="revoke-all-btn">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                </svg>
+                {{ icon_svg("logout", "w-4 h-4") }}
                 Sign out other sessions
             </button>
             {% endif %}
@@ -67,9 +64,7 @@
                         </div>
                         {% else %}
                         <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                            </svg>
+                            {{ icon_svg("desktop-computer", "w-6 h-6") }}
                         </div>
                         {% endif %}
                     </div>
@@ -129,9 +124,7 @@
                             <button onclick="revokeSession('{{ session.id }}')"
                                     class="btn btn-sm text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-900/50 dark:hover:bg-rose-900/20 flex-shrink-0"
                                     id="revoke-btn-{{ session.id }}">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                                </svg>
+                                {{ icon_svg("logout", "w-4 h-4") }}
                                 Sign Out
                             </button>
                             {% endif %}
@@ -142,7 +135,7 @@
                             <div>
                                 <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Signed in</p>
                                 <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
-                                    {{ session.created_at.strftime('%b %d, %Y') }}
+                                    {{ session.created_at | format_date }}
                                     <span class="text-slate-400 dark:text-slate-500">{{ session.created_at.strftime('%H:%M') }}</span>
                                 </p>
                             </div>
@@ -150,7 +143,7 @@
                                 <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Last active</p>
                                 <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
                                     {% if session.last_seen_at %}
-                                    {{ session.last_seen_at.strftime('%b %d, %Y') }}
+                                    {{ session.last_seen_at | format_date }}
                                     <span class="text-slate-400 dark:text-slate-500">{{ session.last_seen_at.strftime('%H:%M') }}</span>
                                     {% else %}
                                     <span class="text-teal-600 dark:text-teal-400">Just now</span>
@@ -160,7 +153,7 @@
                             <div class="col-span-2 sm:col-span-1">
                                 <p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">Expires</p>
                                 <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mt-1">
-                                    {{ session.expires_at.strftime('%b %d, %Y') }}
+                                    {{ session.expires_at | format_date }}
                                     <span class="text-slate-400 dark:text-slate-500">{{ session.expires_at.strftime('%H:%M') }}</span>
                                 </p>
                             </div>
@@ -189,9 +182,7 @@
             <div class="card p-12">
                 <div class="empty-state">
                     <div class="empty-state-icon">
-                        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                        </svg>
+                        {{ icon_svg("desktop-computer", "h-8 w-8", stroke_width="1.5") }}
                     </div>
                     <p class="empty-state-title">No active sessions</p>
                     <p class="empty-state-description">You do not have any active sessions.</p>
@@ -205,28 +196,20 @@
     <div class="stagger-in" style="animation-delay: {{ 150 + sessions|length * 50 }}ms;">
         <div class="card p-6 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <svg class="w-4 h-4 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
+                {{ icon_svg("shield-check", "w-4 h-4 text-teal-500") }}
                 Security tips
             </h3>
             <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
                 <li class="flex items-start gap-2">
-                    <svg class="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0") }}
                     Sign out of sessions you do not recognize.
                 </li>
                 <li class="flex items-start gap-2">
-                    <svg class="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0") }}
                     If you see suspicious activity, <a href="/change-password" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">change your password</a> immediately.
                 </li>
                 <li class="flex items-start gap-2">
-                    <svg class="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0") }}
                     Always sign out when using shared or public devices.
                 </li>
             </ul>

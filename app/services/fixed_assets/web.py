@@ -88,14 +88,16 @@ class FixedAssetWebService:
         db: Session,
         organization_id: UUID,
     ) -> list[Account]:
-        return db.scalars(
-            select(Account)
-            .where(
-                Account.organization_id == organization_id,
-                Account.is_active.is_(True),
+        return list(
+            db.scalars(
+                select(Account)
+                .where(
+                    Account.organization_id == organization_id,
+                    Account.is_active.is_(True),
+                )
+                .order_by(Account.account_code)
             )
-            .order_by(Account.account_code)
-        ).all()
+        )
 
     @staticmethod
     def asset_form_context(
@@ -603,24 +605,24 @@ class FixedAssetWebService:
 
         period_id = _try_uuid(period)
 
-        query = (
-            select(DepreciationRun, FiscalPeriod)
-            .join(
-                FiscalPeriod,
-                DepreciationRun.fiscal_period_id == FiscalPeriod.fiscal_period_id,
-            )
-            .where(DepreciationRun.organization_id == org_id)
+        query = db.query(DepreciationRun, FiscalPeriod).join(
+            FiscalPeriod,
+            DepreciationRun.fiscal_period_id == FiscalPeriod.fiscal_period_id,
         )
+        query = query.filter(DepreciationRun.organization_id == org_id)
 
         if period_id:
-            query = query.where(DepreciationRun.fiscal_period_id == period_id)
+            query = query.filter(DepreciationRun.fiscal_period_id == period_id)
 
-        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        rows = db.execute(
+        total_count = (
+            query.with_entities(func.count(DepreciationRun.run_id)).scalar() or 0
+        )
+        rows = (
             query.order_by(DepreciationRun.created_at.desc())
             .limit(limit)
             .offset(offset)
-        ).all()
+            .all()
+        )
 
         runs_view = []
         for run, fiscal_period in rows:

@@ -31,6 +31,15 @@ def _resolve_currency_prefix(presentation_code: str, currency_context: dict) -> 
 
 
 def _format_currency(amount: Decimal, currency_prefix: str) -> str:
+    """Format amount with currency prefix using accounting parentheses for negatives."""
+    if amount is not None:
+        try:
+            dec = Decimal(str(amount))
+            if dec < 0:
+                abs_formatted = _fmt.format_currency(abs(dec), show_symbol=False)
+                return f"({currency_prefix}{abs_formatted})"
+        except (ValueError, TypeError, ArithmeticError):
+            pass
     return f"{currency_prefix}{_fmt.format_currency(amount, show_symbol=False)}"
 
 
@@ -138,6 +147,8 @@ class DashboardWebService:
             # Trend data
             "revenue_trend": stats.revenue_trend,
             "income_trend": stats.income_trend,
+            "expenses_trend": stats.expenses_trend,
+            "cash_flow_trend": stats.cash_flow_trend,
         }
         subledger_recon_view = {
             "ar_ok": subledger_recon["ar_ok"],

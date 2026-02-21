@@ -1,19 +1,15 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 
 {% block page_title %}{{ order.po_number if order else "PO Not Found" }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/ap/purchase-orders" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Purchase Orders</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ order.po_number if order else "Not Found" }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/purchase-orders" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Purchase Orders</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ order.po_number if order else "Not Found" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -24,13 +20,11 @@
     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 stagger-in" style="animation-delay: 0ms;">
         <div class="flex items-start gap-4">
             <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
-                <svg class="h-7 w-7 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-                </svg>
+                {{ icon_svg("clipboard-list", "h-7 w-7 text-indigo-600 dark:text-indigo-400", stroke_width="1.5") }}
             </div>
             <div>
                 <div class="flex items-center gap-3">
-                    <h1 class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ order.po_number }}</h1>
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ order.po_number }}</h2>
                     {{ status_badge(order.status | default('draft'), 'sm') }}
                 </div>
                 <p class="mt-1 text-lg text-slate-500 dark:text-slate-400">{{ order.supplier_name }}</p>
@@ -39,17 +33,13 @@
         <div class="flex flex-wrap items-center gap-3">
             {% if order.status == 'DRAFT' %}
             <a href="/finance/ap/purchase-orders/{{ order.po_id }}/edit" class="btn btn-ghost">
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
+                {{ icon_svg("edit", "h-4 w-4 mr-2") }}
                 Edit
             </a>
             <form action="/finance/ap/purchase-orders/{{ order.po_id }}/submit" method="POST" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                    </svg>
+                    {{ icon_svg("chevron-right", "h-4 w-4 mr-2") }}
                     Submit for Approval
                 </button>
             </form>
@@ -57,39 +47,29 @@
             <form action="/finance/ap/purchase-orders/{{ order.po_id }}/approve" method="POST" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 mr-2") }}
                     Approve
                 </button>
             </form>
             <form action="/finance/ap/purchase-orders/{{ order.po_id }}/cancel" method="POST" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-ghost text-red-600 hover:text-red-700">
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                    {{ icon_svg("x-mark", "h-4 w-4 mr-2") }}
                     Cancel
                 </button>
             </form>
             {% elif order.status in ['APPROVED', 'PARTIALLY_RECEIVED'] %}
             <a href="/finance/ap/invoices/new?po_id={{ order.po_id }}" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                {{ icon_svg("document", "h-4 w-4 mr-2") }}
                 Create Invoice
             </a>
             <a href="/finance/ap/goods-receipts/new?po_id={{ order.po_id }}" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                </svg>
+                {{ icon_svg("box", "h-4 w-4 mr-2") }}
                 Receive Goods
             </a>
             {% endif %}
             <a href="/finance/ap/purchase-orders" class="btn btn-ghost">
-                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                </svg>
+                {{ icon_svg("arrow-left", "h-4 w-4 mr-2") }}
                 Back to List
             </a>
         </div>
@@ -98,9 +78,7 @@
     {% if error %}
     <div class="rounded-xl bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800 stagger-in" style="animation-delay: 25ms;">
         <div class="flex items-start gap-3">
-            <svg class="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400 mt-0.5") }}
             <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
         </div>
     </div>
@@ -134,9 +112,7 @@
                 <div class="card-header border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center gap-4">
                         <div class="card-icon bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                            </svg>
+                            {{ icon_svg("clipboard", "h-5 w-5", stroke_width="1.5") }}
                         </div>
                         <div>
                             <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Lines</h2>
@@ -202,9 +178,7 @@
                 <div class="card-header border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center gap-4">
                         <div class="card-icon bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
+                            {{ icon_svg("document", "h-5 w-5", stroke_width="1.5") }}
                         </div>
                         <div>
                             <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Terms & Conditions</h2>
@@ -223,9 +197,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                                </svg>
+                                {{ icon_svg("box", "h-5 w-5", stroke_width="1.5") }}
                             </div>
                             <div>
                                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Goods Receipts</h2>
@@ -248,9 +220,7 @@
                                 {% elif receipt.status == 'INSPECTING' %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400
                                 {% elif receipt.status == 'REJECTED' %}bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400
                                 {% else %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400{% endif %}">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                                </svg>
+                                {{ icon_svg("box", "h-4 w-4") }}
                             </div>
                             <div>
                                 <p class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ receipt.receipt_number }}</p>
@@ -259,9 +229,7 @@
                         </div>
                         <div class="flex items-center gap-2">
                             {{ status_badge(receipt.status | default('received'), 'sm') }}
-                            <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                            </svg>
+                            {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
                         </div>
                     </a>
                     {% else %}
@@ -284,6 +252,10 @@
                 {% set delete_base_url = "/finance/ap/attachments" %}
                 {% include "finance/partials/_attachments.html" %}
             </div>
+
+            <div class="stagger-in" style="animation-delay: 225ms;">
+                {% include "finance/ap/_recent_activity.html" %}
+            </div>
         </div>
 
         <!-- Sidebar -->
@@ -293,9 +265,7 @@
                 <div class="card-header border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center gap-4">
                         <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                            </svg>
+                            {{ icon_svg("building", "h-5 w-5", stroke_width="1.5") }}
                         </div>
                         <div>
                             <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Supplier</h2>
@@ -341,9 +311,7 @@
                 <div class="card-header border-b border-slate-100 dark:border-slate-700">
                     <div class="flex items-center gap-4">
                         <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
+                            {{ icon_svg("information-circle", "h-5 w-5", stroke_width="1.5") }}
                         </div>
                         <div>
                             <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Order Info</h2>
@@ -363,12 +331,12 @@
                         {% if order.approved_at %}
                         <div>
                             <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Approved At</dt>
-                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.approved_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.approved_at | format_datetime }}</dd>
                         </div>
                         {% endif %}
                         <div>
                             <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Created At</dt>
-                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '-' }}</dd>
+                            <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ order.created_at | format_datetime if order.created_at else '-' }}</dd>
                         </div>
                     </dl>
                 </div>

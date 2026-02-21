@@ -494,6 +494,9 @@ def import_to_production(
 
 
 if __name__ == "__main__":
+    print("ERPNext API sync is disabled. Use SQL-based sync tooling.")
+    raise SystemExit(2)
+
     parser = argparse.ArgumentParser(
         description="ERPNext Staging Sync",
         formatter_class=argparse.RawDescriptionHelpFormatter,

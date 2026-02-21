@@ -5,12 +5,12 @@
 {% block page_title %}Info Change Requests{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Info Change Requests</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Info Change Requests</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,7 +18,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Info Change Requests</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Info Change Requests</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Review employee-submitted updates before applying.</p>
         </div>
     </div>
@@ -77,18 +77,10 @@
                             {{ req.change_type.value | replace('_', ' ') | title }}
                         </td>
                         <td class="px-4 py-3">
-                            {% if req.status.value == 'PENDING' %}
-                            <span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">Pending</span>
-                            {% elif req.status.value == 'APPROVED' %}
-                            <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">Approved</span>
-                            {% elif req.status.value == 'REJECTED' %}
-                            <span class="inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-800 dark:bg-rose-900/50 dark:text-rose-300">Rejected</span>
-                            {% else %}
-                            {{ status_badge(req.status.value, size="sm") }}
-                            {% endif %}
+                            {{ status_badge(req.status.value, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ req.created_at.strftime('%b %d, %Y %H:%M') if req.created_at else '-' }}
+                            {{ req.created_at | format_datetime if req.created_at else '-' }}
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/hr/info-changes/{{ req.request_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">Review</a>

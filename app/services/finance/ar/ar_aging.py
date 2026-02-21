@@ -13,7 +13,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
@@ -103,16 +103,17 @@ class ARAgingService(ListResponseMixin):
             raise ValueError("Customer not found")
 
         # Get outstanding invoices
-        invoices = db.scalars(
-            select(Invoice).where(
+        invoices = (
+            db.query(Invoice)
+            .filter(
                 and_(
                     Invoice.customer_id == cust_id,
                     Invoice.organization_id == org_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
+            .all()
         )
-        invoices = invoices.all()
 
         current, days_31_60, days_61_90, over_90 = compute_aging_totals(
             invoices,
@@ -154,15 +155,16 @@ class ARAgingService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         ref_date = as_of_date or date.today()
 
-        invoices = db.scalars(
-            select(Invoice).where(
+        invoices = (
+            db.query(Invoice)
+            .filter(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
+            .all()
         )
-        invoices = invoices.all()
 
         customer_ids = {inv.customer_id for inv in invoices}
         current, days_31_60, days_61_90, over_90 = compute_aging_totals(
@@ -210,17 +212,17 @@ class ARAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Get all customers with outstanding invoices
-        customer_ids = db.execute(
-            select(Invoice.customer_id)
-            .where(
+        customer_ids = (
+            db.query(Invoice.customer_id)
+            .filter(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
             .distinct()
+            .all()
         )
-        customer_ids = customer_ids.all()
 
         results = []
         for (cust_id,) in customer_ids:
@@ -236,6 +238,80 @@ class ARAgingService(ListResponseMixin):
         # Sort by total outstanding descending
         results.sort(key=lambda x: x.total_outstanding, reverse=True)
         return results
+
+    @staticmethod
+    def build_aging_report(
+        db: Session,
+        organization_id: UUID,
+        as_of_date: date,
+        customer_id: UUID | None = None,
+    ) -> dict:
+        """Build complete AR aging report response.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            as_of_date: Date for aging calculation
+            customer_id: Optional filter to single customer
+
+        Returns:
+            Dict with as_of_date, currency_code, buckets, and totals.
+        """
+        org_summary = ARAgingService.calculate_organization_aging(
+            db=db,
+            organization_id=organization_id,
+            as_of_date=as_of_date,
+        )
+
+        if customer_id:
+            customer_summaries = [
+                ARAgingService.calculate_customer_aging(
+                    db=db,
+                    organization_id=organization_id,
+                    customer_id=customer_id,
+                    as_of_date=as_of_date,
+                )
+            ]
+        else:
+            customer_summaries = ARAgingService.get_aging_by_customer(
+                db=db,
+                organization_id=organization_id,
+                as_of_date=as_of_date,
+            )
+
+        buckets = [
+            {
+                "customer_id": s.customer_id,
+                "customer_code": s.customer_code,
+                "customer_name": s.customer_name,
+                "current": s.current,
+                "days_1_30": s.current,
+                "days_31_60": s.days_31_60,
+                "days_61_90": s.days_61_90,
+                "over_90": s.over_90,
+                "total": s.total_outstanding,
+            }
+            for s in customer_summaries
+        ]
+
+        totals = {
+            "customer_id": UUID(int=0),
+            "customer_code": "TOTAL",
+            "customer_name": "Total",
+            "current": org_summary.current,
+            "days_1_30": org_summary.current,
+            "days_31_60": org_summary.days_31_60,
+            "days_61_90": org_summary.days_61_90,
+            "over_90": org_summary.over_90,
+            "total": org_summary.total_outstanding,
+        }
+
+        return {
+            "as_of_date": org_summary.as_of_date,
+            "currency_code": org_summary.currency_code,
+            "buckets": buckets,
+            "totals": totals,
+        }
 
     @staticmethod
     def create_aging_snapshot(
@@ -318,18 +394,16 @@ class ARAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
         cutoff_date = ref_date
 
-        stmt = select(Invoice).where(
+        query = db.query(Invoice).filter(
             and_(
                 Invoice.organization_id == org_id,
                 Invoice.status.in_(InvoiceStatus.outstanding()),
                 Invoice.due_date < cutoff_date,
             )
         )
-
         if customer_id:
-            stmt = stmt.where(Invoice.customer_id == coerce_uuid(customer_id))
-
-        invoices = db.scalars(stmt.order_by(Invoice.due_date)).all()
+            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+        invoices = query.order_by(Invoice.due_date).all()
 
         # Filter by min days overdue
         result = []
@@ -411,28 +485,25 @@ class ARAgingService(ListResponseMixin):
         Returns:
             List of ARAgingSnapshot objects
         """
-        stmt = select(ARAgingSnapshot)
-
+        query = db.query(ARAgingSnapshot)
         if organization_id:
-            stmt = stmt.where(
+            query = query.filter(
                 ARAgingSnapshot.organization_id == coerce_uuid(organization_id)
             )
-
         if customer_id:
-            stmt = stmt.where(ARAgingSnapshot.customer_id == coerce_uuid(customer_id))
-
+            query = query.filter(
+                ARAgingSnapshot.customer_id == coerce_uuid(customer_id)
+            )
         if snapshot_date:
-            stmt = stmt.where(ARAgingSnapshot.snapshot_date == snapshot_date)
-
+            query = query.filter(ARAgingSnapshot.snapshot_date == snapshot_date)
         if aging_bucket:
-            stmt = stmt.where(ARAgingSnapshot.aging_bucket == aging_bucket)
-
-        stmt = (
-            stmt.order_by(ARAgingSnapshot.snapshot_date.desc())
+            query = query.filter(ARAgingSnapshot.aging_bucket == aging_bucket)
+        return (
+            query.order_by(ARAgingSnapshot.snapshot_date.desc())
             .limit(limit)
             .offset(offset)
+            .all()
         )
-        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

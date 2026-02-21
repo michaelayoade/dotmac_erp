@@ -1,15 +1,15 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field %}
+{% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, pagination %}
 
 {% block page_title %}Promotions{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Promotions</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Promotions</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,9 +18,7 @@
     {% if request.query_params.get('success') %}
     <div class="p-4 rounded-lg bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800">
         <div class="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-            </svg>
+            {{ icon_svg("check", "w-5 h-5") }}
             <span>{{ request.query_params.get('success') | replace('+', ' ') }}</span>
         </div>
     </div>
@@ -29,9 +27,7 @@
     <!-- Info Banner -->
     <div class="card p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
         <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-            </svg>
+            {{ icon_svg("trending-up", "w-5 h-5 text-blue-500 mt-0.5") }}
             <div class="text-sm text-blue-700 dark:text-blue-300">
                 <p class="font-medium">Employee Promotions</p>
                 <p class="text-blue-600 dark:text-blue-400">Track promotions including designation changes, department moves, and reporting structure updates.</p>
@@ -81,7 +77,7 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                            {{ promo.promotion_date.strftime("%b %d, %Y") if promo.promotion_date else '-' }}
+                            {{ promo.promotion_date | format_date if promo.promotion_date else '-' }}
                         </td>
                         <td class="px-4 py-3 text-sm">
                             {% if promo.details %}
@@ -98,9 +94,7 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/hr/promotions/{{ promo.promotion_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                </svg>
+                                {{ icon_svg("chevron-right", "h-4 w-4") }}
                             </a>
                         </td>
                     </tr>
@@ -111,30 +105,21 @@
     </div>
     {% else %}
     <div class="card p-8 text-center">
-        <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-        </svg>
+        {{ icon_svg("trending-up", "w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4") }}
         <p class="text-slate-500 dark:text-slate-400 mb-4">No promotions recorded yet.</p>
         <p class="text-sm text-slate-400 dark:text-slate-500">Record promotions from the employee detail page.</p>
     </div>
     {% endif %}
 
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between">
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-            Showing page <span class="font-medium text-slate-700 dark:text-slate-300">{{ page }}</span> of
-            <span class="font-medium text-slate-700 dark:text-slate-300">{{ total_pages }}</span>
-        </p>
-        <div class="flex gap-2">
-            {% if has_prev %}
-            <a href="?page={{ page - 1 }}&employee_id={{ employee_id | default('', true) }}" class="btn btn-secondary btn-sm">Previous</a>
-            {% endif %}
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}&employee_id={{ employee_id | default('', true) }}" class="btn btn-secondary btn-sm">Next</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page | default(1),
+        total_pages=total_pages | default(1),
+        total_count=total | default(0),
+        limit=20,
+        show_size_selector=false,
+        filters={"employee_id": employee_id}
+    ) }}
+
     </div>{# /results-container #}
 </div>
 {% endblock %}

@@ -44,6 +44,7 @@ from app.services.fleet.incident_service import IncidentService
 from app.services.fleet.maintenance_service import MaintenanceService
 from app.services.fleet.reservation_service import ReservationService
 from app.services.fleet.vehicle_service import VehicleService
+from app.services.recent_activity import get_recent_activity_for_record
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +360,12 @@ class FleetWebService:
 
         return {
             "vehicle": vehicle,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                org_id,
+                record=vehicle,
+                limit=10,
+            ),
             "maintenance_records": maintenance_result.items,
             "documents": documents_result.items,
             "fuel_logs": fuel_result.items,
@@ -477,6 +484,12 @@ class FleetWebService:
 
         return {
             "record": record,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                org_id,
+                record=record,
+                limit=10,
+            ),
             "statuses": [s.value for s in MaintenanceStatus],
         }
 
@@ -673,6 +686,12 @@ class FleetWebService:
 
         return {
             "incident": incident,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                org_id,
+                record=incident,
+                limit=10,
+            ),
             "statuses": [s.value for s in IncidentStatus],
         }
 
@@ -782,6 +801,12 @@ class FleetWebService:
 
         return {
             "reservation": reservation,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                org_id,
+                record=reservation,
+                limit=10,
+            ),
             "statuses": [s.value for s in ReservationStatus],
         }
 
@@ -894,6 +919,12 @@ class FleetWebService:
 
         return {
             "document": doc,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                org_id,
+                record=doc,
+                limit=10,
+            ),
             "document_types": [t.value for t in DocumentType],
         }
 

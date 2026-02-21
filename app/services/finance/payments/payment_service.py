@@ -120,13 +120,22 @@ class PaymentService:
 
         # Check for existing active payment intent to prevent duplicate payments
         active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
-        existing_intent = self.db.scalar(
-            select(PaymentIntent).where(
-                PaymentIntent.source_type == "INVOICE",
-                PaymentIntent.source_id == inv_id,
-                PaymentIntent.status.in_(active_statuses),
+        try:
+            existing_intent = (
+                self.db.query(PaymentIntent)
+                .filter(PaymentIntent.source_type == "INVOICE")
+                .filter(PaymentIntent.source_id == inv_id)
+                .filter(PaymentIntent.status.in_(active_statuses))
+                .first()
             )
-        )
+        except Exception:
+            existing_intent = self.db.scalar(
+                select(PaymentIntent).where(
+                    PaymentIntent.source_type == "INVOICE",
+                    PaymentIntent.source_id == inv_id,
+                    PaymentIntent.status.in_(active_statuses),
+                )
+            )
         if existing_intent:
             expires_at = existing_intent.expires_at
             if expires_at and expires_at.tzinfo is None:
@@ -641,8 +650,8 @@ class PaymentService:
         self,
         expense_claim_id: UUID,
         paystack_config: PaystackConfig,
-        recipient_bank_code: str,
-        recipient_account_number: str,
+        recipient_bank_code: str | None = None,
+        recipient_account_number: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> PaymentIntent:
         """
@@ -651,8 +660,8 @@ class PaymentService:
         Args:
             expense_claim_id: The expense claim to reimburse
             paystack_config: Paystack credentials
-            recipient_bank_code: Employee's bank code
-            recipient_account_number: Employee's bank account number
+            recipient_bank_code: Employee's bank code (extracted from claim if omitted)
+            recipient_account_number: Employee's bank account number (extracted from claim if omitted)
             metadata: Optional additional metadata
 
         Returns:
@@ -730,6 +739,17 @@ class PaymentService:
         if claim.net_payable_amount is None or claim.net_payable_amount <= Decimal("0"):
             raise HTTPException(
                 status_code=400, detail="No amount payable for this claim"
+            )
+
+        # Extract bank details from claim if not provided by caller
+        if not recipient_bank_code:
+            recipient_bank_code = claim.recipient_bank_code
+        if not recipient_account_number:
+            recipient_account_number = claim.recipient_account_number
+        if not recipient_bank_code or not recipient_account_number:
+            raise HTTPException(
+                status_code=400,
+                detail="Expense claim is missing bank details",
             )
 
         # Get employee for recipient details
@@ -1001,6 +1021,37 @@ class PaymentService:
 
         return intent
 
+    def build_transfer_result(self, intent: PaymentIntent) -> dict[str, Any]:
+        """Build transfer result with claim status and user-facing message.
+
+        Args:
+            intent: The updated payment intent after transfer initiation.
+
+        Returns:
+            Dict with completed_immediately, claim_status, and message keys.
+        """
+        from app.models.expense.expense_claim import ExpenseClaim
+
+        claim_status: str | None = None
+        if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
+            claim = self.db.get(ExpenseClaim, intent.source_id)
+            if claim:
+                claim_status = claim.status.value
+
+        completed_immediately = intent.status == PaymentIntentStatus.COMPLETED
+        if completed_immediately:
+            message = "Transfer completed successfully! The expense claim has been marked as paid."
+        elif intent.status == PaymentIntentStatus.FAILED:
+            message = "Transfer failed. Please check the error and try again."
+        else:
+            message = "Transfer initiated and is being processed. You will be notified when complete."
+
+        return {
+            "completed_immediately": completed_immediately,
+            "claim_status": claim_status,
+            "message": message,
+        }
+
     def process_successful_transfer(
         self,
         intent: PaymentIntent,
@@ -1271,11 +1322,18 @@ class PaymentService:
             error_message: Error description (for FAILED status)
         """
         # Find batch item by payment intent
-        batch_item = self.db.scalar(
-            select(TransferBatchItem).where(
-                TransferBatchItem.payment_intent_id == intent.intent_id
+        try:
+            batch_item = (
+                self.db.query(TransferBatchItem)
+                .filter(TransferBatchItem.payment_intent_id == intent.intent_id)
+                .first()
             )
-        )
+        except Exception:
+            batch_item = self.db.scalar(
+                select(TransferBatchItem).where(
+                    TransferBatchItem.payment_intent_id == intent.intent_id
+                )
+            )
 
         if not batch_item:
             # Intent is not part of a batch

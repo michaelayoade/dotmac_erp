@@ -91,6 +91,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -160,7 +164,6 @@ def create_expense_category(
         requires_receipt=payload.requires_receipt,
         is_active=payload.is_active,
     )
-    db.commit()
     return ExpenseCategoryRead.model_validate(category)
 
 
@@ -190,7 +193,6 @@ def update_expense_category(
     svc = ExpenseService(db)
     update_data = payload.model_dump(exclude_unset=True)
     category = svc.update_category(organization_id, category_id, **update_data)
-    db.commit()
     return ExpenseCategoryRead.model_validate(category)
 
 
@@ -204,7 +206,6 @@ def delete_expense_category(
     """Delete an expense category."""
     svc = ExpenseService(db)
     svc.delete_category(organization_id, category_id)
-    db.commit()
 
 
 # =============================================================================
@@ -298,7 +299,6 @@ def create_expense_claim(
             notes=payload.notes,
             items=items_data,
         )
-        db.commit()
         response = ExpenseClaimRead.model_validate(claim)
         IdempotencyService.update_response(
             db=db,
@@ -310,7 +310,6 @@ def create_expense_claim(
         )
         return response
     except HTTPException as exc:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -321,7 +320,6 @@ def create_expense_claim(
         )
         raise
     except Exception:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -357,7 +355,6 @@ def update_expense_claim(
     svc = ExpenseService(db)
     update_data = payload.model_dump(exclude_unset=True)
     claim = svc.update_claim(organization_id, claim_id, **update_data)
-    db.commit()
     return ExpenseClaimRead.model_validate(claim)
 
 
@@ -371,7 +368,6 @@ def delete_expense_claim(
     """Delete an expense claim (only in draft status)."""
     svc = ExpenseService(db)
     svc.delete_claim(organization_id, claim_id)
-    db.commit()
 
 
 # Claim items
@@ -394,7 +390,6 @@ def add_claim_item(
         claim_id=claim_id,
         **payload.model_dump(),
     )
-    db.commit()
     return ExpenseClaimItemRead.model_validate(item)
 
 
@@ -411,7 +406,6 @@ def remove_claim_item(
     """Remove an item from an expense claim."""
     svc = ExpenseService(db)
     svc.remove_claim_item(organization_id, claim_id, item_id)
-    db.commit()
 
 
 # =============================================================================
@@ -448,7 +442,6 @@ def submit_claim(
     try:
         result = svc.submit_claim(organization_id, claim_id)
         claim = result.claim if hasattr(result, "claim") else result
-        db.commit()
         response = ExpenseClaimRead.model_validate(claim)
         IdempotencyService.update_response(
             db=db,
@@ -460,7 +453,6 @@ def submit_claim(
         )
         return response
     except HTTPException as exc:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -471,7 +463,6 @@ def submit_claim(
         )
         raise
     except Exception:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -523,7 +514,6 @@ def approve_claim(
             approved_amounts=approved_amounts,
             notes=payload.notes,
         )
-        db.commit()
         response = ExpenseClaimRead.model_validate(claim)
         IdempotencyService.update_response(
             db=db,
@@ -535,7 +525,6 @@ def approve_claim(
         )
         return response
     except ApproverAuthorityError as exc:
-        db.rollback()
         detail = str(exc)
         IdempotencyService.update_response(
             db=db,
@@ -547,7 +536,6 @@ def approve_claim(
         )
         raise HTTPException(status_code=403, detail=detail)
     except HTTPException as exc:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -558,7 +546,6 @@ def approve_claim(
         )
         raise
     except Exception:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -604,7 +591,6 @@ def reject_claim(
             approver_id=payload.approver_id,
             reason=payload.reason,
         )
-        db.commit()
         response = ExpenseClaimRead.model_validate(claim)
         IdempotencyService.update_response(
             db=db,
@@ -616,7 +602,6 @@ def reject_claim(
         )
         return response
     except HTTPException as exc:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -627,7 +612,6 @@ def reject_claim(
         )
         raise
     except Exception:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -673,7 +657,6 @@ def mark_claim_paid(
             payment_reference=payload.payment_reference,
             payment_date=payload.payment_date,
         )
-        db.commit()
         response = ExpenseClaimRead.model_validate(claim)
         IdempotencyService.update_response(
             db=db,
@@ -685,7 +668,6 @@ def mark_claim_paid(
         )
         return response
     except HTTPException as exc:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -696,7 +678,6 @@ def mark_claim_paid(
         )
         raise
     except Exception:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -724,10 +705,8 @@ def cancel_claim(
             claim_id=claim_id,
             reason=reason,
         )
-        db.commit()
         return ExpenseClaimRead.model_validate(claim)
     except ExpenseClaimStatusError as exc:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -748,10 +727,8 @@ def resubmit_claim(
             org_id=organization_id,
             claim_id=claim_id,
         )
-        db.commit()
         return ExpenseClaimRead.model_validate(claim)
     except ExpenseClaimStatusError as exc:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -792,7 +769,6 @@ def link_advance_to_claim(
             advance_id=payload.advance_id,
             amount_to_adjust=payload.amount_to_adjust,
         )
-        db.commit()
         response = ExpenseClaimRead.model_validate(claim)
         IdempotencyService.update_response(
             db=db,
@@ -804,7 +780,6 @@ def link_advance_to_claim(
         )
         return response
     except HTTPException as exc:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -815,7 +790,6 @@ def link_advance_to_claim(
         )
         raise
     except Exception:
-        db.rollback()
         IdempotencyService.update_response(
             db=db,
             organization_id=organization_id,
@@ -886,7 +860,6 @@ def create_cash_advance(
         advance_account_id=payload.advance_account_id,
         notes=payload.notes,
     )
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -914,7 +887,6 @@ def update_cash_advance(
     svc = ExpenseService(db)
     update_data = payload.model_dump(exclude_unset=True)
     advance = svc.update_advance(organization_id, advance_id, **update_data)
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -928,7 +900,6 @@ def delete_cash_advance(
     """Delete a cash advance (only in draft status)."""
     svc = ExpenseService(db)
     svc.delete_advance(organization_id, advance_id)
-    db.commit()
 
 
 # Advance workflow
@@ -942,7 +913,6 @@ def submit_advance(
     """Submit a cash advance for approval."""
     svc = ExpenseService(db)
     advance = svc.submit_advance(organization_id, advance_id)
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -967,7 +937,6 @@ def approve_advance(
         approver_id=approver_id,
         approved_amount=approved_amount,
     )
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -988,7 +957,6 @@ def reject_advance(
         approver_id=approver_id,
         reason=reason,
     )
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -1009,7 +977,6 @@ def disburse_advance(
         disbursement_date=payload.disbursement_date,
         payment_reference=payload.payment_reference,
     )
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -1030,7 +997,6 @@ def settle_advance(
         settlement_date=payload.settlement_date,
         notes=payload.notes,
     )
-    db.commit()
     return CashAdvanceRead.model_validate(advance)
 
 
@@ -1091,7 +1057,6 @@ def create_corporate_card(
         currency_code=payload.currency_code,
         liability_account_id=payload.liability_account_id,
     )
-    db.commit()
     return CorporateCardRead.model_validate(card)
 
 
@@ -1119,7 +1084,6 @@ def update_corporate_card(
     svc = ExpenseService(db)
     update_data = payload.model_dump(exclude_unset=True)
     card = svc.update_card(organization_id, card_id, **update_data)
-    db.commit()
     return CorporateCardRead.model_validate(card)
 
 
@@ -1134,7 +1098,6 @@ def deactivate_corporate_card(
     """Deactivate a corporate card."""
     svc = ExpenseService(db)
     svc.deactivate_card(organization_id, card_id, reason=payload.reason)
-    db.commit()
 
 
 # =============================================================================
@@ -1205,7 +1168,6 @@ def create_card_transaction(
         description=payload.description,
         notes=payload.notes,
     )
-    db.commit()
     return CardTransactionRead.model_validate(transaction)
 
 
@@ -1237,7 +1199,6 @@ def update_card_transaction(
     svc = ExpenseService(db)
     update_data = payload.model_dump(exclude_unset=True)
     transaction = svc.update_transaction(organization_id, transaction_id, **update_data)
-    db.commit()
     return CardTransactionRead.model_validate(transaction)
 
 
@@ -1258,7 +1219,6 @@ def match_transaction(
         transaction_id=transaction_id,
         expense_claim_id=payload.expense_claim_id,
     )
-    db.commit()
     return CardTransactionRead.model_validate(transaction)
 
 

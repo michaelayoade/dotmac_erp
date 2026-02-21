@@ -1,24 +1,22 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Bulk Adjustments{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll Runs</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/runs/{{ entry.entry_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ entry.entry_number }}</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Bulk Adjustments</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/runs" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Payroll Runs</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/runs/{{ entry.entry_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ entry.entry_number }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Bulk Adjustments</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/payroll/runs/{{ entry.entry_id }}" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-    </svg>
+    {{ icon_svg("chevron-left", "h-4 w-4 mr-1.5") }}
     Back to Run
 </a>
 {% endblock %}
@@ -26,7 +24,7 @@
 {% block content %}
 <div class="max-w-2xl mx-auto space-y-6">
     <div class="card p-6">
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Bulk Adjustments</h1>
+        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Bulk Adjustments</h2>
         <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Apply a one-time earning or deduction to all draft slips in this run.
         </p>

@@ -1,17 +1,16 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 {% block page_title %}Loan {{ loan.loan_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/payroll/loans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loans</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ loan.loan_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/payroll/loans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Loans</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ loan.loan_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -21,7 +20,7 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <div class="flex items-center gap-3">
-                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ loan.loan_number }}</h1>
+                <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ loan.loan_number }}</h2>
                 {% set status_colors = {
                     'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
                     'PENDING': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -45,25 +44,19 @@
             <form method="post" action="/people/payroll/loans/{{ loan.loan_id }}/approve" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary" onclick="return confirm('Approve this loan?')">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 mr-1") }}
                     Approve
                 </button>
             </form>
             <button type="button" class="btn btn-danger" onclick="document.getElementById('reject-modal').showModal()">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+                {{ icon_svg("x-mark", "h-4 w-4 mr-1") }}
                 Reject
             </button>
             {% endif %}
 
             {% if can_disburse %}
             <button type="button" class="btn btn-primary" onclick="document.getElementById('disburse-modal').showModal()">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
+                {{ icon_svg("cash", "h-4 w-4 mr-1") }}
                 Disburse
             </button>
             {% endif %}
@@ -139,7 +132,7 @@
                     </div>
                     <div>
                         <div class="text-slate-500 dark:text-slate-400">First Repayment Date</div>
-                        <div class="text-slate-900 dark:text-white">{{ loan.first_repayment_date.strftime('%d %b %Y') if loan.first_repayment_date else '-' }}</div>
+                        <div class="text-slate-900 dark:text-white">{{ loan.first_repayment_date | format_date if loan.first_repayment_date else '-' }}</div>
                     </div>
                     {% if loan.purpose %}
                     <div class="col-span-2">
@@ -170,7 +163,7 @@
                         <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                             {% for rep in loan.repayments %}
                             <tr>
-                                <td class="px-4 py-3 text-sm text-slate-900 dark:text-white">{{ rep.repayment_date.strftime('%d %b %Y') }}</td>
+                                <td class="px-4 py-3 text-sm text-slate-900 dark:text-white">{{ rep.repayment_date | format_date }}</td>
                                 <td class="px-4 py-3 text-sm text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(rep.principal_portion) }}</td>
                                 <td class="px-4 py-3 text-sm text-right font-mono text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(rep.interest_portion) }}</td>
                                 <td class="px-4 py-3 text-sm text-right font-mono font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(rep.amount) }}</td>
@@ -201,7 +194,7 @@
                         <div class="flex-shrink-0 w-2 h-2 mt-2 bg-slate-400 rounded-full"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Application</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.application_date.strftime('%d %b %Y') }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.application_date | format_date }}</div>
                         </div>
                     </div>
                     {% if loan.approval_date %}
@@ -209,7 +202,7 @@
                         <div class="flex-shrink-0 w-2 h-2 mt-2 bg-blue-500 rounded-full"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Approved</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.approval_date.strftime('%d %b %Y') }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.approval_date | format_date }}</div>
                         </div>
                     </div>
                     {% endif %}
@@ -218,7 +211,7 @@
                         <div class="flex-shrink-0 w-2 h-2 mt-2 bg-emerald-500 rounded-full"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Disbursed</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.disbursement_date.strftime('%d %b %Y') }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.disbursement_date | format_date }}</div>
                             {% if loan.disbursement_reference %}
                             <div class="text-xs text-slate-400 font-mono">Ref: {{ loan.disbursement_reference }}</div>
                             {% endif %}
@@ -230,7 +223,7 @@
                         <div class="flex-shrink-0 w-2 h-2 mt-2 bg-teal-500 rounded-full"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Completed</div>
-                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.completion_date.strftime('%d %b %Y') }}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.completion_date | format_date }}</div>
                         </div>
                     </div>
                     {% endif %}

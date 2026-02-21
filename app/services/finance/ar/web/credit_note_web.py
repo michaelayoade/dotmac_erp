@@ -422,7 +422,7 @@ class CreditNoteWebService:
             )
             return None
         except HTTPException as exc:
-            return exc.detail
+            return str(exc.detail)
         except Exception as e:
             logger.exception("delete_credit_note: failed for org %s", org_id)
             return f"Failed to delete credit note: {str(e)}"
@@ -602,12 +602,16 @@ class CreditNoteWebService:
         credit_note_id: str,
     ) -> RedirectResponse:
         """Submit credit note for approval."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.submit_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(credit_note_id),
-                submitted_by_user_id=auth.user_id,
+                submitted_by_user_id=user_id,
             )
             return RedirectResponse(
                 url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+submitted+for+approval",
@@ -628,12 +632,16 @@ class CreditNoteWebService:
         credit_note_id: str,
     ) -> RedirectResponse:
         """Approve a submitted credit note."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.approve_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(credit_note_id),
-                approved_by_user_id=auth.user_id,
+                approved_by_user_id=user_id,
             )
             return RedirectResponse(
                 url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+approved",
@@ -654,12 +662,16 @@ class CreditNoteWebService:
         credit_note_id: str,
     ) -> RedirectResponse:
         """Post credit note to general ledger."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.post_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(credit_note_id),
-                posted_by_user_id=auth.user_id,
+                posted_by_user_id=user_id,
             )
             return RedirectResponse(
                 url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+posted+to+ledger",
@@ -680,12 +692,16 @@ class CreditNoteWebService:
         credit_note_id: str,
     ) -> RedirectResponse:
         """Void a credit note."""
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             ar_invoice_service.void_invoice(
                 db=db,
-                organization_id=auth.organization_id,
+                organization_id=org_id,
                 invoice_id=coerce_uuid(credit_note_id),
-                voided_by_user_id=auth.user_id,
+                voided_by_user_id=user_id,
                 reason="Voided via web interface",
             )
             return RedirectResponse(

@@ -354,15 +354,17 @@ class IntercompanyService(ListResponseMixin):
         ).all()
         entity_ids = [e.entity_id for e in entities]
 
-        return db.scalars(
-            select(IntercompanyBalance)
-            .where(
-                IntercompanyBalance.fiscal_period_id == period_id,
-                IntercompanyBalance.from_entity_id.in_(entity_ids),
-                IntercompanyBalance.is_matched == False,
+        return list(
+            db.scalars(
+                select(IntercompanyBalance)
+                .where(
+                    IntercompanyBalance.fiscal_period_id == period_id,
+                    IntercompanyBalance.from_entity_id.in_(entity_ids),
+                    IntercompanyBalance.is_matched == False,
+                )
+                .order_by(IntercompanyBalance.difference_amount.desc())
             )
-            .order_by(IntercompanyBalance.difference_amount.desc())
-        ).all()
+        )
 
     @staticmethod
     def get_summary_by_type(
@@ -461,14 +463,16 @@ class IntercompanyService(ListResponseMixin):
         ).all()
         entity_ids = [e.entity_id for e in entities]
 
-        return db.scalars(
-            select(IntercompanyBalance).where(
-                IntercompanyBalance.fiscal_period_id == period_id,
-                IntercompanyBalance.from_entity_id.in_(entity_ids),
-                IntercompanyBalance.is_matched == True,
-                IntercompanyBalance.is_eliminated == False,
+        return list(
+            db.scalars(
+                select(IntercompanyBalance).where(
+                    IntercompanyBalance.fiscal_period_id == period_id,
+                    IntercompanyBalance.from_entity_id.in_(entity_ids),
+                    IntercompanyBalance.is_matched == True,
+                    IntercompanyBalance.is_eliminated == False,
+                )
             )
-        ).all()
+        )
 
     @staticmethod
     def mark_as_eliminated(
@@ -565,7 +569,7 @@ class IntercompanyService(ListResponseMixin):
             query = query.where(IntercompanyBalance.is_eliminated == is_eliminated)
 
         query = query.order_by(IntercompanyBalance.balance_date.desc())
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return list(db.scalars(query.limit(limit).offset(offset)))
 
 
 # Module-level singleton instance

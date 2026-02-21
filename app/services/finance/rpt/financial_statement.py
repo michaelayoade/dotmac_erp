@@ -318,15 +318,18 @@ class FinancialStatementService(ListResponseMixin):
         Returns:
             Ordered list of statement lines
         """
-        return db.scalars(
-            select(FinancialStatementLine)
-            .where(
-                FinancialStatementLine.organization_id == coerce_uuid(organization_id),
-                FinancialStatementLine.statement_type == statement_type,
-                FinancialStatementLine.is_active == True,
+        return list(
+            db.scalars(
+                select(FinancialStatementLine)
+                .where(
+                    FinancialStatementLine.organization_id
+                    == coerce_uuid(organization_id),
+                    FinancialStatementLine.statement_type == statement_type,
+                    FinancialStatementLine.is_active == True,
+                )
+                .order_by(FinancialStatementLine.sequence_number)
             )
-            .order_by(FinancialStatementLine.sequence_number)
-        ).all()
+        )
 
     @staticmethod
     def calculate_line_amount(
@@ -417,16 +420,17 @@ class FinancialStatementService(ListResponseMixin):
         tgt_org_id = coerce_uuid(target_organization_id)
 
         # Get source lines
-        source_lines = db.scalars(
-            select(FinancialStatementLine)
-            .where(
-                FinancialStatementLine.organization_id == src_org_id,
-                FinancialStatementLine.statement_type == statement_type,
-                FinancialStatementLine.is_active == True,
+        source_lines = list(
+            db.scalars(
+                select(FinancialStatementLine)
+                .where(
+                    FinancialStatementLine.organization_id == src_org_id,
+                    FinancialStatementLine.statement_type == statement_type,
+                    FinancialStatementLine.is_active == True,
+                )
+                .order_by(FinancialStatementLine.sequence_number)
             )
-            .order_by(FinancialStatementLine.sequence_number)
         )
-        source_lines = source_lines.all()
 
         # Map old IDs to new IDs for parent references
         id_map: dict[UUID, UUID] = {}
@@ -524,7 +528,7 @@ class FinancialStatementService(ListResponseMixin):
             .limit(limit)
             .offset(offset)
         )
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

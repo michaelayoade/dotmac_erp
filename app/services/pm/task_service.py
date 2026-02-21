@@ -206,6 +206,7 @@ class TaskService:
 
         self.db.add(task)
         self.db.flush()
+        self.db.refresh(task)
         return task
 
     def update_task(self, task_id: uuid.UUID, data: dict) -> Task:
@@ -244,6 +245,7 @@ class TaskService:
         if self.principal and hasattr(self.principal, "person_id"):
             task.updated_by_id = self.principal.person_id
 
+        self.db.refresh(task)
         return task
 
     def delete_task(self, task_id: uuid.UUID) -> bool:
@@ -348,12 +350,14 @@ class TaskService:
             if not task.actual_end_date:
                 task.actual_end_date = date.today()
 
+        self.db.refresh(task)
         return task
 
     def assign_task(self, task_id: uuid.UUID, employee_id: uuid.UUID | None) -> Task:
         """Assign task to an employee (or unassign if None)."""
         task = self.get_task_or_raise(task_id)
         task.assigned_to_id = employee_id
+        self.db.refresh(task)
         return task
 
     # =========================================================================
@@ -399,6 +403,7 @@ class TaskService:
         )
         self.db.add(dependency)
         self.db.flush()
+        self.db.refresh(dependency)
 
         return dependency
 

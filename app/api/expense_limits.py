@@ -57,6 +57,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -189,13 +193,10 @@ def create_limit_rule(
             effective_to=data.effective_to,
             is_active=data.is_active,
         )
-        db.commit()
         return ExpenseLimitRuleRead.model_validate(rule)
     except ValueError as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -227,10 +228,8 @@ def update_limit_rule(
             update_data["action_config"] = update_data["action_config"].model_dump()
 
         rule = service.update_rule(org_id, rule_id, **update_data)
-        db.commit()
         return ExpenseLimitRuleRead.model_validate(rule)
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -245,9 +244,7 @@ def delete_limit_rule(
     service = ExpenseLimitService(db)
     try:
         service.delete_rule(org_id, rule_id)
-        db.commit()
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
@@ -326,10 +323,8 @@ def create_approver_limit(
             can_approve_own_expenses=data.can_approve_own_expenses,
             is_active=data.is_active,
         )
-        db.commit()
         return ExpenseApproverLimitRead.model_validate(limit)
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -353,10 +348,8 @@ def update_approver_limit(
             ].model_dump()
 
         limit = service.update_approver_limit(org_id, approver_limit_id, **update_data)
-        db.commit()
         return ExpenseApproverLimitRead.model_validate(limit)
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
@@ -371,9 +364,7 @@ def delete_approver_limit(
     service = ExpenseLimitService(db)
     try:
         service.delete_approver_limit(org_id, approver_limit_id)
-        db.commit()
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
@@ -488,41 +479,17 @@ def get_eligible_approvers(
     Returns a list of employees who have sufficient approval authority
     to approve this claim amount.
     """
-    from app.models.people.hr.employee import Employee
-
     expense_service = ExpenseService(db)
     limit_service = ExpenseLimitService(db)
 
     try:
-        claim = expense_service.get_claim(org_id, claim_id)
-
-        if not claim.employee_id:
-            return {"eligible_approvers": [], "message": "No employee linked to claim"}
-
-        employee = db.get(Employee, claim.employee_id)
-        if not employee:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found"
-            )
-
-        approvers = limit_service.get_eligible_approvers(
-            org_id, employee, claim.total_claimed_amount
+        return limit_service.get_eligible_approvers_for_claim(
+            org_id=org_id,
+            claim_id=claim_id,
+            expense_service=expense_service,
         )
-
-        return {
-            "claim_id": str(claim_id),
-            "claim_amount": float(claim.total_claimed_amount),
-            "eligible_approvers": [
-                {
-                    "employee_id": str(a.employee_id),
-                    "employee_name": a.employee_name,
-                    "max_approval_amount": float(a.max_approval_amount),
-                    "is_direct_manager": a.is_direct_manager,
-                    "grade_rank": a.grade_rank,
-                }
-                for a in approvers
-            ],
-        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

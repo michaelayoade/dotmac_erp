@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
 
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.finance.common.attachment import Attachment, AttachmentCategory
@@ -165,15 +165,14 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return list(
-            db.scalars(
-                select(Attachment)
-                .where(
-                    Attachment.organization_id == org_id,
-                    Attachment.entity_type == entity_type,
-                    Attachment.entity_id == ent_id,
-                )
-                .order_by(Attachment.uploaded_at.desc())
-            ).all()
+            db.query(Attachment)
+            .filter(
+                Attachment.organization_id == org_id,
+                Attachment.entity_type == entity_type,
+                Attachment.entity_id == ent_id,
+            )
+            .order_by(Attachment.uploaded_at.desc())
+            .all()
         )
 
     @staticmethod
@@ -186,11 +185,13 @@ class AttachmentService:
         att_id = coerce_uuid(attachment_id)
         org_id = coerce_uuid(organization_id)
 
-        attachment = db.scalar(
-            select(Attachment).where(
+        attachment = (
+            db.query(Attachment)
+            .filter(
                 Attachment.attachment_id == att_id,
                 Attachment.organization_id == org_id,
             )
+            .first()
         )
 
         if not attachment:
@@ -223,13 +224,13 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return (
-            db.scalar(
-                select(func.count(Attachment.attachment_id)).where(
-                    Attachment.organization_id == org_id,
-                    Attachment.entity_type == entity_type,
-                    Attachment.entity_id == ent_id,
-                )
+            db.query(func.count(Attachment.attachment_id))
+            .filter(
+                Attachment.organization_id == org_id,
+                Attachment.entity_type == entity_type,
+                Attachment.entity_id == ent_id,
             )
+            .scalar()
             or 0
         )
 

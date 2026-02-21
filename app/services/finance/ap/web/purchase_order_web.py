@@ -33,6 +33,7 @@ from app.services.finance.ap.web.base import (
     get_projects,
     logger,
     parse_date,
+    recent_activity_view,
     supplier_display_name,
     supplier_form_view,
     supplier_option_view,
@@ -328,6 +329,14 @@ class PurchaseOrderWebService:
             "lines": lines_view,
             "goods_receipts": receipts_view,
             "attachments": attachments_view,
+            "recent_activity": recent_activity_view(
+                db,
+                org_id,
+                table_schema="ap",
+                table_name="purchase_order",
+                record_id=str(po.po_id),
+                limit=10,
+            ),
         }
 
     @staticmethod

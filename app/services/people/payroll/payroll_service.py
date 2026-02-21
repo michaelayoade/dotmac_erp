@@ -17,9 +17,13 @@ from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-from app.models.people.payroll.salary_component import SalaryComponent
+from app.models.people.payroll.salary_component import (
+    SalaryComponent,
+    SalaryComponentType,
+)
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.salary_structure import (
     PayrollFrequency,
@@ -113,6 +117,151 @@ class PayrollService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    # =========================================================================
+    # Salary Components
+    # =========================================================================
+
+    def list_salary_components(
+        self,
+        org_id: UUID,
+        *,
+        component_type: SalaryComponentType | None = None,
+        is_active: bool | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> PaginatedResult[SalaryComponent]:
+        """List salary components with optional filters."""
+        org_id = coerce_uuid(org_id)
+        stmt = select(SalaryComponent).where(
+            SalaryComponent.organization_id == org_id,
+        )
+        if component_type:
+            stmt = stmt.where(SalaryComponent.component_type == component_type)
+        if is_active is not None:
+            stmt = stmt.where(SalaryComponent.is_active == is_active)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.scalar(count_stmt) or 0
+
+        items = list(
+            self.db.scalars(
+                stmt.order_by(SalaryComponent.display_order).offset(offset).limit(limit)
+            ).all()
+        )
+        return PaginatedResult(items=items, total=total, offset=offset, limit=limit)
+
+    def get_salary_component(self, component_id: UUID) -> SalaryComponent | None:
+        """Get a salary component by ID."""
+        return self.db.get(SalaryComponent, component_id)
+
+    def create_salary_component(
+        self,
+        data: dict[str, object],
+    ) -> SalaryComponent:
+        """Create a new salary component."""
+        component = SalaryComponent(**data, is_active=True)
+        self.db.add(component)
+        self.db.flush()
+        self.db.refresh(component)
+        logger.info("Created salary component: %s", component.component_code)
+        return component
+
+    def update_salary_component(
+        self,
+        component_id: UUID,
+        data: dict[str, object],
+    ) -> SalaryComponent | None:
+        """Update a salary component. Returns None if not found."""
+        component = self.db.get(SalaryComponent, component_id)
+        if not component:
+            return None
+        for key, value in data.items():
+            setattr(component, key, value)
+        self.db.flush()
+        self.db.refresh(component)
+        return component
+
+    # =========================================================================
+    # Employee Tax Profiles
+    # =========================================================================
+
+    def get_employee_tax_profile(
+        self,
+        org_id: UUID,
+        employee_id: UUID,
+        as_of_date: date | None = None,
+    ) -> EmployeeTaxProfile | None:
+        """Get effective tax profile for an employee as of a date."""
+        lookup_date = as_of_date or date.today()
+        org_id = coerce_uuid(org_id)
+        stmt = (
+            select(EmployeeTaxProfile)
+            .where(
+                EmployeeTaxProfile.organization_id == org_id,
+                EmployeeTaxProfile.employee_id == employee_id,
+                EmployeeTaxProfile.effective_from <= lookup_date,
+                (
+                    (EmployeeTaxProfile.effective_to.is_(None))
+                    | (EmployeeTaxProfile.effective_to >= lookup_date)
+                ),
+            )
+            .order_by(EmployeeTaxProfile.effective_from.desc())
+        )
+        return self.db.scalar(stmt)
+
+    def create_employee_tax_profile(
+        self,
+        org_id: UUID,
+        data: dict[str, object],
+        created_by_id: UUID,
+    ) -> EmployeeTaxProfile:
+        """Create an employee tax profile."""
+        org_id = coerce_uuid(org_id)
+        profile = EmployeeTaxProfile(
+            organization_id=org_id,
+            created_by_id=created_by_id,
+            **data,
+        )
+        profile.update_rent_relief()
+        self.db.add(profile)
+        self.db.flush()
+        self.db.refresh(profile)
+        logger.info("Created tax profile for employee %s", profile.employee_id)
+        return profile
+
+    def update_employee_tax_profile(
+        self,
+        org_id: UUID,
+        employee_id: UUID,
+        data: dict[str, object],
+        updated_by_id: UUID,
+    ) -> EmployeeTaxProfile | None:
+        """Update the current (active) tax profile for an employee."""
+        org_id = coerce_uuid(org_id)
+        stmt = (
+            select(EmployeeTaxProfile)
+            .where(
+                EmployeeTaxProfile.organization_id == org_id,
+                EmployeeTaxProfile.employee_id == employee_id,
+                EmployeeTaxProfile.effective_to.is_(None),
+            )
+            .order_by(EmployeeTaxProfile.effective_from.desc())
+        )
+        profile = self.db.scalar(stmt)
+        if not profile:
+            return None
+
+        for key, value in data.items():
+            setattr(profile, key, value)
+        profile.updated_by_id = updated_by_id
+
+        if "annual_rent" in data or "rent_receipt_verified" in data:
+            profile.update_rent_relief()
+
+        self.db.flush()
+        self.db.refresh(profile)
+        return profile
 
     # =========================================================================
     # Salary Structures
@@ -1378,8 +1527,8 @@ class PayrollService:
         year_end = date(year, 12, 31)
 
         # Base query: Employee-level aggregates
-        base_results = self.db.execute(
-            select(
+        base_results = (
+            self.db.query(
                 SalarySlip.employee_id,
                 Employee.employee_code,
                 func.concat(Person.first_name, " ", Person.last_name).label(
@@ -1394,7 +1543,7 @@ class PayrollService:
             .select_from(SalarySlip)
             .join(Employee, SalarySlip.employee_id == Employee.employee_id)
             .join(Person, Employee.person_id == Person.id)
-            .where(
+            .filter(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
                 SalarySlip.end_date <= year_end,
@@ -1407,11 +1556,12 @@ class PayrollService:
                 Employee.department_id,
             )
             .order_by(Person.first_name, Person.last_name)
-        ).all()
+            .all()
+        )
 
         # Query deduction breakdowns by component
-        deduction_results = self.db.execute(
-            select(
+        deduction_results = (
+            self.db.query(
                 SalarySlip.employee_id,
                 SalaryComponent.component_code.label("component_code"),
                 func.sum(SalarySlipDeduction.amount).label("total_amount"),
@@ -1422,14 +1572,15 @@ class PayrollService:
                 SalaryComponent,
                 SalarySlipDeduction.component_id == SalaryComponent.component_id,
             )
-            .where(
+            .filter(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
                 SalarySlip.end_date <= year_end,
                 SalaryComponent.component_code.in_(["PAYE", "PENSION", "NHF"]),
             )
             .group_by(SalarySlip.employee_id, SalaryComponent.component_code)
-        ).all()
+            .all()
+        )
 
         # Build deduction lookup by employee
         deductions_by_employee: dict[str, dict[str, Decimal]] = {}

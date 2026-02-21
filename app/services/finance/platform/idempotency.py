@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete, select
+from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -59,14 +59,12 @@ class IdempotencyService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         now = datetime.now(UTC)
 
-        record = db.scalar(
-            select(IdempotencyRecord).where(
-                and_(
-                    IdempotencyRecord.organization_id == org_id,
-                    IdempotencyRecord.idempotency_key == idempotency_key,
-                    IdempotencyRecord.endpoint == endpoint,
-                )
-            )
+        record = (
+            db.query(IdempotencyRecord)
+            .filter(IdempotencyRecord.organization_id == org_id)
+            .filter(IdempotencyRecord.idempotency_key == idempotency_key)
+            .filter(IdempotencyRecord.endpoint == endpoint)
+            .first()
         )
 
         if record is None:
@@ -190,14 +188,12 @@ class IdempotencyService(ListResponseMixin):
         Update the cached response for an existing idempotency key.
         """
         org_id = coerce_uuid(organization_id)
-        record = db.scalar(
-            select(IdempotencyRecord).where(
-                and_(
-                    IdempotencyRecord.organization_id == org_id,
-                    IdempotencyRecord.idempotency_key == idempotency_key,
-                    IdempotencyRecord.endpoint == endpoint,
-                )
-            )
+        record = (
+            db.query(IdempotencyRecord)
+            .filter(IdempotencyRecord.organization_id == org_id)
+            .filter(IdempotencyRecord.idempotency_key == idempotency_key)
+            .filter(IdempotencyRecord.endpoint == endpoint)
+            .first()
         )
 
         if record is None:
@@ -242,15 +238,13 @@ class IdempotencyService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         now = datetime.now(UTC)
 
-        record = db.scalar(
-            select(IdempotencyRecord).where(
-                and_(
-                    IdempotencyRecord.organization_id == org_id,
-                    IdempotencyRecord.idempotency_key == idempotency_key,
-                    IdempotencyRecord.endpoint == endpoint,
-                    IdempotencyRecord.expires_at > now,
-                )
-            )
+        record = (
+            db.query(IdempotencyRecord)
+            .filter(IdempotencyRecord.organization_id == org_id)
+            .filter(IdempotencyRecord.idempotency_key == idempotency_key)
+            .filter(IdempotencyRecord.endpoint == endpoint)
+            .filter(IdempotencyRecord.expires_at > now)
+            .first()
         )
 
         if record is None:
@@ -276,17 +270,17 @@ class IdempotencyService(ListResponseMixin):
         now = datetime.now(UTC)
 
         # Get IDs of expired records (limited by batch_size)
-        expired_ids = db.scalars(
-            select(IdempotencyRecord.record_id)
-            .where(IdempotencyRecord.expires_at < now)
+        expired_ids = (
+            db.query(IdempotencyRecord.record_id)
+            .filter(IdempotencyRecord.expires_at < now)
             .limit(batch_size)
+            .all()
         )
-        expired_ids = expired_ids.all()
 
         if not expired_ids:
             return 0
 
-        ids_to_delete = list(expired_ids)
+        ids_to_delete = [r[0] if isinstance(r, tuple) else r for r in expired_ids]
 
         # Delete the records
         result = db.execute(
@@ -349,26 +343,26 @@ class IdempotencyService(ListResponseMixin):
         Returns:
             List of IdempotencyRecord objects
         """
-        stmt = select(IdempotencyRecord)
+        stmt = db.query(IdempotencyRecord)
 
         if organization_id:
-            stmt = stmt.where(
+            stmt = stmt.filter(
                 IdempotencyRecord.organization_id == coerce_uuid(organization_id)
             )
 
         if endpoint:
-            stmt = stmt.where(IdempotencyRecord.endpoint == endpoint)
+            stmt = stmt.filter(IdempotencyRecord.endpoint == endpoint)
 
         if not include_expired:
             now = datetime.now(UTC)
-            stmt = stmt.where(IdempotencyRecord.expires_at > now)
+            stmt = stmt.filter(IdempotencyRecord.expires_at > now)
 
-        stmt = (
+        return (
             stmt.order_by(IdempotencyRecord.created_at.desc())
             .limit(limit)
             .offset(offset)
+            .all()
         )
-        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

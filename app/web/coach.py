@@ -153,5 +153,4 @@ def insight_feedback(
             insight_id=coerce_uuid(insight_id),
             feedback=feedback,
         )
-        db.commit()
     return RedirectResponse(url="/coach/insights", status_code=303)

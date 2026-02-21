@@ -226,8 +226,6 @@ def bulk_sync(
                 )
             )
 
-    db.commit()
-
     logger.info(
         "CRM bulk sync complete: %d projects, %d tickets, %d work_orders, %d errors",
         projects_synced,
@@ -236,6 +234,7 @@ def bulk_sync(
         len(errors),
     )
 
+    db.commit()
     return BulkSyncResponse(
         projects_synced=projects_synced,
         tickets_synced=tickets_synced,
@@ -278,6 +277,7 @@ def handle_webhook(
         db.commit()
         return {"status": "ok", "entity_type": entity_type, "crm_id": payload.crm_id}
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
         db.rollback()
@@ -590,12 +590,10 @@ def create_material_request(
 
     try:
         result = service.create_material_request(org_id, payload)
-        db.commit()
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        db.rollback()
         logger.exception(
             "Failed to create material request omni_id=%s", payload.omni_id
         )
@@ -658,7 +656,6 @@ def create_purchase_order(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         logger.exception(
             "Failed to create purchase order omni_work_order_id=%s",
             payload.omni_work_order_id,

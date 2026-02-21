@@ -1,0 +1,46 @@
+{% from "components/macros.html" import icon_svg %}
+
+<div class="card print:hidden">
+    <div class="mb-4 flex items-center justify-between">
+        <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            {{ icon_svg("clock", "h-4 w-4") }}
+            Recent Activity
+        </h3>
+        <span class="text-xs text-slate-400">Last {{ recent_activity | length if recent_activity else 0 }} updates</span>
+    </div>
+
+    {% if recent_activity %}
+    <div class="space-y-3">
+        {% for activity in recent_activity %}
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span class="font-semibold text-slate-900 dark:text-white">{{ activity.action_label }}</span>
+                <span class="text-slate-600 dark:text-slate-400">{{ activity.actor_name }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-500">{{ activity.occurred_at }}</span>
+            </div>
+            {% if activity.changed_fields_label %}
+            <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Fields: {{ activity.changed_fields_label }}
+            </p>
+            {% endif %}
+            {% if activity.reason %}
+            <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Reason: {{ activity.reason }}
+            </p>
+            {% endif %}
+            {% if activity.correlation_id or activity.ip_address %}
+            <p class="mt-1 font-mono text-xs text-slate-500 dark:text-slate-500">
+                {% if activity.correlation_id %}Request {{ activity.correlation_id }}{% endif %}
+                {% if activity.correlation_id and activity.ip_address %} | {% endif %}
+                {% if activity.ip_address %}IP {{ activity.ip_address }}{% endif %}
+            </p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+        No recent activity found for this record.
+    </p>
+    {% endif %}
+</div>

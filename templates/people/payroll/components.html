@@ -1,23 +1,21 @@
 {% extends "people/base_people.html" %}
-{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination, icon_svg %}
 
 {% block page_title %}Salary Components{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Salary Components</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Salary Components</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/payroll/components/new" class="btn btn-primary group">
-    <svg class="h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
     New Component
 </a>
 {% endblock %}
@@ -44,15 +42,11 @@
                 <div class="flex items-center gap-3">
                     {% if comp.component_type.value == 'EARNING' %}
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25">
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus", "h-6 w-6") }}
                     </div>
                     {% else %}
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/25">
-                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                        </svg>
+                        {{ icon_svg("minus", "h-6 w-6") }}
                     </div>
                     {% endif %}
                     <div>
@@ -112,18 +106,14 @@
     {# Empty State #}
     <div class="card px-6 py-16 text-center">
         <div class="mx-auto w-24 h-24 rounded-full bg-gradient-to-br from-teal-100 to-emerald-50 dark:from-teal-900/30 dark:to-emerald-900/10 flex items-center justify-center mb-6">
-            <svg class="h-12 w-12 text-teal-500 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+            {{ icon_svg("cash", "h-12 w-12 text-teal-500 dark:text-teal-400", stroke_width="1.5") }}
         </div>
         <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">No salary components yet</h3>
         <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-sm mx-auto">
             Salary components define earnings and deductions. Create your first component to build salary structures.
         </p>
         <a href="/people/payroll/components/new" class="btn btn-primary">
-            <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-            </svg>
+            {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
             Create Component
         </a>
     </div>

@@ -1,11 +1,13 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 {% block page_title %}Operations Dashboard{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Operations Dashboard</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><span class="font-medium text-slate-900 dark:text-white" aria-current="page">Operations Dashboard</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -16,9 +18,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                    </svg>
+                    {{ icon_svg("box") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_items | default(0) }}</p>
@@ -42,9 +42,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("clock") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ expiring_lots_count | default(0) }}</p>
@@ -55,9 +53,7 @@
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                    </svg>
+                    {{ icon_svg("clipboard-check") }}
                 </div>
                 <div>
                     {% if count_stats %}
@@ -163,7 +159,7 @@
                             <td class="px-4 py-2 font-medium text-slate-900 dark:text-white">{{ lot.lot_number }}</td>
                             <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{{ lot.item.item_name if lot.item else '-' }}</td>
                             <td class="px-4 py-2 text-right font-mono">{{ lot.quantity_available }}</td>
-                            <td class="px-4 py-2 text-amber-600 dark:text-amber-400">{{ lot.expiry_date.strftime('%d %b %Y') if lot.expiry_date else '-' }}</td>
+                            <td class="px-4 py-2 text-amber-600 dark:text-amber-400">{{ lot.expiry_date | format_date if lot.expiry_date else '-' }}</td>
                         </tr>
                         {% else %}
                         <tr>

@@ -1,6 +1,6 @@
 {% extends "admin/base_admin.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters %}
+{% from "components/macros.html" import status_badge, compact_filters, icon_svg, pagination %}
 
 {% block page_title %}Sync History{% endblock %}
 {% block page_subtitle %}View synchronization run history{% endblock %}
@@ -10,9 +10,7 @@
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm">
         <a href="/admin/sync" class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">Sync Management</a>
-        <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
+        {{ icon_svg("chevron-right", "h-4 w-4 text-slate-400") }}
         <span class="text-slate-900 dark:text-white font-medium">History</span>
     </nav>
 
@@ -41,115 +39,15 @@
     <div id="results-container">
     <!-- History List -->
     <div class="admin-card overflow-hidden">
-        {% if history %}
-        <div class="table-container">
-            <table class="w-full">
-                <thead class="bg-slate-50 dark:bg-slate-800/50">
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Started</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Completed</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Synced</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Failed</th>
-                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for h in history %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                            {{ h.started_at.strftime('%Y-%m-%d %H:%M:%S') if h.started_at else h.created_at.strftime('%Y-%m-%d %H:%M:%S') if h.created_at else '-' }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                            {{ h.completed_at.strftime('%Y-%m-%d %H:%M:%S') if h.completed_at else '-' }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            {{ status_badge(h.sync_type.value if h.sync_type else 'Unknown', size="sm") }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold
-                                {% if h.status == 'COMPLETED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                                {% elif h.status == 'COMPLETED_WITH_ERRORS' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                                {% elif h.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                                {% elif h.status == 'FAILED' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
-                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                {% if h.status == 'IN_PROGRESS' %}<span class="h-1.5 w-1.5 rounded-full bg-current animate-pulse"></span>{% endif %}
-                                {{ h.status | replace('_', ' ') | title }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-slate-600 dark:text-slate-300">{{ h.total_records | default(0) }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-emerald-600 dark:text-emerald-400">{{ h.synced_count | default(0) }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-right {% if h.error_count and h.error_count > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-400{% endif %}">{{ h.error_count | default(0) }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right">
-                            <a href="/admin/sync/history/{{ h.history_id }}" class="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                                Details
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                </svg>
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total | default(0),
+            limit=20,
+            show_size_selector=false,
+            filters={"status": filter_status}
+        ) }}
 
-        <!-- Pagination -->
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-700">
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ ((page - 1) * per_page) + 1 }} to {{ [page * per_page, total] | min }} of {{ total }} entries
-            </p>
-            <nav class="flex items-center gap-1">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
-                    Previous
-                </a>
-                {% endif %}
-
-                {% for p in range(1, total_pages + 1) %}
-                    {% if p == page %}
-                    <span class="px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded-lg">{{ p }}</span>
-                    {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-                    <a href="?page={{ p }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">{{ p }}</a>
-                    {% elif p == page - 3 or p == page + 3 %}
-                    <span class="px-2 text-slate-400">...</span>
-                    {% endif %}
-                {% endfor %}
-
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition">
-                    Next
-                </a>
-                {% endif %}
-            </nav>
-        </div>
-        {% endif %}
-        {% else %}
-        <div class="text-center py-16">
-            <div class="mx-auto h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-                <svg class="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </div>
-            <p class="text-lg font-medium text-slate-900 dark:text-white">No sync history found</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">
-                {% if filter_status %}
-                No entries match the selected filter
-                {% else %}
-                Run a sync to see history here
-                {% endif %}
-            </p>
-            <a href="/admin/sync" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-                </svg>
-                Back to Dashboard
-            </a>
-        </div>
-        {% endif %}
     </div>
     </div>
 </div>

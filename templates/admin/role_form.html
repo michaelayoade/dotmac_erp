@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ 'Edit Role' if role_data else 'Create Role' }}{% endblock %}
 {% block page_subtitle %}{{ 'Update role settings and permissions' if role_data else 'Define a new role with permissions' }}{% endblock %}
@@ -8,9 +9,7 @@
     <!-- Back Link -->
     <div class="mb-6">
         <a href="/admin/roles" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4") }}
             Back to Roles
         </a>
     </div>
@@ -21,9 +20,7 @@
         {% if error %}
         <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
             <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500 mt-0.5 flex-shrink-0") }}
                 <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
             </div>
         </div>
@@ -33,9 +30,7 @@
         {% if success %}
         <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4">
             <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("check-circle", "h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0") }}
                 <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ success }}</p>
             </div>
         </div>
@@ -139,16 +134,12 @@
             {% else %}
             <div class="text-center py-8">
                 <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                    <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-                    </svg>
+                    {{ icon_svg("key", "h-6 w-6 text-slate-400") }}
                 </div>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">No permissions available</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Create permissions first to assign them to roles</p>
                 <a href="/admin/permissions/new" class="inline-flex items-center gap-2 mt-3 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-4 w-4") }}
                     Create Permission
                 </a>
             </div>

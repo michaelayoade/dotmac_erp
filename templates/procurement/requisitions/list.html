@@ -1,31 +1,28 @@
 {% extends "procurement/base_procurement.html" %}
 
-{%- from "components/macros.html" import status_badge, pagination, live_search %}
+{%- from "components/macros.html" import status_badge, pagination, live_search, icon_svg %}
 {% block page_title %}Purchase Requisitions{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Requisitions</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/procurement" class="hover:text-amber-600 transition-colors">Procurement</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Requisitions</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-req-import-modal').classList.remove('hidden')">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12l4-4m-4 4l-4-4m4 4V4"/>
-    </svg>
+    {{ icon_svg("download-alt", "h-4 w-4 mr-2") }}
     Import
 </button>
 <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-req-export-modal').classList.remove('hidden')">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12l4 4m-4-4l-4 4m4-4V4"/>
-    </svg>
+    {{ icon_svg("upload-alt", "h-4 w-4 mr-2") }}
     Export
 </button>
 <a href="/procurement/requisitions/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+    {{ icon_svg("plus", "h-4 w-4 mr-2") }}
     New Requisition
 </a>
 {% endblock %}
@@ -92,9 +89,7 @@
                     <tr>
                         <td colspan="5" class="py-12">
                             <div class="text-center">
-                                <svg class="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
+                                {{ icon_svg("document", "mx-auto h-12 w-12 text-slate-300 dark:text-slate-600", stroke_width="1.5") }}
                                 <p class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No requisitions found</p>
                                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                     {% if filter_status or filter_urgency %}
@@ -105,9 +100,7 @@
                                 </p>
                                 {% if not (filter_status or filter_urgency) %}
                                 <a href="/procurement/requisitions/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
-                                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                    </svg>
+                                    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
                                     New Requisition
                                 </a>
                                 {% endif %}
@@ -147,9 +140,7 @@
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Import Requisitions</h3>
             <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proc-req-import-modal').classList.add('hidden')" aria-label="Close">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+                {{ icon_svg("x-mark") }}
             </button>
         </div>
         <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">
@@ -195,9 +186,7 @@
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Export Requisitions</h3>
             <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" onclick="document.getElementById('proc-req-export-modal').classList.add('hidden')" aria-label="Close">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
+                {{ icon_svg("x-mark") }}
             </button>
         </div>
         <p class="text-sm text-slate-600 dark:text-slate-400 mb-6">

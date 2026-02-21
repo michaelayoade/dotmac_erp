@@ -136,6 +136,12 @@ _AUDIT_SETTINGS_CACHE_TTL_SECONDS = 30.0
 _AUDIT_SETTINGS_LOCK = Lock()
 configure_logging()
 setup_otel(app)
+
+# Register automatic ORM audit listeners (captures all model changes)
+from app.services.audit_listener import register_audit_listeners  # noqa: E402
+
+register_audit_listeners()
+
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
 # Rate limiting must come before CSRF to reject early

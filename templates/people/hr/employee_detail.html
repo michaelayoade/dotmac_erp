@@ -1,23 +1,21 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 {% block page_title %}{{ person.first_name }} {{ person.last_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ employee.employee_code }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400">Employees</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ employee.employee_code }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/hr/employees/{{ employee.employee_id }}/edit" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-    </svg>
+    {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
     Edit
 </a>
 {% if user and user.is_admin %}
@@ -316,9 +314,7 @@
                             border-slate-300 dark:border-slate-600 hover:border-teal-500
                             {% endif %}">
                             {% if activity.status == 'completed' %}
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                            </svg>
+                            {{ icon_svg("check", "w-3 h-3", stroke_width="3") }}
                             {% endif %}
                         </button>
                     </form>
@@ -326,31 +322,25 @@
                     <div class="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center
                         {% if activity.status == 'completed' %}bg-teal-500 text-white{% else %}border-2 border-slate-300 dark:border-slate-600{% endif %}">
                         {% if activity.status == 'completed' %}
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                        </svg>
+                        {{ icon_svg("check", "w-3 h-3", stroke_width="3") }}
                         {% endif %}
                     </div>
                     {% endif %}
                     <div class="flex-1">
-                        <span class="text-sm text-slate-900 dark:text-white {% if activity.status == 'completed' %}line-through text-slate-500 dark:text-slate-400{% endif %}">
-                            {{ activity.activity_name }}
-                        </span>
+                        {{ status_badge(activity.status, 'sm') }}
                         {% if activity.assignee_role %}
                         <span class="text-xs text-slate-400 dark:text-slate-500 ml-2">({{ activity.assignee_role }})</span>
                         {% endif %}
                     </div>
                     {% if activity.completed_on %}
-                    <span class="text-xs text-slate-400 dark:text-slate-500">{{ activity.completed_on.strftime('%Y-%m-%d') }}</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">{{ activity.completed_on | format_date }}</span>
                     {% endif %}
                 </div>
                 {% endfor %}
             </div>
             {% else %}
             <div class="text-center py-6">
-                <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                </svg>
+                {{ icon_svg("clipboard-check", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600") }}
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No activities defined</p>
             </div>
             {% endif %}
@@ -360,9 +350,7 @@
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/onboarding/complete">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-primary">
-                        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
                         Complete Onboarding
                     </button>
                 </form>
@@ -380,9 +368,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">No onboarding checklist assigned yet</p>
             </div>
             <a href="/people/hr/employees/{{ employee.employee_id }}/onboarding/new" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
                 Create Onboarding
             </a>
         </div>
@@ -422,7 +408,7 @@
                     {% if person.date_of_birth %}
                     <div class="flex justify-between">
                         <dt class="text-slate-500 dark:text-slate-400">Date of Birth</dt>
-                        <dd class="text-slate-900 dark:text-white">{{ person.date_of_birth.strftime('%d %b %Y') }}</dd>
+                        <dd class="text-slate-900 dark:text-white">{{ person.date_of_birth | format_date }}</dd>
                     </div>
                     {% endif %}
                     {% if person.gender %}
@@ -548,20 +534,20 @@
                 <dl class="space-y-3">
                     <div class="flex justify-between">
                         <dt class="text-slate-500 dark:text-slate-400">Date of Joining</dt>
-                        <dd class="text-slate-900 dark:text-white">{{ employee.date_of_joining.strftime('%Y-%m-%d') if employee.date_of_joining else '-' }}</dd>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.date_of_joining | format_date if employee.date_of_joining else '-' }}</dd>
                     </div>
                     <div class="flex justify-between">
                         <dt class="text-slate-500 dark:text-slate-400">Probation End Date</dt>
-                        <dd class="text-slate-900 dark:text-white">{{ employee.probation_end_date.strftime('%Y-%m-%d') if employee.probation_end_date else '-' }}</dd>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.probation_end_date | format_date if employee.probation_end_date else '-' }}</dd>
                     </div>
                     <div class="flex justify-between">
                         <dt class="text-slate-500 dark:text-slate-400">Confirmation Date</dt>
-                        <dd class="text-slate-900 dark:text-white">{{ employee.confirmation_date.strftime('%Y-%m-%d') if employee.confirmation_date else '-' }}</dd>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.confirmation_date | format_date if employee.confirmation_date else '-' }}</dd>
                     </div>
                     {% if employee.date_of_leaving %}
                     <div class="flex justify-between">
                         <dt class="text-slate-500 dark:text-slate-400">Date of Leaving</dt>
-                        <dd class="text-slate-900 dark:text-white">{{ employee.date_of_leaving.strftime('%Y-%m-%d') }}</dd>
+                        <dd class="text-slate-900 dark:text-white">{{ employee.date_of_leaving | format_date }}</dd>
                     </div>
                     {% endif %}
                 </dl>
@@ -622,9 +608,7 @@
             <h3 class="font-medium text-slate-900 dark:text-white">Salary Structure</h3>
             <a href="/people/payroll/assignments/new?employee_id={{ employee.employee_id }}"
                class="btn btn-secondary btn-sm">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                 Assign Structure
             </a>
         </div>
@@ -646,9 +630,9 @@
                             {% endif %}
                         </div>
                         <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                            <span>{{ assignment.from_date.strftime('%Y-%m-%d') }}</span>
+                            <span>{{ assignment.from_date | format_date }}</span>
                             {% if assignment.to_date %}
-                            <span> to {{ assignment.to_date.strftime('%Y-%m-%d') }}</span>
+                            <span> to {{ assignment.to_date | format_date }}</span>
                             {% else %}
                             <span> - Present</span>
                             {% endif %}
@@ -667,9 +651,7 @@
                     <div class="flex items-center gap-2">
                         <a href="/people/payroll/assignments/{{ assignment.assignment_id }}/edit"
                            class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400" title="Edit" aria-label="Edit">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                            </svg>
+                            {{ icon_svg("edit", "w-4 h-4") }}
                         </a>
                     </div>
                 </div>
@@ -677,9 +659,7 @@
             </div>
             {% else %}
             <div class="text-center py-6">
-                <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("currency", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600") }}
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No salary structure assigned</p>
                 <p class="text-xs text-slate-400 dark:text-slate-500">Assign a structure to enable payroll processing</p>
             </div>
@@ -694,17 +674,13 @@
             {% if tax_profile %}
             <a href="/people/payroll/tax/profiles/{{ employee.employee_id }}/edit"
                class="btn btn-secondary btn-sm">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
+                {{ icon_svg("edit", "h-4 w-4 mr-1") }}
                 Edit
             </a>
             {% else %}
             <a href="/people/payroll/tax/profiles/new?employee_id={{ employee.employee_id }}"
                class="btn btn-secondary btn-sm">
-                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
+                {{ icon_svg("plus", "h-4 w-4 mr-1") }}
                 Set Up Tax Profile
             </a>
             {% endif %}
@@ -751,9 +727,7 @@
             </dl>
             {% else %}
             <div class="text-center py-6">
-                <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z"/>
-                </svg>
+                {{ icon_svg("receipt", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600") }}
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No tax profile configured</p>
                 <p class="text-xs text-slate-400 dark:text-slate-500">Set up a tax profile for PAYE calculation</p>
             </div>
@@ -772,5 +746,7 @@
         </div>
     </div>
     {% endif %}
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

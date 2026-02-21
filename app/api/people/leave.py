@@ -55,6 +55,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -133,7 +137,6 @@ def create_leave_type(
         max_optional_leaves=payload.max_optional_leaves,
         is_active=payload.is_active,
     )
-    db.commit()
     return LeaveTypeRead.model_validate(leave_type)
 
 
@@ -162,7 +165,6 @@ def update_leave_type(
     # Build update kwargs from payload
     update_data = payload.model_dump(exclude_unset=True)
     leave_type = svc.update_leave_type(organization_id, leave_type_id, **update_data)
-    db.commit()
     return LeaveTypeRead.model_validate(leave_type)
 
 
@@ -175,7 +177,6 @@ def delete_leave_type(
     """Delete a leave type."""
     svc = LeaveService(db)
     svc.delete_leave_type(organization_id, leave_type_id)
-    db.commit()
 
 
 # =============================================================================
@@ -242,7 +243,6 @@ def create_holiday_list(
             description=h.description,
             is_optional=h.is_optional,
         )
-    db.commit()
     return HolidayListRead.model_validate(holiday_list)
 
 
@@ -272,7 +272,6 @@ def update_holiday_list(
     holiday_list = svc.update_holiday_list(
         organization_id, holiday_list_id, **update_data
     )
-    db.commit()
     return HolidayListRead.model_validate(holiday_list)
 
 
@@ -287,7 +286,6 @@ def delete_holiday_list(
     """Delete a holiday list."""
     svc = LeaveService(db)
     svc.delete_holiday_list(organization_id, holiday_list_id)
-    db.commit()
 
 
 # Holiday sub-endpoints
@@ -312,7 +310,6 @@ def add_holiday(
         description=payload.description,
         is_optional=payload.is_optional,
     )
-    db.commit()
     return HolidayRead.model_validate(holiday)
 
 
@@ -329,7 +326,6 @@ def remove_holiday(
     """Remove a holiday from a holiday list."""
     svc = LeaveService(db)
     svc.remove_holiday(organization_id, holiday_list_id, holiday_id)
-    db.commit()
 
 
 # =============================================================================
@@ -445,7 +441,6 @@ def create_allocation(
         carry_forward_leaves=payload.carry_forward_leaves,
         notes=payload.notes,
     )
-    db.commit()
     return LeaveAllocationRead.model_validate(allocation)
 
 
@@ -467,7 +462,6 @@ def bulk_create_allocations(
         carry_forward_leaves=payload.carry_forward_leaves,
         notes=payload.notes,
     )
-    db.commit()
     return BulkLeaveAllocationResult(**result)
 
 
@@ -495,7 +489,6 @@ def update_allocation(
     svc = LeaveService(db)
     update_data = payload.model_dump(exclude_unset=True)
     allocation = svc.update_allocation(organization_id, allocation_id, **update_data)
-    db.commit()
     return LeaveAllocationRead.model_validate(allocation)
 
 
@@ -508,7 +501,6 @@ def delete_allocation(
     """Delete a leave allocation."""
     svc = LeaveService(db)
     svc.delete_allocation(organization_id, allocation_id)
-    db.commit()
 
 
 # Employee balance endpoint
@@ -610,7 +602,6 @@ def create_application(
         half_day_date=payload.half_day_date,
         reason=payload.reason,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -691,7 +682,6 @@ def update_application(
     svc = LeaveService(db)
     update_data = payload.model_dump(exclude_unset=True)
     application = svc.update_application(organization_id, application_id, **update_data)
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -704,7 +694,6 @@ def delete_application(
     """Delete a leave application (only in draft status)."""
     svc = LeaveService(db)
     svc.delete_application(organization_id, application_id)
-    db.commit()
 
 
 # =============================================================================
@@ -730,7 +719,6 @@ def approve_application(
         approver_id=approver_id,
         notes=notes,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -752,7 +740,6 @@ def reject_application(
         approver_id=approver_id,
         reason=reason,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -772,7 +759,6 @@ def cancel_application(
         application_id=application_id,
         reason=reason,
     )
-    db.commit()
     return LeaveApplicationRead.model_validate(application)
 
 
@@ -792,7 +778,6 @@ def bulk_approve_applications(
         approver_id=approver_id,
         notes=notes,
     )
-    db.commit()
     return result
 
 
@@ -811,5 +796,4 @@ def bulk_reject_applications(
         approver_id=approver_id,
         reason=payload.reason,
     )
-    db.commit()
     return result

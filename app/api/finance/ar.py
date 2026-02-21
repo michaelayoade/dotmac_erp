@@ -15,9 +15,8 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models.finance.ar.contract import ContractStatus, ContractType
 from app.models.finance.ar.customer import CustomerType
-from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
+from app.models.finance.ar.customer_payment import PaymentStatus
 from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
-from app.models.finance.ar.performance_obligation import SatisfactionPattern
 from app.schemas.finance.ar import (
     ARAgingReportRead,
     ARInvoiceCreate,
@@ -36,8 +35,6 @@ from app.services.finance.ar import (
     ARInvoiceInput,
     ARInvoiceLineInput,
     CustomerInput,
-    CustomerPaymentInput,
-    PaymentAllocationInput,
     ar_aging_service,
     ar_invoice_service,
     ar_posting_adapter,
@@ -56,6 +53,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -286,29 +287,21 @@ def create_ar_receipt(
     db: Session = Depends(get_db),
 ):
     """Create a new AR receipt."""
-    allocations = [
-        PaymentAllocationInput(
-            invoice_id=alloc.invoice_id,
-            amount=alloc.amount,
-        )
-        for alloc in payload.allocations
-    ]
-    total_amount = sum((alloc.amount for alloc in allocations), Decimal("0"))
     try:
-        payment_method = PaymentMethod(payload.payment_method)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid payment method") from exc
-
-    input_data = CustomerPaymentInput(
-        customer_id=payload.customer_id,
-        payment_date=payload.receipt_date,
-        payment_method=payment_method,
-        bank_account_id=payload.bank_account_id,
-        currency_code=payload.currency_code,
-        amount=total_amount,
-        reference=payload.reference_number,
-        allocations=allocations,
-    )
+        input_data = customer_payment_service.build_receipt_input(
+            customer_id=payload.customer_id,
+            receipt_date=payload.receipt_date,
+            payment_method_str=payload.payment_method,
+            bank_account_id=payload.bank_account_id,
+            currency_code=payload.currency_code,
+            allocations_raw=[
+                {"invoice_id": a.invoice_id, "amount": a.amount}
+                for a in payload.allocations
+            ],
+            reference=payload.reference_number,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return customer_payment_service.create_payment(
         db=db,
@@ -404,61 +397,12 @@ def get_ar_aging(
     db: Session = Depends(get_db),
 ):
     """Get AR aging report."""
-    org_summary = ar_aging_service.calculate_organization_aging(
+    return ar_aging_service.build_aging_report(
         db=db,
         organization_id=organization_id,
         as_of_date=as_of_date,
+        customer_id=customer_id,
     )
-
-    if customer_id:
-        customer_summaries = [
-            ar_aging_service.calculate_customer_aging(
-                db=db,
-                organization_id=organization_id,
-                customer_id=customer_id,
-                as_of_date=as_of_date,
-            )
-        ]
-    else:
-        customer_summaries = ar_aging_service.get_aging_by_customer(
-            db=db,
-            organization_id=organization_id,
-            as_of_date=as_of_date,
-        )
-
-    buckets = [
-        {
-            "customer_id": summary.customer_id,
-            "customer_code": summary.customer_code,
-            "customer_name": summary.customer_name,
-            "current": summary.current,
-            "days_1_30": summary.current,
-            "days_31_60": summary.days_31_60,
-            "days_61_90": summary.days_61_90,
-            "over_90": summary.over_90,
-            "total": summary.total_outstanding,
-        }
-        for summary in customer_summaries
-    ]
-
-    totals = {
-        "customer_id": UUID(int=0),
-        "customer_code": "TOTAL",
-        "customer_name": "Total",
-        "current": org_summary.current,
-        "days_1_30": org_summary.current,
-        "days_31_60": org_summary.days_31_60,
-        "days_61_90": org_summary.days_61_90,
-        "over_90": org_summary.over_90,
-        "total": org_summary.total_outstanding,
-    }
-
-    return {
-        "as_of_date": org_summary.as_of_date,
-        "currency_code": org_summary.currency_code,
-        "buckets": buckets,
-        "totals": totals,
-    }
 
 
 # =============================================================================
@@ -517,7 +461,6 @@ from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
 
 from app.services.finance.ar import (  # noqa: E402
     ContractInput,
-    PerformanceObligationInput,
     ProgressUpdateInput,
     contract_service,
 )
@@ -604,27 +547,23 @@ def create_contract(
     db: Session = Depends(get_db),
 ):
     """Create an IFRS 15 revenue contract."""
-    obligations = []
-    for obligation in payload.performance_obligations:
-        try:
-            pattern = SatisfactionPattern(obligation.recognition_method)
-        except ValueError:
-            pattern = SatisfactionPattern.OVER_TIME
-        obligations.append(
-            PerformanceObligationInput(
-                description=obligation.description,
-                satisfaction_pattern=pattern,
-                standalone_selling_price=obligation.standalone_price,
-                ssp_determination_method=obligation.ssp_determination_method,
-                revenue_account_id=obligation.revenue_account_id,
-                is_distinct=obligation.is_distinct,
-                over_time_method=obligation.over_time_method,
-                progress_measure=obligation.progress_measure or obligation.measure_type,
-                expected_completion_date=obligation.expected_completion_date,
-                contract_asset_account_id=obligation.contract_asset_account_id,
-                contract_liability_account_id=obligation.contract_liability_account_id,
-            )
+    obligations = [
+        contract_service.build_obligation_input(
+            description=ob.description,
+            standalone_price=ob.standalone_price,
+            revenue_account_id=ob.revenue_account_id,
+            recognition_method=ob.recognition_method,
+            ssp_determination_method=ob.ssp_determination_method,
+            is_distinct=ob.is_distinct,
+            over_time_method=ob.over_time_method,
+            progress_measure=ob.progress_measure,
+            measure_type=ob.measure_type,
+            expected_completion_date=ob.expected_completion_date,
+            contract_asset_account_id=ob.contract_asset_account_id,
+            contract_liability_account_id=ob.contract_liability_account_id,
         )
+        for ob in payload.performance_obligations
+    ]
     input_data = ContractInput(
         customer_id=payload.customer_id,
         contract_name=payload.contract_number,
@@ -704,19 +643,16 @@ def add_performance_obligation(
     db: Session = Depends(get_db),
 ):
     """Add a performance obligation to a contract."""
-    try:
-        pattern = SatisfactionPattern(payload.recognition_method)
-    except ValueError:
-        pattern = SatisfactionPattern.OVER_TIME
-    input_data = PerformanceObligationInput(
+    input_data = contract_service.build_obligation_input(
         description=payload.description,
-        satisfaction_pattern=pattern,
-        standalone_selling_price=payload.standalone_price,
-        ssp_determination_method=payload.ssp_determination_method,
+        standalone_price=payload.standalone_price,
         revenue_account_id=payload.revenue_account_id,
+        recognition_method=payload.recognition_method,
+        ssp_determination_method=payload.ssp_determination_method,
         is_distinct=payload.is_distinct,
         over_time_method=payload.over_time_method,
-        progress_measure=payload.progress_measure or payload.measure_type,
+        progress_measure=payload.progress_measure,
+        measure_type=payload.measure_type,
         expected_completion_date=payload.expected_completion_date,
         contract_asset_account_id=payload.contract_asset_account_id,
         contract_liability_account_id=payload.contract_liability_account_id,

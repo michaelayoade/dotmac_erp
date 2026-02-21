@@ -27,20 +27,24 @@ T = TypeVar("T")
 # =============================================================================
 
 
-class ServiceError(Exception):
+class ServiceError(HTTPException):
     """Base class for all service-level errors.
 
     These errors are raised by service methods and should be caught
     by route handlers to return appropriate HTTP responses.
     """
 
+    status_code = 500
+
     def __init__(self, message: str = "Service error occurred") -> None:
-        super().__init__(message)
         self.message = message
+        super().__init__(status_code=self.status_code, detail=message)
 
 
 class NotFoundError(ServiceError):
     """Raised when a requested resource is not found."""
+
+    status_code = 404
 
     def __init__(self, message: str = "Resource not found") -> None:
         super().__init__(message)
@@ -49,6 +53,8 @@ class NotFoundError(ServiceError):
 class ValidationError(ServiceError):
     """Raised when input validation fails."""
 
+    status_code = 400
+
     def __init__(self, message: str = "Validation error") -> None:
         super().__init__(message)
 
@@ -56,12 +62,16 @@ class ValidationError(ServiceError):
 class ConflictError(ServiceError):
     """Raised when an operation conflicts with current state."""
 
+    status_code = 409
+
     def __init__(self, message: str = "Conflict error") -> None:
         super().__init__(message)
 
 
 class ForbiddenError(ServiceError):
     """Raised when an operation is not permitted."""
+
+    status_code = 403
 
     def __init__(self, message: str = "Operation not permitted") -> None:
         super().__init__(message)
@@ -72,6 +82,8 @@ class RateLimitError(ServiceError):
 
     Includes retry_after to indicate when the client can retry.
     """
+
+    status_code = 429
 
     def __init__(
         self,
@@ -85,12 +97,16 @@ class RateLimitError(ServiceError):
 class AuthenticationError(ServiceError):
     """Raised when authentication fails."""
 
+    status_code = 401
+
     def __init__(self, message: str = "Authentication failed") -> None:
         super().__init__(message)
 
 
 class AuthorizationError(ServiceError):
     """Raised when authorization fails (user authenticated but not authorized)."""
+
+    status_code = 403
 
     def __init__(self, message: str = "Not authorized") -> None:
         super().__init__(message)

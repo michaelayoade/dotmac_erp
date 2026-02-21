@@ -183,7 +183,6 @@ async def create_recurring(
             input_data=input_data,
             created_by=auth.user_id,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "template_id": str(template.template_id)}
@@ -194,7 +193,6 @@ async def create_recurring(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -247,7 +245,6 @@ async def update_recurring(
             updates=updates,
             updated_by=auth.user_id,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "template_id": str(template.template_id)}
@@ -258,7 +255,6 @@ async def update_recurring(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -288,13 +284,11 @@ def pause_recurring(
     """Pause a recurring template."""
     try:
         recurring_service.pause(db, UUID(template_id))
-        db.commit()
         return RedirectResponse(
             url=f"/automation/recurring/{template_id}?success=Template+paused",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
@@ -311,13 +305,11 @@ def resume_recurring(
     """Resume a paused recurring template."""
     try:
         recurring_service.resume(db, UUID(template_id))
-        db.commit()
         return RedirectResponse(
             url=f"/automation/recurring/{template_id}?success=Template+resumed",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
@@ -334,13 +326,11 @@ def cancel_recurring(
     """Cancel a recurring template."""
     try:
         recurring_service.cancel(db, UUID(template_id))
-        db.commit()
         return RedirectResponse(
             url="/automation/recurring?success=Template+cancelled",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
@@ -364,7 +354,6 @@ def generate_now(
             )
 
         log = recurring_service.generate_next(db, template)
-        db.commit()
 
         if log.status.value == "SUCCESS":
             return RedirectResponse(
@@ -377,7 +366,6 @@ def generate_now(
                 status_code=303,
             )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
@@ -521,7 +509,6 @@ async def create_workflow(
             input_data=input_data,
             created_by=auth.user_id,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "rule_id": str(rule.rule_id)}
@@ -532,7 +519,6 @@ async def create_workflow(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -619,7 +605,6 @@ async def update_workflow(
             updates=updates,
             updated_by=auth.user_id,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "rule_id": str(rule.rule_id)}
@@ -630,7 +615,6 @@ async def update_workflow(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -672,7 +656,6 @@ def toggle_workflow(
             updates={"is_active": not rule.is_active},
             updated_by=auth.user_id,
         )
-        db.commit()
 
         status = "activated" if not rule.is_active else "deactivated"
         return RedirectResponse(
@@ -680,7 +663,6 @@ def toggle_workflow(
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/workflows?error={str(e)}",
             status_code=303,
@@ -742,13 +724,11 @@ def delete_workflow(
     """Delete a workflow rule."""
     try:
         workflow_service.delete(db, UUID(rule_id))
-        db.commit()
         return RedirectResponse(
             url="/automation/workflows?success=Rule+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/workflows/{rule_id}?error={str(e)}",
             status_code=303,
@@ -872,7 +852,6 @@ async def create_custom_field(
             input_data=input_data,
             created_by=auth.user_id,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "field_id": str(field.field_id)}
@@ -883,7 +862,6 @@ async def create_custom_field(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -944,7 +922,6 @@ async def update_custom_field(
             updates=updates,
             updated_by=auth.user_id,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "field_id": str(field.field_id)}
@@ -955,7 +932,6 @@ async def update_custom_field(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -985,13 +961,11 @@ def delete_custom_field(
     """Delete (deactivate) a custom field."""
     try:
         custom_fields_service.delete(db, UUID(field_id))
-        db.commit()
         return RedirectResponse(
             url="/automation/fields?success=Field+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/fields/{field_id}?error={str(e)}",
             status_code=303,
@@ -1113,7 +1087,6 @@ async def create_template(
             user_id=auth.user_id,
             data=data,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "template_id": str(template.template_id)}
@@ -1124,7 +1097,6 @@ async def create_template(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -1165,7 +1137,6 @@ async def update_template(
             user_id=auth.user_id,
             data=data,
         )
-        db.commit()
 
         if "application/json" in content_type:
             return {"success": True, "template_id": str(template.template_id)}
@@ -1176,7 +1147,6 @@ async def update_template(
         )
 
     except Exception as e:
-        db.rollback()
         if "application/json" in content_type:
             return JSONResponse(
                 status_code=400,
@@ -1206,13 +1176,11 @@ def delete_template(
     """Delete a document template."""
     try:
         automation_web_service.delete_template(db, UUID(template_id))
-        db.commit()
         return RedirectResponse(
             url="/automation/templates?success=Template+deleted",
             status_code=303,
         )
     except Exception as e:
-        db.rollback()
         return RedirectResponse(
             url=f"/automation/templates/{template_id}?error={str(e)}",
             status_code=303,

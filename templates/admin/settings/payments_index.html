@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Payment Providers{% endblock %}
 {% block page_subtitle %}Configure payment gateway integrations{% endblock %}
@@ -8,16 +9,14 @@
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <a href="/admin/settings/hub" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Settings</a>
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
+        {{ icon_svg("chevron-right", "h-4 w-4") }}
         <span class="font-medium text-slate-900 dark:text-white">Payment Providers</span>
     </nav>
 
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Payment Providers</h1>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Payment Providers</h2>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 Connect and configure payment gateways for online payments.
             </p>
@@ -30,18 +29,14 @@
         <a href="{{ provider.url }}" class="admin-card p-6 hover:border-accent-300 dark:hover:border-accent-700 transition-all group">
             <div class="flex items-center gap-4">
                 <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-accent-50 text-accent-600 dark:bg-accent-900/30 dark:text-accent-400 group-hover:bg-accent-100 dark:group-hover:bg-accent-900/50 transition-colors">
-                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                    </svg>
+                    {{ icon_svg("credit-card", "h-7 w-7") }}
                 </div>
                 <div class="flex-1">
                     <div class="flex items-center gap-2">
                         <h3 class="font-semibold text-slate-900 dark:text-white group-hover:text-accent-600 dark:group-hover:text-accent-400 transition-colors">{{ provider.name }}</h3>
                         {% if provider.configured %}
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                            <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
+                            {{ icon_svg("check", "h-3 w-3 mr-1") }}
                             Connected
                         </span>
                         {% else %}
@@ -52,16 +47,12 @@
                     </div>
                     <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ provider.description }}</p>
                 </div>
-                <svg class="h-5 w-5 text-slate-400 group-hover:text-accent-500 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
+                {{ icon_svg("chevron-right", "h-5 w-5 text-slate-400 group-hover:text-accent-500 group-hover:translate-x-1 transition-all") }}
             </div>
         </a>
         {% else %}
         <div class="admin-card p-12 text-center">
-            <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-            </svg>
+            {{ icon_svg("credit-card", "mx-auto h-12 w-12 text-slate-400") }}
             <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No payment providers available</h3>
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Payment providers will appear here when configured.</p>
         </div>
@@ -71,9 +62,7 @@
     <!-- Back Link -->
     <div class="pt-4">
         <a href="/admin/settings/hub" class="inline-flex items-center text-sm text-accent-600 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300">
-            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-            </svg>
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
             Back to Settings
         </a>
     </div>

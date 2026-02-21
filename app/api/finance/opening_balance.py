@@ -338,7 +338,6 @@ async def import_opening_balance(
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Import failed: {str(e)}",
@@ -358,38 +357,13 @@ async def get_import_status(
 
     Returns journal entry details and line count.
     """
-    from sqlalchemy import func, select
+    from app.services.finance.import_export.opening_balance import (
+        get_journal_import_status,
+    )
 
-    from app.models.finance.gl.journal_entry import JournalEntry
-    from app.models.finance.gl.journal_entry_line import JournalEntryLine
-
-    journal = db.execute(
-        select(JournalEntry).where(
-            JournalEntry.journal_entry_id == journal_entry_id,
-            JournalEntry.organization_id == org_id,
-        )
-    ).scalar_one_or_none()
-
-    if not journal:
+    result = get_journal_import_status(db, org_id, journal_entry_id)
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Journal entry not found"
         )
-
-    line_count = db.execute(
-        select(func.count(JournalEntryLine.line_id)).where(
-            JournalEntryLine.journal_entry_id == journal_entry_id
-        )
-    ).scalar()
-
-    return {
-        "journal_entry_id": str(journal.journal_entry_id),
-        "journal_number": journal.journal_number,
-        "journal_type": journal.journal_type.value,
-        "entry_date": journal.entry_date.isoformat(),
-        "description": journal.description,
-        "status": journal.status.value,
-        "total_debit": float(journal.total_debit),
-        "total_credit": float(journal.total_credit),
-        "line_count": line_count,
-        "created_at": journal.created_at.isoformat(),
-    }
+    return result

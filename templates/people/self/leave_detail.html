@@ -3,14 +3,13 @@
 {% block page_title %}Leave Application{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a>
-    <span class="mx-2">/</span>
-    <a href="/people/self/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Leave</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ application.application_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/attendance" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Self Service</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/self/leave" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Leave</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ application.application_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -18,7 +17,7 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Application</h1>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Leave Application</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">{{ application.application_number }}</p>
         </div>
         {% if application.status.value in ["DRAFT", "SUBMITTED", "APPROVED"] %}

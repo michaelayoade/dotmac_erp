@@ -44,6 +44,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -110,7 +114,6 @@ def create_onboarding(
         notes=payload.notes,
         activities=[a.model_dump() for a in payload.activities],
     )
-    db.commit()
     return OnboardingRead.model_validate(onboarding)
 
 
@@ -138,7 +141,6 @@ def update_onboarding(
     if "activities" in update_data and update_data["activities"] is not None:
         update_data["activities"] = [a.model_dump() for a in update_data["activities"]]
     onboarding = svc.update_onboarding(organization_id, onboarding_id, **update_data)
-    db.commit()
     return OnboardingRead.model_validate(onboarding)
 
 
@@ -150,7 +152,6 @@ def start_onboarding(
 ):
     svc = LifecycleService(db)
     onboarding = svc.start_onboarding(organization_id, onboarding_id)
-    db.commit()
     return OnboardingRead.model_validate(onboarding)
 
 
@@ -162,7 +163,6 @@ def complete_onboarding(
 ):
     svc = LifecycleService(db)
     onboarding = svc.complete_onboarding(organization_id, onboarding_id)
-    db.commit()
     return OnboardingRead.model_validate(onboarding)
 
 
@@ -219,7 +219,6 @@ def create_separation(
         notes=payload.notes,
         activities=[a.model_dump() for a in payload.activities],
     )
-    db.commit()
     return SeparationRead.model_validate(separation)
 
 
@@ -247,7 +246,6 @@ def update_separation(
     if "activities" in update_data and update_data["activities"] is not None:
         update_data["activities"] = [a.model_dump() for a in update_data["activities"]]
     separation = svc.update_separation(organization_id, separation_id, **update_data)
-    db.commit()
     return SeparationRead.model_validate(separation)
 
 
@@ -259,7 +257,6 @@ def start_separation(
 ):
     svc = LifecycleService(db)
     separation = svc.start_separation(organization_id, separation_id)
-    db.commit()
     return SeparationRead.model_validate(separation)
 
 
@@ -271,7 +268,6 @@ def complete_separation(
 ):
     svc = LifecycleService(db)
     separation = svc.complete_separation(organization_id, separation_id)
-    db.commit()
     return SeparationRead.model_validate(separation)
 
 
@@ -318,7 +314,6 @@ def create_promotion(
         notes=payload.notes,
         details=[d.model_dump() for d in payload.details],
     )
-    db.commit()
     return PromotionRead.model_validate(promotion)
 
 
@@ -346,7 +341,6 @@ def update_promotion(
     if "details" in update_data and update_data["details"] is not None:
         update_data["details"] = [d.model_dump() for d in update_data["details"]]
     promotion = svc.update_promotion(organization_id, promotion_id, **update_data)
-    db.commit()
     return PromotionRead.model_validate(promotion)
 
 
@@ -393,7 +387,6 @@ def create_transfer(
         notes=payload.notes,
         details=[d.model_dump() for d in payload.details],
     )
-    db.commit()
     return TransferRead.model_validate(transfer)
 
 
@@ -419,5 +412,4 @@ def update_transfer(
     if "details" in update_data and update_data["details"] is not None:
         update_data["details"] = [d.model_dump() for d in update_data["details"]]
     transfer = svc.update_transfer(organization_id, transfer_id, **update_data)
-    db.commit()
     return TransferRead.model_validate(transfer)

@@ -24,6 +24,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -80,7 +84,6 @@ def create_plan(
     user_id = UUID(person_id)
     try:
         plan = service.create(organization_id, data, user_id)
-        db.commit()
         return ProcurementPlanResponse.model_validate(plan)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -97,7 +100,6 @@ def update_plan(
     service = ProcurementPlanService(db)
     try:
         plan = service.update(organization_id, plan_id, data)
-        db.commit()
         return ProcurementPlanResponse.model_validate(plan)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -115,7 +117,6 @@ def submit_plan(
     service = ProcurementPlanService(db)
     try:
         plan = service.submit(organization_id, plan_id)
-        db.commit()
         return ProcurementPlanResponse.model_validate(plan)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -138,7 +139,6 @@ def approve_plan(
     user_id = UUID(person_id)
     try:
         plan = service.approve(organization_id, plan_id, user_id)
-        db.commit()
         return ProcurementPlanResponse.model_validate(plan)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

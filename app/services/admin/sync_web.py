@@ -32,6 +32,7 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, brand_context, org_brand_context
 
 logger = logging.getLogger(__name__)
+API_SYNC_DISABLED_MSG = "ERPNext API sync is disabled. Use SQL-based sync tooling."
 
 
 class SyncWebService:
@@ -339,6 +340,11 @@ class SyncWebService:
                 url="/admin/sync?error=Authentication+required",
                 status_code=302,
             )
+
+        return RedirectResponse(
+            url=f"/admin/sync?error={quote_plus(API_SYNC_DISABLED_MSG)}",
+            status_code=302,
+        )
 
         org_id = str(auth.organization_id)
         user_id = str(auth.user_id)

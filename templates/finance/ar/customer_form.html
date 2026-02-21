@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ "Edit Customer" if customer else "New Customer" }}{% endblock %}
 
@@ -366,12 +367,14 @@
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="breadcrumb flex items-center gap-2" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-emerald-600">Dashboard</a>
-    <span>/</span>
-    <a href="/finance/ar/customers" class="hover:text-emerald-600">Customers</a>
-    <span>/</span>
-    <span class="current" aria-current="page">{{ "Edit" if customer else "New Customer" }}</span>
+<nav class="breadcrumb" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-emerald-600">Dashboard</a></li>
+        <li class="flex items-center gap-2">None <span>/</span></li>
+        <li class="flex items-center gap-2">None <a href="/finance/ar/customers" class="hover:text-emerald-600">Customers</a></li>
+        <li class="flex items-center gap-2">None <span>/</span></li>
+        <li class="flex items-center gap-2">None <span class="current" aria-current="page">{{ "Edit" if customer else "New Customer" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -382,14 +385,12 @@
     <!-- Page Header -->
     <div class="fade-up flex items-start gap-4">
         <div class="icon-accent">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+            {{ icon_svg("user-group-lg") }}
         </div>
         <div>
-            <h1 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
+            <h2 class="font-display text-3xl font-bold text-[var(--ink)] dark:text-white tracking-tight">
                 {{ "Edit Customer" if customer else "New Customer" }}
-            </h1>
+            </h2>
             <p class="mt-1 text-[var(--ink-muted)] dark:text-white/50">
                 {{ "Update the customer's information below." if customer else "Enter the new customer's details below." }}
             </p>
@@ -406,9 +407,7 @@
             {% if error %}
             <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
                 <div class="flex items-start gap-3">
-                    <svg class="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("exclamation-circle", "w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0") }}
                     <div>
                         <h3 class="font-medium text-red-800 dark:text-red-300">Error</h3>
                         <p class="mt-1 text-sm text-red-700 dark:text-red-400">{{ error }}</p>
@@ -691,9 +690,7 @@
                 Cancel
             </a>
             <button type="submit" class="btn-primary">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
+                {{ icon_svg("check", "w-4 h-4") }}
                 {{ "Update Customer" if customer else "Create Customer" }}
             </button>
         </div>

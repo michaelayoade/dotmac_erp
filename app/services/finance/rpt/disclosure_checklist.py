@@ -389,13 +389,14 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        items = db.scalars(
-            select(DisclosureChecklist).where(
-                DisclosureChecklist.organization_id == org_id,
-                DisclosureChecklist.fiscal_period_id == period_id,
+        items = list(
+            db.scalars(
+                select(DisclosureChecklist).where(
+                    DisclosureChecklist.organization_id == org_id,
+                    DisclosureChecklist.fiscal_period_id == period_id,
+                )
             )
         )
-        items = items.all()
 
         total = len(items)
         not_started = len(
@@ -460,31 +461,32 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        results = db.execute(
-            select(
-                DisclosureChecklist.ifrs_standard,
-                func.count(DisclosureChecklist.checklist_id).label("total"),
-                func.sum(
-                    func.cast(
-                        DisclosureChecklist.status.in_(
-                            [
-                                DisclosureStatus.COMPLETED,
-                                DisclosureStatus.REVIEWED,
-                                DisclosureStatus.NOT_APPLICABLE,
-                            ]
-                        ),
-                        Integer,
-                    )
-                ).label("completed"),
+        results = list(
+            db.execute(
+                select(
+                    DisclosureChecklist.ifrs_standard,
+                    func.count(DisclosureChecklist.checklist_id).label("total"),
+                    func.sum(
+                        func.cast(
+                            DisclosureChecklist.status.in_(
+                                [
+                                    DisclosureStatus.COMPLETED,
+                                    DisclosureStatus.REVIEWED,
+                                    DisclosureStatus.NOT_APPLICABLE,
+                                ]
+                            ),
+                            Integer,
+                        )
+                    ).label("completed"),
+                )
+                .where(
+                    DisclosureChecklist.organization_id == org_id,
+                    DisclosureChecklist.fiscal_period_id == period_id,
+                )
+                .group_by(DisclosureChecklist.ifrs_standard)
+                .order_by(DisclosureChecklist.ifrs_standard)
             )
-            .where(
-                DisclosureChecklist.organization_id == org_id,
-                DisclosureChecklist.fiscal_period_id == period_id,
-            )
-            .group_by(DisclosureChecklist.ifrs_standard)
-            .order_by(DisclosureChecklist.ifrs_standard)
         )
-        results = results.all()
 
         summaries = []
         for row in results:
@@ -526,24 +528,26 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        return db.scalars(
-            select(DisclosureChecklist)
-            .where(
-                DisclosureChecklist.organization_id == org_id,
-                DisclosureChecklist.fiscal_period_id == period_id,
-                DisclosureChecklist.is_mandatory == True,
-                DisclosureChecklist.status.in_(
-                    [
-                        DisclosureStatus.NOT_STARTED,
-                        DisclosureStatus.IN_PROGRESS,
-                    ]
-                ),
+        return list(
+            db.scalars(
+                select(DisclosureChecklist)
+                .where(
+                    DisclosureChecklist.organization_id == org_id,
+                    DisclosureChecklist.fiscal_period_id == period_id,
+                    DisclosureChecklist.is_mandatory == True,
+                    DisclosureChecklist.status.in_(
+                        [
+                            DisclosureStatus.NOT_STARTED,
+                            DisclosureStatus.IN_PROGRESS,
+                        ]
+                    ),
+                )
+                .order_by(
+                    DisclosureChecklist.ifrs_standard,
+                    DisclosureChecklist.sequence_number,
+                )
             )
-            .order_by(
-                DisclosureChecklist.ifrs_standard,
-                DisclosureChecklist.sequence_number,
-            )
-        ).all()
+        )
 
     @staticmethod
     def copy_checklist_to_period(
@@ -569,15 +573,16 @@ class DisclosureChecklistService(ListResponseMixin):
         tgt_period = coerce_uuid(target_period_id)
 
         # Get source items
-        source_items = db.scalars(
-            select(DisclosureChecklist)
-            .where(
-                DisclosureChecklist.organization_id == org_id,
-                DisclosureChecklist.fiscal_period_id == src_period,
+        source_items = list(
+            db.scalars(
+                select(DisclosureChecklist)
+                .where(
+                    DisclosureChecklist.organization_id == org_id,
+                    DisclosureChecklist.fiscal_period_id == src_period,
+                )
+                .order_by(DisclosureChecklist.sequence_number)
             )
-            .order_by(DisclosureChecklist.sequence_number)
         )
-        source_items = source_items.all()
 
         # Map old IDs to new IDs
         id_map: dict[UUID, UUID] = {}
@@ -618,6 +623,53 @@ class DisclosureChecklistService(ListResponseMixin):
             db.refresh(item)
 
         return created_items
+
+    @staticmethod
+    def record_completion(
+        db: Session,
+        organization_id: UUID,
+        checklist_id: UUID,
+        user_id: UUID,
+        is_complete: bool,
+        evidence_reference: str | None = None,
+        notes: str | None = None,
+    ) -> DisclosureChecklist:
+        """Record disclosure item completion or mark as not applicable.
+
+        Delegates to ``complete_item`` when *is_complete* is ``True``,
+        otherwise delegates to ``mark_not_applicable``.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            checklist_id: Disclosure checklist item ID
+            user_id: User recording the completion
+            is_complete: True to complete, False to mark N/A
+            evidence_reference: Location of disclosure evidence
+            notes: Additional notes
+
+        Returns:
+            Updated DisclosureChecklist
+        """
+        input_data = DisclosureCompletionInput(
+            disclosure_location=evidence_reference,
+            notes=notes,
+        )
+        if is_complete:
+            return DisclosureChecklistService.complete_item(
+                db=db,
+                organization_id=organization_id,
+                checklist_id=checklist_id,
+                completed_by_user_id=user_id,
+                input=input_data,
+            )
+        return DisclosureChecklistService.mark_not_applicable(
+            db=db,
+            organization_id=organization_id,
+            checklist_id=checklist_id,
+            reason=notes or "Not applicable",
+            marked_by_user_id=user_id,
+        )
 
     @staticmethod
     def get(
@@ -673,7 +725,7 @@ class DisclosureChecklistService(ListResponseMixin):
             DisclosureChecklist.sequence_number,
         )
         stmt = stmt.limit(limit).offset(offset)
-        return db.scalars(stmt).all()
+        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

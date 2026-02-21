@@ -1,0 +1,87 @@
+doctype,day_token_hits,coverage_status
+Version,13360,uncovered
+GL Entry,1956,uncovered
+Access Log,1592,uncovered
+Comment,1178,uncovered
+Communication Link,1070,uncovered
+Deleted Document,998,uncovered
+Notification Log,998,uncovered
+Payment Ledger Entry,857,uncovered
+Payment Entry,742,uncovered
+ToDo,504,uncovered
+HD Ticket Activity,398,uncovered
+Communication,328,uncovered
+The Attendance,263,uncovered
+Attendance,248,covered
+Expense Claim Detail,246,uncovered
+Sales Invoice Item,246,uncovered
+File,236,uncovered
+Bank Transaction,235,uncovered
+HD Ticket,179,uncovered
+Sales Invoice,167,covered
+Payment Entry Reference,136,uncovered
+PWA Notification,134,uncovered
+Payment Schedule,134,uncovered
+Stock Ledger Entry,124,covered
+Journal Entry,109,uncovered
+Sales Taxes and Charges,109,uncovered
+View Log,103,uncovered
+Expense Claim,96,covered
+Material Request Item,95,uncovered
+Sales Invoice Advance,63,uncovered
+Stock Entry Detail,56,uncovered
+Bank Transaction Payments,50,uncovered
+Material Request,38,uncovered
+Has Role,33,uncovered
+Stock Entry,33,uncovered
+Custom DocPerm,30,uncovered
+Employee Checkin,30,uncovered
+Dynamic Link,26,uncovered
+Quotation,26,uncovered
+Property Setter,23,uncovered
+DocShare,22,uncovered
+Purchase Invoice,20,covered
+Task,19,uncovered
+Contact,17,uncovered
+Contact Email,17,uncovered
+Contact Phone,16,uncovered
+Quotation Item,16,uncovered
+Attendance Request,14,uncovered
+User,13,uncovered
+Dashboard Settings,12,uncovered
+Project,11,covered
+Sales Order,11,uncovered
+Sales Order Item,11,uncovered
+Address,10,uncovered
+Lead,9,uncovered
+Insights Query Execution Log,8,uncovered
+Notification Settings,8,uncovered
+Customer,7,covered
+Shift Assignment,7,uncovered
+DefaultValue,6,uncovered
+Item Default,6,uncovered
+Item Price,6,uncovered
+UOM Conversion Detail,6,uncovered
+User Permission,6,uncovered
+User Social Login,6,uncovered
+Employee,5,uncovered
+Item,5,covered
+Task Depends On,5,uncovered
+Custom Field,4,uncovered
+Base station Link,3,uncovered
+Bin,3,uncovered
+Process Subscription,3,uncovered
+Purchase Invoice Item,3,uncovered
+Email Group Member,2,uncovered
+Leave Application,2,uncovered
+Leave Ledger Entry,2,uncovered
+List View Settings,2,uncovered
+Print Format,2,uncovered
+Role Profile,2,uncovered
+Salary Structure Assignment,2,uncovered
+Sales Team,2,uncovered
+Workflow Action Master,2,uncovered
+Client Script,1,uncovered
+Notification,1,uncovered
+Notification Recipient,1,uncovered
+Purchase Invoice Advance,1,uncovered

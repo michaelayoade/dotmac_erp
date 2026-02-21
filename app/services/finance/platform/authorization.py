@@ -9,7 +9,7 @@ import logging
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, select
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.person import Person
@@ -54,9 +54,7 @@ class AuthorizationService(ListResponseMixin):
             return False
 
         # Get user's roles
-        person_roles = db.scalars(
-            select(PersonRole).where(PersonRole.person_id == uid)
-        ).all()
+        person_roles = db.query(PersonRole).filter(PersonRole.person_id == uid).all()
 
         if not person_roles:
             return False
@@ -64,26 +62,22 @@ class AuthorizationService(ListResponseMixin):
         role_ids = [pr.role_id for pr in person_roles]
 
         # Get permission
-        permission = db.scalar(
-            select(Permission).where(
-                and_(
-                    Permission.key == permission_key,
-                    Permission.is_active == True,  # noqa: E712
-                )
-            )
+        permission = (
+            db.query(Permission)
+            .filter(Permission.key == permission_key)
+            .filter(Permission.is_active == True)  # noqa: E712
+            .first()
         )
 
         if not permission:
             return False
 
         # Check if any of the user's roles have this permission
-        role_permission = db.scalar(
-            select(RolePermission).where(
-                and_(
-                    RolePermission.role_id.in_(role_ids),
-                    RolePermission.permission_id == permission.id,
-                )
-            )
+        role_permission = (
+            db.query(RolePermission)
+            .filter(RolePermission.role_id.in_(role_ids))
+            .filter(RolePermission.permission_id == permission.id)
+            .first()
         )
 
         return role_permission is not None
@@ -134,25 +128,21 @@ class AuthorizationService(ListResponseMixin):
         """
         uid = coerce_uuid(user_id)
 
-        role = db.scalar(
-            select(Role).where(
-                and_(
-                    Role.name == role_name,
-                    Role.is_active == True,  # noqa: E712
-                )
-            )
+        role = (
+            db.query(Role)
+            .filter(Role.name == role_name)
+            .filter(Role.is_active == True)  # noqa: E712
+            .first()
         )
 
         if not role:
             return False
 
-        person_role = db.scalar(
-            select(PersonRole).where(
-                and_(
-                    PersonRole.person_id == uid,
-                    PersonRole.role_id == role.id,
-                )
-            )
+        person_role = (
+            db.query(PersonRole)
+            .filter(PersonRole.person_id == uid)
+            .filter(PersonRole.role_id == role.id)
+            .first()
         )
 
         return person_role is not None
@@ -285,9 +275,7 @@ class AuthorizationService(ListResponseMixin):
             return []
 
         # Get user's roles
-        person_roles = db.scalars(
-            select(PersonRole).where(PersonRole.person_id == uid)
-        ).all()
+        person_roles = db.query(PersonRole).filter(PersonRole.person_id == uid).all()
 
         if not person_roles:
             return []
@@ -295,22 +283,19 @@ class AuthorizationService(ListResponseMixin):
         role_ids = [pr.role_id for pr in person_roles]
 
         # Get permissions for those roles
-        role_permissions = db.scalars(
-            select(RolePermission)
+        role_permissions = (
+            db.query(RolePermission)
             .join(Permission)
-            .where(
-                and_(
-                    RolePermission.role_id.in_(role_ids),
-                    Permission.is_active == True,  # noqa: E712
-                )
-            )
-        ).all()
+            .filter(RolePermission.role_id.in_(role_ids))
+            .filter(Permission.is_active == True)  # noqa: E712
+            .all()
+        )
 
         # Get permission keys
         permission_ids = [rp.permission_id for rp in role_permissions]
-        permissions = db.scalars(
-            select(Permission).where(Permission.id.in_(permission_ids))
-        ).all()
+        permissions = (
+            db.query(Permission).filter(Permission.id.in_(permission_ids)).all()
+        )
 
         return [p.key for p in permissions]
 
@@ -331,19 +316,20 @@ class AuthorizationService(ListResponseMixin):
         """
         uid = coerce_uuid(user_id)
 
-        person_roles = db.scalars(
-            select(PersonRole)
+        person_roles = (
+            db.query(PersonRole)
             .join(Role)
-            .where(
+            .filter(
                 and_(
                     PersonRole.person_id == uid,
                     Role.is_active == True,  # noqa: E712
                 )
             )
-        ).all()
+            .all()
+        )
 
         role_ids = [pr.role_id for pr in person_roles]
-        roles = db.scalars(select(Role).where(Role.id.in_(role_ids))).all()
+        roles = db.query(Role).filter(Role.id.in_(role_ids)).all()
 
         return [r.name for r in roles]
 
@@ -404,14 +390,10 @@ class AuthorizationService(ListResponseMixin):
         organization_id: UUID,
     ) -> bool:
         return (
-            db.scalar(
-                select(Person).where(
-                    and_(
-                        Person.id == user_id,
-                        Person.organization_id == organization_id,
-                    )
-                )
-            )
+            db.query(Person)
+            .filter(Person.id == user_id)
+            .filter(Person.organization_id == organization_id)
+            .first()
             is not None
         )
 

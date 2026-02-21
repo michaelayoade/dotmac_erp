@@ -29,6 +29,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -87,7 +91,6 @@ def create_assignment(
     service = AssignmentService(db, organization_id)
     try:
         assignment = service.create(data)
-        db.commit()
         return AssignmentRead.model_validate(assignment)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -106,7 +109,6 @@ def update_assignment(
     service = AssignmentService(db, organization_id)
     try:
         assignment = service.update(assignment_id, data)
-        db.commit()
         return AssignmentRead.model_validate(assignment)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -125,7 +127,6 @@ def end_assignment(
     service = AssignmentService(db, organization_id)
     try:
         assignment = service.end_assignment(assignment_id, data)
-        db.commit()
         return AssignmentRead.model_validate(assignment)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

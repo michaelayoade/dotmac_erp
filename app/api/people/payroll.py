@@ -17,10 +17,9 @@ from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.models.people.payroll.payroll_entry import PayrollEntryStatus
 from app.models.people.payroll.salary_component import (
-    SalaryComponent,
     SalaryComponentType,
 )
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
+from app.models.people.payroll.salary_slip import SalarySlipStatus
 from app.models.people.payroll.salary_structure import PayrollFrequency
 from app.schemas.people.payroll import (
     # Payroll Entry
@@ -52,7 +51,7 @@ from app.schemas.people.payroll import (
     SalaryStructureRead,
     SalaryStructureUpdate,
 )
-from app.services.common import PaginationParams, coerce_uuid
+from app.services.common import PaginationParams
 from app.services.people.payroll import (
     PayrollService,
     SalarySlipInput,
@@ -71,6 +70,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -103,26 +106,19 @@ def list_salary_components(
     db: Session = Depends(get_db),
 ):
     """List salary components."""
-    org_id = coerce_uuid(organization_id)
-
-    query = db.query(SalaryComponent).filter(SalaryComponent.organization_id == org_id)
-
-    if component_type:
-        query = query.filter(SalaryComponent.component_type == component_type)
-
-    if is_active is not None:
-        query = query.filter(SalaryComponent.is_active == is_active)
-
-    total = query.count()
-    items = (
-        query.order_by(SalaryComponent.display_order).offset(offset).limit(limit).all()
-    )
-
-    return SalaryComponentListResponse(
-        items=[SalaryComponentRead.model_validate(c) for c in items],
-        total=total,
+    svc = PayrollService(db)
+    result = svc.list_salary_components(
+        organization_id,
+        component_type=component_type,
+        is_active=is_active,
         offset=offset,
         limit=limit,
+    )
+    return SalaryComponentListResponse(
+        items=[SalaryComponentRead.model_validate(c) for c in result.items],
+        total=result.total,
+        offset=result.offset,
+        limit=result.limit,
     )
 
 
@@ -136,24 +132,8 @@ def create_salary_component(
     db: Session = Depends(get_db),
 ):
     """Create a new salary component."""
-    component = SalaryComponent(
-        organization_id=data.organization_id,
-        component_code=data.component_code,
-        component_name=data.component_name,
-        abbr=data.abbr,
-        component_type=data.component_type,
-        description=data.description,
-        expense_account_id=data.expense_account_id,
-        liability_account_id=data.liability_account_id,
-        is_tax_applicable=data.is_tax_applicable,
-        is_statutory=data.is_statutory,
-        depends_on_payment_days=data.depends_on_payment_days,
-        is_active=True,
-    )
-    db.add(component)
-    db.commit()
-    db.refresh(component)
-
+    svc = PayrollService(db)
+    component = svc.create_salary_component(data.model_dump())
     return SalaryComponentRead.model_validate(component)
 
 
@@ -163,10 +143,10 @@ def get_salary_component(
     db: Session = Depends(get_db),
 ):
     """Get a salary component by ID."""
-    component = db.get(SalaryComponent, component_id)
+    svc = PayrollService(db)
+    component = svc.get_salary_component(component_id)
     if not component:
         raise HTTPException(status_code=404, detail="Salary component not found")
-
     return SalaryComponentRead.model_validate(component)
 
 
@@ -177,17 +157,12 @@ def update_salary_component(
     db: Session = Depends(get_db),
 ):
     """Update a salary component."""
-    component = db.get(SalaryComponent, component_id)
+    svc = PayrollService(db)
+    component = svc.update_salary_component(
+        component_id, data.model_dump(exclude_unset=True)
+    )
     if not component:
         raise HTTPException(status_code=404, detail="Salary component not found")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(component, key, value)
-
-    db.commit()
-    db.refresh(component)
-
     return SalaryComponentRead.model_validate(component)
 
 
@@ -243,7 +218,6 @@ def create_salary_structure(
         earnings=[line.model_dump() for line in data.earnings],
         deductions=[line.model_dump() for line in data.deductions],
     )
-    db.commit()
     return SalaryStructureRead.model_validate(structure)
 
 
@@ -274,7 +248,6 @@ def update_salary_structure(
         structure_id,
         **update_data,
     )
-    db.commit()
     return SalaryStructureRead.model_validate(structure)
 
 
@@ -287,7 +260,6 @@ def delete_salary_structure(
     """Delete a salary structure."""
     svc = PayrollService(db)
     svc.delete_salary_structure(organization_id, structure_id)
-    db.commit()
 
 
 # =============================================================================
@@ -344,7 +316,6 @@ def create_salary_assignment(
         variable=data.variable,
         income_tax_slab=data.income_tax_slab,
     )
-    db.commit()
     return SalaryStructureAssignmentRead.model_validate(assignment)
 
 
@@ -375,7 +346,6 @@ def update_salary_assignment(
     svc = PayrollService(db)
     update_data = data.model_dump(exclude_unset=True)
     assignment = svc.update_assignment(organization_id, assignment_id, **update_data)
-    db.commit()
     return SalaryStructureAssignmentRead.model_validate(assignment)
 
 
@@ -388,7 +358,6 @@ def delete_salary_assignment(
     """Delete a salary structure assignment."""
     svc = PayrollService(db)
     svc.delete_assignment(organization_id, assignment_id)
-    db.commit()
 
 
 # =============================================================================
@@ -418,15 +387,14 @@ def list_salary_slips(
         limit=limit,
         offset=offset,
     )
-
-    # Get total count
-    org_id = coerce_uuid(organization_id)
-    query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
-    if employee_id:
-        query = query.filter(SalarySlip.employee_id == employee_id)
-    if status:
-        query = query.filter(SalarySlip.status == status)
-    total = query.count()
+    total = salary_slip_service.count(
+        db=db,
+        organization_id=organization_id,
+        employee_id=employee_id,
+        status=status,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
     return SalarySlipListResponse(
         items=[SalarySlipRead.model_validate(s) for s in slips],
@@ -735,7 +703,6 @@ def create_payroll_entry(
         source_bank_account_id=data.bank_account_id,
         notes=data.notes,
     )
-    db.commit()
     return PayrollEntryRead.model_validate(entry)
 
 
@@ -764,7 +731,6 @@ def update_payroll_entry(
     if "bank_account_id" in update_data:
         update_data["source_bank_account_id"] = update_data.pop("bank_account_id")
     entry = svc.update_payroll_entry(organization_id, entry_id, **update_data)
-    db.commit()
     return PayrollEntryRead.model_validate(entry)
 
 
@@ -777,7 +743,6 @@ def delete_payroll_entry(
     """Delete a payroll entry."""
     svc = PayrollService(db)
     svc.delete_payroll_entry(organization_id, entry_id)
-    db.commit()
 
 
 @router.post(
@@ -796,7 +761,6 @@ def generate_salary_slips(
         entry_id=entry_id,
         created_by_id=UUID(auth["person_id"]),
     )
-    db.commit()
     return PayrollSlipGenerationResult(**result)
 
 
@@ -816,7 +780,6 @@ def regenerate_salary_slips(
         entry_id=entry_id,
         created_by_id=UUID(auth["person_id"]),
     )
-    db.commit()
     return PayrollSlipGenerationResult(**result)
 
 
@@ -837,7 +800,6 @@ def payout_payroll_entry(
         slip_ids=payload.slip_ids,
         payment_reference=payload.payment_reference,
     )
-    db.commit()
     return PayrollPayoutResult(**result)
 
 
@@ -857,7 +819,6 @@ def handoff_payroll_to_books(
         posting_date=posting_date,
         user_id=UUID(auth["person_id"]),
     )
-    db.commit()
     return result
 
 
@@ -869,9 +830,6 @@ from decimal import Decimal as PyDecimal  # noqa: E402
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-from app.models.people.payroll.employee_tax_profile import (  # noqa: E402
-    EmployeeTaxProfile,
-)
 from app.services.people.payroll.paye_calculator import PAYECalculator  # noqa: E402
 
 
@@ -1101,7 +1059,6 @@ def seed_nta_2025_tax_bands(
         effective_from=effective_from,
         created_by_id=UUID(auth["person_id"]),
     )
-    db.commit()
 
     if not created_bands:
         # Return existing bands
@@ -1163,27 +1120,10 @@ def get_employee_tax_profile(
     db: Session = Depends(get_db),
 ):
     """Get employee tax profile."""
-    lookup_date = as_of_date or date.today()
-    org_id = coerce_uuid(organization_id)
-
-    profile = (
-        db.query(EmployeeTaxProfile)
-        .filter(
-            EmployeeTaxProfile.organization_id == org_id,
-            EmployeeTaxProfile.employee_id == employee_id,
-            EmployeeTaxProfile.effective_from <= lookup_date,
-            (
-                (EmployeeTaxProfile.effective_to.is_(None))
-                | (EmployeeTaxProfile.effective_to >= lookup_date)
-            ),
-        )
-        .order_by(EmployeeTaxProfile.effective_from.desc())
-        .first()
-    )
-
+    svc = PayrollService(db)
+    profile = svc.get_employee_tax_profile(organization_id, employee_id, as_of_date)
     if not profile:
         raise HTTPException(status_code=404, detail="Employee tax profile not found")
-
     return EmployeeTaxProfileRead.model_validate(profile)
 
 
@@ -1199,31 +1139,12 @@ def create_employee_tax_profile(
     auth: dict = Depends(require_tenant_auth),
 ):
     """Create employee tax profile."""
-    org_id = coerce_uuid(organization_id)
-
-    profile = EmployeeTaxProfile(
-        organization_id=org_id,
-        employee_id=data.employee_id,
-        tin=data.tin,
-        tax_state=data.tax_state,
-        annual_rent=data.annual_rent,
-        rent_receipt_verified=data.rent_receipt_verified,
-        pension_rate=data.pension_rate,
-        nhf_rate=data.nhf_rate,
-        nhis_rate=data.nhis_rate,
-        is_tax_exempt=data.is_tax_exempt,
-        exemption_reason=data.exemption_reason,
-        effective_from=data.effective_from,
+    svc = PayrollService(db)
+    profile = svc.create_employee_tax_profile(
+        organization_id,
+        data.model_dump(),
         created_by_id=UUID(auth["person_id"]),
     )
-
-    # Calculate rent relief
-    profile.update_rent_relief()
-
-    db.add(profile)
-    db.commit()
-    db.refresh(profile)
-
     return EmployeeTaxProfileRead.model_validate(profile)
 
 
@@ -1236,33 +1157,13 @@ def update_employee_tax_profile(
     auth: dict = Depends(require_tenant_auth),
 ):
     """Update employee tax profile."""
-    org_id = coerce_uuid(organization_id)
-
-    profile = (
-        db.query(EmployeeTaxProfile)
-        .filter(
-            EmployeeTaxProfile.organization_id == org_id,
-            EmployeeTaxProfile.employee_id == employee_id,
-            EmployeeTaxProfile.effective_to.is_(None),
-        )
-        .order_by(EmployeeTaxProfile.effective_from.desc())
-        .first()
+    svc = PayrollService(db)
+    profile = svc.update_employee_tax_profile(
+        organization_id,
+        employee_id,
+        data.model_dump(exclude_unset=True),
+        updated_by_id=UUID(auth["person_id"]),
     )
-
     if not profile:
         raise HTTPException(status_code=404, detail="Employee tax profile not found")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(profile, key, value)
-
-    profile.updated_by_id = UUID(auth["person_id"])
-
-    # Recalculate rent relief if rent changed
-    if "annual_rent" in update_data or "rent_receipt_verified" in update_data:
-        profile.update_rent_relief()
-
-    db.commit()
-    db.refresh(profile)
-
     return EmployeeTaxProfileRead.model_validate(profile)

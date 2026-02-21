@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition
@@ -369,17 +369,19 @@ class ReportSchedulerService(ListResponseMixin):
         """
         now = datetime.now(UTC)
 
-        query = select(ReportSchedule).where(
-            ReportSchedule.is_active == True,
-            ReportSchedule.next_run_at <= now,
+        query = db.query(ReportSchedule).filter(
+            and_(
+                ReportSchedule.is_active == True,
+                ReportSchedule.next_run_at <= now,
+            )
         )
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 ReportSchedule.organization_id == coerce_uuid(organization_id)
             )
 
-        return list(db.scalars(query.order_by(ReportSchedule.next_run_at)).all())
+        return list(query.order_by(ReportSchedule.next_run_at).all())
 
     @staticmethod
     def get_upcoming_schedules(
@@ -403,15 +405,16 @@ class ReportSchedulerService(ListResponseMixin):
         cutoff = now + timedelta(hours=hours_ahead)
 
         schedules = list(
-            db.scalars(
-                select(ReportSchedule)
-                .join(ReportDefinition)
-                .where(
+            db.query(ReportSchedule)
+            .join(ReportDefinition)
+            .filter(
+                and_(
                     ReportSchedule.organization_id == org_id,
                     ReportSchedule.is_active == True,
                     ReportSchedule.next_run_at <= cutoff,
                 )
-            ).all()
+            )
+            .all()
         )
 
         executions = []
@@ -587,26 +590,26 @@ class ReportSchedulerService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ReportSchedule]:
         """List schedules with optional filters."""
-        query = select(ReportSchedule)
+        query = db.query(ReportSchedule)
 
         if organization_id:
-            query = query.where(
+            query = query.filter(
                 ReportSchedule.organization_id == coerce_uuid(organization_id)
             )
 
         if report_def_id:
-            query = query.where(
+            query = query.filter(
                 ReportSchedule.report_def_id == coerce_uuid(report_def_id)
             )
 
         if frequency:
-            query = query.where(ReportSchedule.frequency == frequency)
+            query = query.filter(ReportSchedule.frequency == frequency)
 
         if is_active is not None:
-            query = query.where(ReportSchedule.is_active == is_active)
+            query = query.filter(ReportSchedule.is_active == is_active)
 
         query = query.order_by(ReportSchedule.schedule_name)
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+        return list(query.limit(limit).offset(offset).all())
 
 
 # Module-level singleton instance

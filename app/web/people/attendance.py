@@ -60,7 +60,6 @@ def delete_attendance_record(
             attendance_id=attendance_id,
         )
     except Exception as exc:
-        db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -336,7 +335,6 @@ async def approve_attendance_request(
             request_id=request_id,
         )
     except Exception as e:
-        db.rollback()
         error_msg = quote(str(e))
         return RedirectResponse(
             url=f"/people/attendance/requests?error={error_msg}", status_code=303
@@ -357,7 +355,6 @@ async def reject_attendance_request(
             request_id=request_id,
         )
     except Exception as e:
-        db.rollback()
         error_msg = quote(str(e))
         return RedirectResponse(
             url=f"/people/attendance/requests?error={error_msg}", status_code=303
@@ -378,7 +375,6 @@ async def bulk_approve_attendance_requests(
             db=db,
         )
     except Exception as e:
-        db.rollback()
         error_msg = quote(str(e))
         return RedirectResponse(
             url=f"/people/attendance/requests?error={error_msg}", status_code=303
@@ -399,7 +395,6 @@ async def bulk_reject_attendance_requests(
             db=db,
         )
     except Exception as e:
-        db.rollback()
         error_msg = quote(str(e))
         return RedirectResponse(
             url=f"/people/attendance/requests?error={error_msg}", status_code=303

@@ -10,7 +10,7 @@
         <div>
             <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">Resource Utilization</h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Team allocation and utilization for {{ period_start.strftime('%B %d') }} - {{ period_end.strftime('%B %d, %Y') }}
+                Team allocation and utilization for {{ period_start.strftime('%B %d') }} - {{ period_end | format_date }}
             </p>
         </div>
     </div>

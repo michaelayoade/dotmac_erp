@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account, AccountType
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
@@ -77,7 +77,7 @@ class AccountBulkService(BulkActionService[Account]):
 
         # Check for journal entry lines
         journal_count = (
-            Query([JournalEntryLine], session=self.db)
+            self.db.query(JournalEntryLine)
             .filter(JournalEntryLine.account_id == entity.account_id)
             .count()
         )

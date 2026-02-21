@@ -108,17 +108,18 @@ class AuthFlowApiService:
     def list_sessions(self, auth: dict, db: Session) -> SessionListResponse:
         person_id = coerce_uuid(auth["person_id"])
         now = datetime.now(UTC)
-        sessions = db.scalars(
-            select(AuthSession)
-            .where(
-                AuthSession.person_id == person_id,
-                AuthSession.status == SessionStatus.active,
-                AuthSession.revoked_at.is_(None),
-                AuthSession.expires_at > now,
+        sessions = list(
+            db.scalars(
+                select(AuthSession)
+                .where(
+                    AuthSession.person_id == person_id,
+                    AuthSession.status == SessionStatus.active,
+                    AuthSession.revoked_at.is_(None),
+                    AuthSession.expires_at > now,
+                )
+                .order_by(AuthSession.created_at.desc())
             )
-            .order_by(AuthSession.created_at.desc())
         )
-        sessions = sessions.all()
 
         current_session_id = auth.get("session_id")
 
@@ -170,16 +171,17 @@ class AuthFlowApiService:
             current_session_id = coerce_uuid(current_session_id)
 
         now = datetime.now(UTC)
-        sessions = db.scalars(
-            select(AuthSession).where(
-                AuthSession.person_id == coerce_uuid(auth["person_id"]),
-                AuthSession.status == SessionStatus.active,
-                AuthSession.revoked_at.is_(None),
-                AuthSession.expires_at > now,
-                AuthSession.id != current_session_id,
+        sessions = list(
+            db.scalars(
+                select(AuthSession).where(
+                    AuthSession.person_id == coerce_uuid(auth["person_id"]),
+                    AuthSession.status == SessionStatus.active,
+                    AuthSession.revoked_at.is_(None),
+                    AuthSession.expires_at > now,
+                    AuthSession.id != current_session_id,
+                )
             )
         )
-        sessions = sessions.all()
 
         for session in sessions:
             session.status = SessionStatus.revoked

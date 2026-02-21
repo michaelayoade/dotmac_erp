@@ -197,6 +197,11 @@ class ReversalService(ListResponseMixin):
             if not idempotency_key:
                 idempotency_key = f"{org_id}:GL:{reversal.journal_entry_id}:reversal:v1"
 
+            # Mark original as REVERSED *before* posting so that both
+            # the reversal posting and the original status change are
+            # captured in the same db.commit() inside post_journal_entry.
+            original.status = JournalStatus.REVERSED
+
             request = PostingRequest(
                 organization_id=org_id,
                 journal_entry_id=reversal.journal_entry_id,
@@ -212,6 +217,11 @@ class ReversalService(ListResponseMixin):
             post_result = LedgerPostingService.post_journal_entry(db, request)
 
             if not post_result.success:
+                # Posting failed — revert the optimistic status change.
+                # The session was rolled back or not committed by the
+                # posting service on failure, so refresh from DB.
+                db.rollback()
+                db.refresh(original)
                 return ReversalResult(
                     success=False,
                     reversal_journal_id=reversal.journal_entry_id,
@@ -219,9 +229,6 @@ class ReversalService(ListResponseMixin):
                     message=f"Reversal created but posting failed: {post_result.message}",
                 )
 
-            # Mark original as reversed after successful posting
-            original.status = JournalStatus.REVERSED
-            db.commit()
             db.refresh(reversal)
             db.refresh(original)
         else:
@@ -321,20 +328,20 @@ class ReversalService(ListResponseMixin):
         Returns:
             List of reversal JournalEntry objects
         """
-        query = select(JournalEntry).where(JournalEntry.is_reversal == True)  # noqa: E712
+        stmt = select(JournalEntry).where(JournalEntry.is_reversal == True)  # noqa: E712
 
         if organization_id:
-            query = query.where(
+            stmt = stmt.where(
                 JournalEntry.organization_id == coerce_uuid(organization_id)
             )
 
         if original_journal_id:
-            query = query.where(
+            stmt = stmt.where(
                 JournalEntry.reversed_journal_id == coerce_uuid(original_journal_id)
             )
 
-        query = query.order_by(JournalEntry.created_at.desc())
-        return list(db.scalars(query.limit(limit).offset(offset)).all())
+        stmt = stmt.order_by(JournalEntry.created_at.desc())
+        return list(db.scalars(stmt.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

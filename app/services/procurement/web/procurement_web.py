@@ -33,6 +33,7 @@ from app.services.procurement.quotation import QuotationResponseService
 from app.services.procurement.requisition import RequisitionService
 from app.services.procurement.rfq import RFQService
 from app.services.procurement.vendor import VendorPrequalificationService
+from app.services.recent_activity import get_recent_activity_for_record
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +219,12 @@ class ProcurementWebService:
             "status_labels": PLAN_STATUS_LABELS,
             "item_statuses": list(PlanItemStatus),
             "procurement_methods": list(ProcurementMethod),
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                organization_id,
+                record=plan,
+                limit=10,
+            ),
         }
 
     def plan_form_context(
@@ -289,6 +296,12 @@ class ProcurementWebService:
             "lines": requisition.lines,
             "status_labels": REQUISITION_STATUS_LABELS,
             "urgency_levels": list(UrgencyLevel),
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                organization_id,
+                record=requisition,
+                limit=10,
+            ),
         }
 
     def requisition_form_context(
@@ -362,6 +375,12 @@ class ProcurementWebService:
             "status_labels": RFQ_STATUS_LABELS,
             "response_status_labels": RESPONSE_STATUS_LABELS,
             "procurement_methods": list(ProcurementMethod),
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                organization_id,
+                record=rfq,
+                limit=10,
+            ),
         }
 
     def rfq_form_context(
@@ -537,6 +556,12 @@ class ProcurementWebService:
             "remaining_amount": remaining,
             "payment_progress_pct": round(progress_pct, 1),
             "status_labels": CONTRACT_STATUS_LABELS,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                organization_id,
+                record=contract,
+                limit=10,
+            ),
         }
 
     def contract_form_context(
@@ -685,6 +710,12 @@ class ProcurementWebService:
             "qualification_scores": qualification_scores,
             "past_contracts": [],
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
+            "recent_activity": get_recent_activity_for_record(
+                self.db,
+                organization_id,
+                record=preq,
+                limit=10,
+            ),
         }
 
     def prequalification_form_context(self, organization_id: UUID) -> dict[str, Any]:

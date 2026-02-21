@@ -1,25 +1,22 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field %}
+{% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, status_badge %}
 
 {% block page_title %}Employee Onboardings{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a>
-    <span class="mx-2">/</span>
-    <a href="/people/hr/onboarding" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Onboarding</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Employees</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/onboarding" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Onboarding</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Employees</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <a href="/people/hr/onboarding" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-    </svg>
+    {{ icon_svg("home", "h-4 w-4 mr-1.5") }}
     Dashboard
 </a>
 {% endblock %}
@@ -91,7 +88,7 @@
                     </td>
                     <td class="px-6 py-4">
                         <span class="text-sm text-slate-900 dark:text-white">
-                            {{ ob.date_of_joining.strftime('%b %d, %Y') if ob.date_of_joining else 'TBD' }}
+                            {{ ob.date_of_joining | format_date if ob.date_of_joining else 'TBD' }}
                         </span>
                     </td>
                     <td class="px-6 py-4">
@@ -108,18 +105,7 @@
                         </p>
                     </td>
                     <td class="px-6 py-4 text-center">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                            {% if ob.status.value == 'COMPLETED' %}
-                            bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
-                            {% elif ob.status.value == 'IN_PROGRESS' %}
-                            bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300
-                            {% elif ob.status.value == 'CANCELLED' %}
-                            bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300
-                            {% else %}
-                            bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300
-                            {% endif %}">
-                            {{ ob.status.value | replace('_', ' ') | title }}
-                        </span>
+                        {{ status_badge(ob.status.value, 'sm') }}
                     </td>
                     <td class="px-6 py-4 text-right">
                         <a href="/people/hr/onboarding/employees/{{ ob.onboarding_id }}"
@@ -134,9 +120,7 @@
     </div>
     {% else %}
     <div class="card p-12 text-center">
-        <svg class="mx-auto h-16 w-16 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
+        {{ icon_svg("user-group", "mx-auto h-16 w-16 text-slate-300 dark:text-slate-600") }}
         <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No onboardings found</h3>
         <p class="mt-2 text-slate-500 dark:text-slate-400">
             {% if status_filter %}

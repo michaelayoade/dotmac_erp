@@ -241,6 +241,7 @@ def _supplier_detail_view(supplier: Supplier, balance: Decimal) -> dict:
 
 
 def _invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
+    line_amount_raw = float(line.line_amount) if line.line_amount else 0.0
     return {
         "line_id": line.line_id,
         "line_number": line.line_number,
@@ -248,11 +249,19 @@ def _invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
         "quantity": line.quantity,
         "unit_price": _format_currency(line.unit_price, currency_code),
         "tax_amount": _format_currency(line.tax_amount, currency_code),
+        "tax_amount_raw": float(line.tax_amount) if line.tax_amount else 0.0,
+        "line_amount_raw": line_amount_raw,
         "line_amount": _format_currency(line.line_amount, currency_code),
+        "display_line_amount_raw": line_amount_raw,
+        "display_line_amount": _format_currency(line.line_amount, currency_code),
         "expense_account_id": line.expense_account_id,
         "asset_account_id": line.asset_account_id,
         "cost_center_id": line.cost_center_id,
         "project_id": line.project_id,
+        # VAT display fields — enriched in invoice_detail_context
+        "vat_amount_raw": 0.0,
+        "vat_amount": None,
+        "vat_label": None,
     }
 
 
@@ -271,9 +280,22 @@ def _invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) ->
         "due_date": _format_date(invoice.due_date),
         "currency_code": invoice.currency_code,
         "subtotal": _format_currency(invoice.subtotal, invoice.currency_code),
+        "display_subtotal": _format_currency(invoice.subtotal, invoice.currency_code),
+        "display_subtotal_raw": float(invoice.subtotal),
         "tax_amount": _format_currency(invoice.tax_amount, invoice.currency_code),
+        "display_tax_amount": _format_currency(
+            invoice.tax_amount, invoice.currency_code
+        ),
+        "display_tax_amount_raw": float(invoice.tax_amount),
+        "display_tax_added": _format_currency(
+            invoice.tax_amount, invoice.currency_code
+        ),
+        "display_tax_added_raw": float(invoice.tax_amount),
+        "display_tax_included": _format_currency(Decimal("0"), invoice.currency_code),
+        "display_tax_included_raw": 0.0,
         "total_amount": _format_currency(invoice.total_amount, invoice.currency_code),
         "amount_paid": _format_currency(invoice.amount_paid, invoice.currency_code),
+        "amount_paid_raw": float(invoice.amount_paid) if invoice.amount_paid else 0.0,
         "balance": _format_currency(balance, invoice.currency_code),
         "status": _invoice_status_label(invoice.status),
         "comments": getattr(invoice, "comments", None),
@@ -1130,6 +1152,77 @@ class APWebService:
         )
         lines_view = [_invoice_line_view(line, invoice.currency_code) for line in lines]
 
+        # Enrich lines with VAT/tax labels from line_tax detail
+        inclusive_tax_by_line: dict[UUID, Decimal] = {}
+        line_ids = [line.line_id for line in lines]
+        if line_ids:
+            from app.models.finance.ap.supplier_invoice_line_tax import (
+                SupplierInvoiceLineTax,
+            )
+            from app.models.finance.tax.tax_code import TaxCode, TaxType
+
+            vat_taxes = db.execute(
+                select(SupplierInvoiceLineTax, TaxCode)
+                .join(
+                    TaxCode,
+                    TaxCode.tax_code_id == SupplierInvoiceLineTax.tax_code_id,
+                )
+                .where(
+                    SupplierInvoiceLineTax.line_id.in_(line_ids),
+                    TaxCode.organization_id == org_id,
+                    TaxCode.tax_type.in_([TaxType.VAT, TaxType.GST]),
+                )
+            ).all()
+
+            vat_by_line: dict[UUID, Decimal] = {}
+            vat_labels_by_line: dict[UUID, set[str]] = {}
+            for line_tax, tax_code in vat_taxes:
+                tax_amount = line_tax.tax_amount or Decimal("0")
+                tax_rate = line_tax.tax_rate
+                if not isinstance(tax_rate, Decimal):
+                    try:
+                        tax_rate = Decimal(str(tax_rate))
+                    except Exception:
+                        tax_rate = Decimal("0")
+
+                vat_by_line[line_tax.line_id] = (
+                    vat_by_line.get(line_tax.line_id, Decimal("0")) + tax_amount
+                )
+                if line_tax.is_inclusive:
+                    inclusive_tax_by_line[line_tax.line_id] = (
+                        inclusive_tax_by_line.get(line_tax.line_id, Decimal("0"))
+                        + tax_amount
+                    )
+                rate_label = (
+                    f"{(tax_rate * 100).quantize(Decimal('0.01'))}%"
+                    if tax_rate < 1
+                    else f"{tax_rate}%"
+                )
+                incl_suffix = " Incl." if line_tax.is_inclusive else ""
+                vat_labels_by_line.setdefault(line_tax.line_id, set()).add(
+                    f"{tax_code.tax_code} {rate_label}{incl_suffix}"
+                )
+
+            for idx, line in enumerate(lines):
+                inclusive_tax = inclusive_tax_by_line.get(line.line_id, Decimal("0"))
+                if inclusive_tax > 0:
+                    display_amount = (line.line_amount or Decimal("0")) + inclusive_tax
+                    lines_view[idx]["display_line_amount_raw"] = float(display_amount)
+                    lines_view[idx]["display_line_amount"] = _format_currency(
+                        display_amount, invoice.currency_code
+                    )
+
+                vat_amount = vat_by_line.get(line.line_id, Decimal("0"))
+                if vat_amount > 0:
+                    lines_view[idx]["vat_amount_raw"] = float(vat_amount)
+                    lines_view[idx]["vat_amount"] = _format_currency(
+                        vat_amount, invoice.currency_code
+                    )
+                    labels = vat_labels_by_line.get(line.line_id, set())
+                    lines_view[idx]["vat_label"] = (
+                        ", ".join(sorted(labels)) if labels else None
+                    )
+
         # Get attachments
         attachments = attachment_service.list_for_entity(
             db,
@@ -1152,8 +1245,34 @@ class APWebService:
             for att in attachments
         ]
 
+        invoice_view = _invoice_detail_view(invoice, supplier)
+        inclusive_vat_total = sum(inclusive_tax_by_line.values(), Decimal("0"))
+        if inclusive_vat_total > 0:
+            display_subtotal = (invoice.subtotal or Decimal("0")) + inclusive_vat_total
+            display_tax_added = (
+                invoice.tax_amount or Decimal("0")
+            ) - inclusive_vat_total
+            if display_tax_added < 0:
+                display_tax_added = Decimal("0")
+            invoice_view["display_subtotal_raw"] = float(display_subtotal)
+            invoice_view["display_subtotal"] = _format_currency(
+                display_subtotal, invoice.currency_code
+            )
+            invoice_view["display_tax_amount_raw"] = float(display_tax_added)
+            invoice_view["display_tax_amount"] = _format_currency(
+                display_tax_added, invoice.currency_code
+            )
+            invoice_view["display_tax_added_raw"] = float(display_tax_added)
+            invoice_view["display_tax_added"] = _format_currency(
+                display_tax_added, invoice.currency_code
+            )
+            invoice_view["display_tax_included_raw"] = float(inclusive_vat_total)
+            invoice_view["display_tax_included"] = _format_currency(
+                inclusive_vat_total, invoice.currency_code
+            )
+
         return {
-            "invoice": _invoice_detail_view(invoice, supplier),
+            "invoice": invoice_view,
             "supplier": _supplier_form_view(supplier) if supplier else None,
             "lines": lines_view,
             "attachments": attachments_view,
@@ -4178,6 +4297,40 @@ class APWebService:
         return RedirectResponse(
             url=f"{redirect_url}?success=Attachment+deleted",
             status_code=303,
+        )
+
+    @staticmethod
+    def supplier_typeahead(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> dict:
+        """Search active suppliers for typeahead/autocomplete."""
+        from app.services.finance.ap.web.supplier_web import supplier_web_service
+
+        return supplier_web_service.supplier_typeahead(
+            db=db,
+            organization_id=organization_id,
+            query=query,
+            limit=limit,
+        )
+
+    @staticmethod
+    def people_search(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 25,
+    ) -> dict:
+        """Search people by name/email for comment @mentions."""
+        from app.services.finance.ap.web.supplier_web import supplier_web_service
+
+        return supplier_web_service.people_search(
+            db=db,
+            organization_id=organization_id,
+            query=query,
+            limit=limit,
         )
 
 

@@ -76,37 +76,60 @@ class AuditEvents(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = select(AuditEvent)
-        if actor_id:
-            query = query.where(AuditEvent.actor_id == actor_id)
-        if actor_type:
-            query = query.where(AuditEvent.actor_type == actor_type)
-        if action:
-            query = query.where(AuditEvent.action == action)
-        if entity_type:
-            query = query.where(AuditEvent.entity_type == entity_type)
-        if request_id:
-            query = query.where(AuditEvent.request_id == request_id)
-        if is_success is not None:
-            query = query.where(AuditEvent.is_success == is_success)
-        if status_code is not None:
-            query = query.where(AuditEvent.status_code == status_code)
-        if is_active is None:
-            query = query.where(AuditEvent.is_active.is_(True))
-        else:
-            query = query.where(AuditEvent.is_active == is_active)
-        query = _apply_ordering(
-            query,
-            order_by,
-            order_dir,
-            {
-                "occurred_at": AuditEvent.occurred_at,
-                "action": AuditEvent.action,
-                "entity_type": AuditEvent.entity_type,
-                "status_code": AuditEvent.status_code,
-            },
-        )
-        return db.scalars(_apply_pagination(query, limit, offset)).all()
+        allowed_columns = {
+            "occurred_at": AuditEvent.occurred_at,
+            "action": AuditEvent.action,
+            "entity_type": AuditEvent.entity_type,
+            "status_code": AuditEvent.status_code,
+        }
+
+        try:
+            query = db.query(AuditEvent)
+            if actor_id:
+                query = query.filter(AuditEvent.actor_id == actor_id)
+            if actor_type:
+                query = query.filter(AuditEvent.actor_type == actor_type)
+            if action:
+                query = query.filter(AuditEvent.action == action)
+            if entity_type:
+                query = query.filter(AuditEvent.entity_type == entity_type)
+            if request_id:
+                query = query.filter(AuditEvent.request_id == request_id)
+            if is_success is not None:
+                query = query.filter(AuditEvent.is_success == is_success)
+            if status_code is not None:
+                query = query.filter(AuditEvent.status_code == status_code)
+            if is_active is None:
+                query = query.filter(AuditEvent.is_active.is_(True))
+            else:
+                query = query.filter(AuditEvent.is_active == is_active)
+            query = _apply_ordering(query, order_by, order_dir, allowed_columns)
+            query = _apply_pagination(query, limit, offset)
+            return query.all()
+        except HTTPException:
+            raise
+        except Exception:
+            stmt = select(AuditEvent)
+            if actor_id:
+                stmt = stmt.where(AuditEvent.actor_id == actor_id)
+            if actor_type:
+                stmt = stmt.where(AuditEvent.actor_type == actor_type)
+            if action:
+                stmt = stmt.where(AuditEvent.action == action)
+            if entity_type:
+                stmt = stmt.where(AuditEvent.entity_type == entity_type)
+            if request_id:
+                stmt = stmt.where(AuditEvent.request_id == request_id)
+            if is_success is not None:
+                stmt = stmt.where(AuditEvent.is_success == is_success)
+            if status_code is not None:
+                stmt = stmt.where(AuditEvent.status_code == status_code)
+            if is_active is None:
+                stmt = stmt.where(AuditEvent.is_active.is_(True))
+            else:
+                stmt = stmt.where(AuditEvent.is_active == is_active)
+            stmt = _apply_ordering(stmt, order_by, order_dir, allowed_columns)
+            return list(db.scalars(_apply_pagination(stmt, limit, offset)))
 
     @staticmethod
     def log_request(db: Session, request: Request, response: Response):

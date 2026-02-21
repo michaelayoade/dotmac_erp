@@ -192,7 +192,7 @@ def _ensure_category(
     default_name: str,
     summary: TaxSeedSummary,
 ) -> AccountCategory:
-    category = db.scalars(
+    category = db.scalar(
         select(AccountCategory)
         .where(
             AccountCategory.organization_id == organization_id,
@@ -201,18 +201,16 @@ def _ensure_category(
         )
         .order_by(AccountCategory.category_code)
     )
-    category = category.first()
     if category:
         return category
 
     code = default_code
-    code_taken = db.scalars(
+    code_taken = db.scalar(
         select(AccountCategory).where(
             AccountCategory.organization_id == organization_id,
             AccountCategory.category_code == code,
         )
     )
-    code_taken = code_taken.first()
     if code_taken:
         code = f"{default_code}-TAX"
 
@@ -241,13 +239,12 @@ def _ensure_account(
     summary: TaxSeedSummary,
     description: str = "",
 ) -> Account:
-    account = db.scalars(
+    account = db.scalar(
         select(Account).where(
             Account.organization_id == organization_id,
             Account.account_code == account_code,
         )
     )
-    account = account.first()
     if account:
         if not account.is_active:
             account.is_active = True
@@ -289,13 +286,12 @@ def _ensure_jurisdiction(
     corporate_tax_rate: Decimal = Decimal("0.30"),
     tax_authority_name: str = "Federal Inland Revenue Service",
 ) -> TaxJurisdiction:
-    jurisdiction = db.scalars(
+    jurisdiction = db.scalar(
         select(TaxJurisdiction).where(
             TaxJurisdiction.organization_id == organization_id,
             TaxJurisdiction.jurisdiction_code == jurisdiction_code,
         )
     )
-    jurisdiction = jurisdiction.first()
     if jurisdiction:
         return jurisdiction
 
@@ -351,13 +347,12 @@ def _ensure_tax_code(
     tax_return_box: str | None = None,
     reporting_code: str | None = None,
 ) -> TaxCode:
-    existing = db.scalars(
+    existing = db.scalar(
         select(TaxCode).where(
             TaxCode.organization_id == organization_id,
             TaxCode.tax_code == tax_code,
         )
     )
-    existing = existing.first()
     if existing:
         return existing
 
@@ -637,14 +632,13 @@ def get_default_jurisdiction(
     if country_code:
         config = get_country_config(country_code)
         if config:
-            jurisdiction = db.scalars(
+            jurisdiction = db.scalar(
                 select(TaxJurisdiction).where(
                     TaxJurisdiction.organization_id == org_id,
                     TaxJurisdiction.jurisdiction_code == config.jurisdiction_code,
                     TaxJurisdiction.is_active.is_(True),
                 )
             )
-            jurisdiction = jurisdiction.first()
             if jurisdiction:
                 return jurisdiction
 

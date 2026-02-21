@@ -618,7 +618,7 @@ class TaxTransactionService(ListResponseMixin):
             query = query.where(TaxTransaction.transaction_date <= end_date)
 
         query = query.order_by(TaxTransaction.transaction_date.desc())
-        return db.scalars(query.limit(limit).offset(offset)).all()
+        return list(db.scalars(query.limit(limit).offset(offset)))
 
     @staticmethod
     def get_unreported_transactions(
@@ -630,13 +630,15 @@ class TaxTransactionService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        return db.scalars(
-            select(TaxTransaction)
-            .where(TaxTransaction.organization_id == org_id)
-            .where(TaxTransaction.fiscal_period_id == period_id)
-            .where(TaxTransaction.is_included_in_return == False)
-            .order_by(TaxTransaction.transaction_date)
-        ).all()
+        return list(
+            db.scalars(
+                select(TaxTransaction)
+                .where(TaxTransaction.organization_id == org_id)
+                .where(TaxTransaction.fiscal_period_id == period_id)
+                .where(TaxTransaction.is_included_in_return == False)
+                .order_by(TaxTransaction.transaction_date)
+            )
+        )
 
     @staticmethod
     def get_vat_register(

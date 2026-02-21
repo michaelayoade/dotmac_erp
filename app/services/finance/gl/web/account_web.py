@@ -16,8 +16,6 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
-from app.models.finance.gl.account_balance import AccountBalance, BalanceType
-from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -28,6 +26,7 @@ from app.services.finance.gl.web.base import (
     account_form_view,
     category_option_view,
     format_currency,
+    format_date,
     ifrs_label,
 )
 from app.services.finance.platform.currency_context import get_currency_context
@@ -43,36 +42,15 @@ def _calculate_account_balances(
     organization_id,
     account_ids: list,
 ) -> dict:
-    """Calculate current balances for a list of accounts."""
-    if not account_ids:
-        return {}
+    """Calculate current balances for a list of accounts.
 
-    # Get latest closed period for each account
-    balances = db.execute(
-        select(
-            AccountBalance.account_id,
-            AccountBalance.net_balance,
-        )
-        .join(
-            FiscalPeriod,
-            AccountBalance.fiscal_period_id == FiscalPeriod.fiscal_period_id,
-        )
-        .where(
-            AccountBalance.account_id.in_(account_ids),
-            AccountBalance.balance_type == BalanceType.ACTUAL,
-            FiscalPeriod.status.in_(
-                [PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]
-            ),
-        )
-        .order_by(FiscalPeriod.end_date.desc())
-    ).all()
+    Delegates to AccountBalanceService.get_balances_for_accounts.
+    """
+    from app.services.finance.gl.account_balance import AccountBalanceService
 
-    result = {}
-    for account_id, net_balance in balances:
-        if account_id not in result:
-            result[account_id] = net_balance
-
-    return result
+    return AccountBalanceService.get_balances_for_accounts(
+        db, organization_id, account_ids
+    )
 
 
 def _calculate_account_balance_trends(
@@ -81,52 +59,15 @@ def _calculate_account_balance_trends(
     account_ids: list,
     periods: int = 6,
 ) -> dict:
-    """Calculate balance trends over recent periods."""
-    if not account_ids:
-        return {}
+    """Calculate balance trends over recent periods.
 
-    # Get recent closed periods
-    recent_periods = list(
-        db.scalars(
-            select(FiscalPeriod)
-            .where(
-                FiscalPeriod.organization_id == coerce_uuid(organization_id),
-                FiscalPeriod.status.in_(
-                    [PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]
-                ),
-            )
-            .order_by(FiscalPeriod.end_date.desc())
-            .limit(periods)
-        ).all()
+    Delegates to AccountBalanceService.get_balance_trends.
+    """
+    from app.services.finance.gl.account_balance import AccountBalanceService
+
+    return AccountBalanceService.get_balance_trends(
+        db, organization_id, account_ids, periods
     )
-
-    if not recent_periods:
-        return {}
-
-    period_ids = [p.fiscal_period_id for p in recent_periods]
-
-    balances = db.execute(
-        select(
-            AccountBalance.account_id,
-            AccountBalance.fiscal_period_id,
-            AccountBalance.net_balance,
-        ).where(
-            AccountBalance.account_id.in_(account_ids),
-            AccountBalance.fiscal_period_id.in_(period_ids),
-            AccountBalance.balance_type == BalanceType.ACTUAL,
-        )
-    ).all()
-
-    # Build trend data
-    result = {aid: [0.0] * periods for aid in account_ids}
-    period_index = {pid: i for i, pid in enumerate(reversed(period_ids))}
-
-    for account_id, period_id, net_balance in balances:
-        idx = period_index.get(period_id)
-        if idx is not None:
-            result[account_id][idx] = float(net_balance)
-
-    return result
 
 
 class AccountWebService:
@@ -316,17 +257,113 @@ class AccountWebService:
         db: Session,
         organization_id: str,
         account_id: str,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> dict:
-        """Get context for account detail page."""
+        """Get context for account detail page with balance and journal ledger."""
+        from datetime import date as date_type
+        from datetime import datetime
+
+        from sqlalchemy.orm import joinedload
+
+        from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
+        from app.models.finance.gl.journal_entry_line import JournalEntryLine
+
         logger.debug(
-            "account_detail_context: org=%s account_id=%s", organization_id, account_id
+            "account_detail_context: org=%s account_id=%s date_from=%s date_to=%s",
+            organization_id,
+            account_id,
+            date_from,
+            date_to,
         )
         org_id = coerce_uuid(organization_id)
-        account = db.get(Account, coerce_uuid(account_id))
+        acct_id = coerce_uuid(account_id)
+        account = db.get(Account, acct_id)
         if not account or account.organization_id != org_id:
             return {"account": None}
 
-        return {"account": account_detail_view(account)}
+        # --- Current balance ---------------------------------------------------
+        functional_currency = org_context_service.get_functional_currency(db, org_id)
+        balances = _calculate_account_balances(db, org_id, [acct_id])
+        current_balance = balances.get(acct_id, Decimal("0"))
+        balance_trends = _calculate_account_balance_trends(db, org_id, [acct_id])
+        trend = balance_trends.get(acct_id)
+
+        # --- Parse date filters ------------------------------------------------
+        parsed_from: date_type | None = None
+        parsed_to: date_type | None = None
+        try:
+            if date_from:
+                parsed_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+        except ValueError:
+            date_from = None
+        try:
+            if date_to:
+                parsed_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+        except ValueError:
+            date_to = None
+
+        # --- Journal entry lines for this account ----------------------------
+        stmt = (
+            select(JournalEntryLine)
+            .join(
+                JournalEntry,
+                JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+            )
+            .where(
+                JournalEntryLine.account_id == acct_id,
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+            )
+            .options(joinedload(JournalEntryLine.journal_entry))
+            .order_by(
+                JournalEntry.posting_date.desc(), JournalEntry.journal_number.desc()
+            )
+        )
+        if parsed_from:
+            stmt = stmt.where(JournalEntry.posting_date >= parsed_from)
+        if parsed_to:
+            stmt = stmt.where(JournalEntry.posting_date <= parsed_to)
+
+        lines = list(db.scalars(stmt.limit(200)).all())
+
+        total_debit = Decimal("0")
+        total_credit = Decimal("0")
+        journal_lines = []
+        for line in lines:
+            je = line.journal_entry
+            dr = line.debit_amount or Decimal("0")
+            cr = line.credit_amount or Decimal("0")
+            total_debit += dr
+            total_credit += cr
+            journal_lines.append(
+                {
+                    "posting_date": format_date(je.posting_date) if je else "",
+                    "journal_number": je.journal_number if je else "",
+                    "journal_entry_id": str(je.journal_entry_id) if je else "",
+                    "description": line.description or (je.description if je else ""),
+                    "reference": je.reference if je else "",
+                    "debit": format_currency(dr, functional_currency) if dr else "",
+                    "credit": format_currency(cr, functional_currency) if cr else "",
+                    "debit_raw": dr,
+                    "credit_raw": cr,
+                }
+            )
+
+        return {
+            "account": account_detail_view(account),
+            "current_balance": format_currency(current_balance, functional_currency),
+            "current_balance_raw": current_balance,
+            "balance_trend": trend if trend and any(v != 0 for v in trend) else None,
+            "currency_code": functional_currency,
+            "journal_lines": journal_lines,
+            "journal_count": len(journal_lines),
+            "total_debit": format_currency(total_debit, functional_currency),
+            "total_credit": format_currency(total_credit, functional_currency),
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+        }
 
     @staticmethod
     def create_account(
@@ -525,14 +562,19 @@ class AccountWebService:
         auth: WebAuthContext,
         db: Session,
         account_id: str,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> HTMLResponse:
         """Render account detail page."""
-        context = base_context(request, auth, "Account Details", "gl")
+        context = base_context(request, auth, "Account Details", "gl", db=db)
         context.update(
             self.account_detail_context(
                 db,
                 str(auth.organization_id),
                 account_id,
+                date_from=date_from,
+                date_to=date_to,
             )
         )
         return templates.TemplateResponse(

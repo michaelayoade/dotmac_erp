@@ -1,16 +1,16 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}{{ template.template_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a>
-    <span class="mx-2">/</span>
-    <a href="/automation/recurring" class="hover:text-teal-600 dark:hover:text-teal-400">Recurring</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ template.template_name }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation/recurring" class="hover:text-teal-600 dark:hover:text-teal-400">Recurring</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ template.template_name }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,19 +20,14 @@
     <form method="post" action="/automation/recurring/{{ template.template_id }}/generate">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-400">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("play", "h-4 w-4") }}
             Generate Now
         </button>
     </form>
     <form method="post" action="/automation/recurring/{{ template.template_id }}/pause">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("pause-circle", "h-4 w-4") }}
             Pause
         </button>
     </form>
@@ -40,19 +35,14 @@
     <form method="post" action="/automation/recurring/{{ template.template_id }}/resume">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400">
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+            {{ icon_svg("play", "h-4 w-4") }}
             Resume
         </button>
     </form>
     {% endif %}
     <a href="/automation/recurring/{{ template.template_id }}/edit"
        class="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300">
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-        </svg>
+        {{ icon_svg("edit", "h-4 w-4") }}
         Edit
     </a>
 </div>
@@ -68,13 +58,7 @@
                 <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <h3 class="font-semibold text-slate-900 dark:text-white">Template Details</h3>
-                        <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium
-                            {% if template.status_color == 'emerald' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                            {% elif template.status_color == 'amber' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                            {% elif template.status_color == 'rose' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
-                            {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                            {{ template.status | replace('_', ' ') | title }}
-                        </span>
+                        {{ status_badge(template.status_color, 'sm') }}
                     </div>
                 </div>
                 <div class="p-6">
@@ -123,13 +107,7 @@
                     <div class="flex items-center justify-between px-6 py-4">
                         <div>
                             <div class="flex items-center gap-3">
-                                <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
-                                    {% if log.status_color == 'emerald' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                                    {% elif log.status_color == 'rose' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400
-                                    {% elif log.status_color == 'amber' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                                    {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                    {{ log.status | replace('_', ' ') | title }}
-                                </span>
+                                {{ status_badge(log.status_color, 'sm') }}
                                 <span class="text-sm text-slate-500 dark:text-slate-400">{{ log.generated_at }}</span>
                             </div>
                             {% if log.generated_entity_number %}
