@@ -1,23 +1,21 @@
-{% extends "finance/base_finance.html" %}
+{% extends "public_sector/base_public_sector.html" %}
+{% from "components/macros.html" import icon_svg, pagination, status_badge %}
 
 {% block page_title %}Virements{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Virements</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/public-sector/" class="hover:text-primary-600 dark:hover:text-primary-400">Public Sector</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Virements</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/ipsas/virements/new"
+<a href="/public-sector/virements/new"
    class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-500/25 btn-hover">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
+    {{ icon_svg("plus", "h-4 w-4") }}
     New Virement
 </a>
 {% endblock %}
@@ -61,28 +59,18 @@
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for v in virements %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer"
-                        onclick="window.location='/finance/ipsas/virements/{{ v.virement_id }}'">
+                        onclick="window.location='/public-sector/virements/{{ v.virement_id }}'">
                         <td class="px-6 py-4 font-mono text-sm font-medium text-primary-600 dark:text-primary-400">{{ v.virement_number }}</td>
                         <td class="px-6 py-4 text-slate-900 dark:text-white max-w-xs truncate">{{ v.description }}</td>
                         <td class="px-6 py-4">
-                            {% if v.status.value == 'APPLIED' %}
-                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Applied</span>
-                            {% elif v.status.value == 'APPROVED' %}
-                            <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Approved</span>
-                            {% elif v.status.value == 'SUBMITTED' %}
-                            <span class="inline-flex rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Submitted</span>
-                            {% elif v.status.value == 'REJECTED' %}
-                            <span class="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Rejected</span>
-                            {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Draft</span>
-                            {% endif %}
+                            {{ status_badge(v.status.value, 'sm') }}
                         </td>
                         <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(v.amount) }} {{ v.currency_code }}</td>
-                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ v.created_at.strftime('%Y-%m-%d') if v.created_at else '' }}</td>
+                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ v.created_at | format_date if v.created_at else '' }}</td>
                         <td class="px-6 py-4 text-right">
                             <div class="flex items-center justify-end gap-2">
                                 {% if v.status.value == 'SUBMITTED' %}
-                                <form method="POST" action="/finance/ipsas/virements/{{ v.virement_id }}/approve" class="inline"
+                                <form method="POST" action="/public-sector/virements/{{ v.virement_id }}/approve" class="inline"
                                       onsubmit="return confirm('Approve this virement? Budget amounts will be adjusted upon application.')">
                                     <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                                     <button type="submit"
@@ -91,7 +79,7 @@
                                     </button>
                                 </form>
                                 {% elif v.status.value == 'APPROVED' %}
-                                <form method="POST" action="/finance/ipsas/virements/{{ v.virement_id }}/apply" class="inline"
+                                <form method="POST" action="/public-sector/virements/{{ v.virement_id }}/apply" class="inline"
                                       onsubmit="return confirm('Apply this virement? This will transfer budget from the source to destination appropriation and cannot be undone.')">
                                     <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                                     <button type="submit"
@@ -106,7 +94,7 @@
                     {% else %}
                     <tr>
                         <td colspan="6" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                            No virements found. <a href="/finance/ipsas/virements/new" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">Create one</a>.
+                            No virements found. <a href="/public-sector/virements/new" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">Create one</a>.
                         </td>
                     </tr>
                     {% endfor %}
@@ -114,23 +102,15 @@
             </table>
         </div>
 
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-3 dark:border-slate-700">
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ ((page - 1) * page_size) + 1 }}-{{ [page * page_size, total] | min }} of {{ total }}
-            </p>
-            <div class="flex gap-2">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">Prev</a>
-                {% endif %}
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-                   class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700">Next</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total | default(0),
+            limit=20,
+            show_size_selector=false,
+            filters={"status": status_filter}
+        ) }}
+
     </div>
 </div>
 {% endblock %}

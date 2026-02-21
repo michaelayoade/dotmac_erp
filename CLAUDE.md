@@ -50,8 +50,9 @@ tests/          # e2e/, ifrs/, integration/, services/
 | Inventory | `inventory/` | `/inventory/` |
 | People/HR | `people/hr/` | `/people/` |
 | Payroll | `people/payroll/` | `/people/payroll/` |
+| Public Sector (IPSAS) | `finance/ipsas/` | `/public-sector/` |
 
-Special routes: `/finance/quotes`, `/finance/sales-orders`, `/automation` (not nested under `/finance/ar/`)
+Special routes: `/finance/quotes`, `/finance/sales-orders`, `/automation` (not nested under `/finance/ar/`), `/public-sector/` (standalone module, own base template)
 
 ## Critical Rules
 
@@ -170,9 +171,10 @@ Required: `DATABASE_URL`, `SECRET_KEY`, `REDIS_URL`
 Optional: `ERPNEXT_API_KEY/SECRET`, `SMTP_*`, `PAYSTACK_SECRET_KEY`
 
 ## Extended Standards (in .claude/rules/)
-- **`design-system.md`** — Complete UI reference: tokens, colors, components, layout, interactions, dark mode
+- **`accounting-ui-ux-standard.md`** — Definitive accounting app UI/UX standard: page types, financial display, workflows, accessibility, compliance checklist
+- **`design-system.md`** — Implementation reference: tokens, colors, components, layout, interactions, dark mode
 - `forms.md` — Form design patterns, context methods, locked fields
-- `ui-ux.md` — Typography, colors, components, accessibility, dark mode
+- `ui-ux.md` — Quick-reference typography, colors, components, accessibility, dark mode
 - `security.md` — Error handling, template escaping, CSRF, multi-tenancy
 - `patterns.md` — Cross-module integration, source linking, web services
 - `services.md` — Service class structure, querying, error handling

@@ -821,6 +821,8 @@ class WebAuthContext:
             }
         ):
             modules.append("coach")
+        if self.is_admin or "public_sector:access" in scopes_set:
+            modules.append("public_sector")
         if "self:access" in scopes_set:
             modules.append("self_service")
 
@@ -841,6 +843,8 @@ class WebAuthContext:
             "expense": "expense",
             "expenses": "expense",
             "coach": "coach",
+            "public_sector": "public_sector",
+            "public-sector": "public_sector",
             "self": "self_service",
             "self-service": "self_service",
             "self_service": "self_service",
@@ -1398,6 +1402,18 @@ def require_fleet_access(
         raise HTTPException(
             status_code=403,
             detail="Fleet module access required",
+        )
+    return auth
+
+
+def require_public_sector_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to the Public Sector (IPSAS) module."""
+    if not auth.has_module_access("public_sector"):
+        raise HTTPException(
+            status_code=403,
+            detail="Public Sector module access required",
         )
     return auth
 

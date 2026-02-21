@@ -1,15 +1,15 @@
-{% extends "finance/base_finance.html" %}
+{% extends "public_sector/base_public_sector.html" %}
 
 {% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ appropriation.appropriation_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/ipsas/appropriations" class="hover:text-primary-600 dark:hover:text-primary-400">Appropriations</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ appropriation.appropriation_code }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/public-sector/" class="hover:text-primary-600 dark:hover:text-primary-400">Public Sector</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/public-sector/appropriations" class="hover:text-primary-600 dark:hover:text-primary-400">Appropriations</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ appropriation.appropriation_code }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -21,22 +21,14 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ appropriation.appropriation_name }}</h2>
-                    {% if appropriation.status.value == 'ACTIVE' or appropriation.status.value == 'APPROVED' %}
-                    {{ status_badge(appropriation.status.value, size="sm") }}
-                    {% elif appropriation.status.value == 'DRAFT' %}
-                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Draft</span>
-                    {% elif appropriation.status.value == 'SUBMITTED' %}
-                    <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Submitted</span>
-                    {% else %}
-                    {{ status_badge(appropriation.status.value, size="sm") }}
-                    {% endif %}
+                    {{ status_badge(appropriation.status.value, 'sm') }}
                 </div>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {{ appropriation.appropriation_code }} &middot; {{ appropriation.appropriation_type.value | replace('_', ' ') | title }} &middot; {{ appropriation.currency_code }}
                 </p>
             </div>
             {% if appropriation.status.value in ['DRAFT', 'SUBMITTED'] %}
-            <form method="POST" action="/finance/ipsas/appropriations/{{ appropriation.appropriation_id }}/approve" class="inline"
+            <form method="POST" action="/public-sector/appropriations/{{ appropriation.appropriation_id }}/approve" class="inline"
                   onsubmit="return confirm('Approve this appropriation? This action cannot be undone.')">
                 <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                 <button type="submit"
@@ -78,7 +70,7 @@
         <dl class="grid gap-3 sm:grid-cols-2">
             <div>
                 <dt class="text-xs text-slate-500 dark:text-slate-400">Effective Period</dt>
-                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.effective_from.strftime('%Y-%m-%d') if appropriation.effective_from else '-' }}{% if appropriation.effective_to %} to {{ appropriation.effective_to.strftime('%Y-%m-%d') }}{% endif %}</dd>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.effective_from | format_date if appropriation.effective_from else '-' }}{% if appropriation.effective_to %} to {{ appropriation.effective_to | format_date }}{% endif %}</dd>
             </div>
             {% if appropriation.appropriation_act_reference %}
             <div>
@@ -89,7 +81,7 @@
             {% if appropriation.approved_by_user_id %}
             <div>
                 <dt class="text-xs text-slate-500 dark:text-slate-400">Approved At</dt>
-                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.approved_at.strftime('%Y-%m-%d %H:%M') if appropriation.approved_at else '-' }}</dd>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ appropriation.approved_at | format_datetime if appropriation.approved_at else '-' }}</dd>
             </div>
             {% endif %}
         </dl>
@@ -116,13 +108,9 @@
                     <tr>
                         <td class="px-6 py-4 font-mono text-sm text-primary-600 dark:text-primary-400">{{ allot.allotment_code }}</td>
                         <td class="px-6 py-4 text-slate-900 dark:text-white">{{ allot.allotment_name }}</td>
-                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ allot.period_from.strftime('%Y-%m-%d') if allot.period_from else '-' }} - {{ allot.period_to.strftime('%Y-%m-%d') if allot.period_to else '-' }}</td>
+                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ allot.period_from | format_date if allot.period_from else '-' }} - {{ allot.period_to | format_date if allot.period_to else '-' }}</td>
                         <td class="px-6 py-4">
-                            {% if allot.status.value == 'ACTIVE' %}
-                            <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
-                            {% else %}
-                            {{ status_badge(allot.status.value, size="sm") }}
-                            {% endif %}
+                            {{ status_badge(allot.status.value, 'sm') }}
                         </td>
                         <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(allot.allotted_amount) }}</td>
                     </tr>

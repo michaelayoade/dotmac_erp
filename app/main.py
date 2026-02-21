@@ -91,6 +91,7 @@ from app.web.people import router as people_web_router
 from app.web.procurement import router as procurement_web_router
 from app.web.profile import router as profile_web_router
 from app.web.projects import router as projects_web_router
+from app.web.public_sector import router as public_sector_web_router
 from app.web.settings import router as module_settings_web_router
 from app.web.support import router as support_web_router
 from app.web.workflow_tasks import router as workflow_tasks_web_router
@@ -492,6 +493,7 @@ app.include_router(support_web_router)  # /support/* web routes
 app.include_router(projects_web_router)  # /projects/* web routes
 app.include_router(module_settings_web_router)  # /settings/* web routes
 app.include_router(coach_web_router)  # /coach/* web routes
+app.include_router(public_sector_web_router)  # /public-sector/* web routes
 
 # Authenticated file downloads (S3-backed)
 app.include_router(files_router)  # /files/* (avatars, resumes, attachments, etc.)

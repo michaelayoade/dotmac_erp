@@ -38,10 +38,12 @@ class ItemWebService:
 | Expense | `expense/base_expense.html` | Amber |
 | Inventory | `inventory/base_inventory.html` | Emerald |
 | Procurement | `procurement/base_procurement.html` | Violet |
+| Public Sector | `public_sector/base_public_sector.html` | Cyan |
 | Admin | `admin/base_admin.html` | Gray |
 
 ## Route URL Conventions
 - Use kebab-case: `/finance/sales-orders` (not `/finance/sales_orders`)
-- Module prefix: `/finance/...`, `/inventory/...`, `/people/...`
+- Module prefix: `/finance/...`, `/inventory/...`, `/people/...`, `/public-sector/...`
 - Some routes break nesting: `/finance/quotes` (not `/finance/ar/quotes`)
+- Standalone modules: `/public-sector/` (IPSAS fund accounting, own base template)
 - Automation at `/automation` (not `/finance/automation`)

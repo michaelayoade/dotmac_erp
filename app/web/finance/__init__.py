@@ -17,7 +17,6 @@ from app.web.finance.exp import router as expense_router
 from app.web.finance.gl import router as gl_router
 from app.web.finance.help import router as help_router
 from app.web.finance.import_export import router as import_export_router
-from app.web.finance.ipsas import router as ipsas_router
 from app.web.finance.opening_balance import router as opening_balance_router
 from app.web.finance.payments import router as payments_router
 from app.web.finance.quote import router as quote_router
@@ -35,7 +34,6 @@ router.include_router(ap_router)
 router.include_router(ar_router)
 router.include_router(automation_router)
 router.include_router(banking_router)
-router.include_router(ipsas_router)
 router.include_router(tax_router)
 router.include_router(reports_router)
 router.include_router(quote_router)

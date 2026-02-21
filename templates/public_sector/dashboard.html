@@ -1,0 +1,144 @@
+{% extends "public_sector/base_public_sector.html" %}
+
+{% from "components/macros.html" import stats_card, icon_svg, empty_state %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><span class="text-slate-900 dark:text-white" aria-current="page">Public Sector</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card(
+            label="Total Appropriated",
+            value=total_appropriated | format_currency if total_appropriated is defined else "—",
+            icon="folder",
+            color="cyan",
+            href="/public-sector/appropriations"
+        ) }}
+        {{ stats_card(
+            label="Total Committed",
+            value=total_committed | format_currency if total_committed is defined else "—",
+            icon="document",
+            color="blue",
+            href="/public-sector/commitments"
+        ) }}
+        {{ stats_card(
+            label="Available Balance",
+            value=total_available | format_currency if total_available is defined else "—",
+            icon="trending-up",
+            color="emerald",
+            href="/public-sector/available-balance"
+        ) }}
+        {{ stats_card(
+            label="Active Funds",
+            value=active_fund_count | default(0),
+            icon="chart",
+            color="amber",
+            href="/public-sector/funds"
+        ) }}
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <a href="/public-sector/funds" class="card card-hover p-5 flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-300">
+                {{ icon_svg("folder") }}
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">Fund Register</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">Manage funds, donors, and restrictions</div>
+            </div>
+        </a>
+        <a href="/public-sector/appropriations" class="card card-hover p-5 flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
+                {{ icon_svg("document") }}
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">Appropriations</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">Budget allocations and approvals</div>
+            </div>
+        </a>
+        <a href="/public-sector/commitments" class="card card-hover p-5 flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300">
+                {{ icon_svg("receipt") }}
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">Commitments</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">Purchase orders, contracts, obligations</div>
+            </div>
+        </a>
+        <a href="/public-sector/virements" class="card card-hover p-5 flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">
+                {{ icon_svg("switch-horizontal") }}
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">Virements</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">Transfer between appropriations</div>
+            </div>
+        </a>
+        <a href="/public-sector/budget-comparison" class="card card-hover p-5 flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">
+                {{ icon_svg("chart") }}
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">Budget Comparison</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">IPSAS 24 budget vs actual</div>
+            </div>
+        </a>
+        <a href="/public-sector/available-balance" class="card card-hover p-5 flex items-center gap-4">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+                {{ icon_svg("trending-up") }}
+            </div>
+            <div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">Available Balance</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">Real-time fund availability by head</div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card">
+        <div class="card-header flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Virements</h2>
+            <a href="/public-sector/virements" class="text-sm font-medium text-cyan-600 hover:text-cyan-700 dark:text-cyan-400">View all</a>
+        </div>
+        <div class="table-container">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Number</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                        <th scope="col" class="px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for v in recent_virements | default([]) %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/80 cursor-pointer"
+                        onclick="window.location='/public-sector/virements/{{ v.virement_id }}'">
+                        <td class="px-6 py-4 font-mono text-sm font-medium text-cyan-600 dark:text-cyan-400">{{ v.virement_number if v.virement_number else '—' }}</td>
+                        <td class="px-6 py-4 text-slate-900 dark:text-white">{{ v.description if v.description else '—' }}</td>
+                        <td class="px-6 py-4 text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ v.amount | format_currency if v.amount else '—' }}</td>
+                        <td class="px-6 py-4 text-center">{{ status_badge(v.status.value if v.status else '', 'sm') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                            No virements yet. <a href="/public-sector/virements/new" class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400">Create one</a>.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

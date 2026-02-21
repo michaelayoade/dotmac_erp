@@ -1,14 +1,15 @@
-{% extends "finance/base_finance.html" %}
+{% extends "public_sector/base_public_sector.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}Virement {{ virement.virement_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/ipsas/virements" class="hover:text-primary-600 dark:hover:text-primary-400">Virements</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ virement.virement_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/public-sector/" class="hover:text-primary-600 dark:hover:text-primary-400">Public Sector</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/public-sector/virements" class="hover:text-primary-600 dark:hover:text-primary-400">Virements</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ virement.virement_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,23 +21,13 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ virement.virement_number }}</h2>
-                    {% if virement.status.value == 'APPLIED' %}
-                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Applied</span>
-                    {% elif virement.status.value == 'APPROVED' %}
-                    <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Approved</span>
-                    {% elif virement.status.value == 'SUBMITTED' %}
-                    <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Submitted</span>
-                    {% elif virement.status.value == 'REJECTED' %}
-                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Rejected</span>
-                    {% else %}
-                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Draft</span>
-                    {% endif %}
+                    {{ status_badge(virement.status.value, 'sm') }}
                 </div>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ virement.description }}</p>
             </div>
             <div class="flex items-center gap-2">
                 {% if virement.status.value == 'SUBMITTED' %}
-                <form method="POST" action="/finance/ipsas/virements/{{ virement.virement_id }}/approve" class="inline"
+                <form method="POST" action="/public-sector/virements/{{ virement.virement_id }}/approve" class="inline"
                       onsubmit="return confirm('Approve this virement?')">
                     <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                     <button type="submit"
@@ -45,7 +36,7 @@
                     </button>
                 </form>
                 {% elif virement.status.value == 'APPROVED' %}
-                <form method="POST" action="/finance/ipsas/virements/{{ virement.virement_id }}/apply" class="inline"
+                <form method="POST" action="/public-sector/virements/{{ virement.virement_id }}/apply" class="inline"
                       onsubmit="return confirm('Apply this virement? This will transfer budget and cannot be undone.')">
                     <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                     <button type="submit"
@@ -73,7 +64,7 @@
                 <div>
                     <dt class="text-xs text-slate-500 dark:text-slate-400">Appropriation</dt>
                     <dd class="text-sm font-medium text-slate-900 dark:text-white">
-                        <a href="/finance/ipsas/appropriations/{{ from_appropriation.appropriation_id }}"
+                        <a href="/public-sector/appropriations/{{ from_appropriation.appropriation_id }}"
                            class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
                             {{ from_appropriation.appropriation_code }} - {{ from_appropriation.appropriation_name }}
                         </a>
@@ -96,7 +87,7 @@
                 <div>
                     <dt class="text-xs text-slate-500 dark:text-slate-400">Appropriation</dt>
                     <dd class="text-sm font-medium text-slate-900 dark:text-white">
-                        <a href="/finance/ipsas/appropriations/{{ to_appropriation.appropriation_id }}"
+                        <a href="/public-sector/appropriations/{{ to_appropriation.appropriation_id }}"
                            class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
                             {{ to_appropriation.appropriation_code }} - {{ to_appropriation.appropriation_name }}
                         </a>
@@ -123,18 +114,18 @@
             {% endif %}
             <div>
                 <dt class="text-xs text-slate-500 dark:text-slate-400">Created</dt>
-                <dd class="text-sm text-slate-900 dark:text-white">{{ virement.created_at.strftime('%Y-%m-%d %H:%M') if virement.created_at else '-' }}</dd>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ virement.created_at | format_datetime if virement.created_at else '-' }}</dd>
             </div>
             {% if virement.approved_at %}
             <div>
                 <dt class="text-xs text-slate-500 dark:text-slate-400">Approved</dt>
-                <dd class="text-sm text-slate-900 dark:text-white">{{ virement.approved_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ virement.approved_at | format_datetime }}</dd>
             </div>
             {% endif %}
             {% if virement.applied_at %}
             <div>
                 <dt class="text-xs text-slate-500 dark:text-slate-400">Applied</dt>
-                <dd class="text-sm text-slate-900 dark:text-white">{{ virement.applied_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+                <dd class="text-sm text-slate-900 dark:text-white">{{ virement.applied_at | format_datetime }}</dd>
             </div>
             {% endif %}
         </dl>

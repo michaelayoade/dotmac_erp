@@ -1,14 +1,15 @@
-{% extends "finance/base_finance.html" %}
+{% extends "public_sector/base_public_sector.html" %}
+{% from "components/macros.html" import status_badge %}
 
 {% block page_title %}{{ fund.fund_name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/ipsas/funds" class="hover:text-primary-600 dark:hover:text-primary-400">Funds</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ fund.fund_code }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/public-sector/" class="hover:text-primary-600 dark:hover:text-primary-400">Public Sector</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/public-sector/funds" class="hover:text-primary-600 dark:hover:text-primary-400">Funds</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ fund.fund_code }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -20,13 +21,7 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ fund.fund_name }}</h2>
-                    {% if fund.status.value == 'ACTIVE' %}
-                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
-                    {% elif fund.status.value == 'FROZEN' %}
-                    <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Frozen</span>
-                    {% else %}
-                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">Closed</span>
-                    {% endif %}
+                    {{ status_badge(fund.status.value, 'sm') }}
                 </div>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ fund.fund_code }} &middot; {{ fund.fund_type.value | replace('_', ' ') | title }}</p>
                 {% if fund.description %}
@@ -57,12 +52,12 @@
                 {% endif %}
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Effective From</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_from.strftime('%Y-%m-%d') if fund.effective_from else '-' }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_from | format_date if fund.effective_from else '-' }}</dd>
                 </div>
                 {% if fund.effective_to %}
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500 dark:text-slate-400">Effective To</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_to.strftime('%Y-%m-%d') if fund.effective_to else '-' }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ fund.effective_to | format_date if fund.effective_to else '-' }}</dd>
                 </div>
                 {% endif %}
                 {% if fund.donor_name %}

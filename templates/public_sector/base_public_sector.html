@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% from "components/macros.html" import topbar, success_banner, icon_svg %}
+
+{% block head %}
+<meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
+{% include "partials/_org_branding_head.html" %}
+{% endblock %}
+
+{% block body %}
+{% include "partials/_brand_context.html" %}
+<div class="app-shell"
+     style="display: flex !important; flex-direction: row !important;"
+     x-data="{
+        sidebarOpen: false,
+        sidebarCollapsed: false,
+        sidebarCollapsedStored: localStorage.getItem('appSidebarCollapsed') === 'true',
+        activeModule: '{{ active_module | default('ps_dashboard') }}',
+        isDesktop: false,
+        viewportWidth: 0,
+        init() {
+            this.updateViewport();
+            window.addEventListener('resize', () => this.updateViewport());
+            this.$watch('sidebarOpen', (open) => {
+                if (!this.isDesktop) {
+                    document.body.style.overflow = open ? 'hidden' : '';
+                }
+            });
+            this.$nextTick(() => {
+                const path = window.location.pathname;
+                this.$el.querySelectorAll('.ml-8 a[href]').forEach(link => {
+                    const href = (link.getAttribute('href') || '').split('?')[0];
+                    if (!href) return;
+                    const segments = href.split('/').filter(Boolean);
+                    if (path === href || (segments.length >= 2 && path.startsWith(href + '/'))) {
+                        link.classList.remove('text-slate-600', 'dark:text-slate-400');
+                        link.classList.add('text-cyan-800', 'bg-cyan-50/50', 'font-medium', 'dark:text-cyan-200', 'dark:bg-cyan-900/20');
+                        link.setAttribute('aria-current', 'page');
+                    }
+                });
+            });
+        },
+        updateViewport() {
+            this.viewportWidth = window.innerWidth;
+            this.isDesktop = this.viewportWidth >= 1024;
+            this.sidebarCollapsed = this.isDesktop ? this.sidebarCollapsedStored : false;
+            if (!this.isDesktop) {
+                this.sidebarOpen = false;
+            } else {
+                document.body.style.overflow = '';
+            }
+        },
+        toggleSidebar() {
+            if (this.isDesktop) {
+                this.sidebarCollapsed = !this.sidebarCollapsed;
+                this.sidebarCollapsedStored = this.sidebarCollapsed;
+                localStorage.setItem('appSidebarCollapsed', this.sidebarCollapsed);
+            } else {
+                this.sidebarOpen = !this.sidebarOpen;
+            }
+        },
+        closeSidebar() {
+            this.sidebarOpen = false;
+        }
+     }"
+     :class="{
+        'app-sidebar-open': sidebarOpen && !isDesktop,
+        'app-sidebar-collapsed': isDesktop && sidebarCollapsed
+     }">
+
+    <div
+        x-show="sidebarOpen && !isDesktop"
+        @click="closeSidebar()"
+        x-transition:enter="transition-opacity ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition-opacity ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        class="app-overlay"
+        x-cloak>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <aside
+           class="app-sidebar flex flex-col overflow-hidden border-r transition-all duration-300 ease-in-out"
+           :class="darkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'"
+           data-testid="sidebar-nav">
+
+        <!-- Logo/Brand -->
+        {% with
+            brand_href="/public-sector/",
+            module_label="Public Sector",
+            module_pill_class="border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+            module_logo_bg="from-cyan-500 to-cyan-600",
+            module_logo_shadow="shadow-cyan-500/25"
+        %}
+            {% include "partials/_sidebar_header.html" %}
+        {% endwith %}
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto sidebar-scroll py-4 px-3" aria-label="Public Sector navigation">
+            <!-- Dashboard -->
+            <a href="/public-sector/"
+               :aria-current="activeModule === 'ps_dashboard' ? 'page' : false"
+               :class="activeModule === 'ps_dashboard' ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
+                {{ icon_svg("home", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Dashboard</span>
+            </a>
+
+            <!-- Section Divider: Fund Management -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Fund Management</span>
+            </div>
+
+            <!-- Funds -->
+            <div x-data="{ open: activeModule === 'ps_funds' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'ps_funds' ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
+                        class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
+                    {{ icon_svg("folder", "h-5 w-5 flex-shrink-0 text-cyan-500") }}
+                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Funds</span>
+                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
+                    <a href="/public-sector/funds" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Fund Register</a>
+                    <a href="/public-sector/appropriations" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Appropriations</a>
+                    <a href="/public-sector/virements" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Virements</a>
+                    <a href="/public-sector/available-balance" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Available Balance</a>
+                </div>
+            </div>
+
+            <!-- Section Divider: Commitments -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Commitments</span>
+            </div>
+
+            <!-- Commitment Register -->
+            <div x-data="{ open: activeModule === 'ps_commitments' }">
+                <button @click="open = !open"
+                        :class="activeModule === 'ps_commitments' ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
+                        class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
+                    {{ icon_svg("document", "h-5 w-5 flex-shrink-0 text-cyan-500") }}
+                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Commitments</span>
+                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
+                    <a href="/public-sector/commitments" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Commitment Register</a>
+                    <a href="/public-sector/budget-comparison" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Budget Comparison</a>
+                </div>
+            </div>
+
+            <!-- Section Divider: Shared Modules -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Shared Modules</span>
+            </div>
+
+            <a href="/finance/gl/accounts"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-all">
+                {{ icon_svg("book-open", "h-5 w-5 flex-shrink-0 text-teal-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>General Ledger</span>
+            </a>
+            <a href="/finance/ar/customers"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-all">
+                {{ icon_svg("credit-card", "h-5 w-5 flex-shrink-0 text-emerald-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Debtors</span>
+            </a>
+            <a href="/finance/ap/suppliers"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-all">
+                {{ icon_svg("cash", "h-5 w-5 flex-shrink-0 text-rose-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Creditors</span>
+            </a>
+            <a href="/finance/banking/accounts"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-all">
+                {{ icon_svg("credit-card", "h-5 w-5 flex-shrink-0 text-blue-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Banking</span>
+            </a>
+            <a href="/finance/tax/codes"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-all">
+                {{ icon_svg("receipt", "h-5 w-5 flex-shrink-0 text-red-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Tax</span>
+            </a>
+            <a href="/finance/reports"
+               class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-all">
+                {{ icon_svg("document-report", "h-5 w-5 flex-shrink-0 text-indigo-500") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Reports</span>
+            </a>
+
+            {% with current_module="public_sector" %}
+                {% include "partials/_module_switcher.html" %}
+            {% endwith %}
+
+        </nav>
+
+        {% with module_accent="cyan" %}
+            {% include "partials/_sidebar_footer.html" %}
+        {% endwith %}
+    </aside>
+
+    <!-- Main Content -->
+    <div class="app-main">
+
+        {% set back_fallback_url %}{% block back_fallback %}/public-sector/{% endblock %}{% endset %}
+        {% set page_title_html %}{% block page_title %}{{ page_title | default("Dashboard") }}{% endblock %}{% endset %}
+        {% set breadcrumbs_html %}{% block breadcrumbs %}{% endblock %}{% endset %}
+        {% set header_actions_html %}{% block header_actions %}{% endblock %}{% endset %}
+        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="cyan", back_fallback=(back_fallback_url | trim)) }}
+
+        <!-- Page Content -->
+        <main class="min-h-[calc(100vh-4rem)] bg-dashboard">
+            <div class="app-page">
+                {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

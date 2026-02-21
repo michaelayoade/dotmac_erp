@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/macros.html" import topbar, success_banner %}
+{% from "components/macros.html" import topbar, success_banner, icon_svg %}
 
 {% block head %}
 <meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
@@ -8,7 +8,6 @@
 
 {% block body %}
 {% include "partials/_brand_context.html" %}
-{% set is_ipsas = organization and organization.accounting_framework in ('IPSAS', 'BOTH') %}
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{
@@ -36,6 +35,7 @@
                     if (path === href || (segments.length >= 2 && path.startsWith(href + '/'))) {
                         link.classList.remove('text-slate-600', 'dark:text-slate-400');
                         link.classList.add('text-teal-800', 'bg-teal-50/50', 'font-medium', 'dark:text-teal-200', 'dark:bg-teal-900/20');
+                        link.setAttribute('aria-current', 'page');
                     }
                 });
             });
@@ -103,11 +103,10 @@
         <nav class="flex-1 overflow-y-auto sidebar-scroll py-4 px-3" aria-label="Finance navigation">
             <!-- Dashboard -->
             <a href="/finance/dashboard"
+               :aria-current="activeModule === 'dashboard' ? 'page' : false"
                :class="activeModule === 'dashboard' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                </svg>
+                {{ icon_svg("home", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Dashboard</span>
             </a>
 
@@ -121,9 +120,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'gl' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                    </svg>
+                    {{ icon_svg("book-open", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>General Ledger</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -148,16 +145,14 @@
                 <button @click="open = !open"
                         :class="activeModule === 'ap' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                    </svg>
+                    {{ icon_svg("cash", "h-5 w-5 flex-shrink-0 text-rose-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Accounts Payable</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                 </button>
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/finance/ap/suppliers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">{% if is_ipsas %}Creditors{% else %}Suppliers{% endif %}</a>
+                    <a href="/finance/ap/suppliers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Suppliers</a>
                     <a href="/finance/ap/purchase-orders" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Purchase Orders</a>
                     <a href="/finance/ap/goods-receipts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Goods Receipts</a>
                     <a href="/finance/ap/invoices" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Invoices</a>
@@ -172,20 +167,16 @@
                 <button @click="open = !open"
                         :class="activeModule === 'ar' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                    </svg>
+                    {{ icon_svg("credit-card", "h-5 w-5 flex-shrink-0 text-emerald-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Accounts Receivable</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                 </button>
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/finance/ar/customers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">{% if is_ipsas %}Debtors{% else %}Customers{% endif %}</a>
-                    {% if not is_ipsas %}
+                    <a href="/finance/ar/customers" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Customers</a>
                     <a href="/finance/quotes" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Quotes</a>
                     <a href="/finance/sales-orders" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Sales Orders</a>
-                    {% endif %}
                     <a href="/finance/ar/invoices" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Invoices</a>
                     <a href="/finance/ar/credit-notes" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Credit Notes</a>
                     <a href="/finance/ar/receipts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Receipts</a>
@@ -198,9 +189,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'fa' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                    </svg>
+                    {{ icon_svg("building", "h-5 w-5 flex-shrink-0 text-violet-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Fixed Assets</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -217,9 +206,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'tax' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
-                    </svg>
+                    {{ icon_svg("receipt", "h-5 w-5 flex-shrink-0 text-red-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Tax</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -244,15 +231,14 @@
                 <button @click="open = !open"
                         :class="activeModule === 'banking' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                    </svg>
+                    {{ icon_svg("credit-card", "h-5 w-5 flex-shrink-0 text-blue-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Banking</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                 </button>
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
+                    <a href="/finance/banking/dashboard" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Dashboard</a>
                     <a href="/finance/banking/accounts" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Bank Accounts</a>
                     <a href="/finance/banking/statements" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Statements</a>
                     <a href="/finance/banking/reconciliations" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Reconciliations</a>
@@ -260,35 +246,6 @@
                     <a href="/finance/banking/payees" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Payees</a>
                 </div>
             </div>
-
-            <!-- IPSAS / Fund Accounting (conditionally shown) -->
-            {% if organization and organization.fund_accounting_enabled | default(false) %}
-            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
-                <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">IPSAS</span>
-            </div>
-
-            <div x-data="{ open: activeModule === 'ipsas' }">
-                <button @click="open = !open"
-                        :class="activeModule === 'ipsas' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
-                        class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
-                    </svg>
-                    <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Fund Accounting</span>
-                    <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
-                    <a href="/finance/ipsas/funds" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Funds</a>
-                    <a href="/finance/ipsas/appropriations" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Appropriations</a>
-                    <a href="/finance/ipsas/commitments" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Commitments</a>
-                    <a href="/finance/ipsas/virements" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Virements</a>
-                    <a href="/finance/ipsas/budget-comparison" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Budget Comparison</a>
-                    <a href="/finance/ipsas/available-balance" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Available Balance</a>
-                </div>
-            </div>
-            {% endif %}
 
             <!-- Section Divider: Reporting -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
@@ -300,9 +257,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'reports' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document-report", "h-5 w-5 flex-shrink-0 text-indigo-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Reports</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -311,15 +266,15 @@
                 <div x-show="open && !sidebarCollapsed" x-collapse x-cloak class="ml-8 mt-1 space-y-0.5">
                     <a href="/finance/reports" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">All Reports</a>
                     <a href="/finance/reports/trial-balance" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Trial Balance</a>
-                    <a href="/finance/reports/income-statement" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">{% if is_ipsas %}Statement of Financial Performance{% else %}Statement of Profit or Loss{% endif %}</a>
+                    <a href="/finance/reports/income-statement" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Statement of Profit or Loss</a>
                     <a href="/finance/reports/balance-sheet" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Statement of Financial Position</a>
                     <a href="/finance/reports/general-ledger" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">General Ledger</a>
                     <a href="/finance/reports/ap-aging" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">AP Aging</a>
                     <a href="/finance/reports/ar-aging" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">AR Aging</a>
                     <a href="/finance/reports/tax-summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Tax Summary</a>
-                    <a href="/finance/reports/expense-summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</a>
+                    <a href="/finance/reports/expense-summary" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Expenses</a>
                     <a href="/finance/reports/cash-flow" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Cash Flow</a>
-                    <a href="/finance/reports/changes-in-equity" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">{% if is_ipsas %}Changes in Net Assets{% else %}Changes in Equity{% endif %}</a>
+                    <a href="/finance/reports/changes-in-equity" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Changes in Equity</a>
                     <a href="/finance/reports/budget-vs-actual" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors">Budget vs Actual</a>
                 </div>
             </div>
@@ -334,9 +289,7 @@
                 <button @click="open = !open"
                         :class="activeModule === 'automation' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                         class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
-                    <svg class="h-5 w-5 flex-shrink-0 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
+                    {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0 text-purple-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Automation</span>
                     <svg x-show="!sidebarCollapsed" class="h-4 w-4 transition-transform duration-200" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" x-cloak>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>

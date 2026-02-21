@@ -30,6 +30,7 @@ Comprehensive reference for all UI decisions. Fonts are self-hosted. Stack: Tail
 | Operations | `--module-operations` | `#3b82f6` | `blue-500` |
 | Admin | `--module-admin` | `#6366f1` | `indigo-500` |
 | Automation | `--module-automation` | `#a855f7` | `purple-500` |
+| Public Sector | `--module-public-sector` | `#0891b2` | `cyan-600` |
 | Reports | `--module-reports` | `#6366f1` | `indigo-500` |
 
 ### Status Colors
@@ -405,6 +406,7 @@ Each module has its own base template with colored sidebar:
 - `base_expense.html` (amber)
 - `base_inventory.html` (emerald)
 - `base_procurement.html` (blue)
+- `base_public_sector.html` (cyan)
 - `base_modules.html` (indigo, Operations only)
 
 Sidebar: 16rem width, sticky, collapsible to 4rem (icon-only). Active link: `aria-current="page"` + accent color highlight.

@@ -1,14 +1,13 @@
-{% extends "finance/base_finance.html" %}
+{% extends "public_sector/base_public_sector.html" %}
 
 {% block page_title %}Available Balance{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance" class="hover:text-primary-600 dark:hover:text-primary-400">Finance</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">Available Balance</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/public-sector/" class="hover:text-primary-600 dark:hover:text-primary-400">Public Sector</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Available Balance</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -52,7 +51,7 @@
             <div class="p-6">
                 <div class="flex items-center justify-between mb-3">
                     <div>
-                        <a href="/finance/ipsas/funds/{{ fb.fund.fund_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                        <a href="/public-sector/funds/{{ fb.fund.fund_id }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
                             {{ fb.fund.fund_code }} - {{ fb.fund.fund_name }}
                         </a>
                         <p class="text-xs text-slate-500 dark:text-slate-400">{{ fb.fund.fund_type.value | replace('_', ' ') | title }}{% if fb.fund.is_restricted %} &middot; Restricted{% endif %}</p>
@@ -86,7 +85,7 @@
         </div>
         {% else %}
         <div class="p-12 text-center text-slate-500 dark:text-slate-400">
-            No active funds. <a href="/finance/ipsas/funds/new" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">Create a fund</a> to get started.
+            No active funds. <a href="/public-sector/funds/new" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">Create a fund</a> to get started.
         </div>
         {% endif %}
     </div>

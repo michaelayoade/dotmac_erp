@@ -1,15 +1,15 @@
-{% extends "finance/base_finance.html" %}
+{% extends "public_sector/base_public_sector.html" %}
 
 {% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Commitment {{ commitment.commitment_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a>
-    <span class="mx-2">/</span>
-    <a href="/finance/ipsas/commitments" class="hover:text-primary-600 dark:hover:text-primary-400">Commitments</a>
-    <span class="mx-2">/</span>
-    <span class="text-slate-900 dark:text-white" aria-current="page">{{ commitment.commitment_number }}</span>
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/public-sector/" class="hover:text-primary-600 dark:hover:text-primary-400">Public Sector</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/public-sector/commitments" class="hover:text-primary-600 dark:hover:text-primary-400">Commitments</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{{ commitment.commitment_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
@@ -21,19 +21,7 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ commitment.commitment_number }}</h2>
-                    {% if commitment.status.value == 'COMMITTED' %}
-                    <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Committed</span>
-                    {% elif commitment.status.value == 'OBLIGATED' %}
-                    <span class="inline-flex rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Obligated</span>
-                    {% elif commitment.status.value == 'EXPENDED' %}
-                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Expended</span>
-                    {% elif commitment.status.value == 'PARTIALLY_PAID' %}
-                    <span class="inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Partially Paid</span>
-                    {% elif commitment.status.value == 'CANCELLED' %}
-                    <span class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Cancelled</span>
-                    {% else %}
-                    {{ status_badge(commitment.status.value, size="sm") }}
-                    {% endif %}
+                    {{ status_badge(commitment.status.value, 'sm') }}
                 </div>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {{ commitment.commitment_type.value | replace('_', ' ') | title }} &middot; Source: {{ (commitment.source_type or '') | replace('_', ' ') | title }} &middot; {{ commitment.currency_code }}
@@ -49,20 +37,20 @@
             <div class="text-center">
                 <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Committed</p>
                 <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.committed_amount) }}</p>
-                <p class="text-xs text-slate-400">{{ commitment.commitment_date.strftime('%Y-%m-%d') if commitment.commitment_date else '' }}</p>
+                <p class="text-xs text-slate-400">{{ commitment.commitment_date | format_date if commitment.commitment_date else '' }}</p>
             </div>
             <div class="text-center">
                 <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Obligated</p>
                 <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.obligated_amount) }}</p>
                 {% if commitment.obligation_date %}
-                <p class="text-xs text-slate-400">{{ commitment.obligation_date.strftime('%Y-%m-%d') if commitment.obligation_date else '' }}</p>
+                <p class="text-xs text-slate-400">{{ commitment.obligation_date | format_date if commitment.obligation_date else '' }}</p>
                 {% endif %}
             </div>
             <div class="text-center">
                 <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Expended</p>
                 <p class="text-lg font-bold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(commitment.expended_amount) }}</p>
                 {% if commitment.expenditure_date %}
-                <p class="text-xs text-slate-400">{{ commitment.expenditure_date.strftime('%Y-%m-%d') if commitment.expenditure_date else '' }}</p>
+                <p class="text-xs text-slate-400">{{ commitment.expenditure_date | format_date if commitment.expenditure_date else '' }}</p>
                 {% endif %}
             </div>
             <div class="text-center">
