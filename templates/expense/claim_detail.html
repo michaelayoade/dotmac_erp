@@ -1,24 +1,20 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, icon_svg %}
 
-{% block page_title %}Expense Claim{% endblock %}
+{% block page_title %}{{ claim.claim_number }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
-    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/expense/claims/list" class="hover:text-slate-700 dark:hover:text-slate-300">Claims</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ claim.claim_number }}</span>
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/expense/claims/list" class="hover:text-slate-700 dark:hover:text-slate-300">Claims</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ claim.claim_number }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data='{ reviewMode: false }'>
     {% if error %}
     <div class="card p-4 border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
         {{ error }}
@@ -31,13 +27,16 @@
     <div class="card p-4 border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
         Claim rejected.
     </div>
+    {% elif action == "comment_added" %}
+    <div class="card p-4 border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
+        Comment added.
+    </div>
     {% endif %}
 
     <div class="card p-6">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ claim.claim_number }}</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">{{ claim.purpose }}</p>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ claim.purpose }}</h2>
             </div>
             <div class="flex items-center gap-3">
                 {{ status_badge(claim.status.value if claim.status else 'DRAFT') }}
@@ -67,13 +66,17 @@
                 </form>
                 {% endif %}
                 {% if can_approve and can_act %}
-                <form method="post" action="/expense/claims/{{ claim.claim_id }}/approve">
+                {# Quick approve (no corrections) #}
+                <form method="post" action="/expense/claims/{{ claim.claim_id }}/approve" x-show="!reviewMode">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-primary">Approve</button>
                 </form>
+                <button type="button" class="btn btn-secondary" x-show="!reviewMode" @click="reviewMode = true">
+                    Review &amp; Approve
+                </button>
                 {% endif %}
                 {% if can_reject and can_act %}
-                <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="flex items-center gap-2">
+                <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="flex items-center gap-2" x-show="!reviewMode">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="text" name="reason" class="form-input w-48" placeholder="Rejection reason" required>
                     <button type="submit" class="btn btn-secondary">Reject</button>
@@ -95,9 +98,18 @@
                 <p class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ claim.total_claimed_amount | format_currency }}</p>
             </div>
         </div>
+
+        {# Approval notes display #}
+        {% if claim.approval_notes %}
+        <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+            <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Approval Notes</p>
+            <p class="mt-1 text-sm text-emerald-800 dark:text-emerald-300">{{ claim.approval_notes }}</p>
+        </div>
+        {% endif %}
     </div>
 
-    <div class="card overflow-hidden">
+    {# ── Read-only items table (shown when NOT in review mode) ── #}
+    <div class="card overflow-hidden" x-show="!reviewMode">
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -106,6 +118,9 @@
                         <th scope="col">Category</th>
                         <th scope="col">Description</th>
                         <th scope="col" class="text-right">Amount</th>
+                        {% if claim.status.value in ('APPROVED', 'PAID') %}
+                        <th scope="col" class="text-right">Approved</th>
+                        {% endif %}
                         <th scope="col">Receipt</th>
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
@@ -117,6 +132,15 @@
                         <td class="text-slate-700 dark:text-slate-300">{{ item.category.category_name if item.category else '-' }}</td>
                         <td class="text-slate-900 dark:text-white">{{ item.description }}</td>
                         <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ item.claimed_amount | format_currency }}</td>
+                        {% if claim.status.value in ('APPROVED', 'PAID') %}
+                        <td class="text-right font-mono tabular-nums">
+                            {% if item.was_corrected %}
+                            <span class="text-amber-600 dark:text-amber-400" title="Corrected by approver">{{ item.approved_amount | format_currency }}</span>
+                            {% else %}
+                            <span class="text-slate-900 dark:text-white">{{ item.approved_amount | format_currency if item.approved_amount is not none else '-' }}</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td class="text-slate-500">
                             {% if item.receipt_urls %}
                             <div class="space-y-1">
@@ -130,7 +154,6 @@
                                         <path d="M12.293 3.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-8.5 8.5a1 1 0 01-.39.243l-4 1.5a1 1 0 01-1.285-1.285l1.5-4a1 1 0 01.243-.39l8.5-8.5z"/>
                                     </svg>
                                 </a>
-                                <p class="font-mono text-[11px] text-slate-400 dark:text-slate-500 break-all">{{ receipt_url }}</p>
                                 {% endfor %}
                                 {% if item.receipt_number %}
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Receipt #: {{ item.receipt_number }}</p>
@@ -142,22 +165,171 @@
                         </td>
                         <td class="text-right">
                             <a href="/expense/claims/{{ claim.claim_id }}/items/{{ item.item_id }}" class="table-action-btn" title="View item details" aria-label="View item details">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                </svg>
+                                {{ icon_svg("eye", "h-4 w-4") }}
                             </a>
                         </td>
                     </tr>
                     {% endfor %}
                     {% if not claim.items %}
                     <tr>
-                        <td colspan="6" class="text-center text-slate-500">No items on this claim.</td>
+                        <td colspan="7" class="text-center text-slate-500">No items on this claim.</td>
                     </tr>
                     {% endif %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    {# ── Corrections summary (approved claims with corrections) ── #}
+    {% set corrected_items = claim.items | selectattr('was_corrected') | list %}
+    {% if corrected_items and claim.status.value in ('APPROVED', 'PAID') %}
+    <div class="card p-5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10" x-show="!reviewMode">
+        <h3 class="text-sm font-semibold text-amber-800 dark:text-amber-300">Approver Corrections</h3>
+        <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">The following items were corrected during approval:</p>
+        <div class="mt-3 space-y-2">
+            {% for item in corrected_items %}
+            <div class="rounded-lg border border-amber-200 bg-white p-3 dark:border-amber-700 dark:bg-slate-800">
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.description }}</p>
+                <div class="mt-1 flex flex-wrap gap-4 text-xs text-slate-600 dark:text-slate-400">
+                    {% if item.original_claimed_amount is not none %}
+                    <span>Amount: <span class="line-through font-mono">{{ item.original_claimed_amount | format_currency }}</span> &rarr; <span class="font-mono font-semibold text-amber-700 dark:text-amber-400">{{ item.approved_amount | format_currency }}</span></span>
+                    {% endif %}
+                    {% if item.original_description %}
+                    <span>Description: <span class="line-through">{{ item.original_description }}</span> &rarr; <span class="font-semibold text-amber-700 dark:text-amber-400">{{ item.description }}</span></span>
+                    {% endif %}
+                    {% if item.original_category_id %}
+                    <span>Category changed</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Review & Approve form (shown when in review mode) ── #}
+    {% if can_approve and can_act %}
+    <form method="post" action="/expense/claims/{{ claim.claim_id }}/approve" x-show="reviewMode" x-cloak class="space-y-4">
+        {{ request.state.csrf_form | safe }}
+
+        <div class="card p-4 border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20">
+            <p class="text-sm text-blue-700 dark:text-blue-400">
+                Review each item below. You can adjust amounts, change categories, or fix descriptions before approving.
+            </p>
+        </div>
+
+        <div class="card overflow-hidden">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date</th>
+                            <th scope="col">Category</th>
+                            <th scope="col">Description</th>
+                            <th scope="col" class="text-right">Claimed</th>
+                            <th scope="col" class="text-right">Approved Amount</th>
+                            <th scope="col">Receipt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in claim.items %}
+                        <tr>
+                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                            <td class="text-slate-500">{{ item.expense_date }}</td>
+                            <td>
+                                <select name="category_id_{{ item.item_id }}" class="form-select text-sm">
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.category_id }}" {{ 'selected' if cat.category_id == item.category_id else '' }}>{{ cat.category_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" name="description_{{ item.item_id }}" value="{{ item.description }}" class="form-input text-sm" maxlength="500">
+                            </td>
+                            <td class="text-right font-mono tabular-nums text-slate-500">
+                                {{ item.claimed_amount | format_currency }}
+                            </td>
+                            <td class="text-right">
+                                <input type="number" step="0.01" min="0" name="approved_amount_{{ item.item_id }}" value="{{ item.claimed_amount }}" class="form-input form-input-currency text-sm w-32 text-right" required>
+                            </td>
+                            <td class="text-slate-500">
+                                {% if item.receipt_urls %}
+                                <a href="/expense/claims/{{ claim.claim_id }}/items/{{ item.item_id }}/receipt?index=0"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 text-sm">
+                                    {{ icon_svg("eye", "h-3.5 w-3.5") }}
+                                    View
+                                </a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card p-5 space-y-4">
+            <div>
+                <label for="approval-notes" class="form-label">Approval Notes</label>
+                <textarea id="approval-notes" name="approval_notes" rows="3" maxlength="2000" placeholder="Optional: explain corrections or conditions..." class="form-input w-full"></textarea>
+                <span class="form-hint">These notes will be visible to the claimant.</span>
+            </div>
+
+            <div class="flex items-center justify-end gap-3">
+                <button type="button" class="btn btn-secondary" @click="reviewMode = false">Cancel</button>
+                <button type="submit" class="btn btn-success">Approve with Corrections</button>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+
+    <div class="card p-6">
+        <div class="mb-4 flex items-center justify-between">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Comments</h3>
+            <span class="text-xs text-slate-500 dark:text-slate-400">{{ comments | length if comments else 0 }} total</span>
+        </div>
+
+        <form method="post" action="/expense/claims/{{ claim.claim_id }}/comments" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="comment-content" class="text-sm font-medium text-slate-700 dark:text-slate-300">Add comment</label>
+            <textarea
+                id="comment-content"
+                name="content"
+                rows="3"
+                maxlength="5000"
+                required
+                placeholder="Write a comment..."
+                class="form-input w-full"
+            ></textarea>
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary">Post Comment</button>
+            </div>
+        </form>
+
+        <div class="mt-6 space-y-3">
+            {% for comment in comments %}
+            <div class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <div class="mb-1 flex items-center justify-between gap-2">
+                    {% set author_name = (comment.author.first_name or '') ~ ' ' ~ (comment.author.last_name or '') if comment.author else 'Unknown' %}
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        {{ author_name.strip() or 'Unknown' }}
+                    </p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        {{ comment.created_at | format_datetime if comment.created_at else '' }}
+                    </p>
+                </div>
+                <p class="text-sm whitespace-pre-line text-slate-700 dark:text-slate-300">{{ comment.content }}</p>
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-500 dark:text-slate-400">No comments yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% include "partials/_recent_activity.html" %}
 </div>
 {% endblock %}

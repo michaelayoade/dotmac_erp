@@ -43,6 +43,8 @@ from app.services.expense.expense_service import (
 )
 from app.services.file_upload import get_expense_receipt_upload, resolve_safe_path
 from app.services.finance.platform.authorization import AuthorizationService
+from app.services.pm.comment import comment_service
+from app.services.recent_activity import get_recent_activity_for_record
 from app.services.settings_spec import resolve_value
 from app.services.storage import get_storage
 from app.templates import templates
@@ -300,10 +302,40 @@ class ExpenseClaimsWebService:
             and not has_active_payment
         )
 
+        # Load active categories for the review-mode dropdown
+        categories: list = []
+        if can_act and can_approve:
+            from app.models.expense.expense_claim import ExpenseCategory
+
+            categories = list(
+                db.scalars(
+                    select(ExpenseCategory)
+                    .where(
+                        ExpenseCategory.organization_id == org_id,
+                        ExpenseCategory.is_active.is_(True),
+                    )
+                    .order_by(ExpenseCategory.category_name)
+                ).all()
+            )
+
         context = base_context(request, auth, f"Claim {claim.claim_number}", "claims")
         context.update(
             {
                 "claim": claim,
+                "comments": comment_service.list_comments(
+                    db,
+                    organization_id=org_id,
+                    entity_type="EXPENSE_CLAIM",
+                    entity_id=claim_uuid,
+                    include_internal=auth.is_admin,
+                ),
+                "recent_activity": get_recent_activity_for_record(
+                    db,
+                    org_id,
+                    record=claim,
+                    limit=10,
+                ),
+                "categories": categories,
                 "can_submit": can_submit,
                 "can_act": can_act,
                 "can_approve": can_approve,
@@ -316,6 +348,61 @@ class ExpenseClaimsWebService:
             }
         )
         return templates.TemplateResponse(request, "expense/claim_detail.html", context)
+
+    @staticmethod
+    def add_claim_comment_response(
+        claim_id: str,
+        content: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Add a comment on an expense claim."""
+        org_id = coerce_uuid(auth.organization_id)
+        claim_uuid = coerce_uuid(claim_id)
+        comment_text = (content or "").strip()
+        if not comment_text:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Comment+cannot+be+empty",
+                status_code=303,
+            )
+        if len(comment_text) > 5000:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Comment+is+too+long",
+                status_code=303,
+            )
+
+        claim = db.scalar(
+            select(ExpenseClaim).where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.claim_id == claim_uuid,
+            )
+        )
+        if not claim:
+            return RedirectResponse(
+                "/expense/claims/list?error=not_found", status_code=302
+            )
+
+        author_id_raw = auth.person_id or auth.user_id
+        if not author_id_raw:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Unable+to+identify+comment+author",
+                status_code=303,
+            )
+
+        comment_service.add_comment(
+            db,
+            organization_id=org_id,
+            entity_type="EXPENSE_CLAIM",
+            entity_id=claim_uuid,
+            author_id=coerce_uuid(author_id_raw),
+            content=comment_text,
+            is_internal=False,
+        )
+        db.commit()
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=comment_added",
+            status_code=303,
+        )
 
     @staticmethod
     def claim_item_detail_response(
@@ -558,6 +645,7 @@ class ExpenseClaimsWebService:
         claim_id: str,
         auth: WebAuthContext,
         db: Session,
+        form_data: dict[str, str] | None = None,
     ) -> RedirectResponse:
         if not auth.has_any_permission(
             [
@@ -579,9 +667,44 @@ class ExpenseClaimsWebService:
         ).first()
         approver_id = approver.employee_id if approver else None
 
+        # Parse corrections from form data
+        corrections: list[dict] | None = None
+        approval_notes: str | None = None
+        if form_data:
+            approval_notes = (form_data.get("approval_notes") or "").strip() or None
+            item_ids = (
+                form_data.getlist("item_id") if hasattr(form_data, "getlist") else []
+            )
+            if item_ids:
+                corrections = []
+                for iid in item_ids:
+                    iid_str = str(iid).strip()
+                    if not iid_str:
+                        continue
+                    corr: dict = {"item_id": iid_str}
+                    raw_amt = (
+                        form_data.get(f"approved_amount_{iid_str}") or ""
+                    ).strip()
+                    corr["approved_amount"] = (
+                        Decimal(raw_amt) if raw_amt else Decimal("0")
+                    )
+                    cat = (form_data.get(f"category_id_{iid_str}") or "").strip()
+                    if cat:
+                        corr["category_id"] = cat
+                    desc = (form_data.get(f"description_{iid_str}") or "").strip()
+                    if desc:
+                        corr["description"] = desc
+                    corrections.append(corr)
+
         svc = ExpenseService(db)
         try:
-            claim = svc.approve_claim(org_id, claim_uuid, approver_id=approver_id)
+            claim = svc.approve_claim(
+                org_id,
+                claim_uuid,
+                approver_id=approver_id,
+                corrections=corrections,
+                notes=approval_notes,
+            )
             if claim.status != ExpenseClaimStatus.APPROVED:
                 db.rollback()
                 return RedirectResponse(

@@ -230,17 +230,36 @@ def submit_expense_claim(
     )
 
 
+@router.post("/claims/{claim_id}/comments")
+def add_expense_claim_comment(
+    claim_id: str,
+    content: str = Form(...),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Add a comment to an expense claim."""
+    return expense_claims_web_service.add_claim_comment_response(
+        claim_id=claim_id,
+        content=content,
+        auth=auth,
+        db=db,
+    )
+
+
 @router.post("/claims/{claim_id}/approve")
-def approve_expense_claim(
+async def approve_expense_claim(
+    request: Request,
     claim_id: str,
     auth: WebAuthContext = Depends(_require_claim_approve),
     db: Session = Depends(get_db),
 ):
-    """Approve an expense claim."""
+    """Approve an expense claim, optionally with per-item corrections."""
+    form_data = await request.form()
     return expense_claims_web_service.approve_claim_response(
         claim_id=claim_id,
         auth=auth,
         db=db,
+        form_data=form_data,
     )
 
 
@@ -512,10 +531,8 @@ def create_expense(
             cost_center_id=cost_center_id,
             business_unit_id=business_unit_id,
         )
-        db.commit()
         return RedirectResponse(f"/expense/{expense.expense_id}", status_code=303)
     except Exception as e:
-        db.rollback()
         context = base_context(request, auth, "New Expense", "expenses")
         context.update(expense_web_service.form_context(db, str(auth.organization_id)))
         context["return_to"] = return_to or _safe_return_to(request)
@@ -589,10 +606,8 @@ def submit_expense(
         expense_service.submit(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
-        db.commit()
     except Exception:
         logger.exception("Failed to submit expense %s", expense_id)
-        db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
 
@@ -608,10 +623,8 @@ def approve_expense(
         expense_service.approve(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
-        db.commit()
     except Exception:
         logger.exception("Failed to approve expense %s", expense_id)
-        db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
 
@@ -627,10 +640,8 @@ def reject_expense(
         expense_service.reject(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
-        db.commit()
     except Exception:
         logger.exception("Failed to reject expense %s", expense_id)
-        db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
 
@@ -651,10 +662,8 @@ def post_expense(
             str(auth.user_id),
             fiscal_period_id,
         )
-        db.commit()
     except Exception:
         logger.exception("Failed to post expense %s", expense_id)
-        db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
 
@@ -670,10 +679,8 @@ def void_expense(
         expense_service.void(
             db, expense_id, str(auth.user_id), organization_id=str(auth.organization_id)
         )
-        db.commit()
     except Exception:
         logger.exception("Failed to void expense %s", expense_id)
-        db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
 

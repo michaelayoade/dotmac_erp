@@ -1006,19 +1006,23 @@ class ExpenseService:
         *,
         approver_id: UUID | None = None,
         approved_amounts: list[dict] | None = None,
+        corrections: list[dict] | None = None,
         notes: str | None = None,
         auto_post_gl: bool = False,
         create_supplier_invoice: bool = False,
         send_notification: bool = True,
     ) -> ExpenseClaim:
         """
-        Approve an expense claim.
+        Approve an expense claim, optionally with per-item corrections.
 
         Args:
             org_id: Organization ID
             claim_id: Claim to approve
             approver_id: ID of the approver
-            approved_amounts: Optional per-item approved amounts
+            approved_amounts: Optional per-item approved amounts (legacy)
+            corrections: Per-item corrections list. Each dict may contain:
+                ``item_id`` (UUID), ``approved_amount`` (Decimal),
+                ``category_id`` (UUID, optional), ``description`` (str, optional).
             notes: Approval notes
             auto_post_gl: If True, post to GL immediately after approval
             create_supplier_invoice: If True, create AP invoice for payment
@@ -1068,16 +1072,70 @@ class ExpenseService:
             claim.approver_id = approver_id
             claim.approved_on = date.today()
 
-            # Set approved amounts (default to claimed amounts)
+            if notes:
+                claim.approval_notes = notes
+
+            # Build item lookup for corrections
+            corrections_map: dict[str, dict] = {}
+            correction_audit: list[dict] = []
+            if corrections:
+                for c in corrections:
+                    corrections_map[str(c["item_id"])] = c
+
+            # Apply per-item amounts and corrections
             total_approved = Decimal("0")
-            if approved_amounts:
-                for approval in approved_amounts:
-                    item = self.db.get(ExpenseClaimItem, approval["item_id"])
-                    if item and item.claim_id == claim_id:
-                        item.approved_amount = approval["approved_amount"]
-                        total_approved += approval["approved_amount"]
-            else:
-                for item in claim.items:
+            for item in claim.items:
+                item_key = str(item.item_id)
+                corr = corrections_map.get(item_key)
+
+                if corr:
+                    # Snapshot originals before any modification
+                    amt = Decimal(str(corr["approved_amount"]))
+                    changed = False
+                    audit_entry: dict[str, str] = {"item_id": item_key}
+
+                    if amt != item.claimed_amount:
+                        item.original_claimed_amount = item.claimed_amount
+                        audit_entry["amount"] = f"{item.claimed_amount} -> {amt}"
+                        changed = True
+                    item.approved_amount = amt
+
+                    new_cat_id = corr.get("category_id")
+                    if new_cat_id and str(new_cat_id) != str(item.category_id):
+                        item.original_category_id = item.category_id
+                        item.category_id = (
+                            new_cat_id
+                            if isinstance(new_cat_id, UUID)
+                            else UUID(str(new_cat_id))
+                        )
+                        audit_entry["category_changed"] = "true"
+                        changed = True
+
+                    new_desc = corr.get("description")
+                    if new_desc and new_desc.strip() != item.description:
+                        item.original_description = item.description
+                        item.description = new_desc.strip()
+                        audit_entry["description_changed"] = "true"
+                        changed = True
+
+                    if changed:
+                        item.was_corrected = True
+                        correction_audit.append(audit_entry)
+
+                    total_approved += amt
+                elif approved_amounts:
+                    # Legacy path: approved_amounts without corrections
+                    matched = next(
+                        (a for a in approved_amounts if str(a["item_id"]) == item_key),
+                        None,
+                    )
+                    if matched:
+                        item.approved_amount = matched["approved_amount"]
+                        total_approved += matched["approved_amount"]
+                    else:
+                        item.approved_amount = item.claimed_amount
+                        total_approved += item.claimed_amount
+                else:
                     item.approved_amount = item.claimed_amount
                     total_approved += item.claimed_amount
 
@@ -1173,6 +1231,15 @@ class ExpenseService:
 
             self.db.flush()
 
+            audit_new_values: dict = {
+                "status": ExpenseClaimStatus.APPROVED.value,
+                "total_approved_amount": str(claim.total_approved_amount),
+            }
+            if correction_audit:
+                audit_new_values["corrections"] = correction_audit
+            if notes:
+                audit_new_values["approval_notes"] = notes
+
             fire_audit_event(
                 db=self.db,
                 organization_id=org_id,
@@ -1181,10 +1248,7 @@ class ExpenseService:
                 record_id=str(claim.claim_id),
                 action=AuditAction.UPDATE,
                 old_values={"status": ExpenseClaimStatus.SUBMITTED.value},
-                new_values={
-                    "status": ExpenseClaimStatus.APPROVED.value,
-                    "total_approved_amount": str(claim.total_approved_amount),
-                },
+                new_values=audit_new_values,
             )
 
             # Fire workflow automation event

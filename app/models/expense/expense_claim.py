@@ -355,6 +355,13 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=True,
     )
 
+    # Approval corrections
+    approval_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Approver notes when approving with corrections",
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,
@@ -513,6 +520,28 @@ class ExpenseClaimItem(Base):
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # Approval correction snapshots
+    original_category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Snapshot of category_id before approval correction",
+    )
+    original_description: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment="Snapshot of description before approval correction",
+    )
+    original_claimed_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+        comment="Snapshot of claimed_amount before approval correction",
+    )
+    was_corrected: Mapped[bool] = mapped_column(
+        default=False,
+        server_default=text("false"),
+        comment="True if approver modified this item during approval",
     )
 
     # Sequence
