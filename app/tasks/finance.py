@@ -176,37 +176,44 @@ def process_tax_period_reminders() -> dict[str, Any]:
                 )
                 results["errors"].append(f"Tax period {period.period_id}: {str(e)}")
 
-        # Process overdue periods
+        # Process overdue periods — send ONE digest per org instead of N
+        # individual notifications (prevents email spam when many periods
+        # are overdue)
         overdue = service.get_overdue_tax_periods()
         results["periods_overdue"] = len(overdue)
 
-        for period in overdue:
-            try:
-                recipients = _get_finance_recipients(
-                    db,
-                    [
-                        "accountant",
-                        "finance_manager",
-                        "tax_accountant",
-                        "controller",
-                        "cfo",
-                    ],
-                )
+        if overdue:
+            recipients = _get_finance_recipients(
+                db,
+                [
+                    "accountant",
+                    "finance_manager",
+                    "tax_accountant",
+                    "controller",
+                    "cfo",
+                ],
+            )
 
-                if not recipients:
-                    continue
+            if recipients:
+                # Group by org for multi-tenant safety
+                by_org: dict[UUID, list] = {}
+                for period in overdue:
+                    by_org.setdefault(period.organization_id, []).append(period)
 
-                sent = service.send_tax_period_reminder(period, recipients, "overdue")
-                results["notifications_sent"] += sent
-
-            except Exception as e:
-                logger.exception(
-                    "Failed to send overdue tax reminder for period %s",
-                    period.period_id,
-                )
-                results["errors"].append(
-                    f"Overdue tax period {period.period_id}: {str(e)}"
-                )
+                for org_id, org_periods in by_org.items():
+                    try:
+                        sent = service.send_tax_period_digest(
+                            org_periods, recipients, org_id
+                        )
+                        results["notifications_sent"] += sent
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to send tax overdue digest for org %s",
+                            org_id,
+                        )
+                        results["errors"].append(
+                            f"Tax overdue digest org {org_id}: {str(e)}"
+                        )
 
         db.commit()
 
@@ -249,35 +256,39 @@ def process_bank_reconciliation_reminders() -> dict[str, Any]:
         accounts = service.get_accounts_needing_reconciliation()
         results["accounts_checked"] = len(accounts)
 
+        # Classify accounts by urgency, then send ONE digest per org
+        # instead of N individual notifications
+        accounts_with_urgency: list[tuple] = []
         for account in accounts:
-            try:
-                urgency = service.get_reconciliation_urgency(account)
-                if not urgency:
-                    continue
-
+            urgency = service.get_reconciliation_urgency(account)
+            if urgency:
+                accounts_with_urgency.append((account, urgency))
                 results["accounts_needing_action"] += 1
 
-                recipients = _get_finance_recipients(
-                    db,
-                    ["accountant", "finance_manager", "controller"],
-                )
+        if accounts_with_urgency:
+            recipients = _get_finance_recipients(
+                db,
+                ["accountant", "finance_manager", "controller"],
+            )
 
-                if not recipients:
-                    continue
+            if recipients:
+                # Group by org for multi-tenant safety
+                by_org: dict[UUID, list[tuple]] = {}
+                for acct, urg in accounts_with_urgency:
+                    by_org.setdefault(acct.organization_id, []).append((acct, urg))
 
-                sent = service.send_reconciliation_reminder(
-                    account, recipients, urgency
-                )
-                results["notifications_sent"] += sent
-
-            except Exception as e:
-                logger.exception(
-                    "Failed to send reconciliation reminder for account %s",
-                    account.bank_account_id,
-                )
-                results["errors"].append(
-                    f"Bank account {account.bank_account_id}: {str(e)}"
-                )
+                for org_id, org_accounts in by_org.items():
+                    try:
+                        sent = service.send_reconciliation_digest(
+                            org_accounts, recipients, org_id
+                        )
+                        results["notifications_sent"] += sent
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to send reconciliation digest for org %s",
+                            org_id,
+                        )
+                        results["errors"].append(f"Recon digest org {org_id}: {str(e)}")
 
         db.commit()
 

@@ -54,6 +54,10 @@ class ReminderConfig:
     bank_recon_overdue_days: int = 30
     bank_recon_critical_days: int = 45
 
+    # Tax overdue digest: periods overdue longer than this are "stale"
+    # (mentioned as count only, not listed individually in digest)
+    tax_overdue_max_age_days: int = 90
+
     # AR aging thresholds for collection reminders
     ar_first_reminder_days: int = 7  # Days past due
     ar_second_reminder_days: int = 30
@@ -336,6 +340,103 @@ class FinanceReminderService:
 
         return sent
 
+    def send_tax_period_digest(
+        self,
+        periods: list[TaxPeriod],
+        recipient_ids: list[UUID],
+        organization_id: UUID,
+    ) -> int:
+        """
+        Send ONE digest notification summarising all overdue tax periods.
+
+        Periods overdue longer than ``tax_overdue_max_age_days`` are counted
+        but not listed individually — they appear as a stale-count footnote.
+
+        Args:
+            periods: All overdue tax periods for the organization
+            recipient_ids: Users to notify
+            organization_id: Owning organization
+
+        Returns:
+            Number of notifications actually sent (after dedup)
+        """
+        if not periods or not recipient_ids:
+            return 0
+
+        today = date.today()
+        actionable: list[tuple[TaxPeriod, int]] = []
+        stale_count = 0
+
+        for p in periods:
+            effective_due = (
+                p.extended_due_date
+                if p.is_extension_filed and p.extended_due_date
+                else p.due_date
+            )
+            days_overdue = (today - effective_due).days
+            if days_overdue > self.config.tax_overdue_max_age_days:
+                stale_count += 1
+            else:
+                actionable.append((p, days_overdue))
+
+        total = len(periods)
+        title = f"{total} Tax Period{'s' if total != 1 else ''} OVERDUE"
+
+        # Build message body — list actionable items, summarise stale
+        lines: list[str] = []
+        actionable.sort(key=lambda x: -x[1])  # most overdue first
+        for p, days in actionable[:10]:
+            lines.append(f"\u2022 {p.period_name}: {days} day(s) overdue")
+        if len(actionable) > 10:
+            lines.append(f"  \u2026 and {len(actionable) - 10} more")
+        if stale_count:
+            lines.append(
+                f"Plus {stale_count} period(s) overdue >{self.config.tax_overdue_max_age_days} days"
+            )
+        lines.append("Review all at /finance/tax/periods")
+        message = "\n".join(lines)
+
+        # Deterministic entity_id so dedup works per org/day
+        digest_id = uuid5(
+            NAMESPACE_DNS,
+            f"{organization_id}-tax_overdue_digest-{today}",
+        )
+
+        sent = 0
+        for recipient_id in recipient_ids:
+            if self._notification_sent_today(
+                organization_id,
+                EntityType.TAX_PERIOD,
+                digest_id,
+                recipient_id,
+            ):
+                continue
+
+            self.notification_service.create(
+                self.db,
+                organization_id=organization_id,
+                recipient_id=recipient_id,
+                entity_type=EntityType.TAX_PERIOD,
+                entity_id=digest_id,
+                notification_type=NotificationType.OVERDUE,
+                title=title,
+                message=message,
+                channel=NotificationChannel.BOTH,
+                action_url="/finance/tax/periods",
+            )
+            sent += 1
+
+        logger.info(
+            "Tax overdue digest for org %s: %d total (%d actionable, %d stale), "
+            "sent to %d recipient(s)",
+            organization_id,
+            total,
+            len(actionable),
+            stale_count,
+            sent,
+        )
+        return sent
+
     # =========================================================================
     # Bank Reconciliation Overdue
     # =========================================================================
@@ -444,6 +545,89 @@ class FinanceReminderService:
             )
             sent += 1
 
+        return sent
+
+    def send_reconciliation_digest(
+        self,
+        accounts: list[tuple[BankAccount, str]],
+        recipient_ids: list[UUID],
+        organization_id: UUID,
+    ) -> int:
+        """
+        Send ONE digest notification summarising bank accounts needing reconciliation.
+
+        Args:
+            accounts: List of (BankAccount, urgency) tuples
+            recipient_ids: Users to notify
+            organization_id: Owning organization
+
+        Returns:
+            Number of notifications actually sent (after dedup)
+        """
+        if not accounts or not recipient_ids:
+            return 0
+
+        today = date.today()
+        total = len(accounts)
+        title = f"{total} Bank Account{'s' if total != 1 else ''} Need Reconciliation"
+
+        # Group by urgency for the message
+        by_urgency: dict[str, list[BankAccount]] = {}
+        for acct, urgency in accounts:
+            by_urgency.setdefault(urgency, []).append(acct)
+
+        lines: list[str] = []
+        urgency_labels = {
+            "critical": "Critical (never reconciled or >45 days)",
+            "overdue": "Overdue (>30 days)",
+            "warning": "Warning (>15 days)",
+        }
+        for urg in ("critical", "overdue", "warning"):
+            group = by_urgency.get(urg, [])
+            if group:
+                lines.append(
+                    f"{urgency_labels[urg]}: "
+                    f"{', '.join(a.account_name for a in group[:5])}"
+                    + (f" +{len(group) - 5} more" if len(group) > 5 else "")
+                )
+        lines.append("Review all at /finance/banking/accounts")
+        message = "\n".join(lines)
+
+        digest_id = uuid5(
+            NAMESPACE_DNS,
+            f"{organization_id}-bank_recon_digest-{today}",
+        )
+
+        sent = 0
+        for recipient_id in recipient_ids:
+            if self._notification_sent_today(
+                organization_id,
+                EntityType.BANK_RECONCILIATION,
+                digest_id,
+                recipient_id,
+            ):
+                continue
+
+            self.notification_service.create(
+                self.db,
+                organization_id=organization_id,
+                recipient_id=recipient_id,
+                entity_type=EntityType.BANK_RECONCILIATION,
+                entity_id=digest_id,
+                notification_type=NotificationType.ALERT,
+                title=title,
+                message=message,
+                channel=NotificationChannel.BOTH,
+                action_url="/finance/banking/accounts",
+            )
+            sent += 1
+
+        logger.info(
+            "Bank reconciliation digest for org %s: %d accounts, sent to %d recipient(s)",
+            organization_id,
+            total,
+            sent,
+        )
         return sent
 
     # =========================================================================
