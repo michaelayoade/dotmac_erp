@@ -9,23 +9,75 @@ Environment Setup:
 - Requires TEST_DATABASE_URL or uses main DATABASE_URL
 - Tests run in transactions that are rolled back after each test
 - No data persists between tests
-
-IMPORTANT: This file must be loaded BEFORE the main tests/conftest.py
-to avoid SQLite mock issues. Use: pytest tests/integration/ -p no:conftest
-Or run directly: pytest tests/integration/ifrs/test_*.py
 """
 
 from __future__ import annotations
 
-import os
-import uuid
-from collections.abc import Generator
-from datetime import UTC, date, datetime
-from decimal import Decimal
-from typing import TYPE_CHECKING
+# ---------------------------------------------------------------------------
+# CRITICAL: Undo SQLite monkey-patches applied by tests/conftest.py.
+#
+# tests/conftest.py replaces sqlalchemy.dialects.postgresql.UUID with a
+# SQLite-compatible TypeDecorator (PatchedUUID → impl=String(36)) and JSONB
+# with Text.  pytest loads that conftest when walking the tests/ package
+# (because tests/ has __init__.py), even with confcutdir set.  The patch
+# causes all UUID columns to render as ::VARCHAR, which PostgreSQL rejects.
+#
+# Since models are already imported by the time we run, we must:
+#   1. Restore the real types on the pg dialect module
+#   2. Walk Base.metadata and fix every column that got the patched types
+# ---------------------------------------------------------------------------
+import sqlalchemy.dialects.postgresql as _pg_dialect  # noqa: E402
+from sqlalchemy.dialects.postgresql.json import JSONB as _REAL_JSONB  # noqa: E402
+from sqlalchemy.sql.sqltypes import UUID as _REAL_UUID  # noqa: E402
+
+
+def _fix_patched_types() -> None:
+    """Replace SQLite-patched column types with real PostgreSQL types."""
+    from sqlalchemy import Text  # noqa: E402
+
+    # Step 1: restore module-level attributes
+    _pg_dialect.UUID = _REAL_UUID  # type: ignore[misc]
+    _pg_dialect.JSONB = _REAL_JSONB  # type: ignore[misc]
+
+    # Capture the PatchedJSONB class before we lose reference to it.
+    # PatchedJSONB is a direct subclass of Text (not TypeDecorator).
+    _PatchedJSONB: type | None = None
+    for sub in Text.__subclasses__():
+        if sub.__name__ == "PatchedJSONB":
+            _PatchedJSONB = sub
+            break
+
+    # Step 2: fix already-constructed model columns
+    from app.db import Base  # noqa: E402
+
+    for table in Base.metadata.tables.values():
+        for col in table.columns:
+            col_type = col.type
+            # Detect PatchedUUID: has .impl (TypeDecorator) + .as_uuid attr
+            if (
+                hasattr(col_type, "impl")
+                and hasattr(col_type, "as_uuid")
+                and hasattr(col_type.impl, "length")
+            ):
+                col.type = _REAL_UUID(as_uuid=True)
+            # Detect PatchedJSONB: is an instance of the Text subclass
+            elif _PatchedJSONB is not None and isinstance(col_type, _PatchedJSONB):
+                col.type = _REAL_JSONB()
+
+
+# Only run if the patch was applied (PatchedUUID has an .impl attribute)
+if hasattr(_pg_dialect.UUID, "impl"):
+    _fix_patched_types()
+
+import os  # noqa: E402
+import uuid  # noqa: E402
+from collections.abc import Generator  # noqa: E402
+from datetime import UTC, date, datetime  # noqa: E402
+from decimal import Decimal  # noqa: E402
+from typing import TYPE_CHECKING  # noqa: E402
 
 # Load environment variables FIRST
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv()
 
@@ -72,7 +124,7 @@ _test_engine = create_engine(
 )
 
 
-def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def]
+def pytest_collection_modifyitems(config: object, items: list[pytest.Item]) -> None:
     """Skip all integration tests when PostgreSQL is not available."""
     if "sqlite" in _test_db_url:
         skip_marker = pytest.mark.skip(
@@ -144,9 +196,9 @@ def organization(db: Session) -> Organization:
 
 
 @pytest.fixture(scope="function")
-def org_id(organization) -> uuid.UUID:
+def org_id(organization: Organization) -> uuid.UUID:
     """Get the organization ID from the organization fixture."""
-    return organization.organization_id
+    return uuid.UUID(str(organization.organization_id))
 
 
 @pytest.fixture(scope="function")

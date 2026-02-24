@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
-from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine, InspectionStatus
+from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
@@ -33,10 +33,13 @@ class TestGoodsReceiptInventoryIntegration:
             organization_id=org_id,
             supplier_id=supplier.supplier_id,
             po_number="PO-001",
-            order_date=date(2024, 1, 1),
-            delivery_date=date(2024, 1, 15),
+            po_date=date(2024, 1, 1),
+            expected_delivery_date=date(2024, 1, 15),
             currency_code="USD",
             exchange_rate=Decimal("1.0"),
+            subtotal=Decimal("1500.00"),
+            tax_amount=Decimal("0"),
+            total_amount=Decimal("1500.00"),
             status=POStatus.APPROVED,
             created_by_user_id=user_id,
         )
@@ -86,7 +89,7 @@ class TestGoodsReceiptInventoryIntegration:
             po_id=purchase_order.po_id,
             warehouse_id=warehouse.warehouse_id,
             status=ReceiptStatus.RECEIVED,
-            created_by_user_id=user_id,
+            received_by_user_id=user_id,
         )
         db.add(gr)
         db.flush()
@@ -110,8 +113,6 @@ class TestGoodsReceiptInventoryIntegration:
             quantity_received=Decimal("50"),
             quantity_accepted=Decimal("0"),
             quantity_rejected=Decimal("0"),
-            inspection_required=False,
-            inspection_status=InspectionStatus.NOT_REQUIRED,
         )
         db.add(line)
         db.flush()
@@ -137,7 +138,6 @@ class TestGoodsReceiptInventoryIntegration:
             db=db,
             organization_id=org_id,
             receipt_id=goods_receipt.receipt_id,
-            user_id=user_id,
         )
 
         # Should succeed
@@ -211,7 +211,7 @@ class TestSupplierInvoiceCostUpdates:
                 db=db,
                 organization_id=org_id,
                 invoice_id=supplier_invoice.invoice_id,
-                user_id=user_id,
+                posted_by_user_id=user_id,
             )
 
             # Refresh item to get updated cost
@@ -271,7 +271,7 @@ class TestSupplierInvoiceCostUpdates:
                 db=db,
                 organization_id=org_id,
                 invoice_id=supplier_invoice.invoice_id,
-                user_id=user_id,
+                posted_by_user_id=user_id,
             )
 
             db.refresh(inventory_item)
@@ -291,13 +291,14 @@ class TestAPPostingAdapterAccountRouting:
         self,
         db: Session,
         org_id: uuid.UUID,
+        supplier,
         supplier_invoice,
         inventory_item,
         inventory_account,
         expense_account,
     ):
         """Should route to inventory account when line has item_id."""
-        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
+        from app.services.finance.ap.posting.helpers import determine_debit_account
 
         # Create line with inventory item
         line = SupplierInvoiceLine(
@@ -314,10 +315,11 @@ class TestAPPostingAdapterAccountRouting:
         db.flush()
 
         # Get the debit account
-        debit_account = APPostingAdapter._determine_debit_account(
+        debit_account = determine_debit_account(
             db=db,
             organization_id=org_id,
             line=line,
+            supplier=supplier,
         )
 
         # Should use inventory account from item, not the line's expense account
@@ -327,11 +329,12 @@ class TestAPPostingAdapterAccountRouting:
         self,
         db: Session,
         org_id: uuid.UUID,
+        supplier,
         supplier_invoice,
         expense_account,
     ):
         """Should route to expense account for non-inventory lines."""
-        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
+        from app.services.finance.ap.posting.helpers import determine_debit_account
 
         # Create line without inventory item
         line = SupplierInvoiceLine(
@@ -347,10 +350,11 @@ class TestAPPostingAdapterAccountRouting:
         db.add(line)
         db.flush()
 
-        debit_account = APPostingAdapter._determine_debit_account(
+        debit_account = determine_debit_account(
             db=db,
             organization_id=org_id,
             line=line,
+            supplier=supplier,
         )
 
         # Should use the line's expense account
@@ -360,13 +364,14 @@ class TestAPPostingAdapterAccountRouting:
         self,
         db: Session,
         org_id: uuid.UUID,
+        supplier,
         supplier_invoice,
         asset_category,
         expense_account,
         fa_asset_account,
     ):
         """Should route to asset account for capitalizable lines."""
-        from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
+        from app.services.finance.ap.posting.helpers import determine_debit_account
 
         # Create capitalizable line
         line = SupplierInvoiceLine(
@@ -385,10 +390,11 @@ class TestAPPostingAdapterAccountRouting:
         db.add(line)
         db.flush()
 
-        debit_account = APPostingAdapter._determine_debit_account(
+        debit_account = determine_debit_account(
             db=db,
             organization_id=org_id,
             line=line,
+            supplier=supplier,
         )
 
         # Should use asset account for capitalizable items

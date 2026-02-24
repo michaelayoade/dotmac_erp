@@ -211,7 +211,7 @@ class TestDocumentGeneratorService:
         assert "api_secret_key" not in snapshot
         assert "password" not in snapshot
 
-    @patch("app.services.automation.document_generator.HTML")
+    @patch("weasyprint.HTML")
     def test_generate_pdf(
         self,
         mock_html_class: MagicMock,

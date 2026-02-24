@@ -106,7 +106,7 @@ class CareersService:
         org_id: uuid.UUID,
         *,
         search: str | None = None,
-        department_id: list[uuid.UUID] | None = None,
+        department_id: uuid.UUID | list[uuid.UUID] | None = None,
         location: str | None = None,
         employment_type: str | None = None,
         is_remote: bool | None = None,
@@ -148,8 +148,11 @@ class CareersService:
                 )
             )
 
-        if department_id:
-            if len(department_id) == 1:
+        if department_id is not None:
+            # Accept a single UUID or a list of UUIDs
+            if isinstance(department_id, uuid.UUID):
+                base_conditions.append(JobOpening.department_id == department_id)
+            elif len(department_id) == 1:
                 base_conditions.append(JobOpening.department_id == department_id[0])
             else:
                 base_conditions.append(JobOpening.department_id.in_(department_id))
@@ -284,21 +287,30 @@ class CareersService:
         return [loc for loc in self.db.scalars(stmt).all() if loc]
 
     def _generate_application_number(self, org_id: uuid.UUID) -> str:
-        """Generate a unique application number."""
+        """Generate a unique application number.
+
+        Uses global MAX (not per-org COUNT) because ``application_number``
+        has a table-wide unique constraint.
+        """
         year = date.today().year
+        prefix = f"APP-{year}-"
 
-        # Count existing applications this year for this org
-        stmt = (
-            select(func.count())
-            .select_from(JobApplicant)
-            .where(
-                JobApplicant.organization_id == org_id,
-                JobApplicant.application_number.like(f"APP-{year}-%"),
-            )
+        # Find the highest existing number across ALL orgs this year
+        stmt = select(func.max(JobApplicant.application_number)).where(
+            JobApplicant.application_number.like(f"{prefix}%"),
         )
-        count = self.db.scalar(stmt) or 0
+        max_number: str | None = self.db.scalar(stmt)
 
-        return f"APP-{year}-{count + 1:05d}"
+        if max_number:
+            # Extract numeric suffix, e.g. "APP-2026-00042" → 42
+            try:
+                last_seq = int(max_number.replace(prefix, ""))
+            except (ValueError, TypeError):
+                last_seq = 0
+        else:
+            last_seq = 0
+
+        return f"{prefix}{last_seq + 1:05d}"
 
     def submit_application(
         self,
