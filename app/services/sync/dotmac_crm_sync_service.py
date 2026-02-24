@@ -42,6 +42,8 @@ from app.models.sync.sync_entity import SyncEntity, SyncStatus
 from app.schemas.sync.dotmac_crm import (
     CompanyContactRead,
     CompanyListResponse,
+    CRMInventoryItemPayload,
+    CRMInventoryItemResponse,
     CRMMaterialRequestItemRead,
     CRMMaterialRequestPayload,
     CRMMaterialRequestResponse,
@@ -448,6 +450,113 @@ class DotMacCRMSyncService:
         ]
 
     # ============ Inventory Sync (ERP → CRM) ============
+
+    def upsert_inventory_item(
+        self,
+        org_id: UUID,
+        data: CRMInventoryItemPayload,
+    ) -> CRMInventoryItemResponse:
+        """Create or update an ERP inventory item from CRM payload."""
+        from app.models.inventory.item import CostingMethod, Item, ItemType
+        from app.models.inventory.item_category import ItemCategory
+
+        item_code = (data.item_code or "").strip()
+        item_name = (data.item_name or "").strip()
+        if not item_code:
+            raise ValueError("item_code is required")
+        if not item_name:
+            raise ValueError("item_name is required")
+
+        category: ItemCategory | None
+        if data.category_code:
+            category = self.db.scalar(
+                select(ItemCategory).where(
+                    ItemCategory.organization_id == org_id,
+                    ItemCategory.category_code == data.category_code,
+                    ItemCategory.is_active.is_(True),
+                )
+            )
+            if not category:
+                raise ValueError(f"Item category not found: {data.category_code}")
+        else:
+            category = self.db.scalar(
+                select(ItemCategory)
+                .where(
+                    ItemCategory.organization_id == org_id,
+                    ItemCategory.is_active.is_(True),
+                )
+                .order_by(ItemCategory.category_code.asc())
+            )
+            if not category:
+                raise ValueError(
+                    "No active item category available in ERP for this organization"
+                )
+        if category is None:
+            raise ValueError("No item category available for CRM item sync")
+
+        item = self.db.scalar(
+            select(Item).where(
+                Item.organization_id == org_id,
+                Item.item_code == item_code,
+            )
+        )
+
+        if item:
+            item.item_name = item_name
+            item.description = data.description
+            if data.category_code:
+                item.category_id = category.category_id
+            item.base_uom = (data.base_uom or "EA").strip().upper()
+            item.purchase_uom = item.base_uom
+            item.sales_uom = item.base_uom
+            item.currency_code = (data.currency_code or "NGN").strip().upper()
+            item.list_price = data.list_price
+            item.reorder_point = data.reorder_point
+            item.barcode = data.barcode
+            item.is_active = data.is_active
+            # Reuse sync-tracking fields for CRM source correlation.
+            item.erpnext_id = data.crm_id
+            item.last_synced_at = datetime.now(UTC)
+            status = "updated"
+        else:
+            item = Item(
+                organization_id=org_id,
+                item_code=item_code,
+                item_name=item_name,
+                description=data.description,
+                item_type=ItemType.INVENTORY,
+                category_id=category.category_id,
+                base_uom=(data.base_uom or "EA").strip().upper(),
+                purchase_uom=(data.base_uom or "EA").strip().upper(),
+                sales_uom=(data.base_uom or "EA").strip().upper(),
+                costing_method=CostingMethod.WEIGHTED_AVERAGE,
+                currency_code=(data.currency_code or "NGN").strip().upper(),
+                list_price=data.list_price,
+                reorder_point=data.reorder_point,
+                barcode=data.barcode,
+                track_inventory=True,
+                is_active=data.is_active,
+                is_purchaseable=True,
+                is_saleable=True,
+                erpnext_id=data.crm_id,
+                last_synced_at=datetime.now(UTC),
+            )
+            self.db.add(item)
+            status = "created"
+
+        self.db.flush()
+        logger.info(
+            "Upserted CRM inventory item crm_id=%s item_code=%s status=%s",
+            data.crm_id,
+            item.item_code,
+            status,
+        )
+        return CRMInventoryItemResponse(
+            item_id=item.item_id,
+            item_code=item.item_code,
+            status=status,
+            crm_id=data.crm_id,
+        )
 
     def list_inventory_items(
         self,

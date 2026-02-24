@@ -14,12 +14,7 @@
 </nav>
 {% endblock %}
 
-{% block header_actions %}
-<a href="/projects/new" class="btn btn-primary">
-    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-    New Project
-</a>
-{% endblock %}
+{% block header_actions %}{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -177,15 +172,9 @@
                                     {% if search or status_filter %}
                                     Try adjusting your search or filter criteria
                                     {% else %}
-                                    Get started by creating your first project
+                                    Projects will appear here after CRM sync
                                     {% endif %}
                                 </p>
-                                {% if not (search or status_filter) %}
-                                <a href="/projects/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
-                                    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-                                    New Project
-                                </a>
-                                {% endif %}
                             </div>
                         </td>
                     </tr>

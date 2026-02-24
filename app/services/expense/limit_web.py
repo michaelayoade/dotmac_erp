@@ -11,10 +11,12 @@ from uuid import UUID
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.expense import LimitActionType, LimitPeriodType, LimitScopeType
-from app.models.expense.limit_rule import ExpenseApproverLimit
+from app.models.expense.limit_rule import (
+    ExpenseApproverLimit,
+)
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.expense import ExpenseLimitService
@@ -519,6 +521,51 @@ class ExpenseLimitWebService:
             request, "expense/limits/approver_form.html", context
         )
 
+    def approver_limit_detail_response(
+        self,
+        request: Request,
+        approver_limit_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """View expense approver limit details."""
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+        limit = service.get_approver_limit(org_id, approver_limit_id)
+
+        scope_labels = self._build_approver_scope_labels(db, org_id, [limit])
+        scope_label = scope_labels.get(str(limit.approver_limit_id))
+
+        scoped_employees, is_truncated = self._list_scope_approvers(
+            db=db,
+            org_id=org_id,
+            limit=limit,
+            max_items=100,
+        )
+
+        # Budget adjustments
+        adjustments = service.list_budget_adjustments(org_id, approver_limit_id)
+
+        # Current month usage stats
+        current_month_usage = self._build_current_month_usage(
+            db, org_id, limit, service
+        )
+
+        context = base_context(request, auth, "Approver Limit Details", "limits")
+        context.update(
+            {
+                "approver_limit": limit,
+                "scope_label": scope_label,
+                "scoped_approvers": scoped_employees,
+                "scoped_approvers_truncated": is_truncated,
+                "adjustments": adjustments,
+                "current_month_usage": current_month_usage,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/limits/approver_detail.html", context
+        )
+
     def edit_approver_limit_form_response(
         self,
         request: Request,
@@ -793,6 +840,115 @@ class ExpenseLimitWebService:
                 request, "expense/limits/approver_form.html", context
             )
 
+    async def adjust_budget_response(
+        self,
+        request: Request,
+        approver_limit_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Create a budget adjustment for a specific month."""
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        month_str = _safe_form_text(form.get("adjustment_month"))
+        amount_str = _safe_form_text(form.get("additional_amount"))
+        reason = _safe_form_text(form.get("reason"))
+
+        detail_url = f"/expense/limits/approvers/{approver_limit_id}"
+
+        # Validate
+        errors: list[str] = []
+        month_date: date | None = None
+        if month_str:
+            try:
+                # <input type="month"> sends "YYYY-MM"; normalise to 1st
+                if len(month_str) == 7 and month_str[4] == "-":
+                    month_date = date.fromisoformat(month_str + "-01")
+                else:
+                    month_date = date.fromisoformat(month_str)
+            except ValueError:
+                errors.append("Invalid month")
+        else:
+            errors.append("Month is required")
+
+        amount_value: Decimal | None = None
+        if amount_str:
+            try:
+                amount_value = Decimal(amount_str)
+                if amount_value == Decimal("0"):
+                    errors.append("Amount must not be zero")
+            except (ValueError, ArithmeticError):
+                errors.append("Invalid amount")
+        else:
+            errors.append("Amount is required")
+
+        if not reason:
+            errors.append("Reason is required")
+
+        if errors:
+            error_msg = "; ".join(errors)
+            return RedirectResponse(
+                url=f"{detail_url}?error={error_msg}",
+                status_code=303,
+            )
+
+        try:
+            if month_date is None or amount_value is None:
+                raise ValueError("Missing required form values")
+            service.create_budget_adjustment(
+                org_id,
+                approver_limit_id,
+                month=month_date,
+                additional_amount=amount_value,
+                reason=reason,
+                adjusted_by_id=coerce_uuid(auth.person_id),
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"{detail_url}?success=Budget+adjustment+saved",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("Failed to create budget adjustment")
+            return RedirectResponse(
+                url=f"{detail_url}?error={e}",
+                status_code=303,
+            )
+
+    def delete_budget_adjustment_response(
+        self,
+        approver_limit_id: UUID,
+        adjustment_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Delete a budget adjustment."""
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+
+        detail_url = f"/expense/limits/approvers/{approver_limit_id}"
+
+        try:
+            service.delete_budget_adjustment(org_id, adjustment_id)
+            db.commit()
+            return RedirectResponse(
+                url=f"{detail_url}?success=Adjustment+deleted",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("Failed to delete budget adjustment")
+            return RedirectResponse(
+                url=f"{detail_url}?error={e}",
+                status_code=303,
+            )
+
     def delete_approver_limit_response(
         self,
         approver_limit_id: UUID,
@@ -933,6 +1089,110 @@ class ExpenseLimitWebService:
         return templates.TemplateResponse(
             request, "expense/limits/evaluations.html", context
         )
+
+    @staticmethod
+    def _build_current_month_usage(
+        db: Session,
+        org_id: UUID,
+        limit: ExpenseApproverLimit,
+        service: ExpenseLimitService,
+    ) -> dict[str, object] | None:
+        """Build current month usage stats for the approver limit detail page.
+
+        Returns None when no monthly budget is configured (unlimited).
+        """
+
+        base_budget = limit.monthly_approval_budget
+        if base_budget is None:
+            return None
+
+        today = date.today()
+
+        adjustment = service.get_budget_adjustment_for_month(
+            limit.approver_limit_id, today
+        )
+        effective_budget = base_budget + adjustment
+
+        month_label = today.strftime("%B %Y")
+
+        return {
+            "month_label": month_label,
+            "base_budget": base_budget,
+            "adjustment": adjustment,
+            "effective_budget": effective_budget,
+        }
+
+    @staticmethod
+    def _list_scope_approvers(
+        db: Session,
+        org_id: UUID,
+        limit: ExpenseApproverLimit,
+        max_items: int = 100,
+    ) -> tuple[list[dict[str, str]], bool]:
+        """List approvers that match the configured scope target."""
+        from app.models.people.hr.employee import Employee, EmployeeStatus
+        from app.models.person import Person
+        from app.models.rbac import PersonRole
+
+        stmt = (
+            select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .options(
+                joinedload(Employee.person),
+                joinedload(Employee.grade),
+                joinedload(Employee.designation),
+            )
+            .where(Employee.organization_id == org_id)
+        )
+
+        scope_type = limit.scope_type
+        scope_id = limit.scope_id
+
+        if scope_type == "EMPLOYEE":
+            if scope_id:
+                stmt = stmt.where(Employee.employee_id == scope_id)
+            else:
+                stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+        elif scope_type == "GRADE":
+            stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+            if scope_id:
+                stmt = stmt.where(Employee.grade_id == scope_id)
+        elif scope_type == "DESIGNATION":
+            stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+            if scope_id:
+                stmt = stmt.where(Employee.designation_id == scope_id)
+        elif scope_type == "ROLE":
+            stmt = stmt.join(PersonRole, PersonRole.person_id == Employee.person_id)
+            stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+            if scope_id:
+                stmt = stmt.where(PersonRole.role_id == scope_id)
+        else:
+            return [], False
+
+        stmt = stmt.order_by(Person.first_name, Person.last_name).limit(max_items + 1)
+        employees = list(db.scalars(stmt).unique().all())
+        is_truncated = len(employees) > max_items
+        if is_truncated:
+            employees = employees[:max_items]
+
+        rows: list[dict[str, str]] = []
+        for employee in employees:
+            rows.append(
+                {
+                    "employee_id": str(employee.employee_id),
+                    "name": employee.person.name if employee.person else "Unknown",
+                    "employee_code": employee.employee_code or "-",
+                    "designation": (
+                        employee.designation.designation_name
+                        if employee.designation
+                        else "-"
+                    ),
+                    "grade": employee.grade.grade_name if employee.grade else "-",
+                    "status": employee.status.value,
+                }
+            )
+
+        return rows, is_truncated
 
     @staticmethod
     def _build_approver_scope_labels(

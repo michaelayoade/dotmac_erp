@@ -660,6 +660,8 @@ def admin_audit_logs(
     search: str = Query(default=""),
     status: str = Query(default=""),
     actor_type: str = Query(default=""),
+    start_date: str = Query(default=""),
+    end_date: str = Query(default=""),
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
@@ -672,6 +674,8 @@ def admin_audit_logs(
         search,
         status,
         actor_type,
+        start_date,
+        end_date,
     )
 
 

@@ -48,6 +48,9 @@ from app.services.people.hr import (
     OrganizationService,
     TerminationData,
 )
+from app.services.people.hr.employee_filter_engine import (
+    parse_employee_filter_payload_json,
+)
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.recent_activity import get_recent_activity_for_record
 from app.templates import templates
@@ -76,6 +79,7 @@ class HRWebService:
         date_of_joining_to: str | None = None,
         date_of_leaving_from: str | None = None,
         date_of_leaving_to: str | None = None,
+        filters_json: str | None = None,
         page: int = 1,
         success: str | None = None,
         error: str | None = None,
@@ -93,7 +97,7 @@ class HRWebService:
             except ValueError:
                 pass
 
-        filters = EmployeeFilters(
+        employee_filters = EmployeeFilters(
             search=search,
             status=status_filter,
             department_id=coerce_uuid(department_id) if department_id else None,
@@ -104,9 +108,18 @@ class HRWebService:
             date_of_leaving_to=self._parse_date(date_of_leaving_to or ""),
         )
         pagination = PaginationParams.from_page(page, DEFAULT_PAGE_SIZE)
+        try:
+            advanced_expression = parse_employee_filter_payload_json(filters_json)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         # Use eager_load=True to avoid N+1 queries (loads person, dept, desig in bulk)
-        result = svc.list_employees(filters, pagination, eager_load=True)
+        result = svc.list_employees(
+            employee_filters,
+            pagination,
+            eager_load=True,
+            advanced_filter_expression=advanced_expression,
+        )
         stats = svc.get_employee_stats()
 
         # Get departments for filter dropdown
@@ -196,6 +209,14 @@ class HRWebService:
                 "designation_id": desig_options,
             },
         )
+        if filters_json:
+            active_filters.append(
+                {
+                    "name": "filters",
+                    "value": filters_json,
+                    "display_value": "Advanced: Custom rules",
+                }
+            )
         context = {
             **base_context(request, auth, "Employees", "employees", db=db),
             "employees": employees_view,
@@ -211,6 +232,7 @@ class HRWebService:
             "date_of_joining_to": date_of_joining_to or "",
             "date_of_leaving_from": date_of_leaving_from or "",
             "date_of_leaving_to": date_of_leaving_to or "",
+            "filters_json": filters_json or "",
             "page": page,
             "total_pages": result.total_pages,
             "total_count": result.total,

@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg, period_shortcuts %}
 {% from "components/macros.html" import stats_card, empty_state, progress_bar, section_card %}
 
 {% block page_title %}Expense summary{% endblock %}
@@ -26,6 +26,7 @@
     <!-- Filter Card -->
     <div class="card p-4">
         <form method="get" class="flex flex-wrap items-end gap-4">
+            {{ period_shortcuts(mode="range") }}
             <div class="flex-1 min-w-[150px]">
                 <label class="form-label">Start date</label>
                 <input type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">

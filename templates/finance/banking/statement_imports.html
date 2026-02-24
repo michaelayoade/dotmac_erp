@@ -144,9 +144,13 @@
         </div>
 
         {# ── Pagination ── #}
-        {% if total_pages > 1 %}
-        {{ pagination(page, total_pages, "/finance/banking/statements/imports", extra_params="account_id=" ~ account_id ~ "&status=" ~ status ~ "&search=" ~ search ~ "&start_date=" ~ (start_date if start_date else '') ~ "&end_date=" ~ (end_date if end_date else '') ~ "&limit=" ~ limit) }}
-        {% endif %}
+        {{ pagination(
+            page=page | default(1),
+            total_pages=total_pages | default(1),
+            total_count=total_count | default(0),
+            limit=limit | default(25),
+            filters={"account_id": account_id, "status": status, "search": search, "start_date": start_date, "end_date": end_date, "sort": sort, "sort_dir": sort_dir}
+        ) }}
     </div>
 
 </div>

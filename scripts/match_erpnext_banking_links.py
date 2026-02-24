@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.models.expense.expense_claim import ExpenseClaim
 from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.models.finance.ar.customer_payment import CustomerPayment
 from app.models.finance.banking.bank_account import BankAccount
@@ -60,6 +61,7 @@ def _resolve_linked_journal_ids(
     dict[str, uuid.UUID | None],
     dict[uuid.UUID, uuid.UUID | None],
     dict[uuid.UUID, uuid.UUID | None],
+    dict[uuid.UUID, uuid.UUID | None],
 ]:
     payment_sync = {
         source_name: (target_table or "", target_id)
@@ -88,11 +90,25 @@ def _resolve_linked_journal_ids(
         ).all()
     }
 
-    ar_ids = [tid for table, tid in payment_sync.values() if table == "ar.customer_payment" and tid]
-    ap_ids = [tid for table, tid in payment_sync.values() if table == "ap.supplier_payment" and tid]
+    ar_ids = [
+        tid
+        for table, tid in payment_sync.values()
+        if table == "ar.customer_payment" and tid
+    ]
+    ap_ids = [
+        tid
+        for table, tid in payment_sync.values()
+        if table == "ap.supplier_payment" and tid
+    ]
+    expense_claim_ids = [
+        tid
+        for table, tid in payment_sync.values()
+        if table == "expense.expense_claim" and tid
+    ]
 
     ar_journal_by_payment: dict[uuid.UUID, uuid.UUID | None] = {}
     ap_journal_by_payment: dict[uuid.UUID, uuid.UUID | None] = {}
+    expense_journal_by_claim: dict[uuid.UUID, uuid.UUID | None] = {}
     if ar_ids:
         for pid, jeid in db.execute(
             select(CustomerPayment.payment_id, CustomerPayment.journal_entry_id).where(
@@ -107,8 +123,25 @@ def _resolve_linked_journal_ids(
             )
         ).all():
             ap_journal_by_payment[pid] = jeid
+    if expense_claim_ids:
+        for cid, reimb_jeid, claim_jeid in db.execute(
+            select(
+                ExpenseClaim.claim_id,
+                ExpenseClaim.reimbursement_journal_id,
+                ExpenseClaim.journal_entry_id,
+            ).where(ExpenseClaim.claim_id.in_(expense_claim_ids))
+        ).all():
+            # Payment Entry for employee reimbursement should hit reimbursement journal
+            # first; fallback to claim journal when reimbursement journal is absent.
+            expense_journal_by_claim[cid] = reimb_jeid or claim_jeid
 
-    return payment_sync, journal_sync, ar_journal_by_payment, ap_journal_by_payment
+    return (
+        payment_sync,
+        journal_sync,
+        ar_journal_by_payment,
+        ap_journal_by_payment,
+        expense_journal_by_claim,
+    )
 
 
 def _score_candidate(
@@ -127,7 +160,9 @@ def _score_candidate(
     )
     net_amt = abs(debit - credit)
 
-    same_account = bank_gl_account_id is not None and candidate.account_id == bank_gl_account_id
+    same_account = (
+        bank_gl_account_id is not None and candidate.account_id == bank_gl_account_id
+    )
     exact_preferred = abs(preferred_side_amt - target_amount) <= Decimal("0.01")
     exact_net = abs(net_amt - target_amount) <= Decimal("0.01")
     exact_counter = abs(counter_side_amt - target_amount) <= Decimal("0.01")
@@ -158,13 +193,20 @@ def run(args: argparse.Namespace) -> int:
 
     with SessionLocal() as db:
         assert isinstance(db, Session)
-        payment_sync, journal_sync, ar_journal_by_payment, ap_journal_by_payment = (
-            _resolve_linked_journal_ids(db, organization_id)
-        )
+        (
+            payment_sync,
+            journal_sync,
+            ar_journal_by_payment,
+            ap_journal_by_payment,
+            expense_journal_by_claim,
+        ) = _resolve_linked_journal_ids(db, organization_id)
 
         rows = db.execute(
             select(BankStatementLine, BankStatement.bank_account_id)
-            .join(BankStatement, BankStatement.statement_id == BankStatementLine.statement_id)
+            .join(
+                BankStatement,
+                BankStatement.statement_id == BankStatementLine.statement_id,
+            )
             .where(
                 BankStatement.organization_id == organization_id,
                 BankStatement.import_source == "ERPNEXT_SQL",
@@ -190,14 +232,16 @@ def run(args: argparse.Namespace) -> int:
         }
         existing_line_ids = {
             sid
-            for sid, in db.execute(
+            for (sid,) in db.execute(
                 select(BankStatementLineMatch.statement_line_id).distinct()
             ).all()
         }
 
         # Collect journal IDs needed for all links first.
         needed_journal_ids: set[uuid.UUID] = set()
-        per_line_links: list[tuple[BankStatementLine, uuid.UUID, list[dict[str, Any]]]] = []
+        per_line_links: list[
+            tuple[BankStatementLine, uuid.UUID, list[dict[str, Any]]]
+        ] = []
         for line, bank_account_id in rows:
             links = list((line.raw_data or {}).get("erpnext_payment_links") or [])
             if not links:
@@ -219,6 +263,8 @@ def run(args: argparse.Namespace) -> int:
                             journal_id = ar_journal_by_payment.get(target_id)
                         elif table == "ap.supplier_payment" and target_id:
                             journal_id = ap_journal_by_payment.get(target_id)
+                        elif table == "expense.expense_claim" and target_id:
+                            journal_id = expense_journal_by_claim.get(target_id)
                 elif doc == "Journal Entry":
                     journal_id = journal_sync.get(name)
                 if journal_id:
@@ -257,6 +303,8 @@ def run(args: argparse.Namespace) -> int:
                             journal_id = ar_journal_by_payment.get(target_id)
                         elif table == "ap.supplier_payment" and target_id:
                             journal_id = ap_journal_by_payment.get(target_id)
+                        elif table == "expense.expense_claim" and target_id:
+                            journal_id = expense_journal_by_claim.get(target_id)
                 elif doc == "Journal Entry":
                     journal_id = journal_sync.get(name)
                 if not journal_id:
@@ -267,7 +315,9 @@ def run(args: argparse.Namespace) -> int:
                     target_amount = line.amount
 
                 for cand in journal_lines_by_entry.get(journal_id, []):
-                    score = _score_candidate(line, target_amount, bank_gl_account_id, cand)
+                    score = _score_candidate(
+                        line, target_amount, bank_gl_account_id, cand
+                    )
                     if score < min_score:
                         continue
                     if not best_pair or score > best_pair[1]:
@@ -335,7 +385,9 @@ def run(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Match ERPNext bank links to GL lines.")
+    parser = argparse.ArgumentParser(
+        description="Match ERPNext bank links to GL lines."
+    )
     parser.add_argument(
         "--org-id",
         default="00000000-0000-0000-0000-000000000001",

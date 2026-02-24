@@ -92,9 +92,11 @@ class MaterialRequestWebService:
         if project_id:
             stmt = stmt.where(MaterialRequest.project_id == coerce_uuid(project_id))
 
-        requests = db.scalars(
-            stmt.order_by(MaterialRequest.created_at.desc()).limit(100)
-        ).all()
+        requests = (
+            db.scalars(stmt.order_by(MaterialRequest.created_at.desc()).limit(100))
+            .unique()
+            .all()
+        )
 
         items = []
         for req in requests:
@@ -259,18 +261,22 @@ class MaterialRequestWebService:
 
         # If editing, load request data
         if request_id:
-            material_request = db.scalars(
-                select(MaterialRequest)
-                .options(
-                    joinedload(MaterialRequest.items).joinedload(
-                        MaterialRequestItem.request
-                    ),
+            material_request = (
+                db.scalars(
+                    select(MaterialRequest)
+                    .options(
+                        joinedload(MaterialRequest.items).joinedload(
+                            MaterialRequestItem.request
+                        ),
+                    )
+                    .where(
+                        MaterialRequest.request_id == coerce_uuid(request_id),
+                        MaterialRequest.organization_id == org_id,
+                    )
                 )
-                .where(
-                    MaterialRequest.request_id == coerce_uuid(request_id),
-                    MaterialRequest.organization_id == org_id,
-                )
-            ).first()
+                .unique()
+                .first()
+            )
             if material_request:
                 context["material_request"] = {
                     "request_id": str(material_request.request_id),
@@ -608,11 +614,15 @@ class MaterialRequestWebService:
         if end_date:
             stmt = stmt.where(MaterialRequest.schedule_date <= end_date)
 
-        requests = db.scalars(
-            stmt.options(joinedload(MaterialRequest.items)).order_by(
-                MaterialRequest.created_at.desc()
+        requests = (
+            db.scalars(
+                stmt.options(joinedload(MaterialRequest.items)).order_by(
+                    MaterialRequest.created_at.desc()
+                )
             )
-        ).all()
+            .unique()
+            .all()
+        )
 
         # Calculate totals
         total_requests = len(requests)
@@ -1050,14 +1060,18 @@ class MaterialRequestWebService:
 
         logger = logging.getLogger(__name__)
 
-        request = db.scalars(
-            select(MaterialRequest)
-            .options(joinedload(MaterialRequest.items))
-            .where(
-                MaterialRequest.request_id == coerce_uuid(request_id),
-                MaterialRequest.organization_id == organization_id,
+        request = (
+            db.scalars(
+                select(MaterialRequest)
+                .options(joinedload(MaterialRequest.items))
+                .where(
+                    MaterialRequest.request_id == coerce_uuid(request_id),
+                    MaterialRequest.organization_id == organization_id,
+                )
             )
-        ).first()
+            .unique()
+            .first()
+        )
         if not request:
             raise ValueError("Material request not found")
 

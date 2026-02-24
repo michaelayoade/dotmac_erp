@@ -561,7 +561,7 @@ class SupplierPaymentService(ListResponseMixin):
         Returns:
             True if GL entries were created, False if already posted or N/A
         """
-        if payment.status != APPaymentStatus.SENT:
+        if payment.status not in {APPaymentStatus.SENT, APPaymentStatus.CLEARED}:
             return False
         if payment.journal_entry_id is not None:
             return False  # Already has GL entries

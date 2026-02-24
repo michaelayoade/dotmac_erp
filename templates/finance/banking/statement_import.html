@@ -208,11 +208,13 @@
                             <div>
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Date <span class="text-rose-500">*</span></label>
                                 <input type="date" :name="`lines[${idx}][transaction_date]`" x-model="row.transaction_date" required
+                                       :disabled="!!fileName"
                                        class="mt-1 w-full form-input text-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Type <span class="text-rose-500">*</span></label>
                                 <select :name="`lines[${idx}][transaction_type]`" x-model="row.transaction_type" required
+                                        :disabled="!!fileName"
                                         class="mt-1 w-full form-select text-sm">
                                     <option value="debit">Debit</option>
                                     <option value="credit">Credit</option>
@@ -221,11 +223,13 @@
                             <div>
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Amount <span class="text-rose-500">*</span></label>
                                 <input type="number" step="0.01" :name="`lines[${idx}][amount]`" x-model="row.amount" required
+                                       :disabled="!!fileName"
                                        class="mt-1 w-full form-input text-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Description</label>
                                 <input type="text" :name="`lines[${idx}][description]`" x-model="row.description"
+                                       :disabled="!!fileName"
                                        class="mt-1 w-full form-input text-sm">
                             </div>
                             <div>
@@ -233,7 +237,7 @@
                                         class="rounded p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Remove row">
                                     {{ icon_svg("trash", "h-4 w-4") }}
                                 </button>
-                                <input type="hidden" :name="`lines[${idx}][line_number]`" :value="idx + 1">
+                                <input type="hidden" :name="`lines[${idx}][line_number]`" :value="idx + 1" :disabled="!!fileName">
                             </div>
                         </div>
                     </template>

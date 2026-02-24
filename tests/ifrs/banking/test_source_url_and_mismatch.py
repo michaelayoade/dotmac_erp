@@ -339,6 +339,44 @@ class TestStatementDetailContextEnhancements:
         return stmt
 
     @patch("app.services.finance.banking.bank_reconciliation.BankReconciliationService")
+    def test_statement_detail_context_applies_line_pagination(
+        self, MockReconCls: MagicMock, mock_db: MagicMock
+    ) -> None:
+        org_id = uuid4()
+        lines = [
+            MockBankStatementLine(amount=Decimal("100.00"), is_matched=False),
+            MockBankStatementLine(amount=Decimal("200.00"), is_matched=False),
+            MockBankStatementLine(amount=Decimal("300.00"), is_matched=False),
+        ]
+        for line in lines:
+            line.categorization_status = None  # type: ignore[attr-defined]
+            line.suggested_account_id = None  # type: ignore[attr-defined]
+            line.suggested_rule_id = None  # type: ignore[attr-defined]
+            line.suggested_confidence = None  # type: ignore[attr-defined]
+            line.suggested_match_reason = None  # type: ignore[attr-defined]
+
+        statement = self._make_statement(org_id, lines)
+        mock_db.get.return_value = statement
+
+        mock_recon = MagicMock()
+        mock_recon.get_statement_match_suggestions.return_value = {}
+        MockReconCls.return_value = mock_recon
+
+        ctx = BankingWebService.statement_detail_context(
+            mock_db,
+            str(org_id),
+            str(statement.statement_id),
+            page=2,
+            limit=2,
+        )
+
+        assert ctx["page"] == 2
+        assert ctx["limit"] == 2
+        assert ctx["total_count"] == 3
+        assert ctx["total_pages"] == 2
+        assert len(ctx["lines"]) == 1
+
+    @patch("app.services.finance.banking.bank_reconciliation.BankReconciliationService")
     def test_line_amounts_populated(
         self, MockReconCls: MagicMock, mock_db: MagicMock
     ) -> None:

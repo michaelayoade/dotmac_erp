@@ -1220,7 +1220,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
     <nav class="flex items-center gap-1">
       {# Previous Button #}
       {% if current_page > 1 %}
-      {% set prev_ns = namespace(params="page=" ~ (current_page - 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "")) %}
+      {% set prev_ns = namespace(params="page=" ~ (current_page - 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ "&limit=" ~ page_limit) %}
       {% for key, val in active_filters.items() if val %}{% set prev_ns.params = prev_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
       <a href="?{{ prev_ns.params }}"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
@@ -1235,7 +1235,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
         {% if p == current_page %}
         <span class="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ p }}</span>
         {% elif p == 1 or p == page_count or (p >= current_page - 1 and p <= current_page + 1) %}
-        {% set page_ns = namespace(params="page=" ~ p ~ ("&search=" ~ encoded_search if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "")) %}
+        {% set page_ns = namespace(params="page=" ~ p ~ ("&search=" ~ encoded_search if search_term else "") ~ "&limit=" ~ page_limit) %}
         {% for key, val in active_filters.items() if val %}{% set page_ns.params = page_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
         <a href="?{{ page_ns.params }}"
            class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors">{{ p }}</a>
@@ -1246,7 +1246,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
       {# Next Button #}
       {% if current_page < page_count %}
-      {% set next_ns = namespace(params="page=" ~ (current_page + 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "")) %}
+      {% set next_ns = namespace(params="page=" ~ (current_page + 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ "&limit=" ~ page_limit) %}
       {% for key, val in active_filters.items() if val %}{% set next_ns.params = next_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
       <a href="?{{ next_ns.params }}"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
@@ -1596,14 +1596,32 @@ if (typeof window.searchAutosuggest === 'undefined') {
           </svg>
         </template>
       </button>
-      <div x-data='{ open: false, notifications: {{ notifications | default([]) | tojson }} }' class="relative">
+      <div x-data="{
+              open: false,
+              notifications: {{ notifications | default([]) | tojson }},
+              unreadCount: 0,
+              async init() {
+                this.unreadCount = (this.notifications || []).filter(n => !n.read).length;
+                try {
+                  const response = await fetch('/notifications/context?limit=5', {
+                    headers: { 'Accept': 'application/json' }
+                  });
+                  if (!response.ok) return;
+                  const data = await response.json();
+                  if (Array.isArray(data.notifications)) this.notifications = data.notifications;
+                  if (typeof data.unread_count === 'number') this.unreadCount = data.unread_count;
+                } catch (_error) {
+                  // Keep server-rendered notifications if the fetch fails.
+                }
+              }
+            }" class="relative">
         <button @click="open = !open"
                 class="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
                 aria-label="Notifications">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
           </svg>
-          <span x-show="notifications.length > 0" class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
+          <span x-show="unreadCount > 0" class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
         </button>
         <div x-show="open"
              @click.away="open = false"
@@ -1692,5 +1710,90 @@ if (typeof window.searchAutosuggest === 'undefined') {
             </svg>
         </button>
     </div>
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   PERIOD SHORTCUTS — Quick-select dropdown for report date filters
+   Usage (date-range reports):
+     {{ period_shortcuts(mode="range", start_input="start_date", end_input="end_date") }}
+   Usage (as-of-date reports):
+     {{ period_shortcuts(mode="as_of", date_input="as_of_date") }}
+
+   Places a styled <select> that, on change, computes the appropriate
+   date boundaries via Alpine.js and fills sibling <input type="date"> fields.
+   The form is auto-submitted so the report refreshes immediately.
+   ============================================ #}
+{% macro period_shortcuts(mode="range", start_input="start_date", end_input="end_date", date_input="as_of_date") %}
+<div class="flex-1 min-w-[160px]"
+     x-data='{
+        selected: "",
+        _pad(n) { return String(n).padStart(2, "0"); },
+        _fmt(d) { return d.getFullYear() + "-" + this._pad(d.getMonth()+1) + "-" + this._pad(d.getDate()); },
+        _lastDay(y, m) { return new Date(y, m, 0); },
+        apply() {
+            if (!this.selected || this.selected === "custom") return;
+            const today = new Date();
+            const y = today.getFullYear();
+            const m = today.getMonth();
+            let s, e;
+            switch (this.selected) {
+                case "this_month":
+                    s = new Date(y, m, 1);
+                    e = today;
+                    break;
+                case "last_month":
+                    s = new Date(y, m - 1, 1);
+                    e = this._lastDay(y, m);
+                    break;
+                case "this_quarter": {
+                    const qStart = m - (m % 3);
+                    s = new Date(y, qStart, 1);
+                    e = today;
+                    break;
+                }
+                case "last_quarter": {
+                    const qStart = m - (m % 3) - 3;
+                    const qy = qStart < 0 ? y - 1 : y;
+                    const qs = ((qStart % 12) + 12) % 12;
+                    s = new Date(qy, qs, 1);
+                    e = this._lastDay(qy, qs + 3);
+                    break;
+                }
+                case "this_year":
+                    s = new Date(y, 0, 1);
+                    e = today;
+                    break;
+                case "last_year":
+                    s = new Date(y - 1, 0, 1);
+                    e = new Date(y - 1, 11, 31);
+                    break;
+            }
+            const form = this.$el.closest("form");
+            {% if mode == "range" %}
+            const si = form.querySelector("[name={{ start_input }}]");
+            const ei = form.querySelector("[name={{ end_input }}]");
+            if (si) si.value = this._fmt(s);
+            if (ei) ei.value = this._fmt(e);
+            {% else %}
+            const di = form.querySelector("[name={{ date_input }}]");
+            if (di) di.value = this._fmt(e);
+            {% endif %}
+            form.requestSubmit();
+        }
+     }'
+     x-init="$watch('selected', () => apply())">
+    <label class="form-label">Period</label>
+    <select x-model="selected" class="form-select">
+        <option value="">Quick select&hellip;</option>
+        <option value="this_month">This month</option>
+        <option value="last_month">Last month</option>
+        <option value="this_quarter">This quarter</option>
+        <option value="last_quarter">Last quarter</option>
+        <option value="this_year">This year</option>
+        <option value="last_year">Last year</option>
+        <option value="custom">Custom dates</option>
+    </select>
 </div>
 {% endmacro %}

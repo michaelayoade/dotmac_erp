@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{%- from "components/macros.html" import status_badge, pagination as render_pagination, live_search, pagination %}
+{%- from "components/macros.html" import status_badge, live_search, pagination as render_pagination %}
 
 {% block page_title %}Audit Logs{% endblock %}
 {% block page_subtitle %}Review activity across the platform{% endblock %}
@@ -24,6 +24,8 @@
             <option value="success" {{ 'selected' if status_filter == 'success' else '' }}>Success</option>
             <option value="failed" {{ 'selected' if status_filter == 'failed' else '' }}>Failed</option>
         </select>
+        <input type="date" name="start_date" value="{{ start_date_filter }}" class="form-input" {{ search_attrs }}>
+        <input type="date" name="end_date" value="{{ end_date_filter }}" class="form-input" {{ search_attrs }}>
     {% endcall %}
 
     <div id="results-container">
@@ -89,23 +91,19 @@
             </table>
         </div>
 
-            {# Pagination #}
-            {{ render_pagination(
-                page=page,
-                total_pages=total_pages,
-                total_count=total_count,
-                limit=limit,
-                search=search
-            ) }}
-
-        {{ pagination(
-            page=page | default(1),
-            total_pages=total_pages | default(1),
-            total_count=total | default(0),
-            limit=20,
+        {{ render_pagination(
+            page=pagination.page,
+            total_pages=pagination.total_pages,
+            total_count=pagination.total,
+            limit=pagination.per_page,
             show_size_selector=false,
-            search=search | default(''),
-            filters={"actor_type": actor_type_filter, "search": search, "status": status_filter}
+            search=search,
+            filters={
+                "actor_type": actor_type_filter,
+                "status": status_filter,
+                "start_date": start_date_filter,
+                "end_date": end_date_filter
+            }
         ) }}
 
     </div>

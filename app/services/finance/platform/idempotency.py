@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import delete
+from sqlalchemy import and_, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -61,9 +61,13 @@ class IdempotencyService(ListResponseMixin):
 
         record = (
             db.query(IdempotencyRecord)
-            .filter(IdempotencyRecord.organization_id == org_id)
-            .filter(IdempotencyRecord.idempotency_key == idempotency_key)
-            .filter(IdempotencyRecord.endpoint == endpoint)
+            .filter(
+                and_(
+                    IdempotencyRecord.organization_id == org_id,
+                    IdempotencyRecord.idempotency_key == idempotency_key,
+                    IdempotencyRecord.endpoint == endpoint,
+                )
+            )
             .first()
         )
 

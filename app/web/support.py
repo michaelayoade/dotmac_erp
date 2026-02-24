@@ -14,6 +14,20 @@ from app.web.deps import WebAuthContext, get_db, require_support_access
 router = APIRouter(prefix="/support", tags=["support-web"])
 
 
+def _manual_ticket_creation_disabled_response(request: Request):
+    """Manual ticket creation is disabled; tickets are CRM-synced."""
+    from app.templates import templates
+
+    return templates.TemplateResponse(
+        "errors/404.html",
+        {
+            "request": request,
+            "message": "Manual ticket creation is disabled. Tickets are synced from CRM.",
+        },
+        status_code=404,
+    )
+
+
 # ============================================================================
 # SLA Dashboard & Reports
 # ============================================================================
@@ -142,8 +156,7 @@ def new_ticket_form(
     db: Session = Depends(get_db),
 ):
     """New ticket form page."""
-    error = request.query_params.get("error")
-    return support_web_service.ticket_form_response(request, auth, db, error=error)
+    return _manual_ticket_creation_disabled_response(request)
 
 
 @router.post("/tickets")
@@ -153,35 +166,7 @@ async def create_ticket(
     db: Session = Depends(get_db),
 ):
     """Create a new support ticket."""
-    form = getattr(request.state, "csrf_form", None)
-    if form is None:
-        form = await request.form()
-    subject_raw = form.get("subject")
-    subject = str(subject_raw).strip() if subject_raw is not None else ""
-    if not subject:
-        return support_web_service.ticket_form_response(
-            request, auth, db, error="Subject is required."
-        )
-    files = form.getlist("files") if hasattr(form, "getlist") else []
-    return support_web_service.create_ticket_response(
-        request,
-        auth,
-        db,
-        subject=subject,
-        description=(form.get("description") or None),
-        priority=(form.get("priority") or "MEDIUM"),
-        raised_by_email=(form.get("raised_by_email") or None),
-        assigned_to_id=(form.get("assigned_to_id") or None),
-        project_id=(form.get("project_id") or None),
-        customer_id=(form.get("customer_id") or None),
-        category_id=(form.get("category_id") or None),
-        team_id=(form.get("team_id") or None),
-        opening_date=(form.get("opening_date") or None),
-        contact_email=(form.get("contact_email") or None),
-        contact_phone=(form.get("contact_phone") or None),
-        contact_address=(form.get("contact_address") or None),
-        files=files,
-    )
+    return _manual_ticket_creation_disabled_response(request)
 
 
 # ============================================================================

@@ -20,6 +20,7 @@ from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
+from app.observability import actor_id_var
 from app.rls import set_current_organization_sync
 from app.services.auth_dependencies import is_session_inactive
 from app.services.auth_flow import (
@@ -33,6 +34,13 @@ from app.services.finance.branding import BrandingService, CSSGenerator
 from app.templates import templates  # noqa: F401 - re-exported for web routes
 
 logger = logging.getLogger(__name__)
+
+
+def _set_actor_context(request: Request, actor_id: UUID | str) -> None:
+    """Keep request state and observability context in sync for auditing."""
+    actor = str(actor_id)
+    request.state.actor_id = actor
+    actor_id_var.set(actor)
 
 
 def _get_auth_db_for_sso() -> Session | None:
@@ -551,7 +559,12 @@ def base_context(
             get_currency_context = None  # type: ignore[assignment]
 
         # Auto-fetch notifications if db session available and user is authenticated
-        if notifications is None and db and auth.is_authenticated and auth.person_id:
+        if (
+            notifications is None
+            and effective_db
+            and auth.is_authenticated
+            and auth.person_id
+        ):
             try:
                 # Import here to avoid circular import
                 from datetime import datetime, timedelta
@@ -599,7 +612,7 @@ def base_context(
                         return "info"
 
                 raw_notifications = notification_service.list_notifications(
-                    db,
+                    effective_db,
                     recipient_id=auth.person_id,
                     organization_id=auth.organization_id,
                     limit=5,
@@ -1129,7 +1142,7 @@ def require_web_auth(
         set_current_organization_sync(db, organization_id)
         request.state.organization_id = str(organization_id)
 
-    request.state.actor_id = str(person_uuid)
+    _set_actor_context(request, person_uuid)
 
     # Build user display info
     def _clean_name(value: str | None) -> str:
@@ -1275,7 +1288,7 @@ def optional_web_auth(
         set_current_organization_sync(db, organization_id)
         request.state.organization_id = str(organization_id)
 
-    request.state.actor_id = str(person_uuid)
+    _set_actor_context(request, person_uuid)
 
     # Build user display info
     def _clean_name(value: str | None) -> str:

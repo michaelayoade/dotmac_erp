@@ -106,10 +106,24 @@
     {% call(filter_attrs) compact_filters(
         base_url="/people/hr/employees",
         active_filters=active_filters,
-        show_search=true,
+        show_search=false,
         search=search,
-        search_placeholder="Search by name, email, or employee code..."
+        search_placeholder="Search by name, email, or employee code...",
+        auto_submit=false,
+        show_apply_button=true
     ) %}
+        <div>
+            <label class="form-label text-xs">Search</label>
+            <input
+                type="text"
+                name="search"
+                value="{{ search or '' }}"
+                placeholder="Search by name, email, or employee code..."
+                class="form-input w-full"
+                {{ filter_attrs | safe }}
+            >
+        </div>
+        <input type="hidden" id="employee-advanced-filters" name="filters" value="{{ filters_json }}">
         {{ filter_select_field("status", "Status", status, [
             {"value": "active", "label": "Active"},
             {"value": "draft", "label": "Draft"},
@@ -124,6 +138,58 @@
         {{ filter_date_field("date_of_joining_to", "Joined To", date_of_joining_to, filter_attrs) }}
         {{ filter_date_field("date_of_leaving_from", "Exit From", date_of_leaving_from, filter_attrs) }}
         {{ filter_date_field("date_of_leaving_to", "Exit To", date_of_leaving_to, filter_attrs) }}
+        <div class="col-span-full w-full" data-employee-advanced-filter-builder>
+            <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Advanced Filters</p>
+                    <div class="flex items-center gap-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-advanced-add-row>
+                            {{ icon_svg("plus", "h-3.5 w-3.5 mr-1") }}
+                            Add Row
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-advanced-clear>
+                            Clear Advanced
+                        </button>
+                    </div>
+                </div>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Build your filter by choosing a field, an operator, and a value.
+                </p>
+                <div class="mt-3 space-y-2" data-advanced-rows></div>
+                <template data-advanced-row-template>
+                    <div class="w-full rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" data-row-prefix>Where</p>
+                        <div class="grid grid-cols-1 gap-2 md:grid-cols-12">
+                        <div class="md:col-span-4">
+                            <label class="form-label text-[11px]">Field</label>
+                            <select class="form-select w-full text-sm" data-row-field>
+                                <option value="status">Status</option>
+                                <option value="employee_code">Employee Code</option>
+                                <option value="first_name">First Name</option>
+                                <option value="last_name">Last Name</option>
+                                <option value="email">Email</option>
+                                <option value="department_id">Department</option>
+                                <option value="designation_id">Designation</option>
+                                <option value="date_of_joining">Date Of Joining</option>
+                                <option value="date_of_leaving">Date Of Leaving</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-4">
+                            <label class="form-label text-[11px]">Operator</label>
+                            <select class="form-select w-full text-sm" data-row-operator></select>
+                        </div>
+                        <div class="md:col-span-3">
+                            <label class="form-label text-[11px]">Value</label>
+                            <div data-row-value-host></div>
+                        </div>
+                        <div class="md:col-span-1 md:flex md:items-end">
+                            <button type="button" class="btn btn-secondary btn-sm w-full" data-row-remove>Remove</button>
+                        </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
     {% endcall %}
 
     <div id="results-container">
@@ -322,7 +388,17 @@
             total_pages=total_pages,
             total_count=total_count,
             limit=limit,
-            search=search
+            search=search,
+            filters={
+                "status": status,
+                "department_id": department_id,
+                "designation_id": designation_id,
+                "date_of_joining_from": date_of_joining_from,
+                "date_of_joining_to": date_of_joining_to,
+                "date_of_leaving_from": date_of_leaving_from,
+                "date_of_leaving_to": date_of_leaving_to,
+                "filters": filters_json,
+            }
         ) }}
 
         {% else %}
@@ -405,5 +481,485 @@ function employeeBulkActions() {
         }
     };
 }
+</script>
+
+<script>
+(() => {
+    const ALL_OPERATORS = ['=', '!=', 'like', 'not like', 'in', 'not in', '>', '<', '>=', '<=', 'is', 'is not'];
+    const FIELD_META = {
+        employee_code: { kind: 'text', operators: ALL_OPERATORS },
+        first_name: { kind: 'text', operators: ALL_OPERATORS },
+        last_name: { kind: 'text', operators: ALL_OPERATORS },
+        email: { kind: 'text', operators: ALL_OPERATORS },
+        status: { kind: 'status', operators: ALL_OPERATORS },
+        department_id: { kind: 'department', operators: ALL_OPERATORS },
+        designation_id: { kind: 'designation', operators: ALL_OPERATORS },
+        date_of_joining: { kind: 'date', operators: ALL_OPERATORS },
+        date_of_leaving: { kind: 'date', operators: ALL_OPERATORS }
+    };
+
+    const OPERATOR_LABELS = {
+        '=': 'Equals',
+        '!=': 'Not Equals',
+        'like': 'Like',
+        'not like': 'Not Like',
+        'in': 'In',
+        'not in': 'Not In',
+        '>': 'Greater Than',
+        '<': 'Less Than',
+        '>=': 'Greater Than Or Equal',
+        '<=': 'Less Than Or Equal',
+        'is': 'Is',
+        'is not': 'Is Not'
+    };
+
+    const STATUS_OPTIONS = ['DRAFT', 'ACTIVE', 'ON_LEAVE', 'SUSPENDED', 'RESIGNED', 'TERMINATED', 'RETIRED'];
+    const DEPARTMENT_OPTIONS = [
+        {% for dept in departments %}
+        { value: '{{ dept.department_id }}', label: '{{ (dept.department_name or "")|replace("'", "\\'") }}' },
+        {% endfor %}
+    ];
+    const DESIGNATION_OPTIONS = [
+        {% for desig in designations %}
+        { value: '{{ desig.designation_id }}', label: '{{ (desig.designation_name or "")|replace("'", "\\'") }}' },
+        {% endfor %}
+    ];
+
+    function createInput(type, value = '') {
+        const input = document.createElement('input');
+        input.type = type;
+        input.className = 'form-input w-full text-sm';
+        input.value = value;
+        input.dataset.rowValue = '1';
+        return input;
+    }
+
+    function createSelect(options, value = '') {
+        const select = document.createElement('select');
+        select.className = 'form-select w-full text-sm';
+        select.dataset.rowValue = '1';
+        for (const option of options) {
+            const opt = document.createElement('option');
+            opt.value = option.value;
+            opt.textContent = option.label;
+            if (String(option.value) === String(value)) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        }
+        return select;
+    }
+
+    function configureOperatorSelect(row, preferredOperator = null) {
+        const field = row.querySelector('[data-row-field]').value;
+        const meta = FIELD_META[field];
+        const operatorSelect = row.querySelector('[data-row-operator]');
+        const current = preferredOperator || operatorSelect.value || meta.operators[0];
+        operatorSelect.innerHTML = '';
+        for (const op of meta.operators) {
+            const opt = document.createElement('option');
+            opt.value = op;
+            opt.textContent = OPERATOR_LABELS[op] || op;
+            if (op === current) {
+                opt.selected = true;
+            }
+            operatorSelect.appendChild(opt);
+        }
+        if (!meta.operators.includes(operatorSelect.value)) {
+            operatorSelect.value = meta.operators[0];
+        }
+    }
+
+    function configureValueInput(row, preferredValue = null) {
+        const field = row.querySelector('[data-row-field]').value;
+        const operator = row.querySelector('[data-row-operator]').value;
+        const meta = FIELD_META[field];
+        const host = row.querySelector('[data-row-value-host]');
+        host.innerHTML = '';
+
+        if (meta.kind === 'status') {
+            const isList = operator === 'in' || operator === 'not in';
+            if (operator === 'is' || operator === 'is not') {
+                const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+                host.appendChild(select);
+                return;
+            }
+            if (isList) {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'ACTIVE,ON_LEAVE';
+                host.appendChild(input);
+                return;
+            }
+            if (operator === '=' || operator === '!=') {
+                const select = createSelect(
+                    STATUS_OPTIONS.map((item) => ({ value: item, label: item.replaceAll('_', ' ') })),
+                    preferredValue || 'ACTIVE'
+                );
+                host.appendChild(select);
+                return;
+            }
+            const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+            input.placeholder = 'value';
+            host.appendChild(input);
+            return;
+        }
+
+        if (meta.kind === 'department') {
+            if (operator === 'is' || operator === 'is not') {
+                const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+                host.appendChild(select);
+                return;
+            }
+            const isList = operator === 'in' || operator === 'not in';
+            if (isList) {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'department-id-1,department-id-2';
+                host.appendChild(input);
+                return;
+            }
+            if (operator === '=' || operator === '!=') {
+                const select = createSelect(
+                    [{ value: '', label: 'Select department' }, ...DEPARTMENT_OPTIONS],
+                    preferredValue || ''
+                );
+                host.appendChild(select);
+                return;
+            }
+            const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+            input.placeholder = 'value';
+            host.appendChild(input);
+            return;
+        }
+
+        if (meta.kind === 'designation') {
+            if (operator === 'is' || operator === 'is not') {
+                const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+                host.appendChild(select);
+                return;
+            }
+            const isList = operator === 'in' || operator === 'not in';
+            if (isList) {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'designation-id-1,designation-id-2';
+                host.appendChild(input);
+                return;
+            }
+            if (operator === '=' || operator === '!=') {
+                const select = createSelect(
+                    [{ value: '', label: 'Select designation' }, ...DESIGNATION_OPTIONS],
+                    preferredValue || ''
+                );
+                host.appendChild(select);
+                return;
+            }
+            const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+            input.placeholder = 'value';
+            host.appendChild(input);
+            return;
+        }
+
+        if (meta.kind === 'date') {
+            if (operator === 'is' || operator === 'is not') {
+                const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+                host.appendChild(select);
+                return;
+            }
+            if (operator === 'in' || operator === 'not in') {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'YYYY-MM-DD,YYYY-MM-DD';
+                host.appendChild(input);
+                return;
+            }
+            if (operator === 'like' || operator === 'not like') {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'YYYY-MM';
+                host.appendChild(input);
+                return;
+            }
+            const input = createInput('date', preferredValue || '');
+            host.appendChild(input);
+            return;
+        }
+
+        if (operator === 'is' || operator === 'is not') {
+            const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+            host.appendChild(select);
+            return;
+        }
+        const isList = operator === 'in' || operator === 'not in';
+        const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+        input.placeholder = isList ? 'comma,separated,values' : 'value';
+        host.appendChild(input);
+    }
+
+    function parseValueFromRow(row) {
+        const operator = row.querySelector('[data-row-operator]').value;
+        const valueEl = row.querySelector('[data-row-value]');
+        const raw = valueEl ? valueEl.value : '';
+
+        if (operator === 'is' || operator === 'is not') {
+            return null;
+        }
+
+        if (operator === 'in' || operator === 'not in') {
+            return raw
+                .split(',')
+                .map((item) => item.trim())
+                .filter((item) => item !== '');
+        }
+
+        return raw;
+    }
+
+    function addRow(builder, data = {}) {
+        const template = builder.querySelector('[data-advanced-row-template]');
+        const rowsHost = builder.querySelector('[data-advanced-rows]');
+        const row = template.content.firstElementChild.cloneNode(true);
+        rowsHost.appendChild(row);
+
+        const joinSelect = document.createElement('select');
+        joinSelect.className = 'form-select w-full text-sm';
+        joinSelect.dataset.rowJoin = '1';
+        joinSelect.innerHTML = '<option value="and">AND</option><option value="or">OR</option>';
+        joinSelect.value = data.join || 'and';
+
+        const joinHost = document.createElement('div');
+        joinHost.dataset.rowJoinContainer = '1';
+        joinHost.className = 'mb-2 w-full';
+        joinHost.innerHTML = '<label class="form-label text-[11px]">Condition</label>';
+        joinHost.appendChild(joinSelect);
+        row.insertBefore(joinHost, row.children[1]);
+
+        row.querySelector('[data-row-field]').value = data.field || 'status';
+        configureOperatorSelect(row, data.operator || null);
+        configureValueInput(row, data.value ?? null);
+
+        row.querySelector('[data-row-field]').addEventListener('change', () => {
+            configureOperatorSelect(row, null);
+            configureValueInput(row, null);
+            syncBuilder(builder);
+        });
+        row.querySelector('[data-row-operator]').addEventListener('change', () => {
+            configureValueInput(row, null);
+            syncBuilder(builder);
+        });
+        row.addEventListener('change', () => syncBuilder(builder));
+        row.addEventListener('input', () => syncBuilder(builder));
+        row.querySelector('[data-row-remove]').addEventListener('click', () => {
+            row.remove();
+            refreshPrefixes(builder);
+            syncBuilder(builder);
+        });
+        joinSelect.addEventListener('change', () => syncBuilder(builder));
+        refreshPrefixes(builder);
+    }
+
+    function refreshPrefixes(builder) {
+        const rows = Array.from(builder.querySelectorAll('[data-advanced-rows] > div'));
+        rows.forEach((row, index) => {
+            const prefix = row.querySelector('[data-row-prefix]');
+            if (prefix) {
+                prefix.textContent = index === 0 ? 'Where' : '';
+            }
+            const joinContainer = row.querySelector('[data-row-join-container]');
+            if (joinContainer) {
+                joinContainer.style.display = index === 0 ? 'none' : 'block';
+            }
+        });
+    }
+
+    function syncBuilder(builder) {
+        const hiddenInput = document.getElementById('employee-advanced-filters');
+        if (!hiddenInput) return;
+        const rows = Array.from(builder.querySelectorAll('[data-advanced-rows] > div'));
+        const rowTerms = [];
+
+        for (let index = 0; index < rows.length; index += 1) {
+            const row = rows[index];
+            const field = row.querySelector('[data-row-field]').value;
+            const operator = row.querySelector('[data-row-operator]').value;
+            const join = index === 0 ? 'and' : (row.querySelector('[data-row-join]')?.value || 'and');
+            const value = parseValueFromRow(row);
+            if (operator !== 'is' && operator !== 'is not') {
+                if (typeof value === 'string' && value.trim() === '') {
+                    continue;
+                }
+            }
+
+            const mapped = mapOperatorValue(operator, value);
+            if (!mapped) {
+                continue;
+            }
+
+            if ((mapped.operator === 'in' || mapped.operator === 'not in') && (!Array.isArray(mapped.value) || mapped.value.length === 0)) {
+                continue;
+            }
+            if (!(mapped.operator === 'is' || mapped.operator === 'is not') && (mapped.value === '' || mapped.value === null || typeof mapped.value === 'undefined')) {
+                continue;
+            }
+            rowTerms.push({
+                join,
+                term: ['Employee', field, mapped.operator, mapped.value],
+            });
+        }
+
+        const payload = buildPayloadFromRowTerms(rowTerms);
+        if (payload.length > 0) {
+            hiddenInput.value = JSON.stringify(payload);
+        } else {
+            hiddenInput.value = '';
+        }
+    }
+
+    function buildPayloadFromRowTerms(rowTerms) {
+        if (rowTerms.length === 0) {
+            return [];
+        }
+        const payload = [];
+        let currentGroup = [rowTerms[0].term];
+
+        for (let i = 1; i < rowTerms.length; i += 1) {
+            const item = rowTerms[i];
+            if (item.join === 'or') {
+                currentGroup.push(item.term);
+                continue;
+            }
+            if (currentGroup.length === 1) {
+                payload.push(currentGroup[0]);
+            } else {
+                payload.push({ or: currentGroup });
+            }
+            currentGroup = [item.term];
+        }
+
+        if (currentGroup.length === 1) {
+            payload.push(currentGroup[0]);
+        } else {
+            payload.push({ or: currentGroup });
+        }
+
+        return payload;
+    }
+
+    function normalizeLikeValue(value) {
+        if (typeof value !== 'string') {
+            return value;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return trimmed;
+        }
+        if (trimmed.includes('%') || trimmed.includes('_')) {
+            return trimmed;
+        }
+        return `%${trimmed}%`;
+    }
+
+    function mapOperatorValue(operator, value) {
+        if (operator === 'like' || operator === 'not like') {
+            return { operator, value: normalizeLikeValue(value) };
+        }
+        return { operator, value };
+    }
+
+    function displayValueForHydration(operator, value) {
+        if (
+            (operator === 'like' || operator === 'not like')
+            && typeof value === 'string'
+            && value.startsWith('%')
+            && value.endsWith('%')
+            && value.length >= 2
+        ) {
+            return value.slice(1, -1);
+        }
+        return value;
+    }
+
+    function hydrateFromExisting(builder) {
+        const hiddenInput = document.getElementById('employee-advanced-filters');
+        if (!hiddenInput || !hiddenInput.value) {
+            return;
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(hiddenInput.value);
+        } catch (_error) {
+            return;
+        }
+        if (!Array.isArray(parsed)) {
+            return;
+        }
+
+        const rowsHost = builder.querySelector('[data-advanced-rows]');
+        rowsHost.innerHTML = '';
+        let hasRows = false;
+
+        for (const item of parsed) {
+            if (Array.isArray(item) && item.length === 4) {
+                hasRows = true;
+                addRow(
+                    builder,
+                    {
+                        join: 'and',
+                        field: item[1],
+                        operator: item[2],
+                        value: displayValueForHydration(item[2], item[3]),
+                    }
+                );
+                continue;
+            }
+            if (item && typeof item === 'object' && Array.isArray(item.or)) {
+                for (let i = 0; i < item.or.length; i += 1) {
+                    const term = item.or[i];
+                    if (Array.isArray(term) && term.length === 4) {
+                        hasRows = true;
+                        addRow(
+                            builder,
+                            {
+                                join: i === 0 ? 'and' : 'or',
+                                field: term[1],
+                                operator: term[2],
+                                value: displayValueForHydration(term[2], term[3]),
+                            }
+                        );
+                    }
+                }
+            }
+        }
+
+        if (!hasRows) {
+            addRow(builder);
+        }
+    }
+
+    function initBuilder(builder) {
+        const addButton = builder.querySelector('[data-advanced-add-row]');
+        const clearButton = builder.querySelector('[data-advanced-clear]');
+        const form = builder.closest('form');
+
+        hydrateFromExisting(builder);
+        if (builder.querySelectorAll('[data-advanced-rows] > div').length === 0) {
+            addRow(builder);
+        }
+        syncBuilder(builder);
+
+        addButton.addEventListener('click', () => {
+            addRow(builder);
+            syncBuilder(builder);
+        });
+        clearButton.addEventListener('click', () => {
+            builder.querySelector('[data-advanced-rows]').innerHTML = '';
+            addRow(builder);
+            syncBuilder(builder);
+        });
+        if (form) {
+            form.addEventListener('submit', () => syncBuilder(builder));
+            form.addEventListener('htmx:beforeRequest', () => syncBuilder(builder));
+        }
+    }
+
+    document.querySelectorAll('[data-employee-advanced-filter-builder]').forEach(initBuilder);
+})();
 </script>
 {% endblock %}

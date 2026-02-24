@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge, icon_svg %}
+{% from "components/macros.html" import empty_state, pagination, status_badge, icon_svg %}
 
 {% block page_title %}Bank Statement{% endblock %}
 
@@ -751,6 +751,12 @@
                         </tbody>
                     </table>
                 </div>
+                {{ pagination(
+                    page=page | default(1),
+                    total_pages=total_pages | default(1),
+                    total_count=total_count | default(statement.total_lines | default(0)),
+                    limit=limit | default(50)
+                ) }}
             </div>
         </div>
 

@@ -159,11 +159,20 @@ def _notify_integrity_violation(
         # Find admin users for this organization
         from sqlalchemy import select
 
-        from app.models.rbac import RoleAssignment
+        from app.models.person import Person
+        from app.models.rbac import PersonRole, Role
 
-        stmt = select(RoleAssignment.person_id).where(
-            RoleAssignment.organization_id == organization_id,
-            RoleAssignment.role_name.in_(["admin", "finance_manager", "accountant"]),
+        stmt = (
+            select(Person.id)
+            .join(PersonRole, PersonRole.person_id == Person.id)
+            .join(Role, Role.id == PersonRole.role_id)
+            .where(
+                Person.organization_id == organization_id,
+                Person.is_active.is_(True),
+                Role.is_active.is_(True),
+                Role.name.in_(["admin", "finance_manager", "accountant"]),
+            )
+            .distinct()
         )
         recipient_ids = list(db.scalars(stmt).all())
 

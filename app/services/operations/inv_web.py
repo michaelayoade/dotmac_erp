@@ -74,17 +74,39 @@ class OperationsInventoryWebService:
         """Material request list page."""
         context = base_context(request, auth, "Material Requests", "material_requests")
         org_id_str = self._org_id_str(auth)
-        context.update(
-            MaterialRequestWebService.list_context(
-                db,
-                org_id_str,
-                status=status,
-                request_type=request_type,
-                start_date=start_date,
-                end_date=end_date,
-                project_id=project_id,
+        try:
+            context.update(
+                MaterialRequestWebService.list_context(
+                    db,
+                    org_id_str,
+                    status=status,
+                    request_type=request_type,
+                    start_date=start_date,
+                    end_date=end_date,
+                    project_id=project_id,
+                )
             )
-        )
+        except Exception:
+            logger.exception(
+                "Failed to render material request list",
+                extra={"organization_id": org_id_str},
+            )
+            context.update(
+                {
+                    "requests": [],
+                    "filter_status": status,
+                    "filter_request_type": request_type,
+                    "filter_start_date": start_date,
+                    "filter_end_date": end_date,
+                    "filter_project_id": project_id,
+                    "status_counts": {},
+                    "type_counts": {},
+                    "statuses": [],
+                    "request_types": [],
+                    "active_filters": [],
+                    "error": "Unable to load material requests right now.",
+                }
+            )
         return templates.TemplateResponse(
             request, "inventory/material_requests.html", context
         )

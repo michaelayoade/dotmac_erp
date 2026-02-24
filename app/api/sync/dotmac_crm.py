@@ -25,6 +25,8 @@ from app.schemas.sync.dotmac_crm import (
     BulkSyncRequest,
     BulkSyncResponse,
     CompanyListResponse,
+    CRMInventoryItemPayload,
+    CRMInventoryItemResponse,
     CRMMaterialRequestPayload,
     CRMMaterialRequestResponse,
     CRMMaterialRequestStatusRead,
@@ -249,7 +251,12 @@ def bulk_sync(
 @router.post("/webhook/{entity_type}", status_code=200)
 def handle_webhook(
     entity_type: str,
-    payload: CRMProjectPayload | CRMTicketPayload | CRMWorkOrderPayload,
+    payload: (
+        CRMProjectPayload
+        | CRMTicketPayload
+        | CRMWorkOrderPayload
+        | CRMInventoryItemPayload
+    ),
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(_get_db),
 ) -> dict:
@@ -257,7 +264,7 @@ def handle_webhook(
     Handle real-time entity updates from CRM webhook.
 
     Accepts a single entity payload and syncs it immediately.
-    Supported entity_type values: project, ticket, work_order.
+    Supported entity_type values: project, ticket, work_order, item, inventory_item.
     """
     org_id = auth["organization_id"]
     service = DotMacCRMSyncService(db)
@@ -269,6 +276,10 @@ def handle_webhook(
             service.sync_ticket(org_id, payload)
         elif entity_type == "work_order" and isinstance(payload, CRMWorkOrderPayload):
             service.sync_work_order(org_id, payload)
+        elif entity_type in {"item", "inventory_item"} and isinstance(
+            payload, CRMInventoryItemPayload
+        ):
+            service.upsert_inventory_item(org_id, payload)
         else:
             raise HTTPException(
                 status_code=400,
@@ -347,6 +358,34 @@ def list_crm_work_orders(
     return service.list_work_orders(
         org_id, search=search, employee_id=employee_id, limit=min(limit, 100)
     )
+
+
+@router.post(
+    "/inventory-items",
+    response_model=CRMInventoryItemResponse,
+    status_code=201,
+)
+def upsert_inventory_item(
+    payload: CRMInventoryItemPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> CRMInventoryItemResponse:
+    """Create or update an ERP inventory item from CRM."""
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    try:
+        result = service.upsert_inventory_item(org_id, payload)
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "Failed to upsert CRM inventory item crm_id=%s", payload.crm_id
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
 
 
 # ============ Expense Totals Endpoint (ERP → CRM) ============

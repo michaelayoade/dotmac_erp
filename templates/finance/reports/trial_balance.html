@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, period_shortcuts %}
 
 {% block page_title %}Trial balance{% endblock %}
 
@@ -29,6 +29,7 @@
     <!-- Filter Card -->
     <div class="card p-4">
         <form method="get" class="flex flex-wrap items-end gap-4">
+            {{ period_shortcuts(mode="as_of") }}
             <div class="flex-1 min-w-[200px]">
                 <label class="form-label">As of date</label>
                 <input type="date" name="as_of_date" value="{{ as_of_date_iso }}" class="form-input">

@@ -446,6 +446,7 @@ class TestMappingConstants:
             "MM/DD/YYYY",
             "DD-MM-YYYY",
             "DD.MM.YYYY",
+            "DD MMM YYYY",
         }
         assert set(DATE_FORMAT_MAP.keys()) == expected
 

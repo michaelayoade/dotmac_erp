@@ -22,10 +22,6 @@
         {{ icon_svg("archive", "h-4 w-4 mr-1.5") }}
         Archived
     </a>
-    <a href="/support/tickets/new" class="btn btn-primary group">
-        {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
-        New Ticket
-    </a>
 </div>
 {% endblock %}
 
@@ -396,14 +392,10 @@
                 {% if search or selected_status or selected_priority or selected_assigned_to %}
                 No tickets match your current filters. Try adjusting your search criteria.
                 {% else %}
-                Get started by creating your first support ticket or sync from ERPNext.
+                Tickets will appear here after CRM sync.
                 {% endif %}
             </p>
             <div class="flex items-center justify-center gap-3">
-                <a href="/support/tickets/new" class="btn btn-primary">
-                    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-                    New Ticket
-                </a>
                 {% if search or selected_status or selected_priority or selected_assigned_to %}
                 <a href="/support/tickets" class="btn btn-secondary">
                     Clear Filters

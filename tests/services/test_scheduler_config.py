@@ -421,6 +421,11 @@ class TestBuildBeatSchedule:
         # Builtin tasks are always present
         assert "expense-approval-reminders" in schedule
         assert "expense-stuck-transfers" in schedule
+        assert "notification-email-dispatch" in schedule
+        assert (
+            schedule["notification-email-dispatch"]["task"]
+            == "app.tasks.notifications.process_pending_notification_emails"
+        )
         # No DB-defined tasks
         assert not any(k.startswith("scheduled_task_") for k in schedule)
         mock_session.close.assert_called_once()
@@ -642,6 +647,7 @@ class TestBuildBeatSchedule:
 
         # Builtin tasks still present, no DB tasks
         assert "expense-approval-reminders" in schedule
+        assert "notification-email-dispatch" in schedule
         assert not any(k.startswith("scheduled_task_") for k in schedule)
 
     @patch("app.services.scheduler_config.SessionLocal")

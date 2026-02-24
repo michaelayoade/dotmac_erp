@@ -31,6 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.models.expense.expense_claim import ExpenseClaim
 from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.models.finance.ar.customer_payment import CustomerPayment
 from app.models.finance.banking.bank_account import (
@@ -164,8 +165,7 @@ def _sync_bank_accounts(
                 SyncEntity.source_doctype == "Account",
                 SyncEntity.target_id.is_not(None),
             )
-        )
-        .all()
+        ).all()
     }
 
     query = "SELECT * FROM `tabBank Account` WHERE `docstatus` < 2"
@@ -326,7 +326,9 @@ def _sync_bank_transactions(
             stats.statement_groups_skipped_existing += 1
             continue
 
-        txns_sorted = sorted(txns, key=lambda t: (_to_date(t.get("date")), str(t["name"])))
+        txns_sorted = sorted(
+            txns, key=lambda t: (_to_date(t.get("date")), str(t["name"]))
+        )
         period_start = _to_date(txns_sorted[0].get("date")) or date.today()
         period_end = _to_date(txns_sorted[-1].get("date")) or period_start
 
@@ -455,8 +457,7 @@ def _attach_payment_matches(
                 SyncEntity.source_doctype == "Payment Entry",
                 SyncEntity.target_id.is_not(None),
             )
-        )
-        .all()
+        ).all()
     }
     journal_sync = {
         source_name: target_id
@@ -471,11 +472,25 @@ def _attach_payment_matches(
     }
 
     # Preload target payment -> journal_entry_id maps in bulk.
-    ar_payment_ids = [tid for table, tid in payment_sync.values() if table == "ar.customer_payment" and tid]
-    ap_payment_ids = [tid for table, tid in payment_sync.values() if table == "ap.supplier_payment" and tid]
+    ar_payment_ids = [
+        tid
+        for table, tid in payment_sync.values()
+        if table == "ar.customer_payment" and tid
+    ]
+    ap_payment_ids = [
+        tid
+        for table, tid in payment_sync.values()
+        if table == "ap.supplier_payment" and tid
+    ]
+    expense_claim_ids = [
+        tid
+        for table, tid in payment_sync.values()
+        if table == "expense.expense_claim" and tid
+    ]
 
     ar_journal_by_payment: dict[uuid.UUID, uuid.UUID | None] = {}
     ap_journal_by_payment: dict[uuid.UUID, uuid.UUID | None] = {}
+    expense_journal_by_claim: dict[uuid.UUID, uuid.UUID | None] = {}
     if ar_payment_ids:
         for pid, jeid in db.execute(
             select(CustomerPayment.payment_id, CustomerPayment.journal_entry_id).where(
@@ -490,11 +505,24 @@ def _attach_payment_matches(
             )
         ).all():
             ap_journal_by_payment[pid] = jeid
+    if expense_claim_ids:
+        for cid, reimb_jeid, claim_jeid in db.execute(
+            select(
+                ExpenseClaim.claim_id,
+                ExpenseClaim.reimbursement_journal_id,
+                ExpenseClaim.journal_entry_id,
+            ).where(ExpenseClaim.claim_id.in_(expense_claim_ids))
+        ).all():
+            # Payment Entry for employee reimbursement should map to reimbursement
+            # journal first, fallback to claim journal when absent.
+            expense_journal_by_claim[cid] = reimb_jeid or claim_jeid
 
     # Preload all imported statement lines keyed by ERPNext bank transaction name.
     imported_lines = db.execute(
         select(BankStatementLine, BankStatement.bank_account_id)
-        .join(BankStatement, BankStatement.statement_id == BankStatementLine.statement_id)
+        .join(
+            BankStatement, BankStatement.statement_id == BankStatementLine.statement_id
+        )
         .where(
             BankStatement.organization_id == organization_id,
             BankStatement.import_source == "ERPNEXT_SQL",
@@ -582,7 +610,9 @@ def _attach_payment_matches(
 
         raw = dict(line.raw_data or {})
         existing_links = list(raw.get("erpnext_payment_links") or [])
-        dedup: dict[tuple[str | None, str | None, str | None, str | None], dict[str, str | None]] = {}
+        dedup: dict[
+            tuple[str | None, str | None, str | None, str | None], dict[str, str | None]
+        ] = {}
         for link in existing_links + links:
             key = (
                 link.get("payment_document"),
@@ -628,6 +658,8 @@ def _attach_payment_matches(
                     journal_entry_id = ar_journal_by_payment.get(target_id)
                 elif target_table == "ap.supplier_payment":
                     journal_entry_id = ap_journal_by_payment.get(target_id)
+                elif target_table == "expense.expense_claim":
+                    journal_entry_id = expense_journal_by_claim.get(target_id)
             elif payment_document == "Journal Entry":
                 journal_entry_id = journal_sync.get(payment_entry_name)
             if not journal_entry_id:
@@ -751,11 +783,26 @@ def run(args: argparse.Namespace) -> int:
         mysql_conn.close()
 
     logger.info("Done%s", " (dry-run)" if dry_run else "")
-    logger.info("Bank accounts: created=%d updated=%d skipped=%d", stats.bank_accounts_created, stats.bank_accounts_updated, stats.bank_accounts_skipped)
-    logger.info("Statements: created=%d groups_skipped_existing=%d", stats.statements_created, stats.statement_groups_skipped_existing)
-    logger.info("Statement lines: imported=%d skipped=%d", stats.statement_lines_imported, stats.statement_lines_skipped)
+    logger.info(
+        "Bank accounts: created=%d updated=%d skipped=%d",
+        stats.bank_accounts_created,
+        stats.bank_accounts_updated,
+        stats.bank_accounts_skipped,
+    )
+    logger.info(
+        "Statements: created=%d groups_skipped_existing=%d",
+        stats.statements_created,
+        stats.statement_groups_skipped_existing,
+    )
+    logger.info(
+        "Statement lines: imported=%d skipped=%d",
+        stats.statement_lines_imported,
+        stats.statement_lines_skipped,
+    )
     logger.info("Payment links attached=%d", stats.payment_links_attached)
-    logger.info("Matched lines=%d (match errors=%d)", stats.matched_lines, stats.match_errors)
+    logger.info(
+        "Matched lines=%d (match errors=%d)", stats.matched_lines, stats.match_errors
+    )
     return 0
 
 

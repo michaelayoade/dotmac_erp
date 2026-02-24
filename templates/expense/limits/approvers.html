@@ -109,6 +109,12 @@
                         </td>
                         <td>
                             <div class="table-actions">
+                                <a href="/expense/limits/approvers/{{ limit.approver_limit_id }}"
+                                   class="table-action-btn text-slate-500 hover:text-slate-700"
+                                   title="View"
+                                   aria-label="View">
+                                    {{ icon_svg("eye", "h-4 w-4") }}
+                                </a>
                                 <a href="/expense/limits/approvers/{{ limit.approver_limit_id }}/edit"
                                    class="table-action-btn text-slate-500 hover:text-slate-700"
                                    title="Edit"

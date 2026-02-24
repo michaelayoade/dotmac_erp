@@ -37,6 +37,8 @@ from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import PaginatedResult, PaginationParams, paginate
 
+from .employee_filter_contract import FilterExpression
+from .employee_filter_engine import apply_employee_filter_expression
 from .employee_types import (
     BulkResult,
     BulkUpdateData,
@@ -180,6 +182,7 @@ class EmployeeService:
         pagination: PaginationParams | None = None,
         *,
         eager_load: bool = False,
+        advanced_filter_expression: FilterExpression | None = None,
     ) -> PaginatedResult[Employee]:
         """List employees with filters and pagination.
 
@@ -211,10 +214,16 @@ class EmployeeService:
         stmt = select(Employee).where(
             Employee.organization_id == self.organization_id,
         )
+        joined_person = False
 
         # Handle soft delete
         if not filters.include_deleted:
             stmt = stmt.where(Employee.is_deleted == False)
+
+        # Advanced filters are always additive to base tenant/deletion constraints.
+        stmt, joined_person = apply_employee_filter_expression(
+            stmt, advanced_filter_expression
+        )
 
         if filters.is_active is not None and not filters.status:
             if filters.is_active:
@@ -242,7 +251,10 @@ class EmployeeService:
         if filters.search:
             search_term = f"%{filters.search}%"
             # Search by employee_code or join with Person for name/email
-            stmt = stmt.join(Person, Employee.person_id == Person.id).where(
+            if not joined_person:
+                stmt = stmt.join(Person, Employee.person_id == Person.id)
+                joined_person = True
+            stmt = stmt.where(
                 or_(
                     Employee.employee_code.ilike(search_term),
                     Person.first_name.ilike(search_term),

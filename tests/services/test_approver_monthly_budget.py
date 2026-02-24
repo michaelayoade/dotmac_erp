@@ -67,6 +67,11 @@ def _make_approver_limit(
     return limit
 
 
+def _budget_tuple(budget: Decimal) -> tuple[Decimal, ...]:
+    """Helper: build the (budget, limit_id) tuple returned by _get_approver_monthly_budget."""
+    return (budget, uuid4())
+
+
 # ---------------------------------------------------------------------------
 # Tests for check_approver_monthly_budget
 # ---------------------------------------------------------------------------
@@ -99,8 +104,17 @@ class TestApproverMonthlyBudget:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             # 200k used + 50k new = 250k ≤ 500k → pass
             svc.check_approver_monthly_budget(
@@ -116,8 +130,17 @@ class TestApproverMonthlyBudget:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             # 400k used + 100k new = 500k exactly → pass
             svc.check_approver_monthly_budget(
@@ -133,8 +156,17 @@ class TestApproverMonthlyBudget:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             with pytest.raises(ApproverBudgetExhaustedError) as exc_info:
                 # 450k used + 100k new = 550k > 500k → blocked
@@ -156,8 +188,17 @@ class TestApproverMonthlyBudget:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             with pytest.raises(ApproverBudgetExhaustedError):
                 svc.check_approver_monthly_budget(
@@ -190,8 +231,17 @@ class TestBackdatedExpenses:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             # 300k + 100k = 400k ≤ 500k → pass
             svc.check_approver_monthly_budget(
@@ -208,8 +258,17 @@ class TestBackdatedExpenses:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             svc.check_approver_monthly_budget(
                 org_id, approver_id, Decimal("500000"), date(2026, 2, 1)
@@ -224,8 +283,17 @@ class TestBackdatedExpenses:
 
         svc = ExpenseLimitService(db)
 
-        with patch.object(
-            svc, "_get_approver_monthly_budget", return_value=Decimal("500000")
+        with (
+            patch.object(
+                svc,
+                "_get_approver_monthly_budget",
+                return_value=_budget_tuple(Decimal("500000")),
+            ),
+            patch.object(
+                svc,
+                "get_budget_adjustment_for_month",
+                return_value=Decimal("0"),
+            ),
         ):
             with pytest.raises(ApproverBudgetExhaustedError) as exc_info:
                 svc.check_approver_monthly_budget(
@@ -241,49 +309,59 @@ class TestBudgetLookupPriority:
         """Employee-scoped budget wins over grade-scoped."""
         db = MagicMock()
         employee_id = uuid4()
+        limit_id = uuid4()
         employee = _make_employee(employee_id, grade_id=uuid4())
 
-        # First call: employee-specific returns 100k
-        db.scalar.return_value = Decimal("100000")
+        # db.execute().first() returns a Row-like tuple
+        db.execute.return_value.first.return_value = (Decimal("100000"), limit_id)
 
         svc = ExpenseLimitService(db)
         result = svc._get_approver_monthly_budget(org_id, employee)
-        assert result == Decimal("100000")
+        assert result == (Decimal("100000"), limit_id)
 
     def test_falls_through_to_grade_when_no_employee_budget(self, org_id):
         """When no employee-specific budget, falls to grade."""
         db = MagicMock()
         grade_id = uuid4()
+        limit_id = uuid4()
         employee = _make_employee(uuid4(), grade_id=grade_id)
 
-        # First call returns None (no employee budget), second returns grade budget
-        db.scalar.side_effect = [None, Decimal("200000")]
+        # First call (employee) → None, second (grade) → row
+        db.execute.return_value.first.side_effect = [
+            None,
+            (Decimal("200000"), limit_id),
+        ]
 
         svc = ExpenseLimitService(db)
         result = svc._get_approver_monthly_budget(org_id, employee)
-        assert result == Decimal("200000")
+        assert result == (Decimal("200000"), limit_id)
 
     def test_falls_through_to_designation(self, org_id):
         """When no employee or grade budget, falls to designation."""
         db = MagicMock()
         designation_id = uuid4()
+        limit_id = uuid4()
         employee = _make_employee(
             uuid4(), grade_id=uuid4(), designation_id=designation_id
         )
 
-        # employee → None, grade → None, designation → 300k
-        db.scalar.side_effect = [None, None, Decimal("300000")]
+        # employee → None, grade → None, designation → row
+        db.execute.return_value.first.side_effect = [
+            None,
+            None,
+            (Decimal("300000"), limit_id),
+        ]
 
         svc = ExpenseLimitService(db)
         result = svc._get_approver_monthly_budget(org_id, employee)
-        assert result == Decimal("300000")
+        assert result == (Decimal("300000"), limit_id)
 
     def test_returns_none_when_no_budget_anywhere(self, org_id):
         """No budget configured at any level → None (unlimited)."""
         db = MagicMock()
         employee = _make_employee(uuid4(), grade_id=uuid4(), designation_id=uuid4())
 
-        db.scalar.side_effect = [None, None, None]
+        db.execute.return_value.first.side_effect = [None, None, None]
 
         svc = ExpenseLimitService(db)
         result = svc._get_approver_monthly_budget(org_id, employee)

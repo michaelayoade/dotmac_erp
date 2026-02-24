@@ -31,7 +31,7 @@ def test_recent_activity_view_formats_entries(monkeypatch):
             return {user_id: "Ada Lovelace"}
 
     monkeypatch.setattr(
-        "app.services.finance.ap.web.base.get_audit_service",
+        "app.services.recent_activity.get_audit_service",
         lambda _db: _FakeAuditService(),
     )
 

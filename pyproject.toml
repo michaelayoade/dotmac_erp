@@ -89,7 +89,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106", "S311", "B017", "SIM117"]  # test fixtures use hardcoded values
 "alembic/**/*.py" = ["E402", "F841", "S608"]  # migrations: late imports, unused vars, raw SQL
-"scripts/**/*.py" = ["T20", "E402", "S"]  # scripts: print, late imports, relaxed security
+"scripts/**/*.py" = ["T20", "E402", "S", "SIM103", "F841", "B905", "F601", "B007"]  # scripts: one-off maintenance scripts
+"app/tools/**/*.py" = ["T20", "S"]  # one-off tools
+".claude/hooks/**/*.py" = ["T20", "F841"]  # local workflow hooks
 "app/tasks/data_health.py" = ["S608"]  # data health tasks: conditional SQL with hardcoded fragments
 
 [tool.ruff.lint.isort]

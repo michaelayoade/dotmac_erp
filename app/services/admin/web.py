@@ -169,7 +169,7 @@ def _humanize_actor_type(value: str | None) -> str:
         "user": "User",
         "system": "System",
         "service": "Service",
-        "api_key": "API Key",
+        "api_key": "API Key",  # pragma: allowlist secret
     }
     key = (value or "").strip().lower()
     return mapping.get(key, _humanize_token(value))
@@ -2557,6 +2557,8 @@ class AdminWebService:
         search: str | None,
         actor_type: str | None,
         status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -2586,6 +2588,28 @@ class AdminWebService:
         success_value = _parse_success_filter(status)
         if success_value is not None:
             conditions.append(AuditEvent.is_success == success_value)
+
+        start_date_value = (start_date or "").strip()
+        end_date_value = (end_date or "").strip()
+
+        if start_date_value:
+            try:
+                parsed_start = datetime.strptime(start_date_value, "%Y-%m-%d")
+                conditions.append(
+                    AuditEvent.occurred_at >= parsed_start.replace(tzinfo=UTC)
+                )
+            except ValueError:
+                start_date_value = ""
+
+        if end_date_value:
+            try:
+                parsed_end = datetime.strptime(end_date_value, "%Y-%m-%d")
+                conditions.append(
+                    AuditEvent.occurred_at
+                    < (parsed_end + timedelta(days=1)).replace(tzinfo=UTC)
+                )
+            except ValueError:
+                end_date_value = ""
 
         total_count = (
             db.scalar(select(func.count(AuditEvent.id)).where(*conditions)) or 0
@@ -2691,6 +2715,8 @@ class AdminWebService:
             "pagination": pagination,
             "search": search_value,
             "status_filter": status or "",
+            "start_date_filter": start_date_value,
+            "end_date_filter": end_date_value,
             "actor_type_filter": (
                 actor_type_filter_value.value if actor_type_filter_value else ""
             ),
@@ -4204,6 +4230,8 @@ class AdminWebService:
         search: str,
         status: str,
         actor_type: str,
+        start_date: str,
+        end_date: str,
     ) -> HTMLResponse | RedirectResponse:
         auth_or_redirect = self._require_admin_web_auth(request, auth)
         if isinstance(auth_or_redirect, RedirectResponse):
@@ -4216,6 +4244,8 @@ class AdminWebService:
             search=search,
             actor_type=actor_type,
             status=status,
+            start_date=start_date,
+            end_date=end_date,
             page=page,
         )
         return self._render_admin_template(

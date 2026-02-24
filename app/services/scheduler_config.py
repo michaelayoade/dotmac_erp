@@ -226,6 +226,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.expense.poll_stuck_expense_transfers",
             "schedule": crontab(minute="*/2"),  # Every 2 minutes
         },
+        "notification-email-dispatch": {
+            "task": "app.tasks.notifications.process_pending_notification_emails",
+            "schedule": timedelta(minutes=1),  # Every minute
+        },
         "daily-exchange-rate-fetch": {
             "task": "app.tasks.exchange_rates.fetch_daily_exchange_rates",
             "schedule": crontab(hour=14, minute=0),  # 2 PM UTC daily

@@ -116,8 +116,8 @@ def test_other_finance_transaction_tables_put_date_first():
     ordered_headers = [
         (
             "templates/finance/banking/statements.html",
-            ("Statement Date", 'sortable_th("Statement Date"'),
-            ("Statement #", 'sortable_th("Statement #"'),
+            ("Statement Date", 'sortable_th("Statement Date"', 'sortable_th("Date"'),
+            ("Statement #", 'sortable_th("Statement #"', "STMT"),
         ),
         (
             "templates/finance/banking/reconciliations.html",

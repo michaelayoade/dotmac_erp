@@ -12,6 +12,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_fx.exchange_rate import ExchangeRate
@@ -57,8 +58,6 @@ class FXService(ListResponseMixin):
 
         Returns a dict with rate info (always 200, rate=None when not found).
         """
-        from sqlalchemy import and_, select
-
         org_id = coerce_uuid(organization_id)
         effective = effective_date or date.today()
 

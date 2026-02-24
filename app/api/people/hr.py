@@ -80,6 +80,9 @@ from app.services.people.hr import (
     TerminationData,
 )
 from app.services.people.hr.checklist_templates import ChecklistTemplateService
+from app.services.people.hr.employee_filter_engine import (
+    parse_employee_filter_payload_json,
+)
 
 router = APIRouter(
     prefix="/hr",
@@ -694,6 +697,7 @@ def list_employees(
     reports_to_id: UUID | None = None,
     expense_approver_id: UUID | None = None,
     include_deleted: bool = False,
+    filters: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -709,7 +713,16 @@ def list_employees(
         expense_approver_id=expense_approver_id,
         include_deleted=include_deleted,
     )
-    result = svc.list_employees(filters, PaginationParams(offset=offset, limit=limit))
+    try:
+        advanced_expression = parse_employee_filter_payload_json(filters)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    result = svc.list_employees(
+        filters,
+        PaginationParams(offset=offset, limit=limit),
+        advanced_filter_expression=advanced_expression,
+    )
     return EmployeeListResponse(
         items=[EmployeeRead.model_validate(e) for e in result.items],
         total=result.total,

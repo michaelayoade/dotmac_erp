@@ -306,35 +306,45 @@ def _write_audit_records(session: Session) -> None:
                 all_keys = set(rec["old_values"].keys()) | set(rec["new_values"].keys())
                 changed_fields = sorted(all_keys)
 
-            connection.execute(
-                text("""
-                    INSERT INTO audit.audit_log (
-                        audit_id, organization_id, table_schema, table_name,
-                        record_id, action, old_values, new_values,
-                        changed_fields, user_id, ip_address, user_agent,
-                        correlation_id, occurred_at
-                    ) VALUES (
-                        gen_random_uuid(), :org_id, :schema, :table_name,
-                        :record_id, :action, :old_values::jsonb, :new_values::jsonb,
-                        :changed_fields, :user_id, :ip_address, :user_agent,
-                        :correlation_id, now()
-                    )
-                """),
-                {
-                    "org_id": rec["organization_id"],
-                    "schema": rec["schema"],
-                    "table_name": rec["table_name"],
-                    "record_id": rec["record_id"],
-                    "action": rec["action"],
-                    "old_values": old_json,
-                    "new_values": new_json,
-                    "changed_fields": changed_fields,
-                    "user_id": user_id,
-                    "ip_address": ip_address,
-                    "user_agent": user_agent,
-                    "correlation_id": correlation_id,
-                },
-            )
+            # Use SAVEPOINT so audit failures don't abort the parent transaction.
+            # Use CAST() instead of ::jsonb — the :: shorthand conflicts with
+            # SQLAlchemy text() parameter binding (colons are ambiguous).
+            nested = connection.begin_nested()
+            try:
+                connection.execute(
+                    text("""
+                        INSERT INTO audit.audit_log (
+                            audit_id, organization_id, table_schema, table_name,
+                            record_id, action, old_values, new_values,
+                            changed_fields, user_id, ip_address, user_agent,
+                            correlation_id, occurred_at
+                        ) VALUES (
+                            gen_random_uuid(), :org_id, :schema, :table_name,
+                            :record_id, :action,
+                            CAST(:old_values AS jsonb), CAST(:new_values AS jsonb),
+                            :changed_fields, :user_id, :ip_address, :user_agent,
+                            :correlation_id, now()
+                        )
+                    """),
+                    {
+                        "org_id": rec["organization_id"],
+                        "schema": rec["schema"],
+                        "table_name": rec["table_name"],
+                        "record_id": rec["record_id"],
+                        "action": rec["action"],
+                        "old_values": old_json,
+                        "new_values": new_json,
+                        "changed_fields": changed_fields,
+                        "user_id": user_id,
+                        "ip_address": ip_address,
+                        "user_agent": user_agent,
+                        "correlation_id": correlation_id,
+                    },
+                )
+                nested.commit()
+            except Exception:
+                nested.rollback()
+                raise
         except Exception:
             logger.warning(
                 "Auto-audit failed: %s.%s %s %s",

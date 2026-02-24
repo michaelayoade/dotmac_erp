@@ -42,6 +42,13 @@ def _extract_bearer_token(request: Request) -> str | None:
     return None
 
 
+def _extract_access_token_cookie(request: Request) -> str | None:
+    token = request.cookies.get("access_token")
+    if token:
+        return token.strip() or None
+    return None
+
+
 def _jwt_secret() -> str | None:
     secret = os.getenv("JWT_SECRET")
     if secret:
@@ -87,7 +94,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         ip_address_var.set(request.client.host if request.client else "")
         user_agent_var.set(request.headers.get("user-agent", ""))
 
-        token = _extract_bearer_token(request)
+        token = _extract_bearer_token(request) or _extract_access_token_cookie(request)
         actor_id = getattr(
             request.state, "actor_id", None
         ) or _extract_actor_id_from_jwt(token)

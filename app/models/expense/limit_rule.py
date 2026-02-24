@@ -423,6 +423,88 @@ class ExpenseApproverLimit(Base, AuditMixin):
         return f"<ExpenseApproverLimit {self.scope_type}:{self.scope_id} max={self.max_approval_amount}>"
 
 
+class ExpenseApproverBudgetAdjustment(Base):
+    """
+    One-time additive budget adjustment for a specific month.
+
+    Allows increasing (or decreasing) an approver's monthly approval
+    budget for a single month without changing the base
+    ``monthly_approval_budget`` on the parent limit.
+
+    Effective budget for the month = base budget + additional_amount.
+    """
+
+    __tablename__ = "expense_approver_budget_adjustment"
+    __table_args__ = (
+        UniqueConstraint(
+            "approver_limit_id",
+            "adjustment_month",
+            name="uq_approver_budget_adj_limit_month",
+        ),
+        Index(
+            "idx_approver_budget_adj_org",
+            "organization_id",
+        ),
+        {"schema": "expense"},
+    )
+
+    adjustment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    approver_limit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("expense.expense_approver_limit.approver_limit_id"),
+        nullable=False,
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
+        nullable=False,
+    )
+    adjustment_month: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        comment="First day of the target month, e.g. 2026-02-01",
+    )
+    additional_amount: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2),
+        nullable=False,
+        comment="Additive adjustment to monthly budget (positive = increase)",
+    )
+    reason: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Audit trail — why this adjustment was made",
+    )
+    adjusted_by_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    # Relationships
+    approver_limit: Mapped["ExpenseApproverLimit"] = relationship(
+        "ExpenseApproverLimit",
+        foreign_keys=[approver_limit_id],
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ExpenseApproverBudgetAdjustment"
+            f" limit={self.approver_limit_id}"
+            f" month={self.adjustment_month}"
+            f" amount={self.additional_amount}>"
+        )
+
+
 class ExpenseLimitEvaluation(Base):
     """
     Expense Limit Evaluation - audit trail.

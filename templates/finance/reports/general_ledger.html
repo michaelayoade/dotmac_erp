@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg, period_shortcuts %}
 
 
 {% block page_title %}General ledger{% endblock %}
@@ -51,6 +51,7 @@
                 </select>
             </div>
     </div>
+    {{ period_shortcuts(mode="range") }}
     {% endcall %}
 
     <!-- Report -->

@@ -41,6 +41,7 @@ from app.services.expense.expense_service import (
     ExpenseService,
     ExpenseServiceError,
 )
+from app.services.expense.limit_service import ExpenseLimitServiceError
 from app.services.file_upload import get_expense_receipt_upload, resolve_safe_path
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.pm.comment import comment_service
@@ -719,10 +720,24 @@ class ExpenseClaimsWebService:
                 f"/expense/claims/{claim_id}?error={message}",
                 status_code=303,
             )
+        except ExpenseLimitServiceError as exc:
+            db.rollback()
+            message = quote(str(exc))
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={message}",
+                status_code=303,
+            )
         except ExpenseClaimStatusError:
             db.rollback()
             return RedirectResponse(
                 f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
+        except ExpenseServiceError as exc:
+            db.rollback()
+            message = quote(str(exc))
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={message}",
+                status_code=303,
             )
         except Exception:
             db.rollback()

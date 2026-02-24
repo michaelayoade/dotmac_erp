@@ -10,6 +10,7 @@ import json
 import logging
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.services import formatters as _fmt
@@ -116,6 +117,25 @@ class DashboardWebService:
 
         metrics_snapshot = DashboardMetricsService(db).get_org_snapshot(organization_id)
 
+        # Bank balance — live total across active accounts (not year-filtered).
+        from app.models.finance.banking.bank_account import (
+            BankAccount,
+            BankAccountStatus,
+        )
+
+        active_accounts = list(
+            db.scalars(
+                select(BankAccount).where(
+                    BankAccount.organization_id == organization_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+            ).all()
+        )
+        total_bank_balance = sum(
+            (a.last_statement_balance or Decimal("0") for a in active_accounts),
+            Decimal("0"),
+        )
+
         stats_view = {
             "total_revenue": _format_currency(stats.total_revenue, currency_prefix),
             "total_expenses": _format_currency(stats.total_expenses, currency_prefix),
@@ -135,6 +155,7 @@ class DashboardWebService:
             "cash_inflow": _format_currency(stats.cash_inflow, currency_prefix),
             "cash_outflow": _format_currency(stats.cash_outflow, currency_prefix),
             "net_cash_flow": _format_currency(stats.net_cash_flow, currency_prefix),
+            "bank_balance": _format_currency(total_bank_balance, currency_prefix),
             # Aging data
             "aging_current": _format_currency(stats.aging_current, currency_prefix),
             "aging_30": _format_currency(stats.aging_30, currency_prefix),

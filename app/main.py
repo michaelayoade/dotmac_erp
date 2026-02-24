@@ -528,6 +528,12 @@ def favicon():
     return RedirectResponse(url="/static/favicon.svg")
 
 
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon_svg():
+    """Backward-compatible favicon path used by some branding configs."""
+    return RedirectResponse(url="/static/favicon.svg")
+
+
 @app.get("/health")
 def health_check():
     """Basic health check endpoint (backwards compatibility)."""

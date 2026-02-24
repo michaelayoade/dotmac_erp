@@ -617,8 +617,13 @@ class TaxTransactionService(ListResponseMixin):
         if end_date:
             query = query.where(TaxTransaction.transaction_date <= end_date)
 
-        query = query.order_by(TaxTransaction.transaction_date.desc())
-        return list(db.scalars(query.limit(limit).offset(offset)))
+        return list(
+            db.scalars(
+                query.order_by(TaxTransaction.transaction_date.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
     @staticmethod
     def get_unreported_transactions(
@@ -637,7 +642,7 @@ class TaxTransactionService(ListResponseMixin):
                 .where(TaxTransaction.fiscal_period_id == period_id)
                 .where(TaxTransaction.is_included_in_return == False)
                 .order_by(TaxTransaction.transaction_date)
-            )
+            ).all()
         )
 
     @staticmethod

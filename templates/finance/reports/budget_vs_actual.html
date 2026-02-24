@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg %}
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
 {% block page_title %}Budget vs actual{% endblock %}
 
 {% block breadcrumbs %}
@@ -23,7 +23,8 @@
 {% block content %}
 <div class="max-w-5xl mx-auto space-y-6">
     <div class="card p-4">
-        <form method="get" class="grid gap-4 md:grid-cols-3">
+        <form method="get" class="grid gap-4 md:grid-cols-4">
+            {{ period_shortcuts(mode="range") }}
             <div>
                 <label class="form-label">Start date</label>
                 <input type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">
@@ -43,7 +44,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="md:col-span-3">
+            <div class="md:col-span-4">
                 <button type="submit" class="btn btn-primary">
                     {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
                     Refresh

@@ -1264,9 +1264,16 @@ class SplynxSyncService:
         is_credit_note: bool = False,
     ) -> None:
         """Delete existing lines and recreate from current Splynx data."""
-        # Delete old lines
         from sqlalchemy import delete
 
+        # Delete child tax records first (FK constraint)
+        tax_stmt = delete(InvoiceLineTax).where(
+            InvoiceLineTax.line_id.in_(
+                select(InvoiceLine.line_id).where(InvoiceLine.invoice_id == invoice_id)
+            )
+        )
+        self.db.execute(tax_stmt)
+        # Then delete the lines themselves
         stmt = delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id)
         self.db.execute(stmt)
         # Create fresh lines

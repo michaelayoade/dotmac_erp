@@ -528,10 +528,10 @@ class DepreciationService(ListResponseMixin):
         if not run or run.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Depreciation run not found")
 
-        return list(
-            db.scalars(
-                select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
-            )
+        return (
+            db.query(DepreciationSchedule)
+            .filter(DepreciationSchedule.run_id == r_id)
+            .all()
         )
 
     @staticmethod
@@ -560,25 +560,27 @@ class DepreciationService(ListResponseMixin):
         offset: int = 0,
     ) -> list[DepreciationRun]:
         """List depreciation runs with optional filters."""
-        stmt = select(DepreciationRun)
+        query = db.query(DepreciationRun)
 
         if organization_id:
-            stmt = stmt.where(
+            query = query.filter(
                 DepreciationRun.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            stmt = stmt.where(
+            query = query.filter(
                 DepreciationRun.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if status:
-            stmt = stmt.where(DepreciationRun.status == status)
+            query = query.filter(DepreciationRun.status == status)
 
-        stmt = (
-            stmt.order_by(DepreciationRun.created_at.desc()).limit(limit).offset(offset)
+        return (
+            query.order_by(DepreciationRun.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
         )
-        return list(db.scalars(stmt))
 
 
 # Module-level singleton instance

@@ -1166,6 +1166,8 @@ class BankingWebService:
         db: Session,
         organization_id: str,
         statement_id: str,
+        page: int = 1,
+        limit: int = 50,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         statement = db.get(BankStatement, coerce_uuid(statement_id))
@@ -1173,12 +1175,17 @@ class BankingWebService:
             return {"statement": None, "lines": [], "account_map": {}}
 
         currency = statement.currency_code
-        lines = [_statement_line_view(line, currency) for line in statement.lines]
+        all_lines = list(statement.lines)
+        total_count = len(all_lines)
+        total_pages = max(1, (total_count + limit - 1) // limit)
+        offset = (page - 1) * limit
+        paged_lines = all_lines[offset : offset + limit]
+        lines = [_statement_line_view(line, currency) for line in paged_lines]
 
         # Build account name lookup for suggested accounts
         account_ids = [
             line.suggested_account_id
-            for line in statement.lines
+            for line in paged_lines
             if line.suggested_account_id
         ]
         account_map: dict[str, str] = {}
@@ -1201,7 +1208,7 @@ class BankingWebService:
             "auto_applied": 0,
             "flagged": 0,
         }
-        for line in statement.lines:
+        for line in all_lines:
             if line.categorization_status == CategorizationStatus.SUGGESTED:
                 cat_summary["suggested"] += 1
             elif line.categorization_status == CategorizationStatus.ACCEPTED:
@@ -1225,8 +1232,12 @@ class BankingWebService:
 
         # Serialize to JSON-safe dict keyed by string line_id
         match_suggestions: dict[str, dict] = {}
+        visible_line_ids = {str(line.line_id) for line in paged_lines}
         for line_id, suggestion in match_suggestions_raw.items():
-            match_suggestions[str(line_id)] = {
+            line_id_str = str(line_id)
+            if line_id_str not in visible_line_ids:
+                continue
+            match_suggestions[line_id_str] = {
                 "journal_line_id": str(suggestion.journal_line_id),
                 "confidence": suggestion.confidence,
                 "counterparty_name": suggestion.counterparty_name,
@@ -1245,7 +1256,7 @@ class BankingWebService:
 
         matched_jl_ids = [
             line.matched_journal_line_id
-            for line in statement.lines
+            for line in paged_lines
             if line.is_matched and line.matched_journal_line_id
         ]
         matched_source_urls: dict[str, str] = {}
@@ -1285,7 +1296,7 @@ class BankingWebService:
         # Build match_details keyed by statement line_id
         # Map statement line → matched journal line id for lookup
         stmt_line_to_jl: dict[str, str] = {}
-        for line in statement.lines:
+        for line in paged_lines:
             if line.is_matched and line.matched_journal_line_id:
                 stmt_line_to_jl[str(line.line_id)] = str(line.matched_journal_line_id)
 
@@ -1325,11 +1336,9 @@ class BankingWebService:
             }
 
         # Check if any lines have balance/category data (issue #16/#17)
-        has_balance_data = any(
-            line.running_balance is not None for line in statement.lines
-        )
+        has_balance_data = any(line.running_balance is not None for line in paged_lines)
         has_category_data = any(
-            line.categorization_status is not None for line in statement.lines
+            line.categorization_status is not None for line in paged_lines
         )
 
         # GL accounts for "Create Journal & Match" feature
@@ -1365,6 +1374,11 @@ class BankingWebService:
         return {
             "statement": _statement_view(statement),
             "lines": lines,
+            "page": page,
+            "limit": limit,
+            "offset": offset,
+            "total_count": total_count,
+            "total_pages": total_pages,
             "account_map": account_map,
             "categorization_summary": cat_summary,
             "match_suggestions": match_suggestions,
@@ -2683,9 +2697,31 @@ class BankingWebService:
 
         statements = list(db.scalars(stmt.offset(offset).limit(limit)).all())
 
-        # ── Aggregates ──
-        total_lines = sum(s.total_lines or 0 for s in statements)
-        matched_lines = sum(s.matched_lines or 0 for s in statements)
+        # ── Real matched counts from BankStatementLine ──
+        # The BankStatement.matched_lines header column is not reliably updated,
+        # so we compute actual counts from the line-level is_matched flag.
+        stmt_ids = [s.statement_id for s in statements]
+        line_counts: dict[UUID, dict[str, int]] = {}
+        if stmt_ids:
+            count_rows = db.execute(
+                select(
+                    BankStatementLine.statement_id,
+                    func.count().label("total"),
+                    func.count()
+                    .filter(BankStatementLine.is_matched.is_(True))
+                    .label("matched"),
+                )
+                .where(BankStatementLine.statement_id.in_(stmt_ids))
+                .group_by(BankStatementLine.statement_id)
+            ).all()
+            for row in count_rows:
+                line_counts[row.statement_id] = {
+                    "total": row.total,
+                    "matched": row.matched,
+                }
+
+        total_lines = sum(lc["total"] for lc in line_counts.values())
+        matched_lines = sum(lc["matched"] for lc in line_counts.values())
 
         # ── Active filters ──
         active_filters: list[dict[str, str]] = []
@@ -2712,8 +2748,18 @@ class BankingWebService:
         if search:
             active_filters.append({"label": f'Search: "{search}"', "param": "search"})
 
+        # ── Build statement views with real matched counts ──
+        statement_views = []
+        for s in statements:
+            sv = _statement_view(s)
+            lc = line_counts.get(s.statement_id, {"total": 0, "matched": 0})
+            sv["total_lines"] = lc["total"]
+            sv["matched_lines"] = lc["matched"]
+            sv["unmatched_lines"] = lc["total"] - lc["matched"]
+            statement_views.append(sv)
+
         return {
-            "statements": [_statement_view(s) for s in statements],
+            "statements": statement_views,
             "accounts": [_account_view(a) for a in accounts],
             "account_id": account_id or "",
             "status": status or "",
@@ -2807,15 +2853,21 @@ class BankingWebService:
         lines_data: list[dict] = []
         upload = form.get("statement_file")
         upload_file = upload if isinstance(upload, UploadFile) else None
+        has_upload = bool(upload_file and upload_file.filename)
         upload_ext = ""
         column_map = self._parse_column_map(form)
         mapped_lines_data, manual_errors = self._parse_manual_lines(form)
+        # When a file is uploaded, ignore manual line fields from the same form
+        # submission to avoid stale hidden inputs overriding uploaded data.
+        if has_upload:
+            mapped_lines_data = []
+            manual_errors = []
         if mapped_lines_data:
             lines_data = self._normalize_mapped_lines(
                 mapped_lines_data, org_date_fmt=org_date_fmt
             )
             errors.extend(manual_errors)
-        if upload_file and upload_file.filename:
+        if has_upload:
             # CSRF middleware parses form data first, which can advance the file pointer.
             try:
                 await upload_file.seek(0)
@@ -2841,7 +2893,7 @@ class BankingWebService:
                 errors.append(
                     f"Supported statement files: {spreadsheet_formats_label()}."
                 )
-            elif not lines_data:
+            else:
                 # Limit upload size to avoid memory blowups.
                 max_bytes = 10 * 1024 * 1024  # 10 MiB
                 content = await upload_file.read(max_bytes + 1)
@@ -3402,6 +3454,9 @@ class BankingWebService:
         auth: WebAuthContext,
         db: Session,
         statement_id: str,
+        *,
+        page: int = 1,
+        limit: int = 50,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Bank Statement", "banking", db=db)
         context.update(
@@ -3409,6 +3464,8 @@ class BankingWebService:
                 db,
                 str(auth.organization_id),
                 statement_id,
+                page=page,
+                limit=limit,
             )
         )
         return templates.TemplateResponse(

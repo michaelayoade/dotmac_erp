@@ -40,6 +40,8 @@ router = APIRouter(
     ],
 )
 
+MANUAL_TICKET_CREATION_API_ENABLED = False
+
 
 def get_db():
     db = SessionLocal()
@@ -175,6 +177,12 @@ def create_ticket(
     db: Session = Depends(get_db),
 ):
     """Create a new support ticket."""
+    if not MANUAL_TICKET_CREATION_API_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manual ticket creation is disabled. Tickets are synced from CRM.",
+        )
+
     org_id = coerce_uuid(auth["organization_id"])
     user_id = coerce_uuid(auth["person_id"])
 

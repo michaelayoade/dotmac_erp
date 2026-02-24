@@ -322,12 +322,14 @@ async def reject_suggestion_flat(
 def view_statement(
     request: Request,
     statement_id: str,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Statement detail page with lines."""
     return banking_web_service.statement_detail_response(
-        request, auth, db, statement_id
+        request, auth, db, statement_id, page=page, limit=limit
     )
 
 

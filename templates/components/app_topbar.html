@@ -107,14 +107,37 @@
             </button>
 
             <!-- Notifications -->
-            <div x-data='{ open: false, selectedIdx: -1, notifications: {{ notifications | default([]) | tojson }} }' @keydown.escape.window="open = false; selectedIdx = -1" class="relative">
+            <div x-data="{
+                    open: false,
+                    selectedIdx: -1,
+                    notifications: {{ notifications | default([]) | tojson }},
+                    unreadCount: 0,
+                    async init() {
+                        this.unreadCount = (this.notifications || []).filter(n => !n.read).length;
+                        try {
+                            const response = await fetch('/notifications/context?limit=5', {
+                                headers: { 'Accept': 'application/json' }
+                            });
+                            if (!response.ok) return;
+                            const data = await response.json();
+                            if (Array.isArray(data.notifications)) {
+                                this.notifications = data.notifications;
+                            }
+                            if (typeof data.unread_count === 'number') {
+                                this.unreadCount = data.unread_count;
+                            }
+                        } catch (_error) {
+                            // Keep server-rendered notifications if the fetch fails.
+                        }
+                    }
+                }" @keydown.escape.window="open = false; selectedIdx = -1" class="relative">
                 <button @click="open = !open"
                         class="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
                         aria-label="Notifications">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                     </svg>
-                    <span x-show="notifications.length > 0" class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
+                    <span x-show="unreadCount > 0" class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
                 </button>
 
                 <!-- Notifications Dropdown -->

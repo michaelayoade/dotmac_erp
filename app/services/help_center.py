@@ -516,7 +516,7 @@ MODULE_GUIDES: dict[str, dict[str, Any]] = {
 }
 
 
-CROSS_MODULE_WORKFLOWS = [
+CROSS_MODULE_WORKFLOWS: list[dict[str, Any]] = [
     {
         "title": "Procure-to-Pay",
         "modules": ["procurement", "finance", "inventory"],
@@ -550,7 +550,7 @@ CROSS_MODULE_WORKFLOWS = [
 ]
 
 
-ROLE_PLAYBOOKS = [
+ROLE_PLAYBOOKS: list[dict[str, Any]] = [
     {
         "key": "admin",
         "title": "System Administrator",

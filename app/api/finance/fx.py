@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select as select  # noqa: F401
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_tenant_auth

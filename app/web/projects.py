@@ -49,6 +49,19 @@ from app.web.deps import (
 
 router = APIRouter(prefix="/projects", tags=["projects-web"])
 logger = logging.getLogger(__name__)
+MANUAL_PROJECT_CREATION_ENABLED = False
+
+
+def _manual_project_creation_disabled_response(request: Request):
+    """Manual project creation is disabled; projects are CRM-synced."""
+    return templates.TemplateResponse(
+        "errors/404.html",
+        {
+            "request": request,
+            "message": "Manual project creation is disabled. Projects are synced from CRM.",
+        },
+        status_code=404,
+    )
 
 
 # ============================================================================
@@ -549,6 +562,9 @@ def new_project_form(
     db: Session = Depends(get_db),
 ):
     """New project form page."""
+    if not MANUAL_PROJECT_CREATION_ENABLED:
+        return _manual_project_creation_disabled_response(request)
+
     from sqlalchemy import select
 
     from app.models.finance.ar.customer import Customer
@@ -1321,7 +1337,7 @@ def delete_project_comment(
 
     try:
         comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
-    except Exception:
+    except (ValueError, RuntimeError):
         pass
     return RedirectResponse(
         url=_project_url(project) + "?saved=1" + "#comments", status_code=303
@@ -1350,6 +1366,9 @@ async def create_project(
     db: Session = Depends(get_db),
 ):
     """Create a new project."""
+    if not MANUAL_PROJECT_CREATION_ENABLED:
+        return _manual_project_creation_disabled_response(request)
+
     import logging
 
     from sqlalchemy import select
@@ -2038,7 +2057,7 @@ def delete_task_comment(
 
     try:
         comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
-    except Exception:
+    except (ValueError, RuntimeError):
         pass
     base_url = (
         f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}"

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.notification import EntityType, NotificationType
@@ -219,6 +219,24 @@ async def mark_all_notifications_read(
 
     # Redirect back to notifications page
     return RedirectResponse(url="/notifications", status_code=302)
+
+
+@router.get("/notifications/context", response_class=JSONResponse)
+async def notifications_context(
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+    limit: int = Query(5, ge=1, le=20),
+):
+    """Return recent notifications + unread count for header/topbar hydration."""
+    notifications, unread_count = get_notifications_for_context(
+        db,
+        person_id=auth.person_id,
+        organization_id=auth.organization_id,
+        limit=limit,
+    )
+    return JSONResponse(
+        {"notifications": notifications, "unread_count": unread_count},
+    )
 
 
 def get_notifications_for_context(

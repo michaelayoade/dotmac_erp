@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.schemas.sync.dotmac_crm import (
+    CRMInventoryItemPayload,
     CRMMaterialRequestItemPayload,
     CRMMaterialRequestPayload,
     CRMProjectPayload,
@@ -1619,6 +1620,95 @@ class TestGetMaterialRequestByCrmId:
         assert len(result.items) == 1
         assert result.items[0].item_name == "Fiber Cable"
         assert result.items[0].requested_qty == Decimal("10")
+
+
+class TestUpsertInventoryItem:
+    """Test CRM inventory item upsert flow."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_upsert_inventory_item_creates_new(
+        self, mock_select, service, org_id, mock_db
+    ):
+        category = MagicMock()
+        category.category_id = uuid.uuid4()
+
+        # category lookup -> existing item lookup
+        mock_db.scalar.side_effect = [category, None]
+        added_objects: list = []
+        mock_db.add.side_effect = lambda obj: added_objects.append(obj)
+
+        def simulate_flush() -> None:
+            for obj in added_objects:
+                if hasattr(obj, "item_id") and obj.item_id is None:
+                    obj.item_id = uuid.uuid4()
+
+        mock_db.flush.side_effect = simulate_flush
+
+        payload = CRMInventoryItemPayload(
+            crm_id="crm-item-001",
+            item_code="ITEM202602-00001",
+            item_name="Test Item",
+            category_code="DEFAULT",
+            base_uom="EA",
+            currency_code="NGN",
+        )
+
+        result = service.upsert_inventory_item(org_id, payload)
+
+        assert result.status == "created"
+        assert result.item_code == "ITEM202602-00001"
+        assert result.crm_id == "crm-item-001"
+        mock_db.add.assert_called_once()
+        assert mock_db.flush.called
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_upsert_inventory_item_updates_existing(
+        self, mock_select, service, org_id, mock_db
+    ):
+        category = MagicMock()
+        category.category_id = uuid.uuid4()
+
+        existing = MagicMock()
+        existing.item_id = uuid.uuid4()
+        existing.item_code = "ITEM202602-00001"
+
+        # first active category fallback -> existing item lookup
+        mock_db.scalar.side_effect = [category, existing]
+
+        payload = CRMInventoryItemPayload(
+            crm_id="crm-item-001",
+            item_code="ITEM202602-00001",
+            item_name="Test Item Updated",
+            base_uom="PCS",
+            currency_code="NGN",
+            is_active=True,
+        )
+
+        result = service.upsert_inventory_item(org_id, payload)
+
+        assert result.status == "updated"
+        assert existing.item_name == "Test Item Updated"
+        assert existing.base_uom == "PCS"
+        assert existing.purchase_uom == "PCS"
+        assert existing.sales_uom == "PCS"
+        assert existing.erpnext_id == "crm-item-001"
+        assert mock_db.add.call_count == 0
+        assert mock_db.flush.called
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_upsert_inventory_item_missing_category_raises(
+        self, mock_select, service, org_id, mock_db
+    ):
+        mock_db.scalar.return_value = None
+        payload = CRMInventoryItemPayload(
+            crm_id="crm-item-001",
+            item_code="ITEM202602-00001",
+            item_name="Test Item",
+            category_code="MISSING",
+        )
+
+        with pytest.raises(ValueError, match="Item category not found: MISSING"):
+            service.upsert_inventory_item(org_id, payload)
 
 
 class TestEnhancedBulkPayloads:

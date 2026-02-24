@@ -14,6 +14,7 @@ from app.models.auth import ApiKey, SessionStatus
 from app.models.auth import Session as AuthSession
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
+from app.observability import actor_id_var
 from app.rls import enable_rls_bypass_sync, set_current_organization_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
@@ -115,6 +116,14 @@ def _session_revoked_key(session_id: UUID) -> str:
 
 # Short TTL for revocation markers to handle race conditions (30 seconds)
 SESSION_REVOKED_MARKER_TTL_SECONDS = 30
+
+
+def _set_actor_context(request: Request | None, actor_id: UUID | str) -> None:
+    """Keep request state and observability context in sync for auditing."""
+    actor = str(actor_id)
+    actor_id_var.set(actor)
+    if request is not None:
+        request.state.actor_id = actor
 
 
 def _validate_session_cached(
@@ -452,8 +461,7 @@ def require_audit_auth(
                         auth_db.close()
 
             actor_id = str(person_id)
-            if request is not None:
-                request.state.actor_id = actor_id
+            _set_actor_context(request, actor_id)
             return {"actor_type": "user", "actor_id": actor_id}
 
         # Session token (hash-based) - requires local database lookup
@@ -469,8 +477,7 @@ def require_audit_auth(
                 .where(AuthSession.expires_at > now)
             )
             if session:
-                if request is not None:
-                    request.state.actor_id = str(session.person_id)
+                _set_actor_context(request, session.person_id)
                 return {"actor_type": "user", "actor_id": str(session.person_id)}
         finally:
             if auth_db:
@@ -485,8 +492,7 @@ def require_audit_auth(
             .where((ApiKey.expires_at.is_(None)) | (ApiKey.expires_at > now))
         )
         if api_key:
-            if request is not None:
-                request.state.actor_id = str(api_key.id)
+            _set_actor_context(request, api_key.id)
             return {"actor_type": "api_key", "actor_id": str(api_key.id)}
     raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -564,8 +570,7 @@ def require_user_auth(
         [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
     )
     actor_id = str(person_id)
-    if request is not None:
-        request.state.actor_id = actor_id
+    _set_actor_context(request, actor_id)
     return {
         "person_id": str(person_id),
         "session_id": str(session_id),
@@ -732,8 +737,7 @@ def require_tenant_auth(
         [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
     )
     actor_id = str(person_id)
-    if request is not None:
-        request.state.actor_id = actor_id
+    _set_actor_context(request, actor_id)
     return {
         "person_id": str(person_id),
         "session_id": str(session_id),
@@ -906,8 +910,8 @@ def require_admin_bypass(
         [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
     )
     actor_id = str(person_id)
+    _set_actor_context(request, actor_id)
     if request is not None:
-        request.state.actor_id = actor_id
         request.state.is_admin_bypass = True
     return {
         "person_id": str(person_id),
@@ -1038,7 +1042,7 @@ def require_web_session(
         set_current_organization_sync(db, organization_id)
         request.state.organization_id = str(organization_id)
 
-    request.state.actor_id = str(person.id)
+    _set_actor_context(request, person.id)
 
     def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()
@@ -1150,7 +1154,7 @@ def optional_web_session(
         set_current_organization_sync(db, organization_id)
         request.state.organization_id = str(organization_id)
 
-    request.state.actor_id = str(person.id)
+    _set_actor_context(request, person.id)
 
     def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()

@@ -159,7 +159,7 @@ async def test_statement_import_preview_response_for_xlsx(mock_db):
 
 
 @pytest.mark.asyncio
-async def test_statement_import_submit_uses_mapped_lines_when_file_present(
+async def test_statement_import_submit_prefers_uploaded_file_over_manual_lines(
     mock_db, monkeypatch
 ):
     service = BankingWebService()
@@ -193,11 +193,6 @@ async def test_statement_import_submit_uses_mapped_lines_when_file_present(
 
     import app.services.finance.banking.web as banking_web_module
 
-    def _fail_parse(*_args, **_kwargs):
-        raise AssertionError(
-            "File parser should not run when mapped lines are present."
-        )
-
     captured = {}
 
     def _fake_import_statement(**kwargs):
@@ -208,8 +203,25 @@ async def test_statement_import_submit_uses_mapped_lines_when_file_present(
             auto_matched=0,
         )
 
+    def _fake_parse_csv_rows(content, csv_format=None, date_format=None):
+        _ = (content, csv_format, date_format)
+        return (
+            [
+                {
+                    "line_number": 1,
+                    "transaction_date": "2026-02-01",
+                    "transaction_type": "credit",
+                    "amount": "100.00",
+                    "description": "from-file",
+                }
+            ],
+            [],
+        )
+
     monkeypatch.setattr(
-        banking_web_module.bank_statement_service, "parse_csv_rows", _fail_parse
+        banking_web_module.bank_statement_service,
+        "parse_csv_rows",
+        _fake_parse_csv_rows,
     )
     monkeypatch.setattr(
         banking_web_module.bank_statement_service,
@@ -223,7 +235,7 @@ async def test_statement_import_submit_uses_mapped_lines_when_file_present(
     assert "/finance/banking/statements/" in response.headers["location"]
     assert captured["import_source"] == "csv"
     assert len(captured["lines"]) == 1
-    assert captured["lines"][0].description == "from-mapping"
+    assert captured["lines"][0].description == "from-file"
 
 
 @pytest.mark.asyncio

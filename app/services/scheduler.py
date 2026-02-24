@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Select, select
+from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from app.models.scheduler import ScheduledTask, ScheduleType
@@ -72,16 +72,26 @@ class ScheduledTasks(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[ScheduledTask]:
-        allowed_columns = {
-            "created_at": ScheduledTask.created_at,
-            "name": ScheduledTask.name,
-        }
+        allowed_columns = {"created_at", "name"}
+        if order_by not in allowed_columns:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
+            )
 
-        query = select(ScheduledTask)
+        query = db.query(ScheduledTask)
         if enabled is not None:
-            query = query.where(ScheduledTask.enabled == enabled)
-        query = _apply_ordering(query, order_by, order_dir, allowed_columns)
-        return list(db.scalars(_apply_pagination(query, limit, offset)))
+            query = query.filter(ScheduledTask.enabled == enabled)
+
+        sort_column = (
+            ScheduledTask.created_at if order_by == "created_at" else ScheduledTask.name
+        )
+        if order_dir == "desc":
+            query = query.order_by(sort_column.desc())
+        else:
+            query = query.order_by(sort_column.asc())
+
+        return query.limit(limit).offset(offset).all()
 
     @staticmethod
     def update(

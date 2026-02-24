@@ -35,7 +35,7 @@ class NotificationService:
         title: str,
         message: str,
         *,
-        channel: NotificationChannel = NotificationChannel.IN_APP,
+        channel: NotificationChannel | None = None,
         action_url: str | None = None,
         actor_id: uuid.UUID | None = None,
     ) -> Notification:
@@ -51,20 +51,27 @@ class NotificationService:
             notification_type: Type of notification event
             title: Short title for display
             message: Full notification message
-            channel: Delivery channel (IN_APP, EMAIL, or BOTH)
+            channel: Delivery channel (IN_APP, EMAIL, or BOTH). If omitted,
+                MENTION defaults to BOTH and all other types default to IN_APP.
             action_url: URL to navigate to when clicking notification
             actor_id: Person who triggered the notification
 
         Returns:
             Created notification
         """
+        effective_channel = channel or (
+            NotificationChannel.BOTH
+            if notification_type == NotificationType.MENTION
+            else NotificationChannel.IN_APP
+        )
+
         notification = Notification(
             organization_id=organization_id,
             recipient_id=recipient_id,
             entity_type=entity_type,
             entity_id=entity_id,
             notification_type=notification_type,
-            channel=channel,
+            channel=effective_channel,
             title=title,
             message=message,
             action_url=action_url,

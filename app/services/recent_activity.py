@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.inspection import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
+from app.models.audit import AuditActorType, AuditEvent
 from app.models.finance.audit.audit_log import AuditLog
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
@@ -72,8 +73,36 @@ def get_recent_activity(
         return []
 
     audit_service = get_audit_service(db)
-    user_ids = list({log.user_id for log in logs if log.user_id})
-    user_names = audit_service.get_user_names_batch(user_ids)
+    resolved_actor_ids = {log.user_id for log in logs if log.user_id}
+    correlation_ids = {
+        log.correlation_id for log in logs if not log.user_id and log.correlation_id
+    }
+    actor_by_correlation: dict[str, UUID] = {}
+    if correlation_ids:
+        events = list(
+            db.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.organization_id == org_id,
+                    AuditEvent.request_id.in_(list(correlation_ids)),
+                    AuditEvent.actor_type == AuditActorType.user,
+                )
+                .order_by(AuditEvent.occurred_at.desc())
+            ).all()
+        )
+        for event in events:
+            request_id = (event.request_id or "").strip()
+            if not request_id or request_id in actor_by_correlation:
+                continue
+            actor_id = event.actor_person_id
+            if actor_id is None and event.actor_id:
+                parsed = coerce_uuid(event.actor_id, raise_http=False)
+                actor_id = parsed if isinstance(parsed, UUID) else None
+            if actor_id is not None:
+                actor_by_correlation[request_id] = actor_id
+                resolved_actor_ids.add(actor_id)
+
+    user_names = audit_service.get_user_names_batch(list(resolved_actor_ids))
 
     items: list[dict[str, str]] = []
     for log in logs:
@@ -87,7 +116,11 @@ def get_recent_activity(
             else shown_fields
         )
 
-        user_name = user_names.get(log.user_id) if log.user_id else None
+        actor_id = log.user_id
+        if actor_id is None and log.correlation_id:
+            actor_id = actor_by_correlation.get(log.correlation_id)
+        user_name = user_names.get(actor_id) if actor_id else None
+        actor_name = user_name or ("Unknown User" if actor_id else "System")
         items.append(
             {
                 "audit_id": str(log.audit_id),
@@ -96,7 +129,7 @@ def get_recent_activity(
                 "action_label": _ACTION_LABELS.get(
                     action_raw, action_raw.title() if action_raw else "Updated"
                 ),
-                "actor_name": user_name or "System",
+                "actor_name": actor_name,
                 "changed_fields_label": changed_fields_label,
                 "reason": log.reason or "",
                 "ip_address": log.ip_address or "",

@@ -145,6 +145,7 @@ __all__ = [
     "complete_cycle",
     # Audit tasks
     "log_audit_event",
+    "verify_audit_hash_chain",
     # Payroll tasks
     "send_payslip_email",
     "process_payroll_entry_notifications",

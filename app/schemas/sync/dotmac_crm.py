@@ -138,6 +138,25 @@ class CRMWorkOrderPayload(BaseModel):
     metadata: dict | None = None
 
 
+class CRMInventoryItemPayload(BaseModel):
+    """Inventory item data from DotMac CRM."""
+
+    crm_id: str = Field(..., description="UUID from CRM")
+    item_code: str = Field(..., max_length=50)
+    item_name: str = Field(..., max_length=200)
+    description: str | None = None
+    category_code: str | None = Field(
+        None, max_length=30, description="ERP item category code"
+    )
+    base_uom: str = Field("EA", max_length=20)
+    currency_code: str = Field("NGN", min_length=3, max_length=3)
+    list_price: Decimal | None = None
+    reorder_point: Decimal | None = None
+    barcode: str | None = Field(None, max_length=100)
+    is_active: bool = True
+    metadata: dict | None = None
+
+
 class BulkSyncRequest(BaseModel):
     """Bulk sync request from DotMac CRM."""
 
@@ -161,6 +180,15 @@ class BulkSyncResponse(BaseModel):
     tickets_synced: int = 0
     work_orders_synced: int = 0
     errors: list[SyncError] = Field(default_factory=list)
+
+
+class CRMInventoryItemResponse(BaseModel):
+    """Response for CRM inventory item upsert."""
+
+    item_id: UUID
+    item_code: str
+    status: str
+    crm_id: str
 
 
 # ============ Read Schemas (ERP → CRM or UI) ============

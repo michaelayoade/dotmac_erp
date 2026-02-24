@@ -9,7 +9,7 @@ import logging
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.system_configuration import (
@@ -66,8 +66,10 @@ class FeatureFlagService(ListResponseMixin):
         except Exception:
             org_flag = db.scalar(
                 select(SystemConfiguration).where(
-                    SystemConfiguration.organization_id == org_id,
-                    SystemConfiguration.config_key == config_key,
+                    and_(
+                        SystemConfiguration.organization_id == org_id,
+                        SystemConfiguration.config_key == config_key,
+                    )
                 )
             )
 
@@ -85,8 +87,10 @@ class FeatureFlagService(ListResponseMixin):
         except Exception:
             system_flag = db.scalar(
                 select(SystemConfiguration).where(
-                    SystemConfiguration.organization_id.is_(None),
-                    SystemConfiguration.config_key == config_key,
+                    and_(
+                        SystemConfiguration.organization_id.is_(None),
+                        SystemConfiguration.config_key == config_key,
+                    )
                 )
             )
 

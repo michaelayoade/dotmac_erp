@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg %}
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
 {% block page_title %}Cash flow statement{% endblock %}
 
 {% block breadcrumbs %}
@@ -24,6 +24,7 @@
 <div class="max-w-4xl mx-auto space-y-6">
     <div class="card p-4">
         <form method="get" class="flex flex-wrap items-end gap-4">
+            {{ period_shortcuts(mode="range") }}
             <div class="flex-1 min-w-[200px]">
                 <label class="form-label">Start date</label>
                 <input type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">
