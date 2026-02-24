@@ -197,6 +197,7 @@ def upgrade() -> None:
         )
 
     # ── Step 2: Set expense_payable_account_id to 2030 for production org ──
+    # Guard: only set if the target account exists (fresh CI DBs have no data)
     conn.execute(
         sa.text(
             """
@@ -205,6 +206,9 @@ def upgrade() -> None:
             WHERE organization_id = :org_id
               AND (expense_payable_account_id IS NULL
                    OR expense_payable_account_id != :account_id)
+              AND EXISTS (
+                  SELECT 1 FROM gl.account WHERE account_id = :account_id
+              )
             """
         ),
         {"account_id": ACCT_2030_EMPLOYEE_REIMBURSABLES, "org_id": ORG_ID},

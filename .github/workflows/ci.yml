@@ -160,6 +160,8 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - uses: pre-commit/action@v3.0.1
+        env:
+          SKIP: semgrep  # semgrep needs poetry; covered by Security Scan job
 
   # ---------------------------------------------------------------------------
   # Docker Build & Health Check
