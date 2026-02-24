@@ -536,7 +536,7 @@ def offer_portal_pdf(
     letter_service = OfferLetterService(db)
     try:
         letter_service._ensure_default_template(ctx.org_id, user_id)
-    except Exception:
+    except (ValueError, RuntimeError):
         pass
     pdf_bytes, doc = letter_service.generate_offer_letter(offer.offer_id, user_id)
     filename = doc.document_number or f"OFFER-{offer.offer_number}"

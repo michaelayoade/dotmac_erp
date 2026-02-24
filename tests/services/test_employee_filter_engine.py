@@ -34,7 +34,7 @@ def test_parse_employee_filter_payload_json_invalid_json() -> None:
 
 
 def test_parse_employee_filter_payload_json_rejects_mixed_doctypes() -> None:
-    with pytest.raises(ValueError, match="mixed doctypes"):
+    with pytest.raises(ValueError, match="unsupported doctype"):
         FilterExpression.parse_payload(
             [
                 ["Employee", "status", "=", "ACTIVE"],

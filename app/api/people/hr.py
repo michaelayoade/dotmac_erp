@@ -704,7 +704,7 @@ def list_employees(
 ):
     """List employees."""
     svc = EmployeeService(db, organization_id)
-    filters = EmployeeFilters(
+    employee_filters = EmployeeFilters(
         search=search,
         status=status,
         department_id=department_id,
@@ -719,7 +719,7 @@ def list_employees(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     result = svc.list_employees(
-        filters,
+        employee_filters,
         PaginationParams(offset=offset, limit=limit),
         advanced_filter_expression=advanced_expression,
     )

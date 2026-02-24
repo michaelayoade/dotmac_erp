@@ -209,8 +209,8 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             return candidate
 
         self._ensure_customer_lookups()
-        assert self._customer_exact_lookup is not None
-        assert self._customer_norm_lookup is not None
+        assert self._customer_exact_lookup is not None  # noqa: S101  # nosec B101
+        assert self._customer_norm_lookup is not None  # noqa: S101  # nosec B101
 
         if source_name in self._customer_exact_lookup:
             return self._customer_exact_lookup[source_name]

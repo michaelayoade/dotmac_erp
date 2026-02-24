@@ -78,6 +78,7 @@ _test_engine = create_engine(
     poolclass=StaticPool,
     execution_options={
         "schema_translate_map": {
+            "audit": None,
             "expense": None,
             "platform": None,
             "gl": None,

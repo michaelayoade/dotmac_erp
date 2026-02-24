@@ -189,8 +189,8 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
             return candidate
 
         self._ensure_supplier_lookups()
-        assert self._supplier_exact_lookup is not None
-        assert self._supplier_norm_lookup is not None
+        assert self._supplier_exact_lookup is not None  # noqa: S101  # nosec B101
+        assert self._supplier_norm_lookup is not None  # noqa: S101  # nosec B101
 
         if source_name in self._supplier_exact_lookup:
             return self._supplier_exact_lookup[source_name]
