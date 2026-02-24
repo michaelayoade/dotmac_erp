@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from alembic import op
 
 revision: str = "20260224_add_goods_receipt_line_columns"
-down_revision: Union[str, None] = "20260224_add_settingdomain_banking"
+down_revision: Union[str, None] = "20260223_add_approver_budget_adjustment"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
