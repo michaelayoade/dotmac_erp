@@ -1049,7 +1049,9 @@ class ExpenseService:
             # Validate approver authority before allowing approval
             if approver_id:
                 self._validate_approver_authority(org_id, claim, approver_id)
-                self._validate_approver_monthly_budget(org_id, claim, approver_id)
+                # Legacy monthly budget enforcement is intentionally disabled.
+                # self._validate_approver_monthly_budget(org_id, claim, approver_id)
+                self._validate_approver_weekly_budget(org_id, claim, approver_id)
 
                 # Self-approval prevention (separation of duties)
                 if claim.employee_id:
@@ -1428,6 +1430,23 @@ class ExpenseService:
         expense_date = claim.claim_date or date.today()
         limit_svc.check_approver_monthly_budget(
             org_id, approver_id, claim_amount, expense_date
+        )
+
+    def _validate_approver_weekly_budget(
+        self,
+        org_id: UUID,
+        claim: ExpenseClaim,
+        approver_id: UUID,
+    ) -> None:
+        """Validate the approver has remaining weekly budget."""
+        from app.services.expense.limit_service import ExpenseLimitService
+
+        limit_svc = ExpenseLimitService(self.db, self.ctx)
+        claim_amount = claim.total_claimed_amount or Decimal("0")
+        limit_svc.check_approver_weekly_budget(
+            org_id,
+            approver_id,
+            claim_amount,
         )
 
     def reject_claim(

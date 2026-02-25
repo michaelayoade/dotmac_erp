@@ -460,6 +460,7 @@ def _load_rbac_claims(db: Session, person_id: str) -> tuple[list[str], list[str]
         "expense:claims:approve:tier2",
         "expense:claims:approve:tier3",
         "expense:claims:reject",
+        "expense:limits:review",
     }
     permissions = db.scalars(
         select(Permission)

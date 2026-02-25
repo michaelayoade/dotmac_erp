@@ -9,6 +9,8 @@ from app.services.finance.gl.account_balance import (
     AccountBalanceService,
     account_balance_service,
 )
+from app.services.finance.gl.balance_invalidation import BalanceInvalidationService
+from app.services.finance.gl.balance_refresh import BalanceRefreshService
 from app.services.finance.gl.chart_of_accounts import (
     AccountInput,
     ChartOfAccountsService,
@@ -66,6 +68,8 @@ __all__ = [
     # Account Balance
     "AccountBalanceService",
     "account_balance_service",
+    "BalanceInvalidationService",
+    "BalanceRefreshService",
     "balance_service",  # Alias for API compatibility
     # Chart of Accounts
     "ChartOfAccountsService",

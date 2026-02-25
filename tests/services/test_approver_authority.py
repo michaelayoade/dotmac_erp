@@ -203,7 +203,7 @@ class TestApproverAuthorityValidation:
 
         with (
             patch.object(svc, "_validate_approver_authority") as mock_validate,
-            patch.object(svc, "_validate_approver_monthly_budget"),
+            patch.object(svc, "_validate_approver_weekly_budget"),
         ):
             svc.approve_claim(org_id, claim_id, approver_id=approver_id)
             mock_validate.assert_called_once_with(org_id, claim, approver_id)
@@ -269,7 +269,7 @@ class TestSelfApprovalPrevention:
 
         with (
             patch.object(svc, "_validate_approver_authority"),
-            patch.object(svc, "_validate_approver_monthly_budget"),
+            patch.object(svc, "_validate_approver_weekly_budget"),
         ):
             with pytest.raises(ExpenseServiceError, match="Cannot approve your own"):
                 svc.approve_claim(org_id, claim_id, approver_id=approver_id)
@@ -304,7 +304,7 @@ class TestSelfApprovalPrevention:
 
         with (
             patch.object(svc, "_validate_approver_authority"),
-            patch.object(svc, "_validate_approver_monthly_budget"),
+            patch.object(svc, "_validate_approver_weekly_budget"),
         ):
             result = svc.approve_claim(org_id, claim_id, approver_id=approver_id)
             assert result.status == ExpenseClaimStatus.APPROVED

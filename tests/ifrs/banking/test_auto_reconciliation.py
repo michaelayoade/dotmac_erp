@@ -22,6 +22,7 @@ from app.models.finance.payments.payment_intent import (
 )
 from app.services.finance.banking.auto_reconciliation import (
     AMOUNT_TOLERANCE,
+    AutoMatchConfig,
     AutoMatchResult,
     AutoReconciliationService,
 )
@@ -30,6 +31,18 @@ from tests.ifrs.banking.conftest import (
     MockBankStatement,
     MockBankStatementLine,
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_load_config() -> object:
+    """Patch _load_config to return defaults without hitting the DB."""
+    with patch.object(
+        AutoReconciliationService,
+        "_load_config",
+        return_value=AutoMatchConfig(),
+    ):
+        yield
+
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -200,23 +213,29 @@ def setup_db_scalars(
     intents: list,
     splynx_payments: list | None = None,
     extra_gl_account_ids: list | None = None,
+    ap_payments: list | None = None,
+    ar_payments: list | None = None,
 ) -> None:
     """Configure mock_db.scalars() for sequential calls.
 
     Call order:
-    1. Fallback bank GL account IDs (new — for extra_gl_account_ids)
+    1. Fallback bank GL account IDs (for extra_gl_account_ids)
     2. Unmatched statement lines
     3. Splynx CustomerPayments (always loaded, shared by passes 2 & 3)
     4. PaymentIntents for pass 1
+    5. AP SupplierPayments for pass 4
+    6. Non-Splynx AR CustomerPayments for pass 5
 
-    Provide *splynx_payments* to control what the Splynx pass receives.
-    Defaults to empty list (no Splynx payments).
+    Provide *splynx_payments*, *ap_payments*, *ar_payments* to control what
+    each pass receives.  Defaults to empty list (no payments).
     """
     items_list = [
         extra_gl_account_ids or [],  # 1. fallback GL accounts
         unmatched_lines,  # 2. unmatched lines
         splynx_payments or [],  # 3. Splynx payments
         intents,  # 4. PaymentIntents
+        ap_payments or [],  # 5. AP payments
+        ar_payments or [],  # 6. non-Splynx AR payments
     ]
 
     scalars_results = []
@@ -427,6 +446,8 @@ class TestPaymentIntentMatching:
             journal_line_id=jl.line_id,
             matched_by=None,
             force_match=True,
+            source_type="PAYMENT_INTENT",
+            source_id=intent.intent_id,
         )
 
     def test_happy_path_reference_in_description(
@@ -958,6 +979,8 @@ class TestSplynxPaymentMatching:
             journal_line_id=jl.line_id,
             matched_by=None,
             force_match=True,
+            source_type="CUSTOMER_PAYMENT",
+            source_id=pmt.payment_id,
         )
 
     def test_splynx_ref_in_description(
@@ -2148,18 +2171,22 @@ class TestSettlementMatching:
         # 2. unmatched lines
         # 3. splynx payments (empty)
         # 4. intents (empty)
+        # 5. AP payments (empty)
+        # 6. non-Splynx AR payments (empty)
         # Then in _match_settlements():
-        # 5. other_bank_ids
-        # 6. deposit_lines (from other bank statements)
-        # 7. target_accounts (BankAccount objects)
+        # 7. other_bank_ids
+        # 8. deposit_lines (from other bank statements)
+        # 9. target_accounts (BankAccount objects)
         scalars_calls = [
             [],  # 1. fallback GL accounts
             settlement_lines,  # 2. unmatched lines
             [],  # 3. splynx payments
             [],  # 4. intents
-            [dest_bank.bank_account_id],  # 5. other bank account IDs
-            deposit_lines,  # 6. deposit lines from other banks
-            [dest_bank],  # 7. target BankAccount objects
+            [],  # 5. AP payments
+            [],  # 6. non-Splynx AR payments
+            [dest_bank.bank_account_id],  # 7. other bank account IDs
+            deposit_lines,  # 8. deposit lines from other banks
+            [dest_bank],  # 9. target BankAccount objects
         ]
 
         scalars_results = []

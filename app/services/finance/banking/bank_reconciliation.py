@@ -1790,6 +1790,8 @@ class BankReconciliationService:
         journal_line_id: UUID,
         matched_by: UUID | None = None,
         force_match: bool = False,
+        source_type: str | None = None,
+        source_id: UUID | None = None,
     ) -> BankStatementLine:
         """Directly match a statement line to a GL journal line.
 
@@ -1894,6 +1896,8 @@ class BankReconciliationService:
             matched_at=now,
             matched_by=matched_by,
             is_primary=True,
+            source_type=source_type,
+            source_id=source_id,
         )
         db.add(match_row)
 
@@ -1904,9 +1908,11 @@ class BankReconciliationService:
         db.flush()
 
         logger.info(
-            "Matched statement line %s to GL line %s (direct, no reconciliation)",
+            "Matched statement line %s to GL line %s (direct, source=%s/%s)",
             statement_line_id,
             journal_line_id,
+            source_type or "none",
+            source_id or "none",
         )
 
         return stmt_line

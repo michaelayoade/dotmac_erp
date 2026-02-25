@@ -48,6 +48,8 @@ _SKIP_TABLES: frozenset[tuple[str | None, str]] = frozenset(
         ("ap", "ap_aging_snapshot"),
         ("gl", "account_balance"),
         ("gl", "posted_ledger_line"),
+        # Field-level change tracking (separate from forensic audit)
+        ("audit", "field_change_log"),
     }
 )
 

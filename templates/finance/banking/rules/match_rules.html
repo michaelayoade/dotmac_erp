@@ -1,0 +1,121 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state, pagination %}
+
+{% block page_title %}Match Rules{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+  <ol class="flex items-center gap-2">
+    <li><a href="/finance/banking/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Match Rules</span></li>
+  </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+  <a href="/finance/banking/match-rules/log" class="btn btn-secondary btn-sm">Match Log</a>
+  <a href="/finance/banking/match-rules/new" class="btn btn-primary">New Rule</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 page-enter">
+  <div class="card">
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Priority</th>
+            <th scope="col">Name</th>
+            <th scope="col">Source Type</th>
+            <th scope="col" class="text-center">Direction</th>
+            <th scope="col" class="text-center">Status</th>
+            <th scope="col" class="text-right hidden sm:table-cell">Matches</th>
+            <th scope="col" class="hidden sm:table-cell">Last Match</th>
+            <th scope="col" class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rule in rules %}
+          <tr class="group">
+            <td class="font-mono tabular-nums text-slate-500 dark:text-slate-400">{{ rule.priority }}</td>
+            <td>
+              <a href="/finance/banking/match-rules/{{ rule.rule_id }}"
+                 class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                {{ rule.name }}
+              </a>
+              {% if rule.is_system %}
+                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                  System
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-sm text-slate-600 dark:text-slate-400">
+              {{ source_doc_types.get(rule.source_doc_type, rule.source_doc_type) if rule.source_doc_type else '' }}
+            </td>
+            <td class="text-center text-xs">
+              {% if rule.match_credit %}
+                <span class="text-emerald-600 dark:text-emerald-400">Credit</span>
+              {% endif %}
+              {% if rule.match_credit and rule.match_debit %}/{% endif %}
+              {% if rule.match_debit %}
+                <span class="text-rose-600 dark:text-rose-400">Debit</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if rule.is_active %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">Active</span>
+              {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Disabled</span>
+              {% endif %}
+            </td>
+            <td class="text-right font-mono tabular-nums hidden sm:table-cell">{{ rule.match_count if rule.match_count else 0 }}</td>
+            <td class="hidden sm:table-cell text-sm text-slate-500 dark:text-slate-400">
+              {{ rule.last_matched_at.strftime('%d %b %Y') if rule.last_matched_at else '—' }}
+            </td>
+            <td class="text-right">
+              <div class="flex items-center justify-end gap-1">
+                <form method="POST" action="/finance/banking/match-rules/{{ rule.rule_id }}/toggle" class="inline">
+                  {{ request.state.csrf_form | safe }}
+                  <button type="submit" class="btn btn-ghost btn-sm" title="{{ 'Disable' if rule.is_active else 'Enable' }}">
+                    {% if rule.is_active %}
+                      {{ icon_svg("check-circle", "h-4 w-4 text-emerald-500") }}
+                    {% else %}
+                      {{ icon_svg("clock", "h-4 w-4 text-slate-400") }}
+                    {% endif %}
+                  </button>
+                </form>
+                {% if not rule.is_system %}
+                <a href="/finance/banking/match-rules/{{ rule.rule_id }}/edit" class="btn btn-ghost btn-sm" title="Edit">
+                  {{ icon_svg("edit", "h-4 w-4") }}
+                </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8">
+              {{ empty_state(
+                title="No match rules yet",
+                description="Create rules to automatically match bank statement lines to source documents.",
+                icon="document",
+                cta_text="New Rule",
+                cta_href="/finance/banking/match-rules/new"
+              ) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+      {{ pagination(page, total_pages, total, "/finance/banking/match-rules") }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

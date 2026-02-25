@@ -44,6 +44,8 @@ class SettingDomain(enum.Enum):
     procurement = "procurement"
     settings = "settings"
     payroll = "payroll"
+    banking = "banking"
+    coach = "coach"
 
 
 class SettingChangeAction(enum.Enum):

@@ -359,3 +359,132 @@ def wht_report(
     return tax_web_service.wht_report_page(
         request, start_date, end_date, include_details, auth, db
     )
+
+
+# ─── Fiscal Positions ───────────────────────────────────────────────
+
+
+@router.get("/fiscal-positions", response_class=HTMLResponse)
+def list_fiscal_positions(
+    request: Request,
+    search: str | None = None,
+    is_active: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Fiscal positions list page."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    return fiscal_position_web_service.list_response(
+        request, auth, db, search=search, is_active=is_active
+    )
+
+
+@router.get("/fiscal-positions/new", response_class=HTMLResponse)
+def new_fiscal_position(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Fiscal position creation form."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    return fiscal_position_web_service.form_response(request, auth, db)
+
+
+@router.post("/fiscal-positions/new", response_class=HTMLResponse)
+async def create_fiscal_position(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle fiscal position creation."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    form = await request.form()
+    form_data = dict(form)
+    response = fiscal_position_web_service.create_response(request, auth, db, form_data)
+    db.commit()
+    return response
+
+
+@router.get("/fiscal-positions/{fiscal_position_id}", response_class=HTMLResponse)
+def fiscal_position_detail(
+    request: Request,
+    fiscal_position_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Fiscal position detail page."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    return fiscal_position_web_service.detail_response(
+        request, auth, fiscal_position_id, db
+    )
+
+
+@router.get("/fiscal-positions/{fiscal_position_id}/edit", response_class=HTMLResponse)
+def edit_fiscal_position(
+    request: Request,
+    fiscal_position_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Fiscal position edit form."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    return fiscal_position_web_service.form_response(
+        request, auth, db, fiscal_position_id=fiscal_position_id
+    )
+
+
+@router.post("/fiscal-positions/{fiscal_position_id}/edit", response_class=HTMLResponse)
+async def update_fiscal_position(
+    request: Request,
+    fiscal_position_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle fiscal position update."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    form = await request.form()
+    form_data = dict(form)
+    response = fiscal_position_web_service.update_response(
+        request, auth, fiscal_position_id, db, form_data
+    )
+    db.commit()
+    return response
+
+
+@router.post(
+    "/fiscal-positions/{fiscal_position_id}/delete", response_class=HTMLResponse
+)
+def delete_fiscal_position(
+    request: Request,
+    fiscal_position_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle fiscal position deletion."""
+    from app.services.finance.tax.fiscal_position_web import (
+        fiscal_position_web_service,
+    )
+
+    response = fiscal_position_web_service.delete_response(
+        request, auth, fiscal_position_id, db
+    )
+    db.commit()
+    return response

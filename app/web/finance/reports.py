@@ -176,6 +176,28 @@ def changes_in_equity_report(
     )
 
 
+@router.get("/analysis", response_class=HTMLResponse)
+def analysis_report(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Pivot-style analysis report page."""
+    return reports_web_service.analysis_response(request, auth, db)
+
+
+@router.get("/inventory-valuation-reconciliation", response_class=HTMLResponse)
+def inventory_valuation_reconciliation_report(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Inventory valuation reconciliation report page."""
+    return reports_web_service.inventory_valuation_reconciliation_response(
+        request, auth, db
+    )
+
+
 # ─────────────────── CSV Export endpoints ───────────────────
 
 

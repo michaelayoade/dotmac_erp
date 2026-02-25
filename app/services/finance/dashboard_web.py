@@ -10,9 +10,10 @@ import json
 import logging
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.gl.account_balance import AccountBalance
 from app.services import formatters as _fmt
 from app.services.finance.dashboard import dashboard_service
 from app.services.finance.platform.currency_context import get_currency_context
@@ -116,6 +117,16 @@ class DashboardWebService:
         from app.services.analytics.dashboard_metrics import DashboardMetricsService
 
         metrics_snapshot = DashboardMetricsService(db).get_org_snapshot(organization_id)
+
+        stale_balance_count = int(
+            db.scalar(
+                select(func.count(AccountBalance.balance_id)).where(
+                    AccountBalance.organization_id == organization_id,
+                    AccountBalance.is_stale.is_(True),
+                )
+            )
+            or 0
+        )
 
         # Bank balance — live total across active accounts (not year-filtered).
         from app.models.finance.banking.bank_account import (
@@ -224,6 +235,8 @@ class DashboardWebService:
             "selected_year_label": str(selected_year) if selected_year else "All years",
             "subledger_reconciliation": subledger_recon_view,
             "metrics_snapshot": metrics_snapshot,
+            "balances_stale": stale_balance_count > 0,
+            "stale_balance_count": stale_balance_count,
         }
 
 

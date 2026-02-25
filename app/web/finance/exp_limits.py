@@ -8,10 +8,11 @@ HTML template routes for expense limit management:
 - Evaluation audit trail
 """
 
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.expense.limit_web import expense_limit_web_service
@@ -22,7 +23,10 @@ from app.web.deps import (
     require_web_permission,
 )
 
+logger = logging.getLogger(__name__)
+
 _require_policies_manage = require_web_permission("expense:policies:manage")
+_require_limits_review = require_web_permission("expense:limits:review")
 
 router = APIRouter(tags=["expense-limits-web"])
 
@@ -302,6 +306,82 @@ async def delete_approver_limit(
         auth=auth,
         db=db,
     )
+
+
+# =============================================================================
+# Reviewer
+# =============================================================================
+
+
+@router.get("/limits/reviewer/approvers", response_class=HTMLResponse)
+def reviewer_approvers(
+    request: Request,
+    q: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    auth: WebAuthContext = Depends(_require_limits_review),
+    db: Session = Depends(get_db),
+):
+    """List approvers for reviewer reset workflow."""
+    return expense_limit_web_service.reviewer_approver_list_response(
+        request=request,
+        auth=auth,
+        db=db,
+        q=q,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.get("/limits/reviewer/approvers/{approver_id}", response_class=HTMLResponse)
+def reviewer_approver_detail(
+    request: Request,
+    approver_id: UUID,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    auth: WebAuthContext = Depends(_require_limits_review),
+    db: Session = Depends(get_db),
+):
+    """Review all approval decisions for one approver."""
+    return expense_limit_web_service.reviewer_approver_detail_response(
+        request=request,
+        auth=auth,
+        db=db,
+        approver_id=approver_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.post(
+    "/limits/reviewer/approvers/{approver_id}/reset",
+    response_class=HTMLResponse,
+)
+async def reviewer_reset_approver_budget(
+    request: Request,
+    approver_id: UUID,
+    auth: WebAuthContext = Depends(_require_limits_review),
+    db: Session = Depends(get_db),
+):
+    """Reset consumed weekly budget for a single approver."""
+    form = await request.form()
+    form_data = dict(form)
+    try:
+        response = expense_limit_web_service.reviewer_reset_approver_budget_response(
+            auth=auth,
+            db=db,
+            approver_id=approver_id,
+            form_data=form_data,
+        )
+        db.commit()
+        return response
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to reset weekly budget usage")
+        return RedirectResponse(
+            url=f"/finance/expenses/limits/reviewer/approvers/{approver_id}?error={exc}",
+            status_code=303,
+        )
 
 
 # =============================================================================

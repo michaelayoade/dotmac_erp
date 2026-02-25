@@ -1,0 +1,112 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import compact_filters, live_search, pagination, status_badge, empty_state, stats_card, icon_svg %}
+
+{% block page_title %}Fiscal Positions{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/tax/codes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Fiscal Positions</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/tax/fiscal-positions/new" class="btn btn-primary">
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+    New Fiscal Position
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Stats Row #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {{ stats_card("Total Positions", total_count, icon="document", color="slate") }}
+        {{ stats_card("Active", active_count, icon="check-circle", color="emerald") }}
+        {{ stats_card("Inactive", total_count - active_count, icon="ban", color="amber") }}
+    </div>
+
+    {# Search and Filters #}
+    {{ live_search(search=search, base_url="/finance/tax/fiscal-positions", placeholder="Search fiscal positions...",
+        filters=[
+            {"name": "is_active", "label": "All Status", "value": is_active,
+             "options": [{"value": "true", "label": "Active"}, {"value": "false", "label": "Inactive"}]}
+        ]
+    ) }}
+
+    <div id="results-container">
+    {# Fiscal Positions Table #}
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Customer Type</th>
+                        <th scope="col">Supplier Type</th>
+                        <th scope="col" class="text-center">Auto-Apply</th>
+                        <th scope="col" class="text-right">Priority</th>
+                        <th scope="col" class="text-center">Mappings</th>
+                        <th scope="col" class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fp in positions %}
+                    <tr class="group">
+                        <td>
+                            <a href="/finance/tax/fiscal-positions/{{ fp.fiscal_position_id }}"
+                               class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+                                {{ fp.name }}
+                            </a>
+                            {% if fp.description %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-xs">{{ fp.description }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {{ fp.customer_type if fp.customer_type else '—' }}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {{ fp.supplier_type if fp.supplier_type else '—' }}
+                        </td>
+                        <td class="text-center">
+                            {% if fp.auto_apply %}
+                            <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">Yes</span>
+                            {% else %}
+                            <span class="text-xs text-slate-400">No</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-mono text-sm text-slate-600 dark:text-slate-400">
+                            {{ fp.priority }}
+                        </td>
+                        <td class="text-center text-sm text-slate-600 dark:text-slate-400">
+                            <span class="font-mono">{{ fp.tax_map_count }}T</span>
+                            <span class="text-slate-300 dark:text-slate-600 mx-1">/</span>
+                            <span class="font-mono">{{ fp.account_map_count }}A</span>
+                        </td>
+                        <td class="text-center">
+                            {{ status_badge('active' if fp.is_active else 'inactive', 'sm') }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12">
+                            {{ empty_state(
+                                'No fiscal positions found',
+                                'Fiscal positions automatically remap taxes and accounts based on customer or supplier type.' if not search else 'Try adjusting your search or filter criteria.',
+                                'receipt',
+                                'Create Fiscal Position' if not search else none,
+                                '/finance/tax/fiscal-positions/new' if not search else none
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>{# /results-container #}
+</div>
+{% endblock %}

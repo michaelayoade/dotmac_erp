@@ -2,7 +2,7 @@
 {% from "components/macros.html" import icon_svg %}
 
 {% block content %}
-<div class="space-y-6" x-data='{ showAdjustModal: false }'>
+<div class="space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">
             <a href="/expense/limits/approvers" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
@@ -10,15 +10,15 @@
             </a>
             <div>
                 <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Approver Limit Details</h1>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review full configuration and matching approvers</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Weekly budget enforcement and scope coverage</p>
             </div>
         </div>
         <div class="flex items-center gap-2">
-            {% if approver_limit.monthly_approval_budget %}
-            <button type="button" @click="showAdjustModal = true" class="btn btn-secondary">
-                {{ icon_svg("currency", "h-4 w-4 mr-1.5") }}
-                Adjust Budget
-            </button>
+            {% if approver_limit.scope_type == 'EMPLOYEE' and approver_limit.scope_id %}
+            <a href="/expense/limits/reviewer/approvers/{{ approver_limit.scope_id }}" class="btn btn-secondary">
+                {{ icon_svg("document-report", "h-4 w-4 mr-1.5") }}
+                Reviewer Page
+            </a>
             {% endif %}
             <a href="/expense/limits/approvers/{{ approver_limit.approver_limit_id }}/edit" class="btn btn-primary">
                 {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
@@ -27,7 +27,6 @@
         </div>
     </div>
 
-    {# ── Configuration Card ─────────────────────────────────── #}
     <div class="card p-6">
         <h2 class="text-base font-semibold text-slate-900 dark:text-white">Configuration</h2>
         <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -50,10 +49,10 @@
                 <dd class="mt-1 text-sm font-medium font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(approver_limit.max_approval_amount) }} {{ approver_limit.currency_code }}</dd>
             </div>
             <div>
-                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Monthly Approval Budget</dt>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Weekly Approval Budget</dt>
                 <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">
-                    {% if approver_limit.monthly_approval_budget %}
-                        <span class="font-mono">{{ "{:,.2f}".format(approver_limit.monthly_approval_budget) }} {{ approver_limit.currency_code }}</span>
+                    {% if approver_limit.weekly_approval_budget %}
+                        <span class="font-mono">{{ "{:,.2f}".format(approver_limit.weekly_approval_budget) }} {{ approver_limit.currency_code }}</span>
                     {% else %}
                         Unlimited
                     {% endif %}
@@ -76,78 +75,36 @@
         </dl>
     </div>
 
-    {# ── Current Month Budget Usage ─────────────────────────── #}
-    {% if current_month_usage %}
+    {% if current_week_usage %}
     <div class="card p-6">
-        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Current Month Budget — {{ current_month_usage.month_label }}</h2>
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Current Week Budget — {{ current_week_usage.week_label }}</h2>
         <dl class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Base Budget</dt>
-                <dd class="mt-1 text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(current_month_usage.base_budget) }}</dd>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Base Weekly Budget</dt>
+                <dd class="mt-1 text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(current_week_usage.base_budget) }}</dd>
             </div>
             <div>
-                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Adjustment</dt>
-                <dd class="mt-1 text-sm font-medium font-mono tabular-nums {% if current_month_usage.adjustment > 0 %}text-emerald-700 dark:text-emerald-400{% elif current_month_usage.adjustment < 0 %}text-rose-700 dark:text-rose-400{% else %}text-slate-500 dark:text-slate-400{% endif %}">
-                    {% if current_month_usage.adjustment > 0 %}+{% endif %}{{ "{:,.2f}".format(current_month_usage.adjustment) }}
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Used Since Reset/Week Start</dt>
+                <dd class="mt-1 text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(current_week_usage.used_amount) }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Remaining</dt>
+                <dd class="mt-1 text-sm font-semibold font-mono tabular-nums {% if current_week_usage.remaining_budget < 0 %}text-rose-700 dark:text-rose-400{% else %}text-emerald-700 dark:text-emerald-400{% endif %}">{{ "{:,.2f}".format(current_week_usage.remaining_budget) }} {{ approver_limit.currency_code }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Last Reset</dt>
+                <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">
+                    {% if current_week_usage.last_reset_at %}
+                        {{ current_week_usage.last_reset_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                    {% else %}
+                        Not reset this week
+                    {% endif %}
                 </dd>
-            </div>
-            <div>
-                <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Effective Budget</dt>
-                <dd class="mt-1 text-sm font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(current_month_usage.effective_budget) }} {{ approver_limit.currency_code }}</dd>
             </div>
         </dl>
     </div>
     {% endif %}
 
-    {# ── Budget Adjustments History ─────────────────────────── #}
-    <div class="card overflow-hidden">
-        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Budget Adjustments</h2>
-            <span class="text-sm text-slate-500 dark:text-slate-400">{{ adjustments | length }} total</span>
-        </div>
-        {% if adjustments %}
-            <div class="table-container">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Month</th>
-                            <th scope="col" class="text-right">Amount</th>
-                            <th scope="col">Reason</th>
-                            <th scope="col" class="hidden sm:table-cell">Date</th>
-                            <th scope="col" class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for adj in adjustments %}
-                        <tr class="group">
-                            <td class="font-medium text-slate-900 dark:text-white">{{ adj.adjustment_month.strftime('%B %Y') }}</td>
-                            <td class="text-right font-mono tabular-nums {% if adj.additional_amount > 0 %}text-emerald-700 dark:text-emerald-400{% else %}text-rose-700 dark:text-rose-400{% endif %}">
-                                {% if adj.additional_amount > 0 %}+{% endif %}{{ "{:,.2f}".format(adj.additional_amount) }}
-                            </td>
-                            <td class="text-slate-700 dark:text-slate-300 max-w-xs truncate">{{ adj.reason }}</td>
-                            <td class="hidden sm:table-cell text-slate-500 dark:text-slate-400">{{ adj.created_at.strftime('%d %b %Y') }}</td>
-                            <td class="text-center">
-                                <form method="POST" action="/expense/limits/approvers/{{ approver_limit.approver_limit_id }}/adjustments/{{ adj.adjustment_id }}/delete"
-                                      onsubmit="return confirm('Delete this budget adjustment for {{ adj.adjustment_month.strftime('%B %Y') }}?')">
-                                    {{ request.state.csrf_form | safe }}
-                                    <button type="submit" class="btn btn-sm btn-danger-outline" aria-label="Delete adjustment for {{ adj.adjustment_month.strftime('%B %Y') }}">
-                                        {{ icon_svg("trash", "h-3.5 w-3.5") }}
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="px-6 py-8 text-sm text-slate-500 dark:text-slate-400">
-                No budget adjustments. Use "Adjust Budget" to add a one-time monthly increase.
-            </div>
-        {% endif %}
-    </div>
-
-    {# ── Scoped Approvers Table ─────────────────────────────── #}
     <div class="card overflow-hidden">
         <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-base font-semibold text-slate-900 dark:text-white">Employees/Approvers Under Scope Target</h2>
@@ -194,51 +151,6 @@
                 No employees/approvers found for this scope target.
             </div>
         {% endif %}
-    </div>
-
-    {# ── Adjust Budget Modal ────────────────────────────────── #}
-    <div x-show="showAdjustModal" x-cloak
-         role="dialog" aria-modal="true" aria-labelledby="adjust-budget-title"
-         @keydown.escape.window="showAdjustModal = false"
-         class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/50" @click="showAdjustModal = false"
-             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
-             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
-        <div class="relative card max-w-lg w-full mx-4 p-6"
-             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0 scale-95"
-             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95"
-             x-trap.noscroll="showAdjustModal">
-            <h3 id="adjust-budget-title" class="text-lg font-semibold text-slate-900 dark:text-white">Adjust Budget for Month</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Add a one-time adjustment to the monthly approval budget. The base budget stays unchanged.
-            </p>
-
-            <form method="POST" action="/expense/limits/approvers/{{ approver_limit.approver_limit_id }}/adjust-budget" class="mt-4 space-y-4">
-                {{ request.state.csrf_form | safe }}
-
-                <div>
-                    <label for="adjustment_month" class="form-label">Month <span class="text-rose-500">*</span></label>
-                    <input type="month" id="adjustment_month" name="adjustment_month" class="form-input" required>
-                    <span class="form-hint">Select the month to adjust</span>
-                </div>
-
-                <div>
-                    <label for="additional_amount" class="form-label">Additional Amount ({{ approver_limit.currency_code }}) <span class="text-rose-500">*</span></label>
-                    <input type="number" step="0.01" id="additional_amount" name="additional_amount" class="form-input form-input-currency" placeholder="50,000.00" required>
-                    <span class="form-hint">Positive = increase budget, negative = decrease</span>
-                </div>
-
-                <div>
-                    <label for="reason" class="form-label">Reason <span class="text-rose-500">*</span></label>
-                    <textarea id="reason" name="reason" rows="3" class="form-input" placeholder="Why is this adjustment needed?" required></textarea>
-                </div>
-
-                <div class="flex gap-3 justify-end pt-2">
-                    <button type="button" @click="showAdjustModal = false" class="btn btn-secondary">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Adjustment</button>
-                </div>
-            </form>
-        </div>
     </div>
 </div>
 {% endblock %}

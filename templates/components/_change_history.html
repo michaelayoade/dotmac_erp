@@ -1,0 +1,38 @@
+{#
+  Change History partial — displays field-level changes for an entity.
+
+  Usage:
+    {% include "components/_change_history.html" %}
+
+  Expected context variables:
+    - change_history: list of FieldChangeLog records (newest first)
+#}
+
+{% if change_history %}
+<div class="space-y-1">
+  {% for change in change_history %}
+  <div class="flex items-start gap-3 py-2 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
+    <div class="text-xs text-slate-500 dark:text-slate-400 w-32 shrink-0">
+      {{ change.changed_at.strftime('%d %b %Y, %H:%M') if change.changed_at else '' }}
+    </div>
+    <div class="text-sm text-slate-700 dark:text-slate-300">
+      <span class="font-medium text-slate-900 dark:text-white">{{ change.field_label if change.field_label else change.field_name }}</span>
+      changed
+      {% if change.old_value %}
+        from
+        <span class="text-rose-600 dark:text-rose-400 line-through">{{ change.old_display if change.old_display else change.old_value }}</span>
+      {% endif %}
+      to
+      <span class="text-emerald-600 dark:text-emerald-400 font-medium">{{ change.new_display if change.new_display else change.new_value }}</span>
+    </div>
+    {% if change.change_source %}
+    <div class="text-xs text-slate-400 dark:text-slate-500 ml-auto shrink-0">
+      {{ change.change_source | replace('_', ' ') | title }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No changes recorded yet.</p>
+{% endif %}

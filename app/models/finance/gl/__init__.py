@@ -6,6 +6,7 @@ Chart of accounts, fiscal periods, journal entries, posted ledger.
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_balance import AccountBalance, BalanceType
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.finance.gl.balance_refresh_queue import BalanceRefreshQueue
 from app.models.finance.gl.budget import Budget, BudgetStatus
 from app.models.finance.gl.budget_line import BudgetLine
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -33,6 +34,7 @@ __all__ = [
     "PostedLedgerLine",
     "AccountBalance",
     "BalanceType",
+    "BalanceRefreshQueue",
     "Budget",
     "BudgetStatus",
     "BudgetLine",

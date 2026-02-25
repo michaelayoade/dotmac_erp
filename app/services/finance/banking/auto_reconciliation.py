@@ -3,27 +3,34 @@ Auto-Reconciliation Service.
 
 Deterministic matching of bank statement lines to internal payment records.
 
-Five matching strategies run in sequence:
+Seven matching strategies run in sequence:
 1. **PaymentIntent** — matches DotMac-initiated Paystack transfers using
    ``paystack_reference`` as a join key.
 2. **Splynx CustomerPayment by reference** — extracts Paystack transaction IDs
    from ``CustomerPayment.description`` (regex ``[0-9a-f]{12,14}``) and matches
    against statement line references.  Also falls back to the Splynx receipt
    number in ``CustomerPayment.reference``.
-3. **Date + amount fallback** — for remaining unmatched payments, matches when
-   exactly one payment and one statement line share the same date and amount.
-4. **Bank fees** — identifies Paystack fee lines (``Paystack Fee:`` in
+3. **Date + amount fallback** — for remaining unmatched Splynx payments,
+   matches when exactly one payment and one statement line share the same
+   date and amount.
+4. **AP supplier payments** — matches CLEARED ``SupplierPayment`` records
+   by ``payment_number`` / ``reference`` first, then by date + amount.
+   Only matches **debit** bank lines (outgoing).
+5. **Non-Splynx AR payments** — matches CLEARED ``CustomerPayment`` records
+   where ``splynx_id IS NULL`` (app-created receipts) by reference first,
+   then by date + amount.  Only matches **credit** bank lines (incoming).
+6. **Bank fees** — identifies Paystack fee lines (``Paystack Fee:`` in
    description), creates a GL journal (debit Finance Cost, credit bank GL),
    and auto-matches the statement line to the new journal.
-5. **Settlements** — matches Paystack settlement debits to corresponding
+7. **Settlements** — matches Paystack settlement debits to corresponding
    deposits on receiving bank accounts (UBA, Zenith) within a 0–10 day
    date window.  Creates inter-bank transfer journals and matches both
    the outflow and inflow sides.
 
-Strategies 1–3 share the same GL journal lookup
+Strategies 1–5 share the same GL journal lookup
 (``JournalEntry.correlation_id``) and delegate the actual match to
 ``BankReconciliationService.match_statement_line()``.
-Strategies 4 and 5 create their own journals before matching.
+Strategies 6 and 7 create their own journals before matching.
 """
 
 from __future__ import annotations
@@ -39,6 +46,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.finance.ap.supplier_payment import (
+    APPaymentStatus,
+    SupplierPayment,
+)
 from app.models.finance.ar.customer_payment import (
     CustomerPayment,
     PaymentStatus,
@@ -70,12 +81,12 @@ AMOUNT_TOLERANCE = Decimal("0.01")
 # Paystack transaction IDs are 12-14 hex characters
 _PAYSTACK_REF_RE = re.compile(r"[0-9a-f]{12,14}", re.IGNORECASE)
 
-# Pass 4: Bank fee detection (Paystack processing fees)
+# Pass 6: Bank fee detection (Paystack processing fees)
 _BANK_FEE_RE = re.compile(r"Paystack Fee:", re.IGNORECASE)
 FINANCE_COST_ACCOUNT_CODE = "6080"
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
-# Pass 5: Settlement detection (inter-bank transfers)
+# Pass 7: Settlement detection (inter-bank transfers)
 _SETTLEMENT_RE = re.compile(r"Settlement( to bank)?:", re.IGNORECASE)
 SETTLEMENT_DATE_WINDOW_DAYS = 10
 # Paystack-related deposit patterns on receiving banks.
@@ -93,6 +104,23 @@ CONTRA_MIN_SCORE = 90
 
 
 @dataclass
+class AutoMatchConfig:
+    """Runtime configuration loaded from DomainSettings (banking domain)."""
+
+    pass_payment_intents_enabled: bool = True
+    pass_splynx_by_ref_enabled: bool = True
+    pass_splynx_date_amount_enabled: bool = True
+    pass_ap_payments_enabled: bool = True
+    pass_ar_payments_enabled: bool = True
+    pass_bank_fees_enabled: bool = True
+    pass_settlements_enabled: bool = True
+    amount_tolerance: Decimal = Decimal("0.01")
+    date_buffer_days: int = 7
+    settlement_date_window_days: int = 10
+    finance_cost_account_code: str = "6080"
+
+
+@dataclass
 class AutoMatchResult:
     """Result of an auto-match operation."""
 
@@ -106,7 +134,7 @@ class AutoReconciliationService:
     """Deterministic matching of internal payments to bank statement lines.
 
     After a bank statement is imported, this service scans unmatched lines and
-    attempts to match them using five strategies:
+    attempts to match them using seven strategies:
 
     1. **PaymentIntent pass** — for DotMac-initiated Paystack transfers.
        The ``paystack_reference`` is a deterministic join key.
@@ -114,20 +142,84 @@ class AutoReconciliationService:
        as ``CustomerPayment`` records.  Extracts the Paystack transaction ID
        from the payment description using regex, and also tries the Splynx
        receipt number in ``reference``.
-    3. **Date + amount fallback** — for remaining unmatched payments, matches
-       when exactly one payment and one statement line share the same date
-       and amount on the same bank account.
-    4. **Bank fee pass** — for Paystack processing fee lines.  Creates a GL
+    3. **Date + amount fallback** — for remaining unmatched Splynx payments,
+       matches when exactly one payment and one statement line share the same
+       date and amount on the same bank account.
+    4. **AP supplier payment pass** — for CLEARED supplier payments created
+       in the app.  Matches by ``payment_number`` / ``reference`` first, then
+       by date + amount.  Only matches debit (outgoing) bank lines.
+    5. **Non-Splynx AR payment pass** — for CLEARED customer payments created
+       directly in the app (``splynx_id IS NULL``).  Matches by reference
+       first, then by date + amount.  Only matches credit (incoming) lines.
+    6. **Bank fee pass** — for Paystack processing fee lines.  Creates a GL
        journal (debit Finance Cost 6080, credit bank GL) and auto-matches
        the statement line to the new journal entry.
-    5. **Settlement pass** — for Paystack settlement transfers.  Finds the
+    7. **Settlement pass** — for Paystack settlement transfers.  Finds the
        matching deposit on receiving banks (UBA, Zenith) within 0–5 days,
        creates an inter-bank transfer journal, and matches both sides.
 
-    Strategies 1–3 verify amount (within tolerance) and find the GL journal
+    Strategies 1–5 verify amount (within tolerance) and find the GL journal
     line via ``correlation_id`` before delegating the match to
-    ``BankReconciliationService``.  Strategies 4–5 create their own journals.
+    ``BankReconciliationService``.  Strategies 6–7 create their own journals.
     """
+
+    # ── Configuration ──────────────────────────────────────────────
+
+    @staticmethod
+    def _load_config(db: Session, organization_id: UUID) -> AutoMatchConfig:
+        """Load auto-match configuration from DomainSettings with fallbacks."""
+        from app.models.domain_settings import SettingDomain
+        from app.services.settings_spec import resolve_value
+
+        def _bool(key: str, default: bool) -> bool:
+            val = resolve_value(db, SettingDomain.banking, key)
+            if val is None:
+                return default
+            if isinstance(val, bool):
+                return val
+            return str(val).strip().lower() in {"1", "true", "yes", "on"}
+
+        def _int(key: str, default: int) -> int:
+            val = resolve_value(db, SettingDomain.banking, key)
+            if val is None:
+                return default
+            try:
+                return int(str(val))
+            except (TypeError, ValueError):
+                return default
+
+        def _str(key: str, default: str) -> str:
+            val = resolve_value(db, SettingDomain.banking, key)
+            if val is None:
+                return default
+            return str(val)
+
+        cents = _int("automatch_amount_tolerance_cents", 1)
+        tolerance = Decimal(cents) / Decimal(100)
+
+        return AutoMatchConfig(
+            pass_payment_intents_enabled=_bool(
+                "automatch_pass_payment_intents_enabled", True
+            ),
+            pass_splynx_by_ref_enabled=_bool(
+                "automatch_pass_splynx_by_ref_enabled", True
+            ),
+            pass_splynx_date_amount_enabled=_bool(
+                "automatch_pass_splynx_date_amount_enabled", True
+            ),
+            pass_ap_payments_enabled=_bool("automatch_pass_ap_payments_enabled", True),
+            pass_ar_payments_enabled=_bool("automatch_pass_ar_payments_enabled", True),
+            pass_bank_fees_enabled=_bool("automatch_pass_bank_fees_enabled", True),
+            pass_settlements_enabled=_bool("automatch_pass_settlements_enabled", True),
+            amount_tolerance=tolerance,
+            date_buffer_days=_int("automatch_date_buffer_days", 7),
+            settlement_date_window_days=_int(
+                "automatch_settlement_date_window_days", 10
+            ),
+            finance_cost_account_code=_str(
+                "automatch_finance_cost_account_code", "6080"
+            ),
+        )
 
     # ── Public API ──────────────────────────────────────────────────
 
@@ -141,12 +233,14 @@ class AutoReconciliationService:
     ) -> AutoMatchResult:
         """Match unmatched statement lines against known internal payments.
 
-        Runs five passes in sequence:
+        Runs seven passes in sequence:
         1. PaymentIntent (Paystack-initiated transfers)
         2. Splynx CustomerPayment by reference (Paystack ref from description)
-        3. Date + amount greedy matching (fallback)
-        4. Bank fees (creates GL journals for Paystack fee lines)
-        5. Settlements (cross-bank transfer matching, 0–5 day window)
+        3. Date + amount greedy matching (Splynx fallback)
+        4. AP supplier payments (by reference, then date + amount)
+        5. Non-Splynx AR customer payments (by reference, then date + amount)
+        6. Bank fees (creates GL journals for Paystack fee lines)
+        7. Settlements (cross-bank transfer matching, 0–5 day window)
 
         Lines matched in earlier passes are excluded from later passes.
 
@@ -159,6 +253,9 @@ class AutoReconciliationService:
             AutoMatchResult with match/skip/error counts.
         """
         result = AutoMatchResult()
+
+        # Load runtime configuration from DomainSettings
+        config = self._load_config(db, organization_id)
 
         # 1. Load statement + bank account
         statement = db.get(BankStatement, statement_id)
@@ -198,39 +295,59 @@ class AutoReconciliationService:
         if not unmatched_lines:
             return result
 
+        # 2b. Ensure system rules are seeded (idempotent, needed for audit trail)
+        try:
+            from app.services.finance.banking.reconciliation_rule_service import (
+                ReconciliationRuleService,
+            )
+
+            ReconciliationRuleService.seed_system_rules(db, organization_id)
+        except Exception:
+            logger.warning("Failed to seed system match rules", exc_info=True)
+
         # 3. Load all eligible Splynx payments once (shared by passes 2 & 3)
-        splynx_payments = self._load_splynx_payments(db, organization_id, statement)
+        splynx_payments = self._load_splynx_payments(
+            db, organization_id, statement, config=config
+        )
 
         # 4. Pass 1: PaymentIntent matching
         matched_line_ids: set[UUID] = set()
         matched_payment_ids: set[UUID] = set()
-        self._match_payment_intents(
-            db,
-            organization_id,
-            statement,
-            bank_account,
-            unmatched_lines,
-            matched_line_ids,
-            result,
-            extra_gl_account_ids=extra_gl,
-        )
+        if config.pass_payment_intents_enabled:
+            self._match_payment_intents(
+                db,
+                organization_id,
+                statement,
+                bank_account,
+                unmatched_lines,
+                matched_line_ids,
+                result,
+                extra_gl_account_ids=extra_gl,
+                config=config,
+            )
+        else:
+            logger.debug("Pass 1 (PaymentIntent) disabled by config")
 
         # 5. Pass 2: Splynx CustomerPayment by reference
         still_unmatched = [
             line for line in unmatched_lines if line.line_id not in matched_line_ids
         ]
-        if still_unmatched and splynx_payments:
-            self._match_splynx_payments(
-                db,
-                organization_id,
-                bank_account,
-                splynx_payments,
-                still_unmatched,
-                matched_line_ids,
-                matched_payment_ids,
-                result,
-                extra_gl_account_ids=extra_gl,
-            )
+        if config.pass_splynx_by_ref_enabled:
+            if still_unmatched and splynx_payments:
+                self._match_splynx_payments(
+                    db,
+                    organization_id,
+                    bank_account,
+                    splynx_payments,
+                    still_unmatched,
+                    matched_line_ids,
+                    matched_payment_ids,
+                    result,
+                    extra_gl_account_ids=extra_gl,
+                    config=config,
+                )
+        else:
+            logger.debug("Pass 2 (Splynx by ref) disabled by config")
 
         # 6. Pass 3: Date + amount unique matching (fallback)
         still_unmatched = [
@@ -239,51 +356,140 @@ class AutoReconciliationService:
         remaining_payments = [
             p for p in splynx_payments if p.payment_id not in matched_payment_ids
         ]
-        if still_unmatched and remaining_payments:
-            self._match_by_date_amount(
-                db,
-                organization_id,
-                bank_account,
-                remaining_payments,
-                still_unmatched,
-                matched_line_ids,
-                matched_payment_ids,
-                result,
-                extra_gl_account_ids=extra_gl,
-            )
+        if config.pass_splynx_date_amount_enabled:
+            if still_unmatched and remaining_payments:
+                self._match_by_date_amount(
+                    db,
+                    organization_id,
+                    bank_account,
+                    remaining_payments,
+                    still_unmatched,
+                    matched_line_ids,
+                    matched_payment_ids,
+                    result,
+                    extra_gl_account_ids=extra_gl,
+                )
+        else:
+            logger.debug("Pass 3 (Splynx date+amount) disabled by config")
 
-        # 7. Pass 4: Bank fee matching (creates journals for fee lines)
+        # 7. Pass 4: AP supplier payment matching
+        if config.pass_ap_payments_enabled:
+            ap_payments = self._load_ap_payments(
+                db, organization_id, statement, config=config
+            )
+            matched_ap_ids: set[UUID] = set()
+            still_unmatched = [
+                line for line in unmatched_lines if line.line_id not in matched_line_ids
+            ]
+            if still_unmatched and ap_payments:
+                self._match_ap_payments(
+                    db,
+                    organization_id,
+                    bank_account,
+                    ap_payments,
+                    still_unmatched,
+                    matched_line_ids,
+                    matched_ap_ids,
+                    result,
+                    extra_gl_account_ids=extra_gl,
+                    config=config,
+                )
+        else:
+            logger.debug("Pass 4 (AP payments) disabled by config")
+
+        # 8. Pass 5: Non-Splynx AR customer payment matching
+        if config.pass_ar_payments_enabled:
+            ar_payments = self._load_non_splynx_ar_payments(
+                db, organization_id, statement, config=config
+            )
+            matched_ar_ids: set[UUID] = set()
+            still_unmatched = [
+                line for line in unmatched_lines if line.line_id not in matched_line_ids
+            ]
+            if still_unmatched and ar_payments:
+                self._match_ar_payments(
+                    db,
+                    organization_id,
+                    bank_account,
+                    ar_payments,
+                    still_unmatched,
+                    matched_line_ids,
+                    matched_ar_ids,
+                    result,
+                    extra_gl_account_ids=extra_gl,
+                    config=config,
+                )
+        else:
+            logger.debug("Pass 5 (AR payments) disabled by config")
+
+        # 9. Pass 6: Bank fee matching (creates journals for fee lines)
+        if config.pass_bank_fees_enabled:
+            still_unmatched = [
+                line for line in unmatched_lines if line.line_id not in matched_line_ids
+            ]
+            if still_unmatched:
+                self._match_bank_fees(
+                    db,
+                    organization_id,
+                    bank_account,
+                    still_unmatched,
+                    matched_line_ids,
+                    result,
+                    config=config,
+                )
+        else:
+            logger.debug("Pass 6 (bank fees) disabled by config")
+
+        # 10. Pass 7: Settlement matching (cross-bank transfer)
+        if config.pass_settlements_enabled:
+            still_unmatched = [
+                line for line in unmatched_lines if line.line_id not in matched_line_ids
+            ]
+            if still_unmatched:
+                self._match_settlements(
+                    db,
+                    organization_id,
+                    bank_account,
+                    still_unmatched,
+                    matched_line_ids,
+                    result,
+                    config=config,
+                )
+        else:
+            logger.debug("Pass 7 (settlements) disabled by config")
+
+        # 11. Pass 8: Custom rules via ReconciliationEngine
+        # After all system passes, run user-defined custom rules against
+        # remaining unmatched lines.  New integrations = new DB rules.
         still_unmatched = [
             line for line in unmatched_lines if line.line_id not in matched_line_ids
         ]
         if still_unmatched:
-            self._match_bank_fees(
-                db,
-                organization_id,
-                bank_account,
-                still_unmatched,
-                matched_line_ids,
-                result,
-            )
+            try:
+                from app.services.finance.banking.reconciliation_engine import (
+                    ReconciliationEngine,
+                )
 
-        # 8. Pass 5: Settlement matching (cross-bank transfer)
-        still_unmatched = [
-            line for line in unmatched_lines if line.line_id not in matched_line_ids
-        ]
-        if still_unmatched:
-            self._match_settlements(
-                db,
-                organization_id,
-                bank_account,
-                still_unmatched,
-                matched_line_ids,
-                result,
-            )
+                engine = ReconciliationEngine(db)
+                engine_result = engine.run_custom_rules(
+                    organization_id,
+                    statement,
+                    bank_account,
+                    unmatched_lines,
+                    matched_line_ids,
+                    amount_tolerance=config.amount_tolerance,
+                    date_buffer_days=config.date_buffer_days,
+                    extra_gl_account_ids=extra_gl,
+                )
+                result.matched += engine_result.matched
+                result.errors.extend(engine_result.errors)
+            except Exception:
+                logger.warning("Pass 8 (custom rules engine) failed", exc_info=True)
 
         # Recalculate skipped (lines not matched by any pass)
         result.skipped = len(unmatched_lines) - result.matched - len(result.errors)
 
-        # 9. Optional dry-run pass: contra transfer suggestions (no posting)
+        # 12. Optional dry-run pass: contra transfer suggestions (no posting)
         if include_contra_suggestions:
             still_unmatched = [
                 line for line in unmatched_lines if line.line_id not in matched_line_ids
@@ -424,11 +630,13 @@ class AutoReconciliationService:
         result: AutoMatchResult,
         *,
         extra_gl_account_ids: set[UUID] | None = None,
+        config: AutoMatchConfig | None = None,
     ) -> None:
         """Match lines against COMPLETED PaymentIntent records."""
         from datetime import timedelta
 
-        date_buffer = timedelta(days=7)
+        buffer_days = config.date_buffer_days if config else 7
+        date_buffer = timedelta(days=buffer_days)
         intent_query = select(PaymentIntent).where(
             PaymentIntent.organization_id == organization_id,
             PaymentIntent.bank_account_id == statement.bank_account_id,
@@ -457,7 +665,10 @@ class AutoReconciliationService:
                 if not intent:
                     continue
 
-                if not self._amounts_match(line.amount, intent.amount):
+                tolerance = config.amount_tolerance if config else None
+                if not self._amounts_match(
+                    line.amount, intent.amount, tolerance=tolerance
+                ):
                     logger.debug(
                         "PaymentIntent ref %s in line %s but amount mismatch: "
                         "line=%s, intent=%s",
@@ -483,7 +694,24 @@ class AutoReconciliationService:
                     )
                     continue
 
-                self._perform_match(db, organization_id, line, journal_line)
+                self._perform_match(
+                    db,
+                    organization_id,
+                    line,
+                    journal_line,
+                    source_type="PAYMENT_INTENT",
+                    source_id=intent.intent_id,
+                )
+                self._log_match(
+                    db,
+                    organization_id,
+                    line=line,
+                    source_type="PAYMENT_INTENT",
+                    source_id=intent.intent_id,
+                    journal_line_id=journal_line.line_id,
+                    confidence=100,
+                    explanation=f"Paystack reference {intent.paystack_reference} (exact match)",
+                )
                 matched_line_ids.add(line.line_id)
                 matched_intent_ids.add(intent.intent_id)
                 result.matched += 1
@@ -587,7 +815,24 @@ class AutoReconciliationService:
                     if not journal_line:
                         continue
 
-                    self._perform_match(db, organization_id, line, journal_line)
+                    self._perform_match(
+                        db,
+                        organization_id,
+                        line,
+                        journal_line,
+                        source_type="PAYMENT_INTENT",
+                        source_id=intent.intent_id,
+                    )
+                    self._log_match(
+                        db,
+                        organization_id,
+                        line=line,
+                        source_type="PAYMENT_INTENT",
+                        source_id=intent.intent_id,
+                        journal_line_id=journal_line.line_id,
+                        confidence=85,
+                        explanation=f"Expense intent {intent.paystack_reference} (date+amount fallback)",
+                    )
                     matched_line_ids.add(line.line_id)
                     matched_intent_ids.add(intent.intent_id)
                     result.matched += 1
@@ -613,6 +858,8 @@ class AutoReconciliationService:
         db: Session,
         organization_id: UUID,
         statement: BankStatement,
+        *,
+        config: AutoMatchConfig | None = None,
     ) -> list[CustomerPayment]:
         """Load eligible Splynx payments for the statement's bank account.
 
@@ -621,11 +868,79 @@ class AutoReconciliationService:
         """
         from datetime import timedelta
 
-        date_buffer = timedelta(days=7)
+        buffer_days = config.date_buffer_days if config else 7
+        date_buffer = timedelta(days=buffer_days)
         pmt_query = select(CustomerPayment).where(
             CustomerPayment.organization_id == organization_id,
             CustomerPayment.bank_account_id == statement.bank_account_id,
             CustomerPayment.splynx_id.isnot(None),
+            CustomerPayment.status == PaymentStatus.CLEARED,
+            CustomerPayment.journal_entry_id.isnot(None),
+            CustomerPayment.correlation_id.isnot(None),
+        )
+        if statement.period_start and statement.period_end:
+            pmt_query = pmt_query.where(
+                CustomerPayment.payment_date >= statement.period_start - date_buffer,
+                CustomerPayment.payment_date <= statement.period_end + date_buffer,
+            )
+        return list(db.scalars(pmt_query).all())
+
+    # ── AP / non-Splynx AR payment loaders (passes 4 & 5) ───────
+
+    def _load_ap_payments(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement: BankStatement,
+        *,
+        config: AutoMatchConfig | None = None,
+    ) -> list[SupplierPayment]:
+        """Load eligible AP supplier payments for the statement's bank account.
+
+        Filters: status CLEARED, has GL journal, has correlation_id, and
+        matching bank_account_id + date range.
+        """
+        from datetime import timedelta
+
+        buffer_days = config.date_buffer_days if config else 7
+        date_buffer = timedelta(days=buffer_days)
+        pmt_query = select(SupplierPayment).where(
+            SupplierPayment.organization_id == organization_id,
+            SupplierPayment.bank_account_id == statement.bank_account_id,
+            SupplierPayment.status == APPaymentStatus.CLEARED,
+            SupplierPayment.journal_entry_id.isnot(None),
+            SupplierPayment.correlation_id.isnot(None),
+        )
+        if statement.period_start and statement.period_end:
+            pmt_query = pmt_query.where(
+                SupplierPayment.payment_date >= statement.period_start - date_buffer,
+                SupplierPayment.payment_date <= statement.period_end + date_buffer,
+            )
+        return list(db.scalars(pmt_query).all())
+
+    def _load_non_splynx_ar_payments(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement: BankStatement,
+        *,
+        config: AutoMatchConfig | None = None,
+    ) -> list[CustomerPayment]:
+        """Load eligible non-Splynx AR payments for the statement's bank account.
+
+        Filters: ``splynx_id IS NULL``, status CLEARED, has GL journal,
+        has correlation_id, and matching bank_account_id + date range.
+        This catches AR receipts recorded directly in the app (not via
+        Paystack or Splynx).
+        """
+        from datetime import timedelta
+
+        buffer_days = config.date_buffer_days if config else 7
+        date_buffer = timedelta(days=buffer_days)
+        pmt_query = select(CustomerPayment).where(
+            CustomerPayment.organization_id == organization_id,
+            CustomerPayment.bank_account_id == statement.bank_account_id,
+            CustomerPayment.splynx_id.is_(None),
             CustomerPayment.status == PaymentStatus.CLEARED,
             CustomerPayment.journal_entry_id.isnot(None),
             CustomerPayment.correlation_id.isnot(None),
@@ -663,6 +978,7 @@ class AutoReconciliationService:
         result: AutoMatchResult,
         *,
         extra_gl_account_ids: set[UUID] | None = None,
+        config: AutoMatchConfig | None = None,
     ) -> None:
         """Match lines against Splynx-originated CustomerPayments by reference.
 
@@ -693,7 +1009,10 @@ class AutoReconciliationService:
                 if not payment:
                     continue
 
-                if not self._amounts_match(line.amount, payment.amount):
+                tolerance = config.amount_tolerance if config else None
+                if not self._amounts_match(
+                    line.amount, payment.amount, tolerance=tolerance
+                ):
                     logger.debug(
                         "Splynx ref in line %s but amount mismatch: "
                         "line=%s, payment=%s",
@@ -723,7 +1042,24 @@ class AutoReconciliationService:
                     )
                     continue
 
-                self._perform_match(db, organization_id, line, journal_line)
+                self._perform_match(
+                    db,
+                    organization_id,
+                    line,
+                    journal_line,
+                    source_type="CUSTOMER_PAYMENT",
+                    source_id=payment.payment_id,
+                )
+                self._log_match(
+                    db,
+                    organization_id,
+                    line=line,
+                    source_type="CUSTOMER_PAYMENT",
+                    source_id=payment.payment_id,
+                    journal_line_id=journal_line.line_id,
+                    confidence=95,
+                    explanation=f"Splynx payment {payment.splynx_id} (reference match)",
+                )
                 matched_line_ids.add(line.line_id)
                 matched_payment_ids.add(payment.payment_id)
                 result.matched += 1
@@ -818,7 +1154,24 @@ class AutoReconciliationService:
                         )
                         continue
 
-                    self._perform_match(db, organization_id, line, journal_line)
+                    self._perform_match(
+                        db,
+                        organization_id,
+                        line,
+                        journal_line,
+                        source_type="CUSTOMER_PAYMENT",
+                        source_id=pmt.payment_id,
+                    )
+                    self._log_match(
+                        db,
+                        organization_id,
+                        line=line,
+                        source_type="CUSTOMER_PAYMENT",
+                        source_id=pmt.payment_id,
+                        journal_line_id=journal_line.line_id,
+                        confidence=80,
+                        explanation=f"Splynx payment {pmt.splynx_id} (date+amount fallback)",
+                    )
                     matched_line_ids.add(line.line_id)
                     matched_payment_ids.add(pmt.payment_id)
                     result.matched += 1
@@ -837,7 +1190,419 @@ class AutoReconciliationService:
                     )
                     result.errors.append(f"Line {line.line_number}: {e}")
 
-    # ── Pass 4: Bank fee matching ─────────────────────────────────
+    # ── Pass 4: AP supplier payment matching ──────────────────────
+
+    def _match_ap_payments(
+        self,
+        db: Session,
+        organization_id: UUID,
+        bank_account: BankAccount,
+        payments: list[SupplierPayment],
+        unmatched_lines: list[BankStatementLine],
+        matched_line_ids: set[UUID],
+        matched_payment_ids: set[UUID],
+        result: AutoMatchResult,
+        *,
+        extra_gl_account_ids: set[UUID] | None = None,
+        config: AutoMatchConfig | None = None,
+    ) -> None:
+        """Match debit bank lines against CLEARED AP supplier payments.
+
+        Two-phase matching:
+        A. **Reference** — builds lookup from ``payment_number`` and
+           ``reference``, searches bank line text fields.
+        B. **Date + amount** — greedy pairing fallback for remaining
+           unmatched payments.
+
+        Only considers **debit** (outgoing) bank lines, since AP payments
+        are money going out.
+        """
+        from datetime import date
+
+        # Phase A: Reference matching
+        ref_to_payment: dict[str, SupplierPayment] = {}
+        for pmt in payments:
+            if pmt.payment_number:
+                ref_to_payment[pmt.payment_number] = pmt
+            if pmt.reference and pmt.reference not in ref_to_payment:
+                ref_to_payment[pmt.reference] = pmt
+
+        if ref_to_payment:
+            debit_lines = [
+                line
+                for line in unmatched_lines
+                if line.line_id not in matched_line_ids
+                and line.transaction_type == StatementLineType.debit
+            ]
+            for line in debit_lines:
+                if line.line_id in matched_line_ids:
+                    continue
+                try:
+                    payment = self._find_ref_in_line(line, ref_to_payment)
+                    if not payment:
+                        continue
+
+                    tolerance = config.amount_tolerance if config else None
+                    if not self._amounts_match(
+                        line.amount, payment.amount, tolerance=tolerance
+                    ):
+                        logger.debug(
+                            "AP ref in line %s but amount mismatch: "
+                            "line=%s, payment=%s",
+                            line.line_id,
+                            line.amount,
+                            payment.amount,
+                        )
+                        continue
+
+                    if not payment.correlation_id:
+                        continue
+
+                    journal_line = self._find_journal_line(
+                        db,
+                        organization_id,
+                        payment.correlation_id,
+                        bank_account.gl_account_id,
+                        extra_gl_account_ids=extra_gl_account_ids,
+                    )
+                    if not journal_line:
+                        logger.debug(
+                            "No GL journal for AP payment %s (ref: %s)",
+                            payment.payment_id,
+                            payment.payment_number,
+                        )
+                        continue
+
+                    self._perform_match(
+                        db,
+                        organization_id,
+                        line,
+                        journal_line,
+                        source_type="SUPPLIER_PAYMENT",
+                        source_id=payment.payment_id,
+                    )
+                    self._log_match(
+                        db,
+                        organization_id,
+                        line=line,
+                        source_type="SUPPLIER_PAYMENT",
+                        source_id=payment.payment_id,
+                        journal_line_id=journal_line.line_id,
+                        confidence=100,
+                        explanation=f"AP payment {payment.payment_number} (reference match)",
+                    )
+                    matched_line_ids.add(line.line_id)
+                    matched_payment_ids.add(payment.payment_id)
+                    result.matched += 1
+                    logger.info(
+                        "Auto-matched line %s to GL %s via AP payment %s (ref)",
+                        line.line_id,
+                        journal_line.line_id,
+                        payment.payment_number,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "Error matching line %s via AP payment ref: %s",
+                        line.line_id,
+                        e,
+                    )
+                    result.errors.append(f"Line {line.line_number}: {e}")
+
+        # Phase B: Date + amount fallback
+        remaining = [
+            p
+            for p in payments
+            if p.payment_id not in matched_payment_ids and p.correlation_id
+        ]
+        if not remaining:
+            return
+
+        _DateAmountKey = tuple[date, int]
+        pmt_index: dict[_DateAmountKey, list[SupplierPayment]] = {}
+        for pmt in remaining:
+            key: _DateAmountKey = (pmt.payment_date, int(pmt.amount * 100))
+            pmt_index.setdefault(key, []).append(pmt)
+
+        line_index: dict[_DateAmountKey, list[BankStatementLine]] = {}
+        for line in unmatched_lines:
+            if line.line_id in matched_line_ids:
+                continue
+            if line.transaction_type != StatementLineType.debit:
+                continue
+            key = (line.transaction_date, int(line.amount * 100))
+            line_index.setdefault(key, []).append(line)
+
+        for key, pmts in pmt_index.items():
+            lines = line_index.get(key, [])
+            available_lines = [ln for ln in lines if ln.line_id not in matched_line_ids]
+            if not available_lines:
+                continue
+
+            pairs = min(len(pmts), len(available_lines))
+            for i in range(pairs):
+                pmt = pmts[i]
+                line = available_lines[i]
+                if pmt.payment_id in matched_payment_ids:
+                    continue
+                if line.line_id in matched_line_ids:
+                    continue
+                try:
+                    journal_line = self._find_journal_line(
+                        db,
+                        organization_id,
+                        pmt.correlation_id,  # type: ignore[arg-type]
+                        bank_account.gl_account_id,
+                        extra_gl_account_ids=extra_gl_account_ids,
+                    )
+                    if not journal_line:
+                        logger.debug(
+                            "No GL journal for AP payment %s (date+amount)",
+                            pmt.payment_number,
+                        )
+                        continue
+
+                    self._perform_match(
+                        db,
+                        organization_id,
+                        line,
+                        journal_line,
+                        source_type="SUPPLIER_PAYMENT",
+                        source_id=pmt.payment_id,
+                    )
+                    self._log_match(
+                        db,
+                        organization_id,
+                        line=line,
+                        source_type="SUPPLIER_PAYMENT",
+                        source_id=pmt.payment_id,
+                        journal_line_id=journal_line.line_id,
+                        confidence=80,
+                        explanation=f"AP payment {pmt.payment_number} (date+amount fallback)",
+                    )
+                    matched_line_ids.add(line.line_id)
+                    matched_payment_ids.add(pmt.payment_id)
+                    result.matched += 1
+                    logger.info(
+                        "Auto-matched line %s to GL %s via AP payment %s (date+amount)",
+                        line.line_id,
+                        journal_line.line_id,
+                        pmt.payment_number,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "Error matching line %s via AP date+amount: %s",
+                        line.line_id,
+                        e,
+                    )
+                    result.errors.append(f"Line {line.line_number}: {e}")
+
+    # ── Pass 5: Non-Splynx AR customer payment matching ─────────
+
+    def _match_ar_payments(
+        self,
+        db: Session,
+        organization_id: UUID,
+        bank_account: BankAccount,
+        payments: list[CustomerPayment],
+        unmatched_lines: list[BankStatementLine],
+        matched_line_ids: set[UUID],
+        matched_payment_ids: set[UUID],
+        result: AutoMatchResult,
+        *,
+        extra_gl_account_ids: set[UUID] | None = None,
+        config: AutoMatchConfig | None = None,
+    ) -> None:
+        """Match credit bank lines against non-Splynx AR customer payments.
+
+        Two-phase matching:
+        A. **Reference** — builds lookup from ``payment_number`` and
+           ``reference``, searches bank line text fields.
+        B. **Date + amount** — greedy pairing fallback for remaining
+           unmatched payments.
+
+        Only considers **credit** (incoming) bank lines, since AR payments
+        are money coming in.
+        """
+        from datetime import date
+
+        # Phase A: Reference matching
+        ref_to_payment: dict[str, CustomerPayment] = {}
+        for pmt in payments:
+            if pmt.payment_number:
+                ref_to_payment[pmt.payment_number] = pmt
+            if pmt.reference and pmt.reference not in ref_to_payment:
+                ref_to_payment[pmt.reference] = pmt
+
+        if ref_to_payment:
+            credit_lines = [
+                line
+                for line in unmatched_lines
+                if line.line_id not in matched_line_ids
+                and line.transaction_type == StatementLineType.credit
+            ]
+            for line in credit_lines:
+                if line.line_id in matched_line_ids:
+                    continue
+                try:
+                    payment = self._find_ref_in_line(line, ref_to_payment)
+                    if not payment:
+                        continue
+
+                    tolerance = config.amount_tolerance if config else None
+                    if not self._amounts_match(
+                        line.amount, payment.amount, tolerance=tolerance
+                    ):
+                        logger.debug(
+                            "AR ref in line %s but amount mismatch: "
+                            "line=%s, payment=%s",
+                            line.line_id,
+                            line.amount,
+                            payment.amount,
+                        )
+                        continue
+
+                    if not payment.correlation_id:
+                        continue
+
+                    journal_line = self._find_journal_line(
+                        db,
+                        organization_id,
+                        payment.correlation_id,
+                        bank_account.gl_account_id,
+                        extra_gl_account_ids=extra_gl_account_ids,
+                    )
+                    if not journal_line:
+                        logger.debug(
+                            "No GL journal for AR payment %s (ref: %s)",
+                            payment.payment_id,
+                            payment.payment_number,
+                        )
+                        continue
+
+                    self._perform_match(
+                        db,
+                        organization_id,
+                        line,
+                        journal_line,
+                        source_type="CUSTOMER_PAYMENT",
+                        source_id=payment.payment_id,
+                    )
+                    self._log_match(
+                        db,
+                        organization_id,
+                        line=line,
+                        source_type="CUSTOMER_PAYMENT",
+                        source_id=payment.payment_id,
+                        journal_line_id=journal_line.line_id,
+                        confidence=100,
+                        explanation=f"AR payment {payment.payment_number} (reference match)",
+                    )
+                    matched_line_ids.add(line.line_id)
+                    matched_payment_ids.add(payment.payment_id)
+                    result.matched += 1
+                    logger.info(
+                        "Auto-matched line %s to GL %s via AR payment %s (ref)",
+                        line.line_id,
+                        journal_line.line_id,
+                        payment.payment_number,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "Error matching line %s via AR payment ref: %s",
+                        line.line_id,
+                        e,
+                    )
+                    result.errors.append(f"Line {line.line_number}: {e}")
+
+        # Phase B: Date + amount fallback
+        remaining = [
+            p
+            for p in payments
+            if p.payment_id not in matched_payment_ids and p.correlation_id
+        ]
+        if not remaining:
+            return
+
+        _DateAmountKey = tuple[date, int]
+        pmt_index: dict[_DateAmountKey, list[CustomerPayment]] = {}
+        for pmt in remaining:
+            key: _DateAmountKey = (pmt.payment_date, int(pmt.amount * 100))
+            pmt_index.setdefault(key, []).append(pmt)
+
+        line_index: dict[_DateAmountKey, list[BankStatementLine]] = {}
+        for line in unmatched_lines:
+            if line.line_id in matched_line_ids:
+                continue
+            if line.transaction_type != StatementLineType.credit:
+                continue
+            key = (line.transaction_date, int(line.amount * 100))
+            line_index.setdefault(key, []).append(line)
+
+        for key, pmts in pmt_index.items():
+            lines = line_index.get(key, [])
+            available_lines = [ln for ln in lines if ln.line_id not in matched_line_ids]
+            if not available_lines:
+                continue
+
+            pairs = min(len(pmts), len(available_lines))
+            for i in range(pairs):
+                pmt = pmts[i]
+                line = available_lines[i]
+                if pmt.payment_id in matched_payment_ids:
+                    continue
+                if line.line_id in matched_line_ids:
+                    continue
+                try:
+                    journal_line = self._find_journal_line(
+                        db,
+                        organization_id,
+                        pmt.correlation_id,  # type: ignore[arg-type]
+                        bank_account.gl_account_id,
+                        extra_gl_account_ids=extra_gl_account_ids,
+                    )
+                    if not journal_line:
+                        logger.debug(
+                            "No GL journal for AR payment %s (date+amount)",
+                            pmt.payment_number,
+                        )
+                        continue
+
+                    self._perform_match(
+                        db,
+                        organization_id,
+                        line,
+                        journal_line,
+                        source_type="CUSTOMER_PAYMENT",
+                        source_id=pmt.payment_id,
+                    )
+                    self._log_match(
+                        db,
+                        organization_id,
+                        line=line,
+                        source_type="CUSTOMER_PAYMENT",
+                        source_id=pmt.payment_id,
+                        journal_line_id=journal_line.line_id,
+                        confidence=80,
+                        explanation=f"AR payment {pmt.payment_number} (date+amount fallback)",
+                    )
+                    matched_line_ids.add(line.line_id)
+                    matched_payment_ids.add(pmt.payment_id)
+                    result.matched += 1
+                    logger.info(
+                        "Auto-matched line %s to GL %s via AR payment %s (date+amount)",
+                        line.line_id,
+                        journal_line.line_id,
+                        pmt.payment_number,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "Error matching line %s via AR date+amount: %s",
+                        line.line_id,
+                        e,
+                    )
+                    result.errors.append(f"Line {line.line_number}: {e}")
+
+    # ── Pass 6: Bank fee matching ─────────────────────────────────
 
     def _match_bank_fees(
         self,
@@ -847,6 +1612,8 @@ class AutoReconciliationService:
         unmatched_lines: list[BankStatementLine],
         matched_line_ids: set[UUID],
         result: AutoMatchResult,
+        *,
+        config: AutoMatchConfig | None = None,
     ) -> None:
         """Create GL journals for Paystack fee lines and auto-match them.
 
@@ -862,17 +1629,20 @@ class AutoReconciliationService:
         from app.services.finance.gl.journal import JournalInput, JournalLineInput
         from app.services.finance.posting.base import BasePostingAdapter
 
-        # Look up Finance Cost GL account (6080) once
+        # Look up Finance Cost GL account (configurable, default 6080) once
+        account_code = (
+            config.finance_cost_account_code if config else FINANCE_COST_ACCOUNT_CODE
+        )
         finance_cost_account = db.scalar(
             select(Account).where(
                 Account.organization_id == organization_id,
-                Account.account_code == FINANCE_COST_ACCOUNT_CODE,
+                Account.account_code == account_code,
             )
         )
         if not finance_cost_account:
             logger.warning(
                 "Finance Cost account (%s) not found for org %s — skipping fee pass",
-                FINANCE_COST_ACCOUNT_CODE,
+                account_code,
                 organization_id,
             )
             return
@@ -890,7 +1660,7 @@ class AutoReconciliationService:
             return
 
         logger.info(
-            "Pass 4: Processing %d Paystack fee lines for statement on bank %s",
+            "Pass 6: Processing %d Paystack fee lines for statement on bank %s",
             len(fee_lines),
             bank_account.bank_account_id,
         )
@@ -985,7 +1755,24 @@ class AutoReconciliationService:
                     )
                     continue
 
-                self._perform_match(db, organization_id, line, journal_line)
+                self._perform_match(
+                    db,
+                    organization_id,
+                    line,
+                    journal_line,
+                    source_type="BANK_FEE",
+                    source_id=None,
+                )
+                self._log_match(
+                    db,
+                    organization_id,
+                    line=line,
+                    source_type="BANK_FEE",
+                    source_id=None,
+                    journal_line_id=journal_line.line_id,
+                    confidence=95,
+                    explanation=f"Bank fee: {line.description}",
+                )
                 matched_line_ids.add(line.line_id)
                 result.matched += 1
                 logger.info(
@@ -998,7 +1785,7 @@ class AutoReconciliationService:
                 logger.exception("Error matching fee line %s: %s", line.line_id, e)
                 result.errors.append(f"Line {line.line_number}: {e}")
 
-    # ── Pass 5: Settlement matching (cross-bank transfer) ──────────
+    # ── Pass 7: Settlement matching (cross-bank transfer) ──────────
 
     def _match_settlements(
         self,
@@ -1008,6 +1795,8 @@ class AutoReconciliationService:
         unmatched_lines: list[BankStatementLine],
         matched_line_ids: set[UUID],
         result: AutoMatchResult,
+        *,
+        config: AutoMatchConfig | None = None,
     ) -> None:
         """Match Paystack settlement debits to deposits on receiving banks.
 
@@ -1033,7 +1822,12 @@ class AutoReconciliationService:
         from app.services.finance.gl.journal import JournalInput, JournalLineInput
         from app.services.finance.posting.base import BasePostingAdapter
 
-        date_window = timedelta(days=SETTLEMENT_DATE_WINDOW_DAYS)
+        window_days = (
+            config.settlement_date_window_days
+            if config
+            else SETTLEMENT_DATE_WINDOW_DAYS
+        )
+        date_window = timedelta(days=window_days)
 
         # Filter to settlement lines only
         settlement_lines = [
@@ -1065,7 +1859,7 @@ class AutoReconciliationService:
                 unique_settlements.append(line)
 
         logger.info(
-            "Pass 5: Processing %d unique settlement lines (%d total incl. dupes) "
+            "Pass 7: Processing %d unique settlement lines (%d total incl. dupes) "
             "for bank %s",
             len(unique_settlements),
             len(settlement_lines),
@@ -1297,7 +2091,22 @@ class AutoReconciliationService:
                         if dup_line.line_id not in matched_line_ids:
                             try:
                                 self._perform_match(
-                                    db, organization_id, dup_line, credit_jl
+                                    db,
+                                    organization_id,
+                                    dup_line,
+                                    credit_jl,
+                                    source_type="INTER_BANK",
+                                    source_id=None,
+                                )
+                                self._log_match(
+                                    db,
+                                    organization_id,
+                                    line=dup_line,
+                                    source_type="INTER_BANK",
+                                    source_id=None,
+                                    journal_line_id=credit_jl.line_id,
+                                    confidence=85,
+                                    explanation=f"Settlement transfer: {settlement_line.reference}",
                                 )
                                 matched_line_ids.add(dup_line.line_id)
                                 result.matched += 1
@@ -1312,7 +2121,14 @@ class AutoReconciliationService:
                 # ── Match deposit line to debit side ─────────────────
                 if debit_jl and best_deposit.line_id not in matched_deposit_ids:
                     try:
-                        self._perform_match(db, organization_id, best_deposit, debit_jl)
+                        self._perform_match(
+                            db,
+                            organization_id,
+                            best_deposit,
+                            debit_jl,
+                            source_type="INTER_BANK",
+                            source_id=None,
+                        )
                         matched_deposit_ids.add(best_deposit.line_id)
                     except Exception as e:
                         logger.debug(
@@ -1377,9 +2193,15 @@ class AutoReconciliationService:
         return None
 
     @staticmethod
-    def _amounts_match(line_amount: Decimal, expected_amount: Decimal) -> bool:
-        """Check if two amounts match within AMOUNT_TOLERANCE."""
-        return abs(line_amount - expected_amount) <= AMOUNT_TOLERANCE
+    def _amounts_match(
+        line_amount: Decimal,
+        expected_amount: Decimal,
+        tolerance: Decimal | None = None,
+    ) -> bool:
+        """Check if two amounts match within tolerance (default AMOUNT_TOLERANCE)."""
+        return abs(line_amount - expected_amount) <= (
+            tolerance if tolerance is not None else AMOUNT_TOLERANCE
+        )
 
     @staticmethod
     def _is_paystack_opex_account(bank_account: BankAccount) -> bool:
@@ -1447,6 +2269,9 @@ class AutoReconciliationService:
         organization_id: UUID,
         line: BankStatementLine,
         journal_line: JournalEntryLine,
+        *,
+        source_type: str | None = None,
+        source_id: UUID | None = None,
     ) -> None:
         """Delegate to BankReconciliationService.match_statement_line().
 
@@ -1465,4 +2290,37 @@ class AutoReconciliationService:
             journal_line_id=journal_line.line_id,
             matched_by=None,  # System-matched, no user
             force_match=True,  # We've already validated amounts
+            source_type=source_type,
+            source_id=source_id,
+        )
+
+    @staticmethod
+    def _log_match(
+        db: Session,
+        organization_id: UUID,
+        *,
+        line: BankStatementLine,
+        source_type: str,
+        source_id: UUID | None,
+        journal_line_id: UUID | None,
+        confidence: int,
+        explanation: str,
+        action: str = "MATCHED",
+    ) -> None:
+        """Record a match in the reconciliation match log."""
+        from app.services.finance.banking.reconciliation_rule_service import (
+            ReconciliationRuleService,
+        )
+
+        rule_svc = ReconciliationRuleService(db)
+        rule_svc.log_match(
+            organization_id,
+            rule_id=None,  # System passes don't use rule_id
+            line_id=line.line_id,
+            source_doc_type=source_type,
+            source_doc_id=source_id,
+            journal_line_id=journal_line_id,
+            confidence=confidence,
+            explanation=explanation,
+            action=action,
         )

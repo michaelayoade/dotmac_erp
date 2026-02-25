@@ -616,6 +616,7 @@ EXPENSE_PERMISSIONS = [
     ("expense:categories:manage", "Manage expense categories"),
     ("expense:policies:read", "View expense policies"),
     ("expense:policies:manage", "Manage expense policies"),
+    ("expense:limits:review", "Review approver decisions and reset weekly budgets"),
     # -------------------------------------------------------------------------
     # Cash Advances
     # -------------------------------------------------------------------------
@@ -774,6 +775,7 @@ DEFAULT_ROLES = [
     ("expense_admin", "Expense module administrator"),
     ("expense_approver", "Expense approval authority"),
     ("expense_processor", "Expense processing and reimbursement"),
+    ("expense_reviewer", "Expense reviewer with manual weekly reset authority"),
     ("expense_reimburser", "Reimbursement-only processing"),
     # -------------------------------------------------------------------------
     # Operations Roles
@@ -2271,6 +2273,14 @@ ROLE_PERMISSIONS = {
         "expense:advances:settle",
         "expense:cards:transactions:read",
         "expense:cards:transactions:reconcile",
+        "expense:reports:read",
+    ],
+    "expense_reviewer": [
+        "expense:access",
+        "expense:dashboard",
+        "expense:claims:read",
+        "expense:policies:read",
+        "expense:limits:review",
         "expense:reports:read",
     ],
     "expense_reimburser": [

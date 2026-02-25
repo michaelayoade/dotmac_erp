@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts, pivot_table %}
 {% block page_title %}Changes in equity{% endblock %}
 
 {% block breadcrumbs %}
@@ -67,39 +67,13 @@
             </div>
         </div>
 
-        {% if equity_lines %}
-        <table class="w-full text-sm">
-            <thead class="border-b border-slate-200 dark:border-slate-700">
-                <tr class="text-left text-slate-500 dark:text-slate-400">
-                    <th scope="col" class="py-2 px-2 text-xs font-semibold uppercase tracking-wider">Account</th>
-                    <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider">Opening</th>
-                    <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider">Change</th>
-                    <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider">Closing</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in equity_lines %}
-                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                    <td class="py-2 px-2">
-                        <span class="font-mono text-xs text-slate-500">{{ item.account_code }}</span>
-                        <span class="ml-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</span>
-                    </td>
-                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.opening_balance }}</td>
-                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.change }}</td>
-                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.closing_balance }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="99" class="p-0">
-                        {{ empty_state("No equity_lines found", "There are no equity_lines to display.") }}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-sm text-slate-500 dark:text-slate-400">No equity activity for this period.</p>
-        {% endif %}
+        {{ pivot_table(rows=equity_lines, columns=[
+            {"key": "account_name", "label": "Account", "sub_key": "account_code"},
+            {"key": "opening_balance", "label": "Opening", "type": "currency"},
+            {"key": "change", "label": "Change", "type": "currency"},
+            {"key": "closing_balance", "label": "Closing", "type": "currency"},
+          ], container=false,
+          empty_title="No equity activity", empty_description="No equity activity for this period.") }}
     </div>
 </div>
 {% endblock %}

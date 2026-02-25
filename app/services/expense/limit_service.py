@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.expense import (
     ExpenseApproverLimit,
+    ExpenseApproverLimitReset,
     ExpenseClaim,
     ExpenseClaimStatus,
     ExpenseLimitEvaluation,
@@ -31,6 +32,11 @@ from app.models.expense import (
     LimitPeriodType,
     LimitResultType,
     LimitScopeType,
+)
+from app.models.expense.expense_claim_action import (
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
 )
 from app.models.expense.limit_rule import ExpenseApproverBudgetAdjustment
 from app.services.common import PaginatedResult, PaginationParams
@@ -96,6 +102,28 @@ class ApproverBudgetExhaustedError(ExpenseLimitServiceError):
         remaining = budget - used
         super().__init__(
             f"Monthly approval budget for {expense_month} exhausted. "
+            f"Budget: {budget:,.2f}, Used: {used:,.2f}, "
+            f"Remaining: {remaining:,.2f}, Claim: {claim_amount:,.2f}."
+        )
+
+
+class ApproverWeeklyBudgetExhaustedError(ExpenseLimitServiceError):
+    """Approver's weekly approval budget is exhausted."""
+
+    def __init__(
+        self,
+        budget: Decimal,
+        used: Decimal,
+        claim_amount: Decimal,
+        period_label: str,
+    ):
+        self.budget = budget
+        self.used = used
+        self.claim_amount = claim_amount
+        self.period_label = period_label
+        remaining = budget - used
+        super().__init__(
+            f"Weekly approval budget for {period_label} exhausted. "
             f"Budget: {budget:,.2f}, Used: {used:,.2f}, "
             f"Remaining: {remaining:,.2f}, Claim: {claim_amount:,.2f}."
         )
@@ -349,6 +377,7 @@ class ExpenseLimitService:
         scope_type: str,
         max_approval_amount: Decimal,
         scope_id: UUID | None = None,
+        weekly_approval_budget: Decimal | None = None,
         monthly_approval_budget: Decimal | None = None,
         currency_code: str = "NGN",
         dimension_filters: dict | None = None,
@@ -363,6 +392,7 @@ class ExpenseLimitService:
             scope_type=scope_type,
             scope_id=scope_id,
             max_approval_amount=max_approval_amount,
+            weekly_approval_budget=weekly_approval_budget,
             monthly_approval_budget=monthly_approval_budget,
             currency_code=currency_code,
             dimension_filters=dimension_filters or {},
@@ -514,6 +544,102 @@ class ExpenseLimitService:
             )
         )
         return amount if amount is not None else Decimal("0")
+
+    # =========================================================================
+    # Weekly Budget Resets
+    # =========================================================================
+
+    @staticmethod
+    def _start_of_week_utc(reference: datetime | None = None) -> datetime:
+        """Start-of-week (Monday 00:00 UTC) for a timestamp."""
+        ref = reference.astimezone(UTC) if reference else datetime.now(UTC)
+        week_start_date = (ref - timedelta(days=ref.weekday())).date()
+        return datetime.combine(week_start_date, datetime.min.time(), tzinfo=UTC)
+
+    def get_latest_weekly_reset(
+        self,
+        org_id: UUID,
+        approver_id: UUID,
+        approver_limit_id: UUID,
+        *,
+        from_datetime: datetime | None = None,
+    ) -> ExpenseApproverLimitReset | None:
+        """Return the latest reset event for an approver and limit."""
+        query = (
+            select(ExpenseApproverLimitReset)
+            .where(
+                ExpenseApproverLimitReset.organization_id == org_id,
+                ExpenseApproverLimitReset.approver_id == approver_id,
+                ExpenseApproverLimitReset.approver_limit_id == approver_limit_id,
+            )
+            .order_by(ExpenseApproverLimitReset.reset_at.desc())
+        )
+        if from_datetime is not None:
+            query = query.where(ExpenseApproverLimitReset.reset_at >= from_datetime)
+        return self.db.scalar(query.limit(1))
+
+    def create_weekly_budget_reset(
+        self,
+        org_id: UUID,
+        *,
+        approver_id: UUID,
+        reviewed_by_id: UUID,
+        reset_reason: str,
+        reviewed_from: date | None = None,
+        reviewed_to: date | None = None,
+    ) -> ExpenseApproverLimitReset:
+        """Create a manual weekly budget reset event for an approver."""
+        from app.models.people.hr.employee import Employee
+
+        approver = self.db.get(Employee, approver_id)
+        if not approver:
+            raise ValueError("Approver not found")
+
+        budget_info = self._get_approver_weekly_budget(org_id, approver)
+        if budget_info is None:
+            raise ValueError("Approver has no weekly budget configured")
+
+        _, limit_id = budget_info
+
+        action_query = (
+            select(func.count(ExpenseClaimAction.action_id))
+            .join(
+                ExpenseClaim,
+                ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
+            )
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id == approver_id,
+                ExpenseClaimAction.action_type.in_(
+                    [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
+                ),
+                ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+            )
+        )
+        if reviewed_from:
+            action_query = action_query.where(
+                func.date(ExpenseClaimAction.created_at) >= reviewed_from
+            )
+        if reviewed_to:
+            action_query = action_query.where(
+                func.date(ExpenseClaimAction.created_at) <= reviewed_to
+            )
+
+        reviewed_claim_count = self.db.scalar(action_query) or 0
+
+        reset = ExpenseApproverLimitReset(
+            organization_id=org_id,
+            approver_id=approver_id,
+            approver_limit_id=limit_id,
+            reset_reason=reset_reason,
+            reviewed_by_id=reviewed_by_id,
+            reviewed_from=reviewed_from,
+            reviewed_to=reviewed_to,
+            reviewed_claim_count=int(reviewed_claim_count),
+        )
+        self.db.add(reset)
+        self.db.flush()
+        return reset
 
     # =========================================================================
     # Period Usage
@@ -1305,9 +1431,122 @@ class ExpenseLimitService:
         )
 
     # =========================================================================
-    # Approver Monthly Budget
+    # Approver Weekly Budget
     # =========================================================================
 
+    def check_approver_weekly_budget(
+        self,
+        org_id: UUID,
+        approver_id: UUID,
+        claim_amount: Decimal,
+        *,
+        approval_at: datetime | None = None,
+    ) -> None:
+        """Check if approver has remaining weekly budget for approval."""
+        from app.models.people.hr.employee import Employee
+
+        approver = self.db.get(Employee, approver_id)
+        if not approver:
+            return
+
+        budget_info = self._get_approver_weekly_budget(org_id, approver)
+        if budget_info is None:
+            return
+
+        budget, limit_id = budget_info
+        as_of = approval_at.astimezone(UTC) if approval_at else datetime.now(UTC)
+        week_start = self._start_of_week_utc(as_of)
+
+        latest_reset = self.get_latest_weekly_reset(
+            org_id,
+            approver_id,
+            limit_id,
+            from_datetime=week_start,
+        )
+        usage_start = latest_reset.reset_at if latest_reset else week_start
+
+        approved_statuses = [ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]
+        used = self.db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(ExpenseClaim.total_approved_amount), Decimal("0")
+                )
+            )
+            .select_from(ExpenseClaim)
+            .join(
+                ExpenseClaimAction,
+                and_(
+                    ExpenseClaimAction.claim_id == ExpenseClaim.claim_id,
+                    ExpenseClaimAction.action_type == ExpenseClaimActionType.APPROVE,
+                    ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                ),
+            )
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id == approver_id,
+                ExpenseClaim.status.in_(approved_statuses),
+                ExpenseClaimAction.created_at >= usage_start,
+                ExpenseClaimAction.created_at <= as_of,
+            )
+        ) or Decimal("0")
+
+        if used + claim_amount > budget:
+            week_end = week_start + timedelta(days=6)
+            period_label = (
+                f"{week_start.date().isoformat()} to {week_end.date().isoformat()}"
+            )
+            raise ApproverWeeklyBudgetExhaustedError(
+                budget=budget,
+                used=used,
+                claim_amount=claim_amount,
+                period_label=period_label,
+            )
+
+    def _get_approver_weekly_budget(
+        self,
+        org_id: UUID,
+        employee: Employee,
+    ) -> tuple[Decimal, UUID] | None:
+        """Get weekly approval budget in priority: employee -> grade -> designation."""
+
+        def _lookup(
+            scope_type: str, scope_id: UUID | None
+        ) -> tuple[Decimal, UUID] | None:
+            if scope_id is None and scope_type != "EMPLOYEE":
+                return None
+            row = self.db.execute(
+                select(
+                    ExpenseApproverLimit.weekly_approval_budget,
+                    ExpenseApproverLimit.approver_limit_id,
+                ).where(
+                    ExpenseApproverLimit.organization_id == org_id,
+                    ExpenseApproverLimit.is_active == True,
+                    ExpenseApproverLimit.scope_type == scope_type,
+                    ExpenseApproverLimit.scope_id == scope_id,
+                    ExpenseApproverLimit.weekly_approval_budget.isnot(None),
+                )
+            ).first()
+            if row is None:
+                return None
+            return row[0], row[1]
+
+        emp_row = _lookup("EMPLOYEE", employee.employee_id)
+        if emp_row is not None:
+            return emp_row
+
+        if employee.grade_id:
+            grade_row = _lookup("GRADE", employee.grade_id)
+            if grade_row is not None:
+                return grade_row
+
+        if employee.designation_id:
+            desig_row = _lookup("DESIGNATION", employee.designation_id)
+            if desig_row is not None:
+                return desig_row
+
+        return None
+
+    # Legacy monthly budget logic intentionally preserved for compatibility.
     def check_approver_monthly_budget(
         self,
         org_id: UUID,
@@ -1315,27 +1554,7 @@ class ExpenseLimitService:
         claim_amount: Decimal,
         expense_date: date,
     ) -> None:
-        """Check if approver has remaining monthly budget for the expense month.
-
-        Looks up the approver's ``monthly_approval_budget`` (via the most
-        specific matching ``ExpenseApproverLimit``).  When set, sums all
-        amounts this approver has already approved for the **expense month**
-        (keyed on ``claim_date``, not the current date) and raises
-        ``ApproverBudgetExhaustedError`` if the new claim would exceed the
-        budget.
-
-        If no ``monthly_approval_budget`` is configured the check passes
-        silently (backward compatible).
-
-        Args:
-            org_id: Organization ID
-            approver_id: Employee ID of the approver
-            claim_amount: Amount being approved
-            expense_date: The claim's expense date (determines which month's budget)
-
-        Raises:
-            ApproverBudgetExhaustedError: when budget would be exceeded
-        """
+        """Check if approver has remaining monthly budget for the expense month."""
         from app.models.people.hr.employee import Employee
 
         approver = self.db.get(Employee, approver_id)
@@ -1394,9 +1613,7 @@ class ExpenseLimitService:
     ) -> tuple[Decimal, UUID] | None:
         """Get the monthly approval budget for an employee.
 
-        Checks in priority order: employee-specific → grade → designation.
-        Returns ``(budget, approver_limit_id)`` or ``None`` when no budget
-        is configured.
+        Checks in priority order: employee-specific -> grade -> designation.
         """
         # Employee-specific limit
         emp_row = self.db.execute(

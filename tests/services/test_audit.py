@@ -47,14 +47,12 @@ class TestParseActorType:
         result = AuditEvents.parse_actor_type("service")
         assert result == AuditActorType.service
 
-    def test_parse_actor_type_invalid_raises_400(self):
-        """Invalid actor type should raise HTTPException with 400."""
-        with pytest.raises(HTTPException) as exc_info:
+    def test_parse_actor_type_invalid_raises_value_error(self):
+        """Invalid actor type should raise ValueError."""
+        with pytest.raises(ValueError, match="Invalid actor_type") as exc_info:
             AuditEvents.parse_actor_type("invalid_type")
 
-        assert exc_info.value.status_code == 400
-        assert "Invalid actor_type" in exc_info.value.detail
-        assert "user" in exc_info.value.detail  # Should list allowed values
+        assert "user" in str(exc_info.value)  # Should list allowed values
 
     def test_parse_actor_type_already_enum(self):
         """AuditActorType enum value should be resolved correctly."""
@@ -91,7 +89,7 @@ class TestAuditEventsCreate:
             AuditEvents.create(mock_db, payload)
 
             mock_db.add.assert_called_once_with(mock_event)
-            mock_db.commit.assert_called_once()
+            mock_db.flush.assert_called_once()
             mock_db.refresh.assert_called_once_with(mock_event)
 
     def test_create_with_occurred_at(self, mock_db):
@@ -175,16 +173,15 @@ class TestAuditEventsGet:
 
         assert result == mock_audit_event
 
-    def test_get_nonexistent_raises_404(self, mock_db):
-        """Nonexistent event ID should raise HTTPException with 404."""
+    def test_get_nonexistent_raises_not_found(self, mock_db):
+        """Nonexistent event ID should raise NotFoundError."""
+        from app.services.common import NotFoundError
+
         mock_db.get.return_value = None
         event_id = str(uuid.uuid4())
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(NotFoundError, match="Audit event not found"):
             AuditEvents.get(mock_db, event_id)
-
-        assert exc_info.value.status_code == 404
-        assert "Audit event not found" in exc_info.value.detail
 
     def test_get_invalid_uuid(self, mock_db):
         """Invalid UUID format should raise HTTPException(400)."""
@@ -199,20 +196,16 @@ class TestAuditEventsGet:
 class TestAuditEventsList:
     """Tests for AuditEvents.list method."""
 
-    def _setup_mock_query(self, mock_db, return_value=None):
-        """Helper to setup mock query chain."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = return_value or []
-        return mock_query
+    def _setup_mock_scalars(self, mock_db, return_value=None):
+        """Helper to setup mock for select() + db.scalars() pattern."""
+        mock_result = MagicMock()
+        mock_result.__iter__ = MagicMock(return_value=iter(return_value or []))
+        mock_db.scalars.return_value = mock_result
+        return mock_result
 
     def test_list_all_active(self, mock_db, mock_audit_event):
         """Should list active events by default."""
-        mock_query = self._setup_mock_query(mock_db, [mock_audit_event])
+        self._setup_mock_scalars(mock_db, [mock_audit_event])
 
         result = AuditEvents.list(
             mock_db,
@@ -231,15 +224,14 @@ class TestAuditEventsList:
         )
 
         assert len(result) == 1
-        # Should filter for is_active=True by default
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_actor_id(self, mock_db):
         """Should filter by actor_id."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
         actor_id = str(uuid.uuid4())
 
-        AuditEvents.list(
+        result = AuditEvents.list(
             mock_db,
             actor_id=actor_id,
             actor_type=None,
@@ -255,12 +247,12 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        # Filter should be called at least twice (actor_id + is_active)
-        assert mock_query.filter.call_count >= 2
+        mock_db.scalars.assert_called_once()
+        assert isinstance(result, list)
 
     def test_list_filter_by_actor_type(self, mock_db):
         """Should filter by actor_type."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -278,11 +270,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_action(self, mock_db):
         """Should filter by action."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -300,11 +292,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_entity_type(self, mock_db):
         """Should filter by entity_type."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -322,11 +314,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_request_id(self, mock_db):
         """Should filter by request_id."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -344,11 +336,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_is_success_true(self, mock_db):
         """Should filter by is_success=True."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -366,11 +358,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_is_success_false(self, mock_db):
         """Should filter by is_success=False."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -388,11 +380,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_status_code(self, mock_db):
         """Should filter by status_code."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -410,11 +402,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_filter_by_is_active(self, mock_db):
         """Should filter by explicit is_active value."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -432,11 +424,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_order_by_occurred_at(self, mock_db):
         """Should order by occurred_at."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -454,11 +446,11 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.order_by.assert_called()
+        mock_db.scalars.assert_called_once()
 
     def test_list_order_by_action(self, mock_db):
         """Should order by action."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -476,13 +468,13 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        mock_query.order_by.assert_called()
+        mock_db.scalars.assert_called_once()
 
-    def test_list_invalid_order_by_raises_400(self, mock_db):
-        """Invalid order_by column should raise HTTPException."""
-        self._setup_mock_query(mock_db)
+    def test_list_invalid_order_by_raises_value_error(self, mock_db):
+        """Invalid order_by column should raise ValueError."""
+        self._setup_mock_scalars(mock_db)
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValueError, match="Invalid order_by"):
             AuditEvents.list(
                 mock_db,
                 actor_id=None,
@@ -499,12 +491,9 @@ class TestAuditEventsList:
                 offset=0,
             )
 
-        assert exc_info.value.status_code == 400
-        assert "Invalid order_by" in exc_info.value.detail
-
     def test_list_pagination(self, mock_db):
         """Should apply limit and offset correctly."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -522,12 +511,11 @@ class TestAuditEventsList:
             offset=50,
         )
 
-        mock_query.limit.assert_called_once_with(25)
-        mock_query.offset.assert_called_once_with(50)
+        mock_db.scalars.assert_called_once()
 
     def test_list_combined_filters(self, mock_db):
         """Should apply multiple filters together."""
-        mock_query = self._setup_mock_query(mock_db)
+        self._setup_mock_scalars(mock_db)
 
         AuditEvents.list(
             mock_db,
@@ -545,8 +533,7 @@ class TestAuditEventsList:
             offset=0,
         )
 
-        # All filters should be applied
-        assert mock_query.filter.call_count >= 7
+        mock_db.scalars.assert_called_once()
 
 
 # ============ TestLogRequest ============
@@ -787,7 +774,7 @@ class TestLogRequest:
         with patch("app.services.audit.AuditEvent"):
             AuditEvents.log_request(mock_db, request, response)
 
-            mock_db.commit.assert_called_once()
+            mock_db.flush.assert_called_once()
 
     def test_log_request_invalid_actor_type_defaults_to_system(self, mock_db):
         """Invalid actor_type header should default to system."""
@@ -817,14 +804,13 @@ class TestAuditEventsDelete:
         AuditEvents.delete(mock_db, str(mock_audit_event.id))
 
         assert mock_audit_event.is_active is False
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
-    def test_delete_nonexistent_raises_404(self, mock_db):
-        """Deleting nonexistent event should raise HTTPException."""
+    def test_delete_nonexistent_raises_not_found(self, mock_db):
+        """Deleting nonexistent event should raise NotFoundError."""
+        from app.services.common import NotFoundError
+
         mock_db.get.return_value = None
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(NotFoundError, match="Audit event not found"):
             AuditEvents.delete(mock_db, str(uuid.uuid4()))
-
-        assert exc_info.value.status_code == 404
-        assert "Audit event not found" in exc_info.value.detail

@@ -1,0 +1,246 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{{ "Edit " ~ fp.name if fp else "New Fiscal Position" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/tax/codes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/tax/fiscal-positions" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Fiscal Positions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if fp else "New" }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6"
+     x-data='{
+        taxMaps: {{ (fp.tax_maps | map(attribute="__dict__") | list | tojson) if fp and fp.tax_maps else "[]" }},
+        accountMaps: {{ (fp.account_maps | map(attribute="__dict__") | list | tojson) if fp and fp.account_maps else "[]" }},
+        addTaxMap() {
+            this.taxMaps.push({ tax_source_id: "", tax_dest_id: "" });
+        },
+        removeTaxMap(index) {
+            this.taxMaps.splice(index, 1);
+        },
+        addAccountMap() {
+            this.accountMaps.push({ account_source_id: "", account_dest_id: "" });
+        },
+        removeAccountMap(index) {
+            this.accountMaps.splice(index, 1);
+        }
+     }'>
+
+    {# Error Banner #}
+    {% if error %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-900/20">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("warning", "h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 flex-shrink-0") }}
+            <div>
+                <h3 class="font-medium text-rose-800 dark:text-rose-300">Error</h3>
+                <p class="mt-1 text-sm text-rose-700 dark:text-rose-400">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post"
+          action="{{ '/finance/tax/fiscal-positions/' ~ fp.fiscal_position_id ~ '/edit' if fp else '/finance/tax/fiscal-positions/new' }}"
+          class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        {# Basic Information #}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Basic Information</h2>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="grid gap-6 sm:grid-cols-2">
+                    <div class="sm:col-span-2">
+                        <label for="name" class="form-label">Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="name" name="name" required maxlength="120"
+                               value="{{ form_data.name if form_data else (fp.name if fp else '') }}"
+                               placeholder="e.g., Government Customer - VAT Exempt"
+                               class="form-input">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea id="description" name="description" rows="2"
+                                  placeholder="When this fiscal position should apply..."
+                                  class="form-input resize-none">{{ form_data.description if form_data else (fp.description if fp and fp.description else '') }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Matching Criteria #}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Matching Criteria</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">When auto-apply is enabled, invoices for matching partners will use this fiscal position automatically.</p>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="auto_apply_check" name="auto_apply" value="true"
+                           {{ 'checked' if (form_data and form_data.auto_apply == 'true') or (fp and fp.auto_apply) else '' }}
+                           class="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700">
+                    <label for="auto_apply_check" class="text-sm font-medium text-slate-900 dark:text-white">Auto-apply to matching partners</label>
+                </div>
+
+                <div class="grid gap-6 sm:grid-cols-2">
+                    <div>
+                        <label for="customer_type" class="form-label">Customer Type</label>
+                        <select id="customer_type" name="customer_type" class="form-select">
+                            <option value="">Any customer type</option>
+                            {% for ct in customer_types %}
+                            <option value="{{ ct.value }}"
+                                {{ 'selected' if (form_data and form_data.customer_type == ct.value) or (fp and fp.customer_type == ct.value) else '' }}>
+                                {{ ct.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span class="form-hint">Match customers of this type</span>
+                    </div>
+                    <div>
+                        <label for="supplier_type" class="form-label">Supplier Type</label>
+                        <select id="supplier_type" name="supplier_type" class="form-select">
+                            <option value="">Any supplier type</option>
+                            {% for st in supplier_types %}
+                            <option value="{{ st.value }}"
+                                {{ 'selected' if (form_data and form_data.supplier_type == st.value) or (fp and fp.supplier_type == st.value) else '' }}>
+                                {{ st.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span class="form-hint">Match suppliers of this type</span>
+                    </div>
+                    <div>
+                        <label for="country_code" class="form-label">Country Code</label>
+                        <input type="text" id="country_code" name="country_code" maxlength="3"
+                               value="{{ form_data.country_code if form_data else (fp.country_code if fp and fp.country_code else '') }}"
+                               placeholder="e.g., NGA"
+                               class="form-input">
+                        <span class="form-hint">ISO 3166-1 alpha-3</span>
+                    </div>
+                    <div>
+                        <label for="state_code" class="form-label">State Code</label>
+                        <input type="text" id="state_code" name="state_code" maxlength="10"
+                               value="{{ form_data.state_code if form_data else (fp.state_code if fp and fp.state_code else '') }}"
+                               placeholder="e.g., LA"
+                               class="form-input">
+                    </div>
+                    <div>
+                        <label for="priority" class="form-label">Priority</label>
+                        <input type="number" id="priority" name="priority" min="1" max="999"
+                               value="{{ form_data.priority if form_data else (fp.priority if fp else 10) }}"
+                               class="form-input">
+                        <span class="form-hint">Lower number = higher priority (matched first)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Tax Mappings #}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tax Mappings</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Map source tax codes to destination codes. Leave destination blank for tax exemption.</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <template x-for="(tm, index) in taxMaps" :key="index">
+                    <div class="flex items-end gap-3">
+                        <div class="flex-1">
+                            <label class="form-label text-xs" x-show="index === 0">Source Tax</label>
+                            <select :name="'tax_source_id'" x-model="tm.tax_source_id" class="form-select">
+                                <option value="">Select source tax...</option>
+                                {% for tc in tax_codes %}
+                                <option value="{{ tc.tax_code_id }}">{{ tc.tax_code }} - {{ tc.tax_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-center pb-1 text-slate-400 dark:text-slate-500">
+                            {{ icon_svg("chevron-right", "h-5 w-5") }}
+                        </div>
+                        <div class="flex-1">
+                            <label class="form-label text-xs" x-show="index === 0">Destination Tax</label>
+                            <select :name="'tax_dest_id'" x-model="tm.tax_dest_id" class="form-select">
+                                <option value="">(Exempt - remove tax)</option>
+                                {% for tc in tax_codes %}
+                                <option value="{{ tc.tax_code_id }}">{{ tc.tax_code }} - {{ tc.tax_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="button" @click="removeTaxMap(index)"
+                                class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400 transition-colors"
+                                aria-label="Remove tax mapping">
+                            {{ icon_svg("trash", "h-4 w-4") }}
+                        </button>
+                    </div>
+                </template>
+                <button type="button" @click="addTaxMap()"
+                        class="btn btn-ghost text-sm">
+                    {{ icon_svg("plus", "h-4 w-4 mr-1") }}
+                    Add Tax Mapping
+                </button>
+            </div>
+        </div>
+
+        {# Account Mappings #}
+        <div class="card">
+            <div class="card-header">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Account Mappings</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Map source GL accounts to destination accounts (e.g., domestic revenue to export revenue).</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <template x-for="(am, index) in accountMaps" :key="index">
+                    <div class="flex items-end gap-3">
+                        <div class="flex-1">
+                            <label class="form-label text-xs" x-show="index === 0">Source Account</label>
+                            <select :name="'account_source_id'" x-model="am.account_source_id" class="form-select">
+                                <option value="">Select source account...</option>
+                                {% for acct in accounts %}
+                                <option value="{{ acct.account_id }}">{{ acct.account_code }} - {{ acct.account_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-center pb-1 text-slate-400 dark:text-slate-500">
+                            {{ icon_svg("chevron-right", "h-5 w-5") }}
+                        </div>
+                        <div class="flex-1">
+                            <label class="form-label text-xs" x-show="index === 0">Destination Account</label>
+                            <select :name="'account_dest_id'" x-model="am.account_dest_id" class="form-select">
+                                <option value="">Select destination account...</option>
+                                {% for acct in accounts %}
+                                <option value="{{ acct.account_id }}">{{ acct.account_code }} - {{ acct.account_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="button" @click="removeAccountMap(index)"
+                                class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400 transition-colors"
+                                aria-label="Remove account mapping">
+                            {{ icon_svg("trash", "h-4 w-4") }}
+                        </button>
+                    </div>
+                </template>
+                <button type="button" @click="addAccountMap()"
+                        class="btn btn-ghost text-sm">
+                    {{ icon_svg("plus", "h-4 w-4 mr-1") }}
+                    Add Account Mapping
+                </button>
+            </div>
+        </div>
+
+        {# Form Actions #}
+        <div class="flex items-center justify-end gap-3 py-4">
+            <a href="{{ '/finance/tax/fiscal-positions/' ~ fp.fiscal_position_id if fp else '/finance/tax/fiscal-positions' }}"
+               class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("check", "h-4 w-4 mr-1") }}
+                {{ "Update Fiscal Position" if fp else "Create Fiscal Position" }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

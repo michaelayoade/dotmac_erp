@@ -1,5 +1,6 @@
 """HR info change request routes."""
 
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
@@ -125,9 +126,26 @@ def approve_info_change_request(
         auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
     )
     svc = InfoChangeService(db)
-    svc.approve_request(
-        org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
-    )
+    try:
+        svc.approve_request(
+            org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        message = quote(str(exc))
+        if "not found" in str(exc).lower():
+            return RedirectResponse(
+                url=f"/people/hr/info-changes?error={message}",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url=f"/people/hr/info-changes/{request_id}?error={message}",
+            status_code=303,
+        )
+    except Exception:
+        db.rollback()
+        raise
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Approved",
         status_code=303,
@@ -151,9 +169,26 @@ def reject_info_change_request(
         auth.person_id if isinstance(auth.person_id, UUID) else UUID(auth.person_id)
     )
     svc = InfoChangeService(db)
-    svc.reject_request(
-        org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
-    )
+    try:
+        svc.reject_request(
+            org_id, request_id, reviewer_id=person_id, reviewer_notes=reviewer_notes
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        message = quote(str(exc))
+        if "not found" in str(exc).lower():
+            return RedirectResponse(
+                url=f"/people/hr/info-changes?error={message}",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url=f"/people/hr/info-changes/{request_id}?error={message}",
+            status_code=303,
+        )
+    except Exception:
+        db.rollback()
+        raise
     return RedirectResponse(
         url=f"/people/hr/info-changes/{request_id}?success=Rejected",
         status_code=303,

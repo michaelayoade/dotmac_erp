@@ -1,0 +1,109 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Auto-Match Rules{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Auto-Match Rules</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6 stagger-in">
+    <!-- Header -->
+    <div>
+        <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Auto-Match Rules</h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Configure which matching passes run during auto-reconciliation and adjust shared parameters.
+        </p>
+    </div>
+
+    <!-- Success Message -->
+    {% if saved or request.query_params.get('saved') %}
+    <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 dark:bg-emerald-900/20 dark:border-emerald-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("check", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
+            <p class="text-sm text-emerald-700 dark:text-emerald-300">Auto-match settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/finance/banking/settings" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        <!-- Matching Passes -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Matching Passes</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                Toggle individual matching strategies. Disabled passes are skipped during auto-reconciliation.
+            </p>
+
+            <div class="space-y-1">
+                {% for key in pass_keys %}
+                {% set s = settings[key] %}
+                {% set is_enabled = s.value if s.value is not none else s.default %}
+                <label class="flex items-start gap-3 cursor-pointer rounded-lg border border-slate-200 dark:border-slate-700 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <input type="hidden" name="{{ key }}" value="false">
+                    <input type="checkbox" name="{{ key }}" value="true"
+                           {{ 'checked' if is_enabled else '' }}
+                           class="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800">
+                    <div class="flex-1 min-w-0">
+                        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ loop.index }}. {{ s.label }}</span>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ s.description }}</p>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Parameters -->
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Parameters</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                Shared matching parameters used across multiple passes.
+            </p>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                {% for key in param_keys %}
+                {% set s = settings[key] %}
+                {% set current_value = s.value if s.value is not none else s.default %}
+                <div>
+                    <label for="{{ key }}" class="form-label">{{ s.label }}</label>
+                    <input type="{{ 'number' if s.type == 'integer' else 'text' }}"
+                           id="{{ key }}" name="{{ key }}"
+                           value="{{ current_value if current_value is not none else '' }}"
+                           {% if s.min is not none %}min="{{ s.min }}"{% endif %}
+                           {% if s.max is not none %}max="{{ s.max }}"{% endif %}
+                           class="form-input">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ s.description }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/finance/banking/dashboard" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

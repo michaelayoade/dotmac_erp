@@ -350,6 +350,35 @@ class TestFIFOValuationAPI:
 
         assert result["item_count"] == 10
 
+    def test_get_inventory_valuation_reconciliation(
+        self, mock_db, mock_auth_dict, org_id
+    ):
+        """Test inventory valuation reconciliation snapshot endpoint."""
+        mock_result = MagicMock()
+        mock_result.fiscal_period_id = uuid.uuid4()
+        mock_result.inventory_total = Decimal("1250.00")
+        mock_result.gl_total = Decimal("1000.00")
+        mock_result.difference = Decimal("250.00")
+        mock_result.is_balanced = False
+
+        with patch(
+            "app.api.inventory.ValuationReconciliationService.reconcile"
+        ) as mock_reconcile:
+            mock_reconcile.return_value = mock_result
+
+            result = inv_api.get_inventory_valuation_reconciliation(
+                organization_id=org_id,
+                fiscal_period_id=None,
+                auth=mock_auth_dict,
+                db=mock_db,
+            )
+
+        assert result.fiscal_period_id == mock_result.fiscal_period_id
+        assert result.inventory_total == Decimal("1250.00")
+        assert result.gl_total == Decimal("1000.00")
+        assert result.difference == Decimal("250.00")
+        assert result.is_balanced is False
+
 
 class TestLotTrackingAPI:
     """Tests for lot tracking endpoints."""

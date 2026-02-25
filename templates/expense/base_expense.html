@@ -156,6 +156,13 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Spending Limits</span>
             </a>
 
+            <a href="/expense/limits/reviewer/approvers"
+               :class="activeModule === 'limits-review' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
+                {{ icon_svg("document-report", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Expense Reviewer</span>
+            </a>
+
             <!-- Section Divider: Reports -->
             <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
                 <span class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Reports</span>

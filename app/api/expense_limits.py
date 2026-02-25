@@ -314,6 +314,7 @@ def create_approver_limit(
             scope_type=data.scope_type,
             scope_id=data.scope_id,
             max_approval_amount=data.max_approval_amount,
+            weekly_approval_budget=data.weekly_approval_budget,
             currency_code=data.currency_code,
             dimension_filters=data.dimension_filters.model_dump()
             if data.dimension_filters

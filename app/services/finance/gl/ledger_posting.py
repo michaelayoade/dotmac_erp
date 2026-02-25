@@ -317,12 +317,28 @@ class LedgerPostingService(ListResponseMixin):
             total_debit += entry.debit_amount_functional
             total_credit += entry.credit_amount_functional
 
-        # 11. Update batch status
+        # 11. Mark affected balances stale and enqueue asynchronous refresh.
+        from app.services.finance.gl.balance_invalidation import (
+            BalanceInvalidationService,
+        )
+
+        BalanceInvalidationService(db).invalidate_batch(
+            [
+                (
+                    org_id,
+                    line.account_id,
+                    line.fiscal_period_id,
+                )
+                for line in posted_lines
+            ]
+        )
+
+        # 12. Update batch status
         batch.posted_entries = len(posted_lines)
         batch.status = BatchStatus.POSTED
         batch.completed_at = datetime.now(UTC)
 
-        # 12. Update journal status
+        # 13. Update journal status
         journal.status = JournalStatus.POSTED
         journal.posting_batch_id = batch.batch_id
         journal.posted_at = datetime.now(UTC)
@@ -332,7 +348,7 @@ class LedgerPostingService(ListResponseMixin):
             else journal.created_by_user_id
         )
 
-        # 13. Publish event via outbox (must be in the same transaction)
+        # 14. Publish event via outbox (must be in the same transaction)
         LedgerPostingService._publish_posting_event(
             db,
             org_id,
@@ -345,7 +361,35 @@ class LedgerPostingService(ListResponseMixin):
             request.correlation_id,
         )
 
-        # 14. Commit the transaction (journal + ledger lines + outbox event)
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import GL_JOURNAL_POSTED
+
+            emit_hook_event(
+                db,
+                event_name=GL_JOURNAL_POSTED,
+                organization_id=org_id,
+                entity_type="JournalEntry",
+                entity_id=journal_id,
+                actor_user_id=coerce_uuid(request.posted_by_user_id)
+                if request.posted_by_user_id
+                else journal.created_by_user_id,
+                payload={
+                    "journal_entry_id": str(journal_id),
+                    "journal_number": getattr(journal, "journal_number", None),
+                    "posting_batch_id": str(batch.batch_id),
+                    "posted_lines": str(len(posted_lines)),
+                    "total_debit": str(total_debit),
+                    "total_credit": str(total_credit),
+                    "source_module": request.source_module,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit gl.journal.posted hook for journal %s", journal_id
+            )
+
+        # 15. Commit the transaction (journal + ledger lines + outbox event)
         db.commit()
         db.refresh(batch)
 

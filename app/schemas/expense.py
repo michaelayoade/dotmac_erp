@@ -680,6 +680,7 @@ class ExpenseApproverLimitBase(BaseModel):
     scope_type: str = Field(description="EMPLOYEE, GRADE, DESIGNATION, ROLE")
     scope_id: UUID | None = None
     max_approval_amount: Decimal
+    weekly_approval_budget: Decimal | None = None
     currency_code: str = "NGN"
     dimension_filters: DimensionFilters | None = None
     escalate_to_employee_id: UUID | None = None
@@ -698,6 +699,7 @@ class ExpenseApproverLimitUpdate(BaseModel):
     """Update expense approver limit request."""
 
     max_approval_amount: Decimal | None = None
+    weekly_approval_budget: Decimal | None = None
     dimension_filters: DimensionFilters | None = None
     escalate_to_employee_id: UUID | None = None
     escalate_to_grade_min_rank: int | None = None

@@ -25,6 +25,7 @@ from app.models.expense.expense_claim_action import (
 from app.models.expense.limit_rule import (
     ExpenseApproverBudgetAdjustment,
     ExpenseApproverLimit,
+    ExpenseApproverLimitReset,
     ExpenseLimitEvaluation,
     ExpenseLimitRule,
     ExpensePeriodUsage,
@@ -54,6 +55,7 @@ __all__ = [
     "ExpenseLimitRule",
     "ExpenseApproverLimit",
     "ExpenseApproverBudgetAdjustment",
+    "ExpenseApproverLimitReset",
     "ExpenseLimitEvaluation",
     "ExpensePeriodUsage",
     "LimitScopeType",

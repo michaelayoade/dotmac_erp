@@ -27,7 +27,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.mixins import VersionedMixin
+from app.models.mixins import TrackedMixin, VersionedMixin
 
 
 class JournalType(str, enum.Enum):
@@ -61,7 +61,7 @@ class JournalStatus(str, enum.Enum):
         return frozenset({cls.POSTED, cls.REVERSED, cls.VOID})
 
 
-class JournalEntry(Base, VersionedMixin):
+class JournalEntry(Base, VersionedMixin, TrackedMixin):
     """
     Journal entry header.
     Document 07: Immutable after posting.
@@ -77,6 +77,18 @@ class JournalEntry(Base, VersionedMixin):
         Index("idx_journal_correlation", "correlation_id"),
         {"schema": "gl"},
     )
+
+    # Field-level change tracking
+    __tracked_fields__ = {
+        "status": {"label": "Status"},
+        "entry_date": {"label": "Entry Date"},
+        "description": {"label": "Description"},
+        "submitted_by_user_id": {"label": "Submitted By"},
+        "approved_by_user_id": {"label": "Approved By"},
+        "posted_by_user_id": {"label": "Posted By"},
+    }
+    __tracking_entity_type__ = "JournalEntry"
+    __tracking_pk_field__ = "journal_entry_id"
 
     journal_entry_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

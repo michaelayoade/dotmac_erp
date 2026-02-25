@@ -1,0 +1,425 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge, icon_svg %}
+
+{% block page_title %}Service Hooks{% endblock %}
+{% block page_subtitle %}Configure event-driven outbound hooks{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <a href="/admin/settings/hub" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Settings</a>
+        {{ icon_svg("chevron-right", "h-4 w-4") }}
+        <span class="font-medium text-slate-900 dark:text-white">Service Hooks</span>
+    </nav>
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Service Hooks</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Trigger webhooks or outbox events when business events occur.
+            </p>
+        </div>
+        {{ status_badge('ENABLED' if service_hooks_enabled else 'DISABLED', 'sm') }}
+    </div>
+
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-900/20 dark:border-green-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("check", "h-5 w-5 text-green-600 dark:text-green-400") }}
+            <p class="text-sm text-green-700 dark:text-green-300">Service hooks updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if bulk_result %}
+    <div class="rounded-lg bg-blue-50 border border-blue-200 p-4 dark:bg-blue-900/20 dark:border-blue-800">
+        <p class="text-sm text-blue-700 dark:text-blue-300">
+            Bulk {{ bulk_result.action }}: {{ bulk_result.processed }} processed, {{ bulk_result.skipped }} skipped ({{ bulk_result.requested }} selected).
+        </p>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not service_hooks_enabled %}
+    <div class="rounded-lg bg-amber-50 border border-amber-200 p-4 dark:bg-amber-900/20 dark:border-amber-800">
+        <div class="flex gap-3">
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5") }}
+            <div class="text-sm text-amber-700 dark:text-amber-300">
+                <p class="font-medium">Service Hooks feature is disabled.</p>
+                <p class="mt-1">Enable <code>enable_service_hooks</code> in Feature Flags to execute hooks. You can still configure hooks here.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if selected_execution %}
+    <div class="admin-card p-5 space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Execution Detail</h3>
+            <a href="/admin/settings/service-hooks" class="text-sm text-accent-600 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300">Clear</a>
+        </div>
+        <p class="text-sm text-slate-600 dark:text-slate-300">
+            Status: <span class="font-medium">{{ selected_execution.status }}</span>
+            {% if selected_execution.response_status_code is not none %} · HTTP {{ selected_execution.response_status_code }}{% endif %}
+            {% if selected_execution.duration_ms is not none %} · {{ selected_execution.duration_ms }}ms{% endif %}
+            · Retries: {{ selected_execution.retry_count }}
+        </p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+            Created: {{ selected_execution.created_at or '-' }} · Executed: {{ selected_execution.executed_at or '-' }}
+        </p>
+        {% if selected_execution.error_message %}
+        <div class="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300">
+            {{ selected_execution.error_message }}
+        </div>
+        {% endif %}
+        <div class="grid gap-3 md:grid-cols-2">
+            <div>
+                <p class="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">Event Payload</p>
+                <pre class="max-h-72 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{{ selected_execution.event_payload | tojson(indent=2) }}</pre>
+            </div>
+            <div>
+                <p class="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">Response Body</p>
+                <pre class="max-h-72 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{{ selected_execution.response_body or '' }}</pre>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="admin-card p-6">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Create Hook</h3>
+        <form method="post" action="/admin/settings/service-hooks" class="mt-4 grid gap-4 md:grid-cols-2">
+            {{ request.state.csrf_form | safe }}
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+                <input name="name" type="text" required class="form-input" placeholder="Notify CRM on SO confirm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Event</label>
+                <select name="event_name" class="form-input" required>
+                    <option value="">Select event</option>
+                    {% for event_name in available_events %}
+                    <option value="{{ event_name }}">{{ event_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Handler Type</label>
+                <select name="handler_type" class="form-input" required>
+                    {% for handler_type in handler_types %}
+                    <option value="{{ handler_type }}">{{ handler_type|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Execution Mode</label>
+                <select name="execution_mode" class="form-input" required>
+                    {% for execution_mode in execution_modes %}
+                    <option value="{{ execution_mode }}" {{ 'selected' if execution_mode == 'ASYNC' else '' }}>
+                        {{ execution_mode }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Webhook URL (for WEBHOOK)</label>
+                <input name="webhook_url" type="url" class="form-input" placeholder="https://example.com/webhooks/dotmac">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Webhook Timeout (seconds)</label>
+                <input name="webhook_timeout_seconds" type="number" min="1" value="15" class="form-input">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Outbox Event Override (for EVENT_OUTBOX)</label>
+                <input name="event_name_override" type="text" class="form-input" placeholder="custom.domain.event">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
+                <input name="priority" type="number" min="0" value="10" class="form-input">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Retries</label>
+                <input name="max_retries" type="number" min="0" value="3" class="form-input">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Retry Backoff (seconds)</label>
+                <input name="retry_backoff_seconds" type="number" min="1" value="60" class="form-input">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Circuit Breaker (failures)</label>
+                <input name="circuit_breaker_failures" type="number" min="0" value="0" class="form-input">
+            </div>
+            <div class="flex items-end">
+                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="is_active" value="true" checked class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">
+                    Active
+                </label>
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+                <textarea name="description" rows="2" class="form-input" placeholder="Optional notes"></textarea>
+            </div>
+            <div class="md:col-span-2">
+                <button type="submit" class="btn btn-primary">Create Hook</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="admin-card divide-y divide-slate-200 dark:divide-slate-700">
+        <div class="p-4">
+            <form method="get" action="/admin/settings/service-hooks" class="grid gap-3 md:grid-cols-4">
+                <div class="md:col-span-2">
+                    <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Search name</label>
+                    <input type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search hooks">
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Handler</label>
+                    <select name="handler_type" class="form-input">
+                        <option value="">All</option>
+                        {% for handler_type in handler_types %}
+                        <option value="{{ handler_type }}" {{ 'selected' if filters.handler_type == handler_type else '' }}>
+                            {{ handler_type|replace('_', ' ')|title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Status</label>
+                    <select name="is_active" class="form-input">
+                        <option value="" {{ 'selected' if not filters.is_active else '' }}>All</option>
+                        <option value="true" {{ 'selected' if filters.is_active == 'true' else '' }}>Enabled</option>
+                        <option value="false" {{ 'selected' if filters.is_active == 'false' else '' }}>Disabled</option>
+                    </select>
+                </div>
+                <div class="md:col-span-4 flex items-center gap-2">
+                    <button type="submit" class="btn btn-secondary">Apply Filters</button>
+                    <a href="/admin/settings/service-hooks" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+        <div class="p-4">
+            <form id="bulk-hooks-form" method="post" action="/admin/settings/service-hooks/bulk-action" class="flex flex-wrap items-center gap-2">
+                {{ request.state.csrf_form | safe }}
+                <input type="hidden" name="q" value="{{ filters.q }}">
+                <input type="hidden" name="handler_type" value="{{ filters.handler_type }}">
+                <input type="hidden" name="is_active" value="{{ filters.is_active }}">
+                <label class="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <input id="hooks-select-all" type="checkbox" class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">
+                    Select all visible
+                </label>
+                <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Bulk action</label>
+                <select name="bulk_action" class="form-input w-auto">
+                    <option value="enable">Enable selected</option>
+                    <option value="disable">Disable selected</option>
+                    <option value="delete">Delete selected</option>
+                </select>
+                <button type="submit" class="btn btn-secondary" onclick="return confirm('Apply this action to selected hooks?')">Apply</button>
+                <span id="hooks-selected-count" class="text-xs text-slate-500 dark:text-slate-400">0 selected</span>
+            </form>
+        </div>
+        {% for hook in hooks %}
+        <div class="p-5 space-y-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <input type="checkbox" name="hook_ids" value="{{ hook.hook_id }}" form="bulk-hooks-form" class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">
+                    <p class="font-semibold text-slate-900 dark:text-white">{{ hook.name }}</p>
+                    {{ status_badge(hook.handler_type, 'sm') }}
+                    {{ status_badge(hook.execution_mode, 'sm') }}
+                    {{ status_badge('ENABLED' if hook.is_active else 'DISABLED', 'sm') }}
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ hook.event_name }}</p>
+                {% if hook.webhook_url %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Webhook: {{ hook.webhook_url }}</p>
+                {% endif %}
+                {% if hook.webhook_timeout_seconds %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Timeout: {{ hook.webhook_timeout_seconds }}s</p>
+                {% endif %}
+                {% if hook.event_name_override %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Outbox Override: {{ hook.event_name_override }}</p>
+                {% endif %}
+                {% if hook.circuit_breaker_failures %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Circuit breaker: disable after {{ hook.circuit_breaker_failures }} consecutive failures
+                </p>
+                {% endif %}
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Last 30d: {{ hook.stats_success }} success, {{ hook.stats_failed }} failed, {{ hook.stats_dead }} dead
+                </p>
+                {% if hook.recent_executions %}
+                <div class="mt-2 space-y-1">
+                    <p class="text-xs font-medium text-slate-600 dark:text-slate-300">Recent executions</p>
+                    {% for execution in hook.recent_executions %}
+                    <div class="flex items-center justify-between rounded border border-slate-200 px-2 py-1 text-xs dark:border-slate-700">
+                        <div class="truncate text-slate-600 dark:text-slate-300">
+                            <span class="font-medium">{{ execution.status }}</span>
+                            {% if execution.duration_ms is not none %} · {{ execution.duration_ms }}ms{% endif %}
+                            {% if execution.response_status_code is not none %} · HTTP {{ execution.response_status_code }}{% endif %}
+                            {% if execution.error_message %} · {{ execution.error_message }}{% endif %}
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <a href="/admin/settings/service-hooks?detail_hook_id={{ hook.hook_id }}&detail_execution_id={{ execution.execution_id }}" class="btn btn-secondary px-2 py-1 text-xs">View</a>
+                            {% if execution.status in ["FAILED", "DEAD"] %}
+                            <form method="post" action="/admin/settings/service-hooks/{{ hook.hook_id }}/executions/{{ execution.execution_id }}/retry" class="inline">
+                                {{ request.state.csrf_form | safe }}
+                                <button type="submit" class="btn btn-secondary px-2 py-1 text-xs">Retry</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="flex items-center gap-2">
+                <details class="relative">
+                    <summary class="btn btn-secondary cursor-pointer list-none">Edit</summary>
+                    <div class="absolute right-0 z-20 mt-2 w-[22rem] rounded-lg border border-slate-200 bg-white p-4 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                        <form method="post" action="/admin/settings/service-hooks/{{ hook.hook_id }}/edit" class="grid gap-3">
+                            {{ request.state.csrf_form | safe }}
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Name</label>
+                                <input name="name" type="text" required class="form-input" value="{{ hook.name }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Event</label>
+                                <select name="event_name" class="form-input" required>
+                                    {% for event_name in available_events %}
+                                    <option value="{{ event_name }}" {{ 'selected' if event_name == hook.event_name else '' }}>{{ event_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Handler</label>
+                                    <select name="handler_type" class="form-input" required>
+                                        {% for handler_type in handler_types %}
+                                        <option value="{{ handler_type }}" {{ 'selected' if handler_type == hook.handler_type else '' }}>
+                                            {{ handler_type|replace('_', ' ')|title }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Mode</label>
+                                    <select name="execution_mode" class="form-input" required>
+                                        {% for execution_mode in execution_modes %}
+                                        <option value="{{ execution_mode }}" {{ 'selected' if execution_mode == hook.execution_mode else '' }}>{{ execution_mode }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Webhook URL</label>
+                                <input name="webhook_url" type="url" class="form-input" value="{{ hook.webhook_url or '' }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Webhook Timeout (seconds)</label>
+                                <input name="webhook_timeout_seconds" type="number" min="1" class="form-input" value="{{ hook.webhook_timeout_seconds or 15 }}">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Outbox Event Override</label>
+                                <input name="event_name_override" type="text" class="form-input" value="{{ hook.event_name_override or '' }}">
+                            </div>
+                            <div class="grid grid-cols-4 gap-2">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Priority</label>
+                                    <input name="priority" type="number" min="0" class="form-input" value="{{ hook.priority }}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Retries</label>
+                                    <input name="max_retries" type="number" min="0" class="form-input" value="{{ hook.max_retries }}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Backoff</label>
+                                    <input name="retry_backoff_seconds" type="number" min="1" class="form-input" value="{{ hook.retry_backoff_seconds }}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Circuit</label>
+                                    <input name="circuit_breaker_failures" type="number" min="0" class="form-input" value="{{ hook.circuit_breaker_failures or 0 }}">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Description</label>
+                                <textarea name="description" rows="2" class="form-input">{{ hook.description or '' }}</textarea>
+                            </div>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" name="is_active" value="true" {{ 'checked' if hook.is_active else '' }} class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">
+                                Active
+                            </label>
+                            <div class="flex justify-end">
+                                <button type="submit" class="btn btn-primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </details>
+                <form method="post" action="/admin/settings/service-hooks/{{ hook.hook_id }}/toggle" class="inline">
+                    {{ request.state.csrf_form | safe }}
+                    <input type="hidden" name="enabled" value="{{ 'false' if hook.is_active else 'true' }}">
+                    <button type="submit" class="btn btn-secondary">
+                        {{ 'Disable' if hook.is_active else 'Enable' }}
+                    </button>
+                </form>
+                <form method="post" action="/admin/settings/service-hooks/{{ hook.hook_id }}/delete" class="inline" onsubmit="return confirm('Delete this service hook?')">
+                    {{ request.state.csrf_form | safe }}
+                    <button type="submit" class="btn btn-danger-outline">Delete</button>
+                </form>
+            </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="p-12 text-center">
+            {{ icon_svg("link", "mx-auto h-12 w-12 text-slate-400") }}
+            <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">No hooks configured</h3>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Create your first service hook to start emitting outbound events.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="pt-2">
+        <a href="/admin/settings/hub" class="inline-flex items-center text-sm text-accent-600 hover:text-accent-700 dark:text-accent-400 dark:hover:text-accent-300">
+            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
+            Back to Settings
+        </a>
+    </div>
+</div>
+<script>
+(() => {
+  const form = document.getElementById("bulk-hooks-form");
+  if (!form) return;
+  const selectAll = document.getElementById("hooks-select-all");
+  const countEl = document.getElementById("hooks-selected-count");
+  const rowBoxes = () => Array.from(document.querySelectorAll('input[name="hook_ids"][form="bulk-hooks-form"]'));
+
+  const updateCount = () => {
+    const boxes = rowBoxes();
+    const selected = boxes.filter((box) => box.checked).length;
+    if (countEl) countEl.textContent = `${selected} selected`;
+    if (selectAll && boxes.length > 0) {
+      selectAll.indeterminate = selected > 0 && selected < boxes.length;
+      selectAll.checked = selected === boxes.length;
+    }
+  };
+
+  if (selectAll) {
+    selectAll.addEventListener("change", () => {
+      const checked = selectAll.checked;
+      rowBoxes().forEach((box) => {
+        box.checked = checked;
+      });
+      updateCount();
+    });
+  }
+
+  rowBoxes().forEach((box) => box.addEventListener("change", updateCount));
+  updateCount();
+})();
+</script>
+{% endblock %}

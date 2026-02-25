@@ -1,0 +1,120 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="/expense/limits/reviewer/approvers" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
+                {{ icon_svg("arrow-left") }}
+            </a>
+            <div>
+                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Approver Review</h1>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ approver.person.name if approver.person else approver.employee_code }}{% if approver.employee_code %} ({{ approver.employee_code }}){% endif %}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <form method="get" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+                <label class="form-label">From</label>
+                <input type="date" name="from_date" value="{{ filters.from_date }}" class="form-input">
+            </div>
+            <div>
+                <label class="form-label">To</label>
+                <input type="date" name="to_date" value="{{ filters.to_date }}" class="form-input">
+            </div>
+            <div class="flex items-end">
+                <button type="submit" class="btn btn-secondary">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Weekly Budget Status</h2>
+        <div class="mt-3 text-sm text-slate-600 dark:text-slate-300">
+            <p>Configured Weekly Budget:
+                {% if weekly_budget %}
+                    <span class="font-mono">{{ "{:,.2f}".format(weekly_budget) }}</span>
+                {% else %}
+                    <span class="font-medium">Not configured</span>
+                {% endif %}
+            </p>
+            <p class="mt-1">Last Reset:
+                {% if last_reset %}
+                    <span class="font-medium">{{ last_reset.reset_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+                {% else %}
+                    <span class="font-medium">Never</span>
+                {% endif %}
+            </p>
+        </div>
+
+        {% if weekly_budget %}
+        <form method="post" action="/expense/limits/reviewer/approvers/{{ approver.employee_id }}/reset" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {{ request.state.csrf_form | safe }}
+            <div>
+                <label class="form-label">Reviewed From</label>
+                <input type="date" name="reviewed_from" value="{{ filters.from_date }}" class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Reviewed To</label>
+                <input type="date" name="reviewed_to" value="{{ filters.to_date }}" class="form-input">
+            </div>
+            <div class="sm:col-span-3">
+                <label class="form-label">Reset Reason <span class="text-rose-500">*</span></label>
+                <textarea name="reset_reason" rows="3" class="form-input" required placeholder="State why this reset is justified after review"></textarea>
+            </div>
+            <div class="sm:col-span-3 flex justify-end">
+                <button type="submit" class="btn btn-primary">Reset Consumed Budget To Zero</button>
+            </div>
+        </form>
+        {% else %}
+        <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">Reset unavailable until a weekly approval budget is configured for this approver.</p>
+        {% endif %}
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Approved/Rejected Decisions</h2>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">When</th>
+                        <th scope="col">Action</th>
+                        <th scope="col">Claim #</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-right">Claimed</th>
+                        <th scope="col" class="text-right">Approved</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for action, claim in actions %}
+                    <tr>
+                        <td class="text-sm text-slate-600 dark:text-slate-300">{{ action.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            {% if action.action_type.value == 'APPROVE' %}
+                                <span class="badge badge-success">Approved</span>
+                            {% else %}
+                                <span class="badge badge-neutral">Rejected</span>
+                            {% endif %}
+                        </td>
+                        <td><a href="/expense/claims/{{ claim.claim_id }}" class="text-amber-700 hover:text-amber-800">{{ claim.claim_number }}</a></td>
+                        <td>{{ claim.status.value }}</td>
+                        <td class="text-right font-mono">{{ "{:,.2f}".format(claim.total_claimed_amount or 0) }}</td>
+                        <td class="text-right font-mono">{{ "{:,.2f}".format(claim.total_approved_amount or 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not actions %}
+                    <tr>
+                        <td colspan="6" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No approval decisions found for selected period.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

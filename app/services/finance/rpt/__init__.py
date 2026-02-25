@@ -5,6 +5,10 @@ This module provides services for financial reporting including report definitio
 financial statements, disclosure checklists, and scheduled reports per IAS 1.
 """
 
+from app.services.finance.rpt.analysis_cube import (
+    AnalysisCubeService,
+    CubeQueryResult,
+)
 from app.services.finance.rpt.disclosure_checklist import (
     DisclosureChecklistService,
     DisclosureCompletionInput,
@@ -41,6 +45,9 @@ from app.services.finance.rpt.report_scheduler import (
 )
 
 __all__ = [
+    # Analysis Cubes
+    "AnalysisCubeService",
+    "CubeQueryResult",
     # Report Definition
     "ReportDefinitionService",
     "ReportDefinitionInput",

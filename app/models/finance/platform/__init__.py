@@ -15,6 +15,15 @@ from app.models.finance.platform.saga_execution import (
     SagaStep,
     StepStatus,
 )
+from app.models.finance.platform.service_hook import (
+    HookExecutionMode,
+    HookHandlerType,
+    ServiceHook,
+)
+from app.models.finance.platform.service_hook_execution import (
+    ExecutionStatus,
+    ServiceHookExecution,
+)
 
 __all__ = [
     "EventOutbox",
@@ -22,6 +31,11 @@ __all__ = [
     "EventHandlerCheckpoint",
     "CheckpointStatus",
     "IdempotencyRecord",
+    "ServiceHook",
+    "HookHandlerType",
+    "HookExecutionMode",
+    "ServiceHookExecution",
+    "ExecutionStatus",
     "SagaExecution",
     "SagaStep",
     "SagaStatus",

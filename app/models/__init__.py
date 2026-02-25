@@ -16,6 +16,7 @@ import app.models.procurement as procurement  # noqa: F401
 # Support Models - Tickets/Issues synced from ERPNext
 import app.models.support as support  # noqa: F401
 from app.models.audit import AuditActorType, AuditEvent  # noqa: F401
+from app.models.audit_field_tracking import FieldChangeLog  # noqa: F401
 from app.models.auth import (  # noqa: F401
     ApiKey,
     AuthProvider,

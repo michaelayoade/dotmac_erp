@@ -460,6 +460,8 @@ def client(db_session):
     from app.api.rbac import router as rbac_router
     from app.api.scheduler import get_db as scheduler_get_db
     from app.api.scheduler import router as scheduler_router
+    from app.api.service_hooks import get_db as service_hooks_get_db
+    from app.api.service_hooks import router as service_hooks_router
     from app.api.settings import get_db as settings_get_db
     from app.api.settings import router as settings_router
     from app.errors import register_error_handlers
@@ -501,6 +503,9 @@ def client(db_session):
     _include_api_router(persons_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(settings_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(
+        service_hooks_router, dependencies=[Depends(require_tenant_auth)]
+    )
 
     # Discipline routes live under /api/v1/people/discipline in tests.
     people_v1 = APIRouter(
@@ -516,6 +521,7 @@ def client(db_session):
     app.dependency_overrides[audit_get_db] = override_get_db
     app.dependency_overrides[settings_get_db] = override_get_db
     app.dependency_overrides[scheduler_get_db] = override_get_db
+    app.dependency_overrides[service_hooks_get_db] = override_get_db
     app.dependency_overrides[discipline_get_db] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 

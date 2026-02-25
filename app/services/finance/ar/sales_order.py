@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.domain_settings import SettingDomain
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.sales_order import (
@@ -24,6 +25,7 @@ from app.models.finance.ar.sales_order import (
 )
 from app.models.finance.core_config import SequenceType
 from app.services.common import coerce_uuid
+from app.services.feature_flags import FEATURE_STOCK_RESERVATION, is_feature_enabled
 from app.services.finance.ar.input_utils import (
     parse_date_str,
     parse_json_list,
@@ -31,6 +33,7 @@ from app.services.finance.ar.input_utils import (
     resolve_currency_code,
 )
 from app.services.finance.common import SyncNumberingService
+from app.services.settings_cache import settings_cache
 
 logger = logging.getLogger(__name__)
 
@@ -382,6 +385,30 @@ class SalesOrderService:
         so.status = SOStatus.CONFIRMED
         so.confirmed_at = datetime.utcnow()
 
+        SalesOrderService._reserve_stock_on_confirm(db, so)
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import SALES_ORDER_CONFIRMED
+
+            emit_hook_event(
+                db,
+                event_name=SALES_ORDER_CONFIRMED,
+                organization_id=so.organization_id,
+                entity_type="SalesOrder",
+                entity_id=so.so_id,
+                actor_user_id=None,
+                payload={
+                    "so_id": str(so.so_id),
+                    "so_number": so.so_number,
+                    "status": so.status.value,
+                    "total_amount": str(so.total_amount),
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit sales.order.confirmed hook for %s", so.so_id
+            )
+
         db.flush()
         db.commit()
         db.refresh(so)
@@ -438,6 +465,12 @@ class SalesOrderService:
         db.flush()
 
         # Process line quantities
+        from app.services.inventory.stock_reservation import (
+            ReservationSourceType,
+            StockReservationService,
+        )
+
+        reservation_service = StockReservationService(db)
         for lq in line_quantities:
             line_id = coerce_uuid(lq["line_id"])
             qty_to_ship = Decimal(str(lq["quantity"]))
@@ -472,11 +505,55 @@ class SalesOrderService:
             elif so_line.quantity_shipped > 0:
                 so_line.fulfillment_status = FulfillmentStatus.PARTIAL
 
+            if is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+                reservation = reservation_service.get_reservation_for_line(
+                    ReservationSourceType.SALES_ORDER,
+                    so_line.line_id,
+                )
+                if reservation:
+                    try:
+                        reservation_service.fulfill(
+                            reservation.reservation_id,
+                            qty_to_ship,
+                        )
+                    except ValueError:
+                        logger.warning(
+                            "Could not fulfill reservation for SO line %s",
+                            so_line.line_id,
+                            exc_info=True,
+                        )
+
         # Update SO status
         if so.is_fully_shipped:
             so.status = SOStatus.SHIPPED
         else:
             so.status = SOStatus.IN_PROGRESS
+
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import SHIPMENT_CREATED
+
+            emit_hook_event(
+                db,
+                event_name=SHIPMENT_CREATED,
+                organization_id=so.organization_id,
+                entity_type="Shipment",
+                entity_id=shipment.shipment_id,
+                actor_user_id=user_id,
+                payload={
+                    "shipment_id": str(shipment.shipment_id),
+                    "shipment_number": shipment.shipment_number,
+                    "so_id": str(so.so_id),
+                    "so_number": so.so_number,
+                    "line_count": str(len(line_quantities)),
+                    "status": so.status.value,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit shipment.created hook for shipment %s",
+                shipment.shipment_id,
+            )
 
         db.flush()
         db.commit()
@@ -681,6 +758,52 @@ class SalesOrderService:
         for line in so.lines:
             line.fulfillment_status = FulfillmentStatus.CANCELLED
 
+        if is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+            from app.services.inventory.stock_reservation import (
+                ReservationSourceType,
+                StockReservationService,
+            )
+
+            reservation_service = StockReservationService(db)
+            reservations = reservation_service.get_reservations_for_source(
+                ReservationSourceType.SALES_ORDER,
+                so.so_id,
+            )
+            for reservation in reservations:
+                try:
+                    reservation_service.cancel(
+                        reservation.reservation_id,
+                        reason=reason,
+                    )
+                except ValueError:
+                    logger.warning(
+                        "Could not cancel reservation %s",
+                        reservation.reservation_id,
+                        exc_info=True,
+                    )
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import SALES_ORDER_CANCELLED
+
+            emit_hook_event(
+                db,
+                event_name=SALES_ORDER_CANCELLED,
+                organization_id=so.organization_id,
+                entity_type="SalesOrder",
+                entity_id=so.so_id,
+                actor_user_id=coerce_uuid(cancelled_by),
+                payload={
+                    "so_id": str(so.so_id),
+                    "so_number": so.so_number,
+                    "status": so.status.value,
+                    "reason": reason,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit sales.order.cancelled hook for %s", so.so_id
+            )
+
         db.flush()
         db.commit()
         db.refresh(so)
@@ -792,6 +915,75 @@ class SalesOrderService:
         )
 
         return query.offset(offset).limit(limit).all()
+
+    @staticmethod
+    def _reserve_stock_on_confirm(db: Session, so: SalesOrder) -> None:
+        """Auto-reserve inventory on SO confirmation when feature is enabled."""
+        if not is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+            return
+
+        from app.services.inventory.stock_reservation import (
+            ReservationSourceType,
+            StockReservationService,
+        )
+
+        reservation_service = StockReservationService(db)
+        config = reservation_service.load_config(db, so.organization_id)
+        if not config.enabled or not config.auto_on_confirm:
+            return
+
+        raw_warehouse_id = settings_cache.get_setting_value(
+            db,
+            domain=SettingDomain.inventory,
+            key="inventory_default_warehouse_id",
+            default=None,
+        )
+        warehouse_id = None
+        if raw_warehouse_id:
+            try:
+                warehouse_id = coerce_uuid(raw_warehouse_id)
+            except Exception:
+                logger.warning(
+                    "Skipping stock reservation for SO %s: invalid default warehouse id",
+                    so.so_id,
+                )
+                return
+        if warehouse_id is None:
+            logger.info(
+                "Skipping stock reservation for SO %s: no default warehouse configured",
+                so.so_id,
+            )
+            return
+
+        reserved_by = so.updated_by or so.approved_by or so.created_by
+        for line in so.lines:
+            if line.item_id is None or line.quantity_ordered <= 0:
+                continue
+            try:
+                result = reservation_service.reserve(
+                    organization_id=so.organization_id,
+                    item_id=line.item_id,
+                    warehouse_id=warehouse_id,
+                    quantity=line.quantity_ordered,
+                    source_type=ReservationSourceType.SALES_ORDER,
+                    source_id=so.so_id,
+                    source_line_id=line.line_id,
+                    reserved_by_user_id=reserved_by,
+                    config=config,
+                )
+                if not result.success:
+                    logger.warning(
+                        "Reservation failed for SO %s line %s: %s",
+                        so.so_id,
+                        line.line_id,
+                        result.message,
+                    )
+            except Exception:
+                logger.exception(
+                    "Reservation error for SO %s line %s",
+                    so.so_id,
+                    line.line_id,
+                )
 
 
 sales_order_service = SalesOrderService()

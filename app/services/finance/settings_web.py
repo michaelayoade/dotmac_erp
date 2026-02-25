@@ -10,6 +10,7 @@ from typing import Any, TypedDict, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
 from app.models.email_profile import EmailModule, EmailProfile, ModuleEmailRouting
@@ -825,6 +826,131 @@ class SettingsWebService:
             service.upsert_by_key(db, key, payload)
 
         db.commit()
+        return True, None
+
+    # ========== Banking Auto-Match Settings ==========
+
+    def get_auto_match_settings_context(
+        self, db: object, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get banking auto-match settings for the form."""
+        specs = list_specs(SettingDomain.banking)
+        settings: dict[str, dict[str, Any]] = {}
+
+        pass_keys: list[str] = []
+        param_keys: list[str] = []
+
+        for spec in specs:
+            value = resolve_value(db, SettingDomain.banking, spec.key)
+            settings[spec.key] = {
+                "value": value,
+                "default": spec.default,
+                "type": spec.value_type.value,
+                "min": spec.min_value,
+                "max": spec.max_value,
+                "label": spec.label or spec.key,
+                "description": spec.description or "",
+            }
+            if spec.key.startswith("automatch_pass_"):
+                pass_keys.append(spec.key)
+            else:
+                param_keys.append(spec.key)
+
+        return {
+            "settings": settings,
+            "pass_keys": pass_keys,
+            "param_keys": param_keys,
+        }
+
+    def update_auto_match_settings(
+        self, db: Session, organization_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        """Update banking auto-match settings."""
+        from app.services.settings_spec import coerce_value
+
+        service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.banking)
+        if not service:
+            return False, "Banking settings service not found"
+
+        # Ensure unchecked checkboxes are persisted as false
+        for spec in list_specs(SettingDomain.banking):
+            if spec.value_type.value == "boolean":
+                data.setdefault(spec.key, "false")
+
+        for key, value in data.items():
+            setting_spec = get_spec(SettingDomain.banking, key)
+            if not setting_spec:
+                continue
+
+            coerced, error = coerce_value(setting_spec, value)
+            if error:
+                return False, f"{setting_spec.label or key}: {error}"
+
+            payload = DomainSettingUpdate(
+                value_type=setting_spec.value_type,
+                value_text=str(coerced) if coerced is not None else None,
+            )
+            service.upsert_by_key(db, key, payload)
+
+        db.flush()
+        return True, None
+
+    # ========== Coach / AI Settings ==========
+
+    def get_coach_settings_context(
+        self, db, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get Coach / AI settings for the form."""
+        specs = list_specs(SettingDomain.coach)
+        settings: dict[str, dict[str, Any]] = {}
+
+        for spec in specs:
+            value = resolve_value(db, SettingDomain.coach, spec.key)
+            settings[spec.key] = {
+                "value": value if not spec.is_secret else "",
+                "default": spec.default,
+                "type": spec.value_type.value,
+                "is_secret": spec.is_secret,
+                "has_value": value is not None and value != "",
+                "label": spec.label or spec.key,
+                "description": spec.description or "",
+                "min": spec.min_value,
+                "max": spec.max_value,
+            }
+
+        return {"coach_settings": settings}
+
+    def update_coach_settings(
+        self, db, organization_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[bool, str | None]:
+        """Update Coach / AI settings."""
+        from app.services.settings_spec import coerce_value
+
+        service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.coach)
+        if not service:
+            return False, "Coach settings service not found"
+
+        for key, value in data.items():
+            spec = get_spec(SettingDomain.coach, key)
+            if not spec:
+                continue
+
+            # Skip empty secret fields (don't overwrite existing)
+            if spec.is_secret and value == "":
+                continue
+
+            coerced, error = coerce_value(spec, value)
+            if error:
+                return False, f"{spec.label or key}: {error}"
+
+            payload = DomainSettingUpdate(
+                value_type=spec.value_type,
+                value_text=str(coerced) if coerced is not None else None,
+                is_secret=spec.is_secret,
+            )
+            service.upsert_by_key(db, key, payload)
+
+        db.flush()
         return True, None
 
     # ========== Payments Settings ==========

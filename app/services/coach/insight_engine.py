@@ -9,6 +9,7 @@ from typing import Any, TypeVar, cast
 
 import httpx
 from pydantic import BaseModel, ValidationError
+from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.services.cache import cache_service
@@ -82,11 +83,20 @@ class InsightEngine:
     This module is intentionally standalone: analyzers should provide deterministic
     context dicts and Pydantic output schemas; InsightEngine handles the LLM call
     + strict JSON validation + basic repair retries.
+
+    When ``db`` is provided, configuration is read from domain settings first
+    (admin-configurable via ``/admin/settings``), falling back to environment
+    variables via ``app.config.settings``.
     """
 
-    def __init__(self) -> None:
-        self._timeout_s = int(getattr(app_settings, "coach_llm_timeout_s", 30))
-        self._max_retries = int(getattr(app_settings, "coach_llm_max_retries", 2))
+    def __init__(self, db: Session | None = None) -> None:
+        self._db = db
+        self._timeout_s = int(
+            self._setting("timeout_seconds", "coach_llm_timeout_s") or 30
+        )
+        self._max_retries = int(
+            self._setting("max_retries", "coach_llm_max_retries") or 2
+        )
         self._max_output_tokens = int(
             getattr(app_settings, "coach_llm_max_output_tokens", 1200)
         )
@@ -95,6 +105,17 @@ class InsightEngine:
         )
 
         self._backends = self._load_backends()
+
+    def _setting(self, key: str, fallback_attr: str) -> str:
+        """Read from DB domain settings first, fall back to env var config."""
+        if self._db is not None:
+            from app.models.domain_settings import SettingDomain
+            from app.services.settings_spec import resolve_value
+
+            val = resolve_value(self._db, SettingDomain.coach, key)
+            if val:
+                return str(val)
+        return str(getattr(app_settings, fallback_attr, "") or "")
 
     def _cache_key(
         self,
@@ -114,23 +135,33 @@ class InsightEngine:
         return {
             "llama": LLMBackend(
                 name="llama",
-                base_url=getattr(app_settings, "coach_llm_llama_base_url", ""),
-                api_key=getattr(app_settings, "coach_llm_llama_api_key", ""),
-                model_fast=getattr(app_settings, "coach_llm_llama_model_fast", ""),
-                model_standard=getattr(
-                    app_settings, "coach_llm_llama_model_standard", ""
+                base_url=self._setting("llama_base_url", "coach_llm_llama_base_url"),
+                api_key=self._setting("llama_api_key", "coach_llm_llama_api_key"),
+                model_fast=self._setting(
+                    "llama_model_fast", "coach_llm_llama_model_fast"
                 ),
-                model_deep=getattr(app_settings, "coach_llm_llama_model_deep", ""),
+                model_standard=self._setting(
+                    "llama_model_standard", "coach_llm_llama_model_standard"
+                ),
+                model_deep=self._setting(
+                    "llama_model_deep", "coach_llm_llama_model_deep"
+                ),
             ),
             "deepseek": LLMBackend(
                 name="deepseek",
-                base_url=getattr(app_settings, "coach_llm_deepseek_base_url", ""),
-                api_key=getattr(app_settings, "coach_llm_deepseek_api_key", ""),
-                model_fast=getattr(app_settings, "coach_llm_deepseek_model_fast", ""),
-                model_standard=getattr(
-                    app_settings, "coach_llm_deepseek_model_standard", ""
+                base_url=self._setting(
+                    "deepseek_base_url", "coach_llm_deepseek_base_url"
                 ),
-                model_deep=getattr(app_settings, "coach_llm_deepseek_model_deep", ""),
+                api_key=self._setting("deepseek_api_key", "coach_llm_deepseek_api_key"),
+                model_fast=self._setting(
+                    "deepseek_model_fast", "coach_llm_deepseek_model_fast"
+                ),
+                model_standard=self._setting(
+                    "deepseek_model_standard", "coach_llm_deepseek_model_standard"
+                ),
+                model_deep=self._setting(
+                    "deepseek_model_deep", "coach_llm_deepseek_model_deep"
+                ),
             ),
         }
 

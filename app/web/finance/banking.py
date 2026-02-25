@@ -5,13 +5,68 @@ HTML template routes for Bank Accounts, Statements, and Reconciliations.
 """
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.responses import Response
 
 from app.services.finance.banking.web import banking_web_service
 from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/banking", tags=["banking-web"])
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def auto_match_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Auto-match rules settings page."""
+    from app.services.finance.settings_web import settings_web_service
+    from app.web.deps import base_context, templates
+
+    context = base_context(request, auth, "Auto-Match Rules", "banking", db=db)
+    context.update(
+        settings_web_service.get_auto_match_settings_context(db, auth.organization_id)
+    )
+    if request.query_params.get("saved"):
+        context["saved"] = True
+    return templates.TemplateResponse(
+        request, "finance/banking/auto_match_settings.html", context
+    )
+
+
+@router.post("/settings")
+async def update_auto_match_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Save auto-match rules settings."""
+    from app.services.finance.settings_web import settings_web_service
+    from app.web.deps import base_context, templates
+
+    form = await request.form()
+    data = dict(form)
+
+    ok, error = settings_web_service.update_auto_match_settings(
+        db, auth.organization_id, data
+    )
+    if ok:
+        db.commit()
+        return RedirectResponse(
+            url="/finance/banking/settings?saved=1", status_code=303
+        )
+
+    # Re-render with error
+    context = base_context(request, auth, "Auto-Match Rules", "banking", db=db)
+    context.update(
+        settings_web_service.get_auto_match_settings_context(db, auth.organization_id)
+    )
+    context["error"] = error
+    return templates.TemplateResponse(
+        request, "finance/banking/auto_match_settings.html", context
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -911,3 +966,158 @@ async def duplicate_rules_bulk(
         bank_account_ids=bank_account_ids,
         include_global=include_global,
     )
+
+
+# ── Match Rules (Reconciliation) ─────────────────────────────────────
+
+
+@router.get("/match-rules", response_class=HTMLResponse)
+def list_match_rules(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Match rules list page."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    return recon_rule_web_service.list_response(request, auth, db, page, limit)
+
+
+@router.get("/match-rules/log", response_class=HTMLResponse)
+def match_log(
+    request: Request,
+    rule_id: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=200),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Match audit log page."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    return recon_rule_web_service.match_log_response(
+        request, auth, db, rule_id=rule_id, page=page, limit=limit
+    )
+
+
+@router.get("/match-rules/new", response_class=HTMLResponse)
+def new_match_rule_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """New match rule form page."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    return recon_rule_web_service.new_form_response(request, auth, db)
+
+
+@router.post("/match-rules/new")
+async def create_match_rule(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Create a new match rule."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    form = await request.form()
+    form_data = dict(form)
+    response = recon_rule_web_service.create_response(request, auth, db, form_data)
+    db.commit()
+    return response
+
+
+@router.get("/match-rules/{rule_id}", response_class=HTMLResponse)
+def view_match_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Match rule detail page."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    return recon_rule_web_service.detail_response(request, auth, db, rule_id)
+
+
+@router.get("/match-rules/{rule_id}/edit", response_class=HTMLResponse)
+def edit_match_rule_form(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    """Edit match rule form page."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    return recon_rule_web_service.edit_form_response(request, auth, db, rule_id)
+
+
+@router.post("/match-rules/{rule_id}/edit")
+async def update_match_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Update an existing match rule."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    form = await request.form()
+    form_data = dict(form)
+    response = recon_rule_web_service.update_response(
+        request, auth, db, rule_id, form_data
+    )
+    db.commit()
+    return response
+
+
+@router.post("/match-rules/{rule_id}/toggle")
+async def toggle_match_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Toggle a match rule's active state."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    response = recon_rule_web_service.toggle_response(request, auth, db, rule_id)
+    db.commit()
+    return response
+
+
+@router.post("/match-rules/{rule_id}/delete")
+async def delete_match_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete a match rule."""
+    from app.services.finance.banking.reconciliation_rule_web import (
+        recon_rule_web_service,
+    )
+
+    response = recon_rule_web_service.delete_response(auth, db, rule_id)
+    db.commit()
+    return response

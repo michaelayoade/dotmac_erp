@@ -72,6 +72,7 @@
                         <th scope="col">Scope Type</th>
                         <th scope="col">Scope Target</th>
                         <th scope="col" class="text-right">Max Approval Amount</th>
+                        <th scope="col" class="text-right">Weekly Budget</th>
                         <th scope="col">Can Approve Own</th>
                         <th scope="col">Status</th>
                         <th scope="col"></th>
@@ -92,6 +93,13 @@
                         </td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">
                             {{ "{:,.2f}".format(limit.max_approval_amount) }}
+                        </td>
+                        <td class="text-right font-mono text-slate-900 dark:text-white">
+                            {% if limit.weekly_approval_budget %}
+                                {{ "{:,.2f}".format(limit.weekly_approval_budget) }}
+                            {% else %}
+                                <span class="text-slate-400">Unlimited</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if limit.can_approve_own_expenses %}

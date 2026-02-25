@@ -23,6 +23,7 @@ from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.feature_flags import FEATURE_STOCK_RESERVATION, is_feature_enabled
 from app.services.finance.ar.sales_order import sales_order_service
 from app.services.finance.ar.web.base import normalize_date_range_filters
 from app.services.finance.common import format_currency, format_date, parse_date
@@ -288,6 +289,31 @@ class SalesOrderWebService:
         if not so or so.organization_id != org_id:
             return {"order": None, "lines": [], "shipments": []}
 
+        reservation_by_line: dict[str, dict] = {}
+        if is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+            try:
+                from app.services.inventory.stock_reservation import (
+                    ReservationSourceType,
+                    StockReservationService,
+                )
+
+                reservation_service = StockReservationService(db)
+                reservations = reservation_service.get_reservations_for_source(
+                    ReservationSourceType.SALES_ORDER,
+                    so.so_id,
+                )
+                for reservation in reservations:
+                    reservation_by_line[str(reservation.source_line_id)] = {
+                        "status": reservation.status.value,
+                        "quantity_reserved": str(reservation.quantity_reserved),
+                        "quantity_remaining": str(reservation.quantity_remaining),
+                    }
+            except Exception:
+                logger.exception(
+                    "detail_context: reservation load failed for so=%s",
+                    so.so_id,
+                )
+
         # Format order data
         order_data = {
             "so_id": str(so.so_id),
@@ -374,6 +400,15 @@ class SalesOrderWebService:
                     "tax": format_currency(line.tax_amount, so.currency_code),
                     "line_total": format_currency(line.line_total, so.currency_code),
                     "fulfillment_status": line.fulfillment_status.value,
+                    "reservation_status": reservation_by_line.get(
+                        str(line.line_id), {}
+                    ).get("status"),
+                    "reserved_quantity": reservation_by_line.get(
+                        str(line.line_id), {}
+                    ).get("quantity_reserved"),
+                    "reserved_remaining": reservation_by_line.get(
+                        str(line.line_id), {}
+                    ).get("quantity_remaining"),
                     "can_ship": line.quantity_shipped < line.quantity_ordered
                     and so.status in [SOStatus.CONFIRMED, SOStatus.IN_PROGRESS],
                 }

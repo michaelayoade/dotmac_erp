@@ -13,6 +13,7 @@ from app.services.finance.tax.deferred_tax import (
     DeferredTaxSummary,
     deferred_tax_service,
 )
+from app.services.finance.tax.fiscal_position_service import FiscalPositionService
 from app.services.finance.tax.tax_calculation import (
     InvoiceLineTaxInput,
     InvoiceTaxResult,
@@ -112,4 +113,6 @@ __all__ = [
     "InvoiceLineTaxInput",
     "InvoiceTaxResult",
     "tax_calculation_service",
+    # Fiscal Position
+    "FiscalPositionService",
 ]

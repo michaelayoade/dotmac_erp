@@ -1,0 +1,282 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{{ "Edit Match Rule" if editing else "New Match Rule" }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+  <ol class="flex items-center gap-2">
+    <li><a href="/finance/banking/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/match-rules" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Match Rules</a></li>
+    {% if editing and rule %}
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/banking/match-rules/{{ rule.rule_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ rule.name }}</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Edit</span></li>
+    {% else %}
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New Rule</span></li>
+    {% endif %}
+  </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl page-enter"
+     x-data='matchRuleForm({{ ((rule.conditions if rule and rule.conditions else []) | tojson) }})'>
+
+  {% if error %}
+  <div class="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
+    <div class="flex items-center gap-2">
+      {{ icon_svg("warning", "h-5 w-5 shrink-0") }}
+      {{ error }}
+    </div>
+  </div>
+  {% endif %}
+
+  {% set fd = form_data if form_data else {} %}
+  {% set action_url = "/finance/banking/match-rules/" + rule.rule_id|string + "/edit" if editing and rule else "/finance/banking/match-rules/new" %}
+
+  <form method="POST" action="{{ action_url }}" class="space-y-6">
+    {{ request.state.csrf_form | safe }}
+
+    {# ── Basic Information ────────────────────────────── #}
+    <div class="card p-6">
+      <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Basic Information</h3>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label for="name" class="form-label">Rule Name <span class="text-rose-500">*</span></label>
+          <input type="text" id="name" name="name" required
+                 value="{{ fd.name if fd.name is defined else (rule.name if rule else '') }}"
+                 placeholder="e.g., Paystack Gateway Payments"
+                 class="form-input mt-1">
+        </div>
+        <div class="sm:col-span-2">
+          <label for="description" class="form-label">Description</label>
+          <input type="text" id="description" name="description"
+                 value="{{ fd.description if fd.description is defined else (rule.description if rule and rule.description else '') }}"
+                 placeholder="Describe what this rule matches..."
+                 class="form-input mt-1">
+        </div>
+        <div>
+          <label for="source_doc_type" class="form-label">Source Document Type <span class="text-rose-500">*</span></label>
+          <select id="source_doc_type" name="source_doc_type" required class="form-select mt-1">
+            <option value="">Select type...</option>
+            {% for val, label in source_doc_type_choices %}
+            <option value="{{ val }}"
+              {{ 'selected' if (fd.source_doc_type == val if fd.source_doc_type is defined else (rule.source_doc_type == val if rule else false)) else '' }}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">What kind of business document does this rule match against?</span>
+        </div>
+        <div>
+          <label for="priority" class="form-label">Priority <span class="text-rose-500">*</span></label>
+          <input type="number" id="priority" name="priority" min="1" max="999" required
+                 value="{{ fd.priority if fd.priority is defined else (rule.priority if rule else 100) }}"
+                 class="form-input mt-1 w-32">
+          <span class="form-hint">Lower = runs first. System rules use 10–70.</span>
+        </div>
+        <div class="flex items-center gap-3 self-center pt-4">
+          <input type="checkbox" id="is_active" name="is_active"
+                 {{ 'checked' if (fd.is_active == 'on' if fd.is_active is defined else (rule.is_active if rule else true)) else '' }}
+                 class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+          <label for="is_active" class="form-label mb-0">Rule is Active</label>
+        </div>
+      </div>
+    </div>
+
+    {# ── Direction Filter ─────────────────────────────── #}
+    <div class="card p-6">
+      <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Transaction Direction</h3>
+      <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">Which statement line directions should this rule apply to?</p>
+      <div class="flex gap-6">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="match_credit" name="match_credit"
+                 {{ 'checked' if (fd.match_credit == 'on' if fd.match_credit is defined else (rule.match_credit if rule else true)) else '' }}
+                 class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+          <label for="match_credit" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <span class="text-emerald-600 dark:text-emerald-400">Credit</span> (incoming)
+          </label>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="match_debit" name="match_debit"
+                 {{ 'checked' if (fd.match_debit == 'on' if fd.match_debit is defined else (rule.match_debit if rule else true)) else '' }}
+                 class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+          <label for="match_debit" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <span class="text-rose-600 dark:text-rose-400">Debit</span> (outgoing)
+          </label>
+        </div>
+      </div>
+    </div>
+
+    {# ── Match Conditions (Dynamic Rows) ──────────────── #}
+    <div class="card p-6">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-medium text-slate-900 dark:text-white">Match Conditions</h3>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">All conditions must match (AND logic).</p>
+        </div>
+        <button type="button" @click="addCondition()"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3 py-1.5 text-xs font-medium text-teal-700 transition-colors hover:bg-teal-50 dark:border-teal-700 dark:bg-slate-800 dark:text-teal-400 dark:hover:bg-slate-700">
+          {{ icon_svg("plus", "h-3.5 w-3.5") }}
+          Add Condition
+        </button>
+      </div>
+
+      {# Empty state #}
+      <div x-show="conditions.length === 0" class="rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center">
+        {{ icon_svg("filter", "mx-auto h-8 w-8 text-slate-400") }}
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No conditions yet.</p>
+        <p class="text-xs text-slate-400 dark:text-slate-500">Without conditions, this rule matches by date + amount only.</p>
+      </div>
+
+      {# Condition rows #}
+      <div class="space-y-3">
+        <template x-for="(cond, idx) in conditions" :key="cond.id">
+          <div class="relative rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <div x-show="idx > 0" class="absolute -top-3 left-6">
+              <span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">AND</span>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label class="form-label text-xs">Field</label>
+                    <select x-model="cond.field" :name="'cond_field_' + idx" class="form-select mt-1 text-sm">
+                      <option value="">Select...</option>
+                      {% for val, label in condition_field_choices %}
+                      <option value="{{ val }}">{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label text-xs">Operator</label>
+                    <select x-model="cond.operator" :name="'cond_operator_' + idx" class="form-select mt-1 text-sm">
+                      <option value="">Select...</option>
+                      {% for val, label in condition_operator_choices %}
+                      <option value="{{ val }}">{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label text-xs">Value</label>
+                    <input type="text" x-model="cond.value" :name="'cond_value_' + idx"
+                           placeholder="e.g., PSTK_.* or AMAZON"
+                           class="form-input mt-1 text-sm font-mono">
+                  </div>
+                </div>
+              </div>
+              <button type="button" @click="removeCondition(idx)"
+                      class="mt-6 shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
+                      aria-label="Remove condition">
+                {{ icon_svg("trash", "h-4 w-4") }}
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    {# ── Advanced Settings ─────────────────────────────── #}
+    <div class="card p-6" x-data='{ showAdvanced: {{ "true" if (fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents) or (fd.date_window_days is defined and fd.date_window_days) or (rule and (rule.amount_tolerance_cents is not none or rule.date_window_days is not none or rule.journal_label_template)) else "false" }} }'>
+      <button type="button" @click="showAdvanced = !showAdvanced"
+              class="flex w-full items-center justify-between text-lg font-medium text-slate-900 dark:text-white">
+        Advanced Settings
+        <span class="text-slate-400" :class="showAdvanced ? 'rotate-180' : ''" style="transition: transform 0.2s">
+          {{ icon_svg("chevron-down", "h-5 w-5") }}
+        </span>
+      </button>
+
+      <div x-show="showAdvanced" x-transition class="mt-4 space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="action_type" class="form-label">Action Type</label>
+            <select id="action_type" name="action_type" class="form-select mt-1">
+              {% for val, label in action_type_choices %}
+              <option value="{{ val }}"
+                {{ 'selected' if (fd.action_type == val if fd.action_type is defined else (rule.action_type == val if rule else val == 'MATCH')) else '' }}>
+                {{ label }}
+              </option>
+              {% endfor %}
+            </select>
+            <span class="form-hint">MATCH auto-reconciles; SUGGEST requires manual review.</span>
+          </div>
+          <div>
+            <label for="min_confidence" class="form-label">Minimum Confidence (%)</label>
+            <input type="number" id="min_confidence" name="min_confidence" min="0" max="100"
+                   value="{{ fd.min_confidence if fd.min_confidence is defined else (rule.min_confidence if rule else 90) }}"
+                   class="form-input mt-1 w-32">
+            <span class="form-hint">Below this threshold, rule suggests instead of matching.</span>
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="amount_tolerance_cents" class="form-label">Amount Tolerance (cents)</label>
+            <input type="number" id="amount_tolerance_cents" name="amount_tolerance_cents" min="0"
+                   value="{{ fd.amount_tolerance_cents if fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents else (rule.amount_tolerance_cents if rule and rule.amount_tolerance_cents is not none else '') }}"
+                   placeholder="Use global setting"
+                   class="form-input mt-1">
+            <span class="form-hint">Override the global auto-match amount tolerance.</span>
+          </div>
+          <div>
+            <label for="date_window_days" class="form-label">Date Window (days)</label>
+            <input type="number" id="date_window_days" name="date_window_days" min="0"
+                   value="{{ fd.date_window_days if fd.date_window_days is defined and fd.date_window_days else (rule.date_window_days if rule and rule.date_window_days is not none else '') }}"
+                   placeholder="Use global setting"
+                   class="form-input mt-1">
+            <span class="form-hint">Override the global date buffer for matching.</span>
+          </div>
+        </div>
+
+        <div>
+          <label for="journal_label_template" class="form-label">Journal Label Template</label>
+          <input type="text" id="journal_label_template" name="journal_label_template"
+                 value="{{ fd.journal_label_template if fd.journal_label_template is defined and fd.journal_label_template else (rule.journal_label_template if rule and rule.journal_label_template else '') }}"
+                 placeholder="e.g., Bank fee - {date} - {description}"
+                 class="form-input mt-1 font-mono text-sm">
+          <span class="form-hint">For CREATE_JOURNAL rules. Use {date}, {description}, {amount} placeholders.</span>
+        </div>
+      </div>
+    </div>
+
+    {# ── Form Actions ─────────────────────────────────── #}
+    <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+      <a href="{{ '/finance/banking/match-rules/' + rule.rule_id|string if editing and rule else '/finance/banking/match-rules' }}" class="btn btn-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary">
+        {{ "Update Rule" if editing else "Create Rule" }}
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+function matchRuleForm(initialConditions) {
+  var conditions = (initialConditions || []).map(function(c, i) {
+    return {
+      id: i + 1,
+      field: c.field || '',
+      operator: c.operator || '',
+      value: c.value || ''
+    };
+  });
+
+  return {
+    conditions: conditions,
+    _nextId: conditions.length + 1,
+
+    addCondition() {
+      this.conditions.push({
+        id: this._nextId++,
+        field: '',
+        operator: '',
+        value: ''
+      });
+    },
+
+    removeCondition(idx) {
+      this.conditions.splice(idx, 1);
+    }
+  };
+}
+</script>
+{% endblock %}

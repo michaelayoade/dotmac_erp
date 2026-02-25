@@ -1,0 +1,208 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Coach / AI Settings{% endblock %}
+{% block page_subtitle %}Configure LLM backends for the AI Coach module{% endblock %}
+
+{% block content %}
+{% set s = coach_settings if coach_settings is defined else {} %}
+{# Safe getter: returns '' instead of None for template value= attributes #}
+{% macro val(key) %}{{ s.get(key, {}).get('value', '') if s.get(key, {}).get('value') else '' }}{% endmacro %}
+{% macro dflt(key, fallback='') %}{{ s.get(key, {}).get('default', fallback) if s.get(key, {}).get('default') else fallback }}{% endmacro %}
+
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <a href="/admin/settings/hub" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Settings</a>
+        {{ icon_svg("chevron-right", "h-4 w-4") }}
+        <span class="font-medium text-slate-900 dark:text-white">Coach / AI</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Coach / AI Settings</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Configure LLM backends (DeepSeek, Llama) for the AI Coach insight engine.
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Message -->
+    {% if request.query_params.get('saved') %}
+    <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 dark:bg-emerald-900/20 dark:border-emerald-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("check", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
+            <p class="text-sm text-emerald-700 dark:text-emerald-300">Coach / AI settings updated successfully.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message -->
+    {% if error %}
+    <div class="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-600 dark:text-red-400") }}
+            <p class="text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/admin/settings/coach" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        <!-- Section 1: DeepSeek API -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">DeepSeek API</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Primary LLM backend using the OpenAI-compatible DeepSeek API.</p>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Base URL -->
+                <div class="sm:col-span-2">
+                    <label for="deepseek_base_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Base URL</label>
+                    <input type="text" id="deepseek_base_url" name="deepseek_base_url"
+                           value="{{ val('deepseek_base_url') }}"
+                           placeholder="{{ dflt('deepseek_base_url', 'https://api.deepseek.com/v1') }}"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">OpenAI-compatible API endpoint</p>
+                </div>
+
+                <!-- API Key -->
+                <div class="sm:col-span-2">
+                    <label for="deepseek_api_key" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">API Key</label>
+                    <input type="password" id="deepseek_api_key" name="deepseek_api_key"
+                           placeholder="{{ '••••••••' if s.get('deepseek_api_key', {}).get('has_value') else 'sk-...' }}"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Leave blank to keep existing key</p>
+                </div>
+
+                <!-- Fast Model -->
+                <div>
+                    <label for="deepseek_model_fast" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fast Model</label>
+                    <input type="text" id="deepseek_model_fast" name="deepseek_model_fast"
+                           value="{{ val('deepseek_model_fast') }}"
+                           placeholder="{{ dflt('deepseek_model_fast', 'deepseek-chat') }}"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Model for quick classification tasks</p>
+                </div>
+
+                <!-- Standard Model -->
+                <div>
+                    <label for="deepseek_model_standard" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Standard Model</label>
+                    <input type="text" id="deepseek_model_standard" name="deepseek_model_standard"
+                           value="{{ val('deepseek_model_standard') }}"
+                           placeholder="{{ dflt('deepseek_model_standard', 'deepseek-chat') }}"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Model for standard analysis</p>
+                </div>
+
+                <!-- Deep Model -->
+                <div class="sm:col-span-2">
+                    <label for="deepseek_model_deep" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Reasoning Model</label>
+                    <input type="text" id="deepseek_model_deep" name="deepseek_model_deep"
+                           value="{{ val('deepseek_model_deep') }}"
+                           placeholder="{{ dflt('deepseek_model_deep', 'deepseek-reasoner') }}"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Model for deep reasoning tasks (chain-of-thought)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Llama API -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Llama API</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Optional secondary backend. Leave blank to use DeepSeek only.</p>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Base URL -->
+                <div class="sm:col-span-2">
+                    <label for="llama_base_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Base URL</label>
+                    <input type="text" id="llama_base_url" name="llama_base_url"
+                           value="{{ val('llama_base_url') }}"
+                           placeholder="https://api.llama-api.com/v1"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">OpenAI-compatible API endpoint for Llama</p>
+                </div>
+
+                <!-- API Key -->
+                <div class="sm:col-span-2">
+                    <label for="llama_api_key" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">API Key</label>
+                    <input type="password" id="llama_api_key" name="llama_api_key"
+                           placeholder="{{ '••••••••' if s.get('llama_api_key', {}).get('has_value') else '' }}"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Leave blank to keep existing key</p>
+                </div>
+
+                <!-- Fast Model -->
+                <div>
+                    <label for="llama_model_fast" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fast Model</label>
+                    <input type="text" id="llama_model_fast" name="llama_model_fast"
+                           value="{{ val('llama_model_fast') }}"
+                           placeholder="llama-3.1-8b"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Model for quick classification tasks</p>
+                </div>
+
+                <!-- Standard Model -->
+                <div>
+                    <label for="llama_model_standard" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Standard Model</label>
+                    <input type="text" id="llama_model_standard" name="llama_model_standard"
+                           value="{{ val('llama_model_standard') }}"
+                           placeholder="llama-3.1-70b"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Model for standard analysis</p>
+                </div>
+
+                <!-- Deep Model -->
+                <div class="sm:col-span-2">
+                    <label for="llama_model_deep" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Reasoning Model</label>
+                    <input type="text" id="llama_model_deep" name="llama_model_deep"
+                           value="{{ val('llama_model_deep') }}"
+                           placeholder="llama-3.1-405b"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Model for deep reasoning tasks</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Performance -->
+        <div class="admin-card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">Performance</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Timeout and retry settings for LLM API calls.</p>
+
+            <div class="grid gap-6 sm:grid-cols-2">
+                <!-- Timeout -->
+                <div>
+                    <label for="timeout_seconds" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Request Timeout (seconds)</label>
+                    <input type="number" id="timeout_seconds" name="timeout_seconds"
+                           value="{{ val('timeout_seconds') if val('timeout_seconds') else dflt('timeout_seconds', '30') }}"
+                           min="5" max="120"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Maximum seconds to wait for LLM response (5–120)</p>
+                </div>
+
+                <!-- Max Retries -->
+                <div>
+                    <label for="max_retries" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Retries</label>
+                    <input type="number" id="max_retries" name="max_retries"
+                           value="{{ val('max_retries') if val('max_retries') else dflt('max_retries', '2') }}"
+                           min="0" max="5"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Retry attempts on validation failure (0–5)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center justify-end gap-4 py-4">
+            <a href="/admin/settings/hub" class="inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-600 dark:hover:bg-slate-700 transition-colors">
+                Cancel
+            </a>
+            <button type="submit" class="inline-flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 transition-colors">
+                {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
+                Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

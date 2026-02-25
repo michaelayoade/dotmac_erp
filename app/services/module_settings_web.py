@@ -66,6 +66,10 @@ MODULE_SETTINGS_CONFIGS = [
             "inventory_default_warehouse_id",
             "inventory_enable_lot_tracking",
             "inventory_enable_serial_tracking",
+            "stock_reservation_enabled",
+            "stock_reservation_expiry_hours",
+            "stock_reservation_allow_partial",
+            "stock_reservation_auto_on_confirm",
         ],
     ),
     ModuleSettingsConfig(

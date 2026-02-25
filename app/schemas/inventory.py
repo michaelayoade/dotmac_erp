@@ -194,6 +194,16 @@ class InventoryValuationRead(BaseModel):
     items: list[CostingResultRead]
 
 
+class ValuationReconciliationRead(BaseModel):
+    """Inventory valuation reconciliation snapshot."""
+
+    fiscal_period_id: UUID
+    inventory_total: Decimal
+    gl_total: Decimal
+    difference: Decimal
+    is_balanced: bool
+
+
 # =============================================================================
 # Stock Balances
 # =============================================================================
@@ -352,6 +362,7 @@ __all__ = [
     "TransactionRead",
     "CostingResultRead",
     "InventoryValuationRead",
+    "ValuationReconciliationRead",
     "StockBalanceRead",
     "LowStockItemRead",
     "FIFOLayerRead",

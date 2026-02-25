@@ -533,6 +533,32 @@ class SupplierPaymentService(ListResponseMixin):
                 "Workflow event failed for payment %s post: %s", payment.payment_id, e
             )
 
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import AP_PAYMENT_POSTED
+
+            emit_hook_event(
+                db,
+                event_name=AP_PAYMENT_POSTED,
+                organization_id=org_id,
+                entity_type="SupplierPayment",
+                entity_id=payment.payment_id,
+                actor_user_id=user_id,
+                payload={
+                    "payment_id": str(payment.payment_id),
+                    "payment_number": payment.payment_number,
+                    "status": payment.status.value,
+                    "supplier_id": str(payment.supplier_id),
+                    "amount": str(payment.amount),
+                    "currency_code": payment.currency_code,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit ap.payment.posted hook for payment %s",
+                payment.payment_id,
+            )
+
         db.commit()
         db.refresh(payment)
 

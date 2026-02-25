@@ -231,6 +231,7 @@
                         <th scope="col" class="text-right">Unit Price</th>
                         <th scope="col" class="text-right">Total</th>
                         <th scope="col">Status</th>
+                        <th scope="col">Reservation</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -246,6 +247,18 @@
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ line.line_total }}</td>
                         <td>
                             {{ status_badge(line.fulfillment_status) }}
+                        </td>
+                        <td>
+                            {% if line.reservation_status %}
+                            <div class="space-y-1">
+                                {{ status_badge(line.reservation_status) }}
+                                <div class="text-xs text-slate-500 dark:text-slate-400">
+                                    {{ line.reserved_remaining }}/{{ line.reserved_quantity }}
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="text-xs text-slate-400 dark:text-slate-500">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}

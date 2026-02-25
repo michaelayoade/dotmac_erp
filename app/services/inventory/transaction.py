@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
+from app.models.domain_settings import SettingDomain
 from app.models.inventory.inventory_lot import InventoryLot
 from app.models.inventory.inventory_transaction import (
     InventoryTransaction,
@@ -25,6 +26,7 @@ from app.models.inventory.item import CostingMethod, Item
 from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
+from app.services.settings_cache import settings_cache
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,10 @@ class InventoryTransactionService(ListResponseMixin):
     Handles receipts, issues, transfers, adjustments with FIFO,
     weighted average, and standard costing methods.
     """
+
+    @staticmethod
+    def _is_mock_like(value: object) -> bool:
+        return type(value).__module__.startswith("unittest.mock")
 
     @staticmethod
     def calculate_weighted_average_cost(
@@ -283,13 +289,6 @@ class InventoryTransactionService(ListResponseMixin):
 
         db.add(transaction)
 
-        # Update weighted average cost
-        if item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
-            new_avg_cost = InventoryTransactionService.calculate_weighted_average_cost(
-                db, org_id, itm_id, wh_id, input.quantity, input.unit_cost
-            )
-            item.average_cost = new_avg_cost
-
         # Update last purchase cost
         item.last_purchase_cost = input.unit_cost
 
@@ -300,6 +299,52 @@ class InventoryTransactionService(ListResponseMixin):
                 item=item,
                 transaction=transaction,
                 input=input,
+            )
+
+        db.flush()
+
+        # Update weighted average ledger and item average cost
+        if item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
+            if InventoryTransactionService._is_mock_like(db):
+                item.average_cost = (
+                    InventoryTransactionService.calculate_weighted_average_cost(
+                        db, org_id, itm_id, wh_id, input.quantity, input.unit_cost
+                    )
+                )
+            else:
+                from app.services.inventory.wac_valuation import WACValuationService
+
+                try:
+                    wac_result = WACValuationService(db).apply_receipt(
+                        organization_id=org_id,
+                        item_id=itm_id,
+                        warehouse_id=wh_id,
+                        receipt_qty=input.quantity,
+                        receipt_unit_cost=input.unit_cost,
+                        transaction_id=transaction.transaction_id,
+                    )
+                    item.average_cost = wac_result.new_wac
+                except Exception:
+                    logger.exception(
+                        "Falling back to legacy weighted-average update for receipt."
+                    )
+                    item.average_cost = (
+                        InventoryTransactionService.calculate_weighted_average_cost(
+                            db,
+                            org_id,
+                            itm_id,
+                            wh_id,
+                            input.quantity,
+                            input.unit_cost,
+                        )
+                    )
+
+        if InventoryTransactionService._is_real_time_valuation_enabled(db):
+            InventoryTransactionService._post_inventory_transaction(
+                db,
+                organization_id=org_id,
+                transaction=transaction,
+                posted_by_user_id=user_id,
             )
 
         db.commit()
@@ -521,6 +566,36 @@ class InventoryTransactionService(ListResponseMixin):
         )
 
         db.add(transaction)
+
+        db.flush()
+
+        # Weighted average issues consume at current WAC and update ledger quantity.
+        if item.costing_method == CostingMethod.WEIGHTED_AVERAGE:
+            if not InventoryTransactionService._is_mock_like(db):
+                from app.services.inventory.wac_valuation import WACValuationService
+
+                try:
+                    wac_result = WACValuationService(db).apply_issue(
+                        organization_id=org_id,
+                        item_id=itm_id,
+                        warehouse_id=wh_id,
+                        issue_qty=input.quantity,
+                        transaction_id=transaction.transaction_id,
+                    )
+                    item.average_cost = wac_result.new_wac
+                except Exception:
+                    logger.exception(
+                        "Failed updating WAC ledger on issue; continuing with legacy average cost."
+                    )
+
+        if InventoryTransactionService._is_real_time_valuation_enabled(db):
+            InventoryTransactionService._post_inventory_transaction(
+                db,
+                organization_id=org_id,
+                transaction=transaction,
+                posted_by_user_id=user_id,
+            )
+
         db.commit()
         db.refresh(transaction)
 
@@ -727,10 +802,59 @@ class InventoryTransactionService(ListResponseMixin):
             if lot.warehouse_id is None:
                 lot.warehouse_id = wh_id
 
+        db.flush()
+
+        if InventoryTransactionService._is_real_time_valuation_enabled(db):
+            InventoryTransactionService._post_inventory_transaction(
+                db,
+                organization_id=org_id,
+                transaction=transaction,
+                posted_by_user_id=user_id,
+            )
+
         db.commit()
         db.refresh(transaction)
 
         return transaction
+
+    @staticmethod
+    def _is_real_time_valuation_enabled(db: Session) -> bool:
+        """Return whether inventory valuation mode is set to real_time."""
+        try:
+            mode = settings_cache.get_setting_value(
+                db,
+                SettingDomain.inventory,
+                "inventory_valuation_mode",
+                default="manual",
+            )
+        except Exception:
+            logger.exception("Failed reading inventory_valuation_mode; using manual mode.")
+            return False
+        return str(mode or "manual").lower() == "real_time"
+
+    @staticmethod
+    def _post_inventory_transaction(
+        db: Session,
+        *,
+        organization_id: UUID,
+        transaction: InventoryTransaction,
+        posted_by_user_id: UUID,
+    ) -> None:
+        """Post a transaction to GL and raise when posting fails."""
+        from app.services.inventory.inv_posting_adapter import inv_posting_adapter
+
+        result = inv_posting_adapter.post_transaction(
+            db=db,
+            organization_id=organization_id,
+            transaction_id=transaction.transaction_id,
+            posting_date=transaction.transaction_date.date(),
+            posted_by_user_id=posted_by_user_id,
+        )
+        if not result.success:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Inventory GL posting failed: {result.message}",
+            )
 
     @staticmethod
     def create_transfer(

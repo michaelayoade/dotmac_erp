@@ -92,10 +92,22 @@ ADMIN_SETTINGS_SECTIONS = [
         "icon": "flag",
     },
     {
+        "title": "Service Hooks",
+        "description": "Configure outbound hooks for domain events",
+        "url": "/admin/settings/service-hooks",
+        "icon": "link",
+    },
+    {
         "title": "Payments",
         "description": "Payment gateway integration",
         "url": "/admin/settings/payments",
         "icon": "credit-card",
+    },
+    {
+        "title": "Coach / AI",
+        "description": "Configure LLM backends (DeepSeek, Llama) for the AI Coach module.",
+        "url": "/admin/settings/coach",
+        "icon": "lightning-bolt",
     },
     {
         "title": "Advanced",
@@ -504,6 +516,27 @@ class AdminSettingsWebService:
         from app.services.finance.settings_web import settings_web_service
 
         return settings_web_service.update_payments_settings(db, organization_id, data)
+
+    # ========== Coach / AI Settings ==========
+
+    def get_coach_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get Coach / AI settings for the form."""
+        from app.services.finance.settings_web import settings_web_service
+
+        return settings_web_service.get_coach_settings_context(db, organization_id)
+
+    def update_coach(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, str | None]:
+        """Update Coach / AI settings."""
+        from app.services.finance.settings_web import settings_web_service
+
+        return settings_web_service.update_coach_settings(db, organization_id, data)
 
 
 # Singleton instance

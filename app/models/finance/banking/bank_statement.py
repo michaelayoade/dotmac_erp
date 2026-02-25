@@ -423,6 +423,18 @@ class BankStatementLineMatch(Base):
         nullable=True,
     )
 
+    # Source document tracking (populated by auto-reconciliation)
+    source_type: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="Source doc type: CUSTOMER_PAYMENT, SUPPLIER_PAYMENT, etc.",
+    )
+    source_id: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        nullable=True,
+        comment="PK of the matched source document",
+    )
+
     # Relationships
     statement_line: Mapped["BankStatementLine"] = relationship(
         "BankStatementLine",

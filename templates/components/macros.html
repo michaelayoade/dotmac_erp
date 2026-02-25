@@ -218,6 +218,113 @@
 
 
 {# ============================================
+   PIVOT TABLE (cross-tab financial report table)
+   Usage:
+     {{ pivot_table(rows=items, columns=[
+         {"key": "name", "label": "Name"},
+         {"key": "amount", "label": "Amount", "type": "currency"},
+       ], totals={"name": "Total", "amount": total_amount}) }}
+
+   Column config keys:
+     key (str)        — row dict key to read value from
+     label (str)      — header text
+     type (str)       — "text" (default), "currency", "number", "percent", "badge"
+     sub_key (str)    — optional small monospace label before the value (e.g. account code)
+     color (str)      — fixed text color: emerald/rose/amber/blue/teal/violet/slate
+     color_key (str)  — row dict key whose numeric value drives conditional color
+     color_pos (str)  — color when color_key >= 0
+     color_neg (str)  — color when color_key < 0
+     hidden_mobile    — hide column on mobile (adds "hidden sm:table-cell")
+     class (str)      — extra CSS classes on td/th
+   ============================================ #}
+{% macro pivot_table(rows, columns, totals=none, compact=true, hover=true,
+                     empty_title="No data", empty_description="No records to display.",
+                     container=true) %}
+{% set _text_colors = {
+  'emerald': 'text-emerald-600 dark:text-emerald-400',
+  'rose': 'text-rose-600 dark:text-rose-400',
+  'amber': 'text-amber-600 dark:text-amber-400',
+  'blue': 'text-blue-600 dark:text-blue-400',
+  'teal': 'text-teal-600 dark:text-teal-400',
+  'violet': 'text-violet-600 dark:text-violet-400',
+  'slate': 'text-slate-600 dark:text-slate-400',
+} %}
+{% set _numeric_types = ['currency', 'number', 'percent'] %}
+{% if rows %}
+{% if container %}<div class="table-container">{% endif %}
+<table class="w-full text-sm">
+  <thead class="border-b border-slate-200 dark:border-slate-700">
+    <tr class="text-left text-slate-500 dark:text-slate-400">
+      {% for col in columns %}
+      {% set is_numeric = col.get('type', 'text') in _numeric_types %}
+      {% set is_badge = col.get('type') == 'badge' %}
+      <th scope="col" class="py-2 px-2 {% if compact %}text-xs font-semibold uppercase tracking-wider{% else %}font-semibold text-slate-700 dark:text-slate-300{% endif %} {% if is_numeric %}text-right{% elif is_badge %}text-center{% endif %} {% if col.get('hidden_mobile') %}hidden sm:table-cell{% endif %} {{ col.get('class', '') }}">{{ col.label }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="{% if hover %}hover:bg-slate-50 dark:hover:bg-slate-800/30{% else %}border-b border-slate-100 dark:border-slate-800{% endif %}">
+      {% for col in columns %}
+      {% set ctype = col.get('type', 'text') %}
+      {% set is_numeric = ctype in _numeric_types %}
+      {% set is_badge = ctype == 'badge' %}
+      {% set val = row[col.key] if row[col.key] is defined else '' %}
+      {# Determine text color #}
+      {% if col.get('color_key') and col.get('color_pos') %}
+        {% set raw = row[col.color_key] if row[col.color_key] is defined else 0 %}
+        {% set _color_cls = _text_colors.get(col.color_pos, '') if raw >= 0 else _text_colors.get(col.get('color_neg', 'slate'), '') %}
+      {% elif col.get('color') %}
+        {% set _color_cls = _text_colors.get(col.color, '') %}
+      {% elif is_numeric %}
+        {% set _color_cls = 'text-slate-900 dark:text-white' %}
+      {% else %}
+        {% set _color_cls = '' %}
+      {% endif %}
+      <td class="py-2 px-2 {% if is_numeric %}text-right font-mono tabular-nums{% elif is_badge %}text-center{% endif %} {% if col.get('hidden_mobile') %}hidden sm:table-cell{% endif %} {{ _color_cls }} {{ col.get('class', '') }}">
+        {% if col.get('sub_key') -%}
+          <span class="font-mono text-xs text-slate-500">{{ row[col.sub_key] if row[col.sub_key] is defined else '' }}</span>
+          <span class="ml-2 text-slate-700 dark:text-slate-300">{{ val }}</span>
+        {%- elif is_badge -%}
+          {{ status_badge(val, 'sm') }}
+        {%- else -%}
+          {{ val }}
+        {%- endif %}
+      </td>
+      {% endfor %}
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="{{ columns | length }}" class="p-0">
+        {{ empty_state(empty_title, empty_description) }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% if totals %}
+  <tfoot>
+    <tr class="border-t border-slate-200 dark:border-slate-700">
+      {% for col in columns %}
+      {% set ctype = col.get('type', 'text') %}
+      {% set is_numeric = ctype in _numeric_types %}
+      {% set tval = totals[col.key] if totals[col.key] is defined else '' %}
+      {% if loop.first and not tval %}
+        {% set tval = totals.get('_label', 'Total') %}
+      {% endif %}
+      <td class="py-2 px-2 font-semibold {% if is_numeric %}text-right font-mono tabular-nums{% endif %} {% if not is_numeric and loop.first %}text-slate-700 dark:text-slate-300{% endif %} {% if col.get('hidden_mobile') %}hidden sm:table-cell{% endif %} {{ col.get('class', '') }}">{{ tval }}</td>
+      {% endfor %}
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+{% if container %}</div>{% endif %}
+{% else %}
+<p class="text-sm text-slate-500 dark:text-slate-400">{{ empty_description }}</p>
+{% endif %}
+{% endmacro %}
+
+
+{# ============================================
    SECTION CARD (with header and content)
    Usage: {% call section_card("Recent Activity", href="/activity") %}content here{% endcall %}
    ============================================ #}

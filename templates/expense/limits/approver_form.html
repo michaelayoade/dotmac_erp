@@ -127,15 +127,15 @@
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Maximum amount this approver can authorize on a single claim</p>
                 </div>
                 <div>
-                    <label class="form-label">Monthly Approval Budget</label>
-                    <input type="number" name="monthly_approval_budget" step="0.01" min="0"
-                           value="{{ approver_limit.monthly_approval_budget if approver_limit and approver_limit.monthly_approval_budget else '' }}"
-                           class="form-input{% if errors.monthly_approval_budget %} border-red-300{% endif %}"
+                    <label class="form-label">Weekly Approval Budget</label>
+                    <input type="number" name="weekly_approval_budget" step="0.01" min="0"
+                           value="{{ approver_limit.weekly_approval_budget if approver_limit and approver_limit.weekly_approval_budget else '' }}"
+                           class="form-input{% if errors.weekly_approval_budget %} border-red-300{% endif %}"
                            placeholder="Leave empty for unlimited">
-                    {% if errors.monthly_approval_budget %}
-                    <p class="mt-1 text-sm text-red-500">{{ errors.monthly_approval_budget }}</p>
+                    {% if errors.weekly_approval_budget %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.weekly_approval_budget }}</p>
                     {% endif %}
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Total amount this approver can approve per calendar month. Resets automatically. Backdated expenses deduct from the expense month.</p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Weekly budget runs Monday-Sunday. No automatic reset. Expense Reviewer must manually reset consumed usage.</p>
                 </div>
             </div>
             <div class="mt-4 flex flex-col gap-3">

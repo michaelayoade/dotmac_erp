@@ -1,0 +1,187 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
+
+{% block page_title %}{{ fp.name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/tax/codes" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Tax</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/tax/fiscal-positions" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Fiscal Positions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ fp.name }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/finance/tax/fiscal-positions/{{ fp.fiscal_position_id }}/edit" class="btn btn-primary">
+        {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
+        Edit
+    </a>
+    <form method="post" action="/finance/tax/fiscal-positions/{{ fp.fiscal_position_id }}/delete"
+          onsubmit="return confirm('Are you sure you want to delete this fiscal position?')">
+        {{ request.state.csrf_form | safe }}
+        <button type="submit" class="btn btn-danger-outline">
+            {{ icon_svg("trash", "h-4 w-4 mr-1.5") }}
+            Delete
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {# Info Card #}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Details</h2>
+        </div>
+        <div class="p-6">
+            <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Name</dt>
+                    <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ fp.name }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</dt>
+                    <dd class="mt-1">{{ status_badge('active' if fp.is_active else 'inactive', 'sm') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Auto-Apply</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">
+                        {% if fp.auto_apply %}
+                        <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">Yes</span>
+                        {% else %}
+                        <span class="text-slate-500 dark:text-slate-400">No</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer Type</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ fp.customer_type | replace('_', ' ') | title if fp.customer_type else '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Supplier Type</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ fp.supplier_type | replace('_', ' ') | title if fp.supplier_type else '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Priority</dt>
+                    <dd class="mt-1 text-sm font-mono text-slate-900 dark:text-white">{{ fp.priority }}</dd>
+                </div>
+                {% if fp.country_code %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Country</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ fp.country_code }}</dd>
+                </div>
+                {% endif %}
+                {% if fp.state_code %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">State</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ fp.state_code }}</dd>
+                </div>
+                {% endif %}
+            </div>
+            {% if fp.description %}
+            <div class="mt-6 border-t border-slate-200 dark:border-slate-700 pt-4">
+                <dt class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</dt>
+                <dd class="mt-1 text-sm text-slate-600 dark:text-slate-400">{{ fp.description }}</dd>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Tax Mappings #}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tax Mappings</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">When a source tax is found on an invoice line, it is replaced with the destination tax.</p>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Source Tax Code</th>
+                        <th scope="col" class="text-center">{{ icon_svg("chevron-right", "h-4 w-4 inline") }}</th>
+                        <th scope="col">Destination Tax Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tm in tax_maps %}
+                    <tr>
+                        <td>
+                            <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white">{{ tm.source_code }}</span>
+                            {% if tm.source_name %}
+                            <span class="text-xs text-slate-500 dark:text-slate-400 ml-2">{{ tm.source_name }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center text-slate-400 dark:text-slate-500">
+                            {{ icon_svg("chevron-right", "h-4 w-4 inline") }}
+                        </td>
+                        <td>
+                            {% if tm.dest_code %}
+                            <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white">{{ tm.dest_code }}</span>
+                            {% if tm.dest_name %}
+                            <span class="text-xs text-slate-500 dark:text-slate-400 ml-2">{{ tm.dest_name }}</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Exempt (removed)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No tax mappings configured.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# Account Mappings #}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Account Mappings</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">When a source account is found on an invoice line, it is replaced with the destination account.</p>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Source Account</th>
+                        <th scope="col" class="text-center">{{ icon_svg("chevron-right", "h-4 w-4 inline") }}</th>
+                        <th scope="col">Destination Account</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for am in account_maps %}
+                    <tr>
+                        <td>
+                            <span class="font-mono text-sm text-slate-900 dark:text-white">{{ am.source_code }}</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400 ml-2">{{ am.source_name }}</span>
+                        </td>
+                        <td class="text-center text-slate-400 dark:text-slate-500">
+                            {{ icon_svg("chevron-right", "h-4 w-4 inline") }}
+                        </td>
+                        <td>
+                            <span class="font-mono text-sm text-slate-900 dark:text-white">{{ am.dest_code }}</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400 ml-2">{{ am.dest_name }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No account mappings configured.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

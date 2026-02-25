@@ -4,6 +4,11 @@ Tax Schema Models - IAS 12.
 
 from app.models.finance.tax.deferred_tax_basis import DeferredTaxBasis, DifferenceType
 from app.models.finance.tax.deferred_tax_movement import DeferredTaxMovement
+from app.models.finance.tax.fiscal_position import (
+    FiscalPosition,
+    FiscalPositionAccountMap,
+    FiscalPositionTaxMap,
+)
 from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
 from app.models.finance.tax.tax_period import (
@@ -31,4 +36,7 @@ __all__ = [
     "DifferenceType",
     "DeferredTaxMovement",
     "TaxReconciliation",
+    "FiscalPosition",
+    "FiscalPositionTaxMap",
+    "FiscalPositionAccountMap",
 ]

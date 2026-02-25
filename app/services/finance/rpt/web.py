@@ -37,9 +37,13 @@ from app.models.finance.rpt.report_definition import ReportDefinition, ReportTyp
 from app.models.finance.rpt.report_instance import ReportInstance
 from app.services.common import coerce_uuid
 from app.services.finance.platform.org_context import org_context_service
+from app.services.finance.rpt.analysis_cube import AnalysisCubeService
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
 from app.services.formatters import parse_date as _parse_date
+from app.services.inventory.valuation_reconciliation import (
+    ValuationReconciliationService,
+)
 from app.templates import templates
 
 logger = logging.getLogger(__name__)
@@ -1882,6 +1886,36 @@ class ReportsWebService:
             "total_variance_raw": float(total_variance),
         }
 
+    @staticmethod
+    def inventory_valuation_reconciliation_context(
+        db: Session,
+        organization_id: str,
+    ) -> dict:
+        """Get context for inventory valuation versus GL reconciliation."""
+        org_id = coerce_uuid(organization_id)
+        service = ValuationReconciliationService(db)
+        try:
+            result = service.reconcile(org_id)
+            return {
+                "has_data": True,
+                "fiscal_period_id": str(result.fiscal_period_id),
+                "inventory_total": _format_currency(result.inventory_total),
+                "gl_total": _format_currency(result.gl_total),
+                "difference": _format_currency(result.difference),
+                "difference_raw": float(result.difference),
+                "is_balanced": result.is_balanced,
+            }
+        except ValueError:
+            return {
+                "has_data": False,
+                "fiscal_period_id": "",
+                "inventory_total": _format_currency(Decimal("0")),
+                "gl_total": _format_currency(Decimal("0")),
+                "difference": _format_currency(Decimal("0")),
+                "difference_raw": 0.0,
+                "is_balanced": True,
+            }
+
     def dashboard_response(
         self,
         request: Request,
@@ -2169,6 +2203,56 @@ class ReportsWebService:
         return templates.TemplateResponse(
             request, "finance/reports/budget_vs_actual.html", context
         )
+
+    def inventory_valuation_reconciliation_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        from app.web.deps import base_context
+
+        context = base_context(
+            request,
+            auth,
+            "Inventory Valuation Reconciliation",
+            "reports",
+        )
+        context.update(
+            self.inventory_valuation_reconciliation_context(
+                db,
+                str(auth.organization_id),
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "finance/reports/inventory_valuation_reconciliation.html",
+            context,
+        )
+
+    def analysis_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        from app.web.deps import base_context
+
+        context = base_context(request, auth, "Analysis", "reports")
+        cubes = AnalysisCubeService(db).list_cubes(auth.organization_id)
+        context["analysis_cubes"] = [
+            {
+                "code": cube.code,
+                "name": cube.name,
+                "description": cube.description,
+                "dimensions": cube.dimensions or [],
+                "measures": cube.measures or [],
+                "default_rows": cube.default_rows or [],
+                "default_measures": cube.default_measures or [],
+            }
+            for cube in cubes
+        ]
+        return templates.TemplateResponse(request, "finance/reports/analysis.html", context)
 
     # ─────────────────── CSV Export helpers ───────────────────
 

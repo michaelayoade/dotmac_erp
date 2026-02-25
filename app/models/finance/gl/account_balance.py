@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -58,6 +59,7 @@ class AccountBalance(Base):
         Index(
             "idx_balance_lookup", "organization_id", "fiscal_period_id", "balance_type"
         ),
+        Index("idx_balance_stale", "organization_id", "is_stale"),
         {"schema": "gl"},
     )
 
@@ -143,6 +145,22 @@ class AccountBalance(Base):
     )
 
     # Metadata
+    is_stale: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    stale_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    refresh_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
     last_updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

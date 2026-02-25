@@ -2,11 +2,15 @@
 Model Mixins - Reusable model components.
 
 Provides common functionality across models like audit trails,
-soft delete, optimistic locking, and sync tracking.
+soft delete, optimistic locking, sync tracking, and field-level
+change tracking.
 """
+
+from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any, ClassVar
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -238,3 +242,27 @@ class ERPNextSyncMixin:
         nullable=True,
         comment="Last synchronization timestamp",
     )
+
+
+class TrackedMixin:
+    """Mixin for models that want field-level change tracking.
+
+    Declares which fields to track and how to label them for the
+    user-facing change history (FieldChangeLog).
+
+    Usage::
+
+        class Invoice(Base, TrackedMixin):
+            __tracked_fields__: ClassVar[dict[str, dict[str, Any]]] = {
+                "status": {"label": "Status"},
+                "amount_total": {"label": "Total Amount"},
+                "customer_id": {"label": "Customer"},
+                "due_date": {"label": "Due Date"},
+            }
+            __tracking_entity_type__: ClassVar[str] = "Invoice"
+            __tracking_pk_field__: ClassVar[str] = "invoice_id"
+    """
+
+    __tracked_fields__: ClassVar[dict[str, dict[str, Any]]] = {}
+    __tracking_entity_type__: ClassVar[str] = ""
+    __tracking_pk_field__: ClassVar[str] = "id"

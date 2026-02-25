@@ -273,10 +273,29 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": timedelta(seconds=30),  # Every 30 seconds
             "kwargs": {"batch_size": 100},
         },
+        "refresh-stale-balances": {
+            "task": "app.tasks.finance.refresh_stale_balances",
+            "schedule": timedelta(seconds=30),  # Every 30 seconds
+            "kwargs": {"batch_size": 200},
+        },
+        "refresh-analysis-cubes": {
+            "task": "app.tasks.finance.refresh_analysis_cubes",
+            "schedule": crontab(minute="*/15"),  # Every 15 minutes
+        },
+        "release-expired-stock-reservations": {
+            "task": "app.tasks.finance.release_expired_stock_reservations",
+            "schedule": crontab(minute="*/15"),  # Every 15 minutes
+            "kwargs": {"batch_size": 200},
+        },
         "outbox-cleanup": {
             "task": "app.tasks.outbox_relay.cleanup_published_outbox_events",
             "schedule": crontab(hour=2, minute=30),  # 2:30 AM daily
             "kwargs": {"retention_days": 30, "batch_size": 5000},
+        },
+        "service-hook-execution-cleanup": {
+            "task": "app.tasks.hooks.cleanup_old_hook_executions",
+            "schedule": crontab(hour=2, minute=45),  # 2:45 AM daily
+            "kwargs": {"retention_days": 90, "batch_size": 5000},
         },
         # ── Data health tasks ────────────────────────────────────
         "data-health-check": {

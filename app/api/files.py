@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -25,6 +26,13 @@ from app.services.storage import get_storage
 
 # Characters unsafe in Content-Disposition filenames
 _UNSAFE_FILENAME_RE = re.compile(r'[\x00-\x1f\x7f"\\]')
+_INLINE_SAFE_MIME_TYPES = frozenset(
+    {
+        "application/pdf",
+        "text/plain",
+        "text/csv",
+    }
+)
 
 router = APIRouter(prefix="/files", tags=["files"])
 legacy_router = APIRouter(prefix="/uploads", tags=["files"])
@@ -47,6 +55,7 @@ def _stream_s3_file(
     *,
     filename: str | None = None,
     media_type: str | None = None,
+    disposition: Literal["attachment", "inline", "auto"] = "attachment",
 ) -> StreamingResponse:
     """Stream a file from S3 as a FastAPI response."""
     storage = get_storage()
@@ -60,11 +69,20 @@ def _stream_s3_file(
     if content_length is not None:
         headers["Content-Length"] = str(content_length)
     if filename:
+        effective_disposition = disposition
+        if disposition == "auto":
+            if effective_type in _INLINE_SAFE_MIME_TYPES or effective_type.startswith(
+                "image/"
+            ):
+                effective_disposition = "inline"
+            else:
+                effective_disposition = "attachment"
         # RFC 6266 + RFC 5987 Content-Disposition — sanitize to prevent header injection
         safe_name = _UNSAFE_FILENAME_RE.sub("_", filename)
         # ASCII fallback + UTF-8 encoded version for non-ASCII filenames
         headers["Content-Disposition"] = (
-            f"attachment; filename=\"{safe_name}\"; filename*=UTF-8''{quote(safe_name)}"
+            f'{effective_disposition}; filename="{safe_name}"; '
+            f"filename*=UTF-8''{quote(safe_name)}"
         )
 
     return StreamingResponse(
@@ -181,6 +199,7 @@ def download_attachment(
         s3_key,
         filename=attachment.file_name,
         media_type=attachment.content_type or "application/octet-stream",
+        disposition="auto",
     )
 
 

@@ -1,0 +1,81 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Expense Reviewer</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review approver decisions and reset weekly consumed budgets</p>
+        </div>
+        <form method="get" class="grid grid-cols-1 gap-2 sm:grid-cols-4">
+            <input type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search approver">
+            <input type="date" name="from_date" value="{{ filters.from_date }}" class="form-input">
+            <input type="date" name="to_date" value="{{ filters.to_date }}" class="form-input">
+            <button class="btn btn-secondary" type="submit">Filter</button>
+        </form>
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Approver</th>
+                        <th scope="col">Code</th>
+                        <th scope="col" class="text-right">Approved Count</th>
+                        <th scope="col" class="text-right">Rejected Count</th>
+                        <th scope="col" class="text-right">Approved Amount</th>
+                        <th scope="col" class="text-right">Weekly Budget</th>
+                        <th scope="col" class="text-right">Max Per Claim</th>
+                        <th scope="col">Last Activity</th>
+                        <th scope="col">Last Reset</th>
+                        <th scope="col"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for approver in approvers %}
+                    <tr>
+                        <td class="font-medium text-slate-900 dark:text-white">{{ approver.name }}</td>
+                        <td class="font-mono text-slate-700 dark:text-slate-300">{{ approver.employee_code }}</td>
+                        <td class="text-right font-mono">{{ approver.approved_count }}</td>
+                        <td class="text-right font-mono">{{ approver.rejected_count }}</td>
+                        <td class="text-right font-mono">{{ "{:,.2f}".format(approver.approved_amount) }} {{ approver.currency_code }}</td>
+                        <td class="text-right font-mono">
+                            {% if approver.weekly_budget %}
+                                {{ "{:,.2f}".format(approver.weekly_budget) }} {{ approver.currency_code }}
+                            {% else %}
+                                <span class="text-slate-400">Not Set</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-mono">{{ "{:,.2f}".format(approver.max_approval_amount) }} {{ approver.currency_code }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {% if approver.last_action_at %}
+                                {{ approver.last_action_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">
+                            {% if approver.last_reset_at %}
+                                {{ approver.last_reset_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <a class="btn btn-sm btn-primary" href="/expense/limits/reviewer/approvers/{{ approver.employee_id }}">Review</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not approvers %}
+                    <tr>
+                        <td colspan="10" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No approver activity found for selected filter.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -26,7 +26,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.mixins import VersionedMixin
+from app.models.mixins import TrackedMixin, VersionedMixin
 
 
 class InvoiceType(str, enum.Enum):
@@ -63,7 +63,7 @@ class InvoiceStatus(str, enum.Enum):
         return frozenset({cls.PAID, cls.VOID})
 
 
-class Invoice(Base, VersionedMixin):
+class Invoice(Base, VersionedMixin, TrackedMixin):
     """
     AR Invoice.
 
@@ -88,6 +88,17 @@ class Invoice(Base, VersionedMixin):
         ),
         {"schema": "ar"},
     )
+
+    # Field-level change tracking
+    __tracked_fields__ = {
+        "status": {"label": "Status"},
+        "total_amount": {"label": "Total Amount"},
+        "customer_id": {"label": "Customer"},
+        "due_date": {"label": "Due Date"},
+        "payment_terms_id": {"label": "Payment Terms"},
+    }
+    __tracking_entity_type__ = "Invoice"
+    __tracking_pk_field__ = "invoice_id"
 
     invoice_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

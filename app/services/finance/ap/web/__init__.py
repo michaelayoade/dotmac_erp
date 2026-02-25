@@ -20,7 +20,7 @@ For backward compatibility, the original import path also works:
 """
 
 from fastapi import Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionRequest, BulkExportRequest
@@ -96,8 +96,8 @@ class APWebService(
         attachment_id: str,
         auth: WebAuthContext,
         db: Session,
-    ) -> FileResponse | RedirectResponse:
-        """Download an attachment file."""
+    ) -> RedirectResponse:
+        """Download an attachment file via authenticated S3 proxy."""
         attachment = attachment_service.get(
             db,
             coerce_uuid(auth.organization_id),
@@ -109,17 +109,10 @@ class APWebService(
                 url="/finance/ap/invoices?error=Attachment+not+found", status_code=303
             )
 
-        file_path = attachment_service.get_file_path(attachment)
-
-        if not file_path.exists():
-            return RedirectResponse(
-                url="/finance/ap/invoices?error=File+not+found", status_code=303
-            )
-
-        return FileResponse(
-            path=str(file_path),
-            filename=attachment.file_name,
-            media_type=attachment.content_type,
+        # Files are stored in S3; stream through authenticated /files endpoint.
+        return RedirectResponse(
+            url=f"/files/attachments/{attachment_id}",
+            status_code=302,
         )
 
     def delete_attachment_response(

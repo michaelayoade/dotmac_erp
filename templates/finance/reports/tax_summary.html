@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import icon_svg, period_shortcuts %}
+{% from "components/macros.html" import icon_svg, period_shortcuts, pivot_table %}
 
 {% block page_title %}Tax summary{% endblock %}
 
@@ -96,34 +96,14 @@
         <!-- Tax Breakdown by Type -->
         <div class="card p-6">
             <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Breakdown by tax type</h3>
-            {% if tax_breakdown %}
-            <div class="table-container">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-slate-200 dark:border-slate-700">
-                            <th scope="col" class="text-left py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Tax Type</th>
-                            <th scope="col" class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Output</th>
-                            <th scope="col" class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Input</th>
-                            <th scope="col" class="text-right py-2 px-2 font-semibold text-slate-700 dark:text-slate-300">Net</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in tax_breakdown %}
-                        <tr class="border-b border-slate-100 dark:border-slate-800">
-                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.tax_type }}</td>
-                            <td class="py-2 px-2 text-right font-mono text-emerald-600 dark:text-emerald-400">{{ item.output }}</td>
-                            <td class="py-2 px-2 text-right font-mono text-rose-600 dark:text-rose-400">{{ item.input }}</td>
-                            <td class="py-2 px-2 text-right font-mono font-medium {% if item.net_raw >= 0 %}text-amber-600 dark:text-amber-400{% else %}text-blue-600 dark:text-blue-400{% endif %}">{{ item.net }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="empty-state py-8">
-                <p class="text-sm text-slate-500 dark:text-slate-400">No tax transactions for this period</p>
-            </div>
-            {% endif %}
+            {{ pivot_table(rows=tax_breakdown, columns=[
+                {"key": "tax_type", "label": "Tax Type"},
+                {"key": "output", "label": "Output", "type": "currency", "color": "emerald"},
+                {"key": "input", "label": "Input", "type": "currency", "color": "rose"},
+                {"key": "net", "label": "Net", "type": "currency", "class": "font-medium",
+                 "color_key": "net_raw", "color_pos": "amber", "color_neg": "blue"},
+              ], compact=false, hover=false,
+              empty_title="No tax transactions", empty_description="No tax transactions for this period.") }}
         </div>
 
         <!-- Upcoming Deadlines -->

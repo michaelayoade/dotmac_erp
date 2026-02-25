@@ -263,6 +263,32 @@ class SupplierInvoiceService(ListResponseMixin):
         if not supplier.is_active:
             raise ValidationError("Supplier is not active")
 
+        # Auto-detect fiscal position and remap taxes/accounts
+        from app.services.finance.tax.fiscal_position_service import (
+            FiscalPositionService,
+        )
+
+        fp_service = FiscalPositionService(db)
+        supplier_type = getattr(supplier, "supplier_type", None)
+        supplier_classification = (
+            supplier_type.value if hasattr(supplier_type, "value") else supplier_type
+        )
+        fiscal_position = fp_service.get_for_partner(
+            organization_id=org_id,
+            partner_type="supplier",
+            partner_classification=supplier_classification,
+        )
+        if fiscal_position:
+            for line in input.lines:
+                if line.tax_code_ids:
+                    line.tax_code_ids = fp_service.map_taxes(
+                        fiscal_position, line.tax_code_ids
+                    )
+                if line.expense_account_id:
+                    line.expense_account_id = fp_service.map_account(
+                        fiscal_position, line.expense_account_id
+                    )
+
         # Validate lines
         if not input.lines:
             raise ValidationError("Invoice must have at least one line")

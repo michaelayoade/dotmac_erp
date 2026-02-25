@@ -130,6 +130,9 @@ class AccountBalanceService(ListResponseMixin):
             balance.closing_credit = balance.opening_credit + balance.period_credit
             balance.net_balance = balance.closing_debit - balance.closing_credit
             balance.transaction_count += 1
+            balance.is_stale = False
+            balance.stale_since = None
+            balance.refresh_count = int(getattr(balance, "refresh_count", 0)) + 1
             balance.last_updated_at = datetime.now(UTC)
         else:
             # Create new
@@ -153,6 +156,9 @@ class AccountBalanceService(ListResponseMixin):
                 closing_credit=credit_amount,
                 net_balance=debit_amount - credit_amount,
                 transaction_count=1,
+                is_stale=False,
+                stale_since=None,
+                refresh_count=1,
             )
             db.add(balance)
 
@@ -436,6 +442,9 @@ class AccountBalanceService(ListResponseMixin):
                     closing_credit=credit,
                     net_balance=debit - credit,
                     transaction_count=r.tx_count,
+                    is_stale=False,
+                    stale_since=None,
+                    refresh_count=1,
                 )
                 db.add(balance)
                 count += 1
@@ -512,6 +521,8 @@ class AccountBalanceService(ListResponseMixin):
                 target.closing_debit = target.opening_debit + target.period_debit
                 target.closing_credit = target.opening_credit + target.period_credit
                 target.net_balance = target.closing_debit - target.closing_credit
+                target.is_stale = False
+                target.stale_since = None
             else:
                 target = AccountBalance(
                     organization_id=org_id,
@@ -531,6 +542,9 @@ class AccountBalanceService(ListResponseMixin):
                     closing_credit=source.closing_credit,
                     net_balance=source.closing_debit - source.closing_credit,
                     transaction_count=0,
+                    is_stale=False,
+                    stale_since=None,
+                    refresh_count=1,
                 )
                 db.add(target)
 

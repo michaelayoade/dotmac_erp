@@ -5,6 +5,7 @@ Provides admin dashboard and management pages with admin role requirement.
 """
 
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -15,6 +16,7 @@ from starlette.datastructures import UploadFile
 from app.services.admin.settings_web import admin_settings_web_service
 from app.services.admin.web import admin_web_service
 from app.services.branding_assets import delete_branding_asset, save_branding_asset
+from app.services.hooks.web import service_hook_web_service
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -1152,6 +1154,316 @@ async def admin_settings_feature_toggle(
     return RedirectResponse(url="/admin/settings/features?saved=1", status_code=303)
 
 
+@router.get("/settings/service-hooks", response_class=HTMLResponse)
+def admin_settings_service_hooks(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Service hook settings page."""
+    context = _admin_base_context(request, auth, "Service Hooks", db)
+    if auth and auth.organization_id:
+        q = request.query_params.get("q")
+        handler_type = request.query_params.get("handler_type")
+        is_active = request.query_params.get("is_active")
+        context.update(
+            service_hook_web_service.settings_context_filtered(
+                db,
+                auth.organization_id,
+                q=q,
+                handler_type=handler_type,
+                is_active=is_active,
+            )
+        )
+        bulk_action = request.query_params.get("bulk_action")
+        if bulk_action:
+            try:
+                requested = int(request.query_params.get("bulk_requested", "0"))
+            except ValueError:
+                requested = 0
+            try:
+                processed = int(request.query_params.get("bulk_processed", "0"))
+            except ValueError:
+                processed = 0
+            try:
+                skipped = int(request.query_params.get("bulk_skipped", "0"))
+            except ValueError:
+                skipped = max(0, requested - processed)
+            context["bulk_result"] = {
+                "action": bulk_action,
+                "requested": requested,
+                "processed": processed,
+                "skipped": skipped,
+            }
+        detail_hook_id = request.query_params.get("detail_hook_id")
+        detail_execution_id = request.query_params.get("detail_execution_id")
+        if detail_hook_id and detail_execution_id:
+            detail, detail_error = service_hook_web_service.execution_detail(
+                db,
+                auth.organization_id,
+                detail_hook_id,
+                detail_execution_id,
+            )
+            context["selected_execution"] = detail
+            if detail_error:
+                context["error"] = detail_error
+    return templates.TemplateResponse(
+        request, "admin/settings/service_hooks.html", context
+    )
+
+
+@router.post("/settings/service-hooks", response_class=HTMLResponse)
+async def admin_settings_service_hooks_create(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Create a service hook."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = _normalize_form(form)
+
+    if auth and auth.organization_id:
+        success, error = service_hook_web_service.create_from_form(
+            db,
+            auth.organization_id,
+            auth.person_id if auth else None,
+            data,
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Service Hooks", db)
+            context.update(
+                service_hook_web_service.settings_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/service_hooks.html", context
+            )
+
+    return RedirectResponse(
+        url="/admin/settings/service-hooks?saved=1", status_code=303
+    )
+
+
+@router.post("/settings/service-hooks/{hook_id}/toggle", response_class=HTMLResponse)
+async def admin_settings_service_hooks_toggle(
+    request: Request,
+    hook_id: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Enable or disable a service hook."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    enabled = str(form.get("enabled", "false")).lower() == "true"
+
+    if auth and auth.organization_id:
+        success, error = service_hook_web_service.toggle(
+            db, auth.organization_id, hook_id, enabled
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Service Hooks", db)
+            context.update(
+                service_hook_web_service.settings_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/service_hooks.html", context
+            )
+
+    return RedirectResponse(
+        url="/admin/settings/service-hooks?saved=1", status_code=303
+    )
+
+
+@router.post("/settings/service-hooks/bulk-action", response_class=HTMLResponse)
+async def admin_settings_service_hooks_bulk_action(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Apply a bulk action to selected service hooks."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    q = str(form.get("q") or "").strip()
+    handler_type = str(form.get("handler_type") or "").strip()
+    is_active = str(form.get("is_active") or "").strip()
+    base_params: dict[str, str] = {}
+    if q:
+        base_params["q"] = q
+    if handler_type:
+        base_params["handler_type"] = handler_type
+    if is_active:
+        base_params["is_active"] = is_active
+    action = str(form.get("bulk_action") or "").strip().lower()
+    hook_ids = list(form.getlist("hook_ids")) if hasattr(form, "getlist") else []
+    if not hook_ids:
+        query = urlencode(base_params)
+        return RedirectResponse(
+            url=f"/admin/settings/service-hooks?{query}"
+            if query
+            else "/admin/settings/service-hooks",
+            status_code=303,
+        )
+
+    if auth and auth.organization_id:
+        if action == "enable":
+            success, error, result = service_hook_web_service.bulk_toggle(
+                db,
+                auth.organization_id,
+                hook_ids,
+                enabled=True,
+            )
+        elif action == "disable":
+            success, error, result = service_hook_web_service.bulk_toggle(
+                db,
+                auth.organization_id,
+                hook_ids,
+                enabled=False,
+            )
+        elif action == "delete":
+            success, error, result = service_hook_web_service.bulk_delete(
+                db,
+                auth.organization_id,
+                hook_ids,
+            )
+        else:
+            success, error, result = False, "Invalid bulk action.", None
+
+        if not success:
+            context = _admin_base_context(request, auth, "Service Hooks", db)
+            context.update(
+                service_hook_web_service.settings_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/service_hooks.html", context
+            )
+
+        if result:
+            requested = int(result.get("requested", len(hook_ids)))
+            processed = int(
+                result.get(
+                    "updated",
+                    result.get("deleted", 0),
+                )
+            )
+            skipped = max(0, requested - processed)
+            params = dict(base_params)
+            params.update(
+                {
+                    "saved": "1",
+                    "bulk_action": action,
+                    "bulk_requested": str(requested),
+                    "bulk_processed": str(processed),
+                    "bulk_skipped": str(skipped),
+                }
+            )
+            query = urlencode(params)
+            return RedirectResponse(
+                url=f"/admin/settings/service-hooks?{query}",
+                status_code=303,
+            )
+
+    params = dict(base_params)
+    params["saved"] = "1"
+    query = urlencode(params)
+    return RedirectResponse(url=f"/admin/settings/service-hooks?{query}", status_code=303)
+
+
+@router.post("/settings/service-hooks/{hook_id}/delete", response_class=HTMLResponse)
+async def admin_settings_service_hooks_delete(
+    request: Request,
+    hook_id: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Delete a service hook."""
+    if auth and auth.organization_id:
+        success, error = service_hook_web_service.delete(
+            db, auth.organization_id, hook_id
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Service Hooks", db)
+            context.update(
+                service_hook_web_service.settings_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/service_hooks.html", context
+            )
+
+    return RedirectResponse(
+        url="/admin/settings/service-hooks?saved=1", status_code=303
+    )
+
+
+@router.post("/settings/service-hooks/{hook_id}/edit", response_class=HTMLResponse)
+async def admin_settings_service_hooks_edit(
+    request: Request,
+    hook_id: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Update a service hook."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = _normalize_form(form)
+
+    if auth and auth.organization_id:
+        success, error = service_hook_web_service.update_from_form(
+            db, auth.organization_id, hook_id, data
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Service Hooks", db)
+            context.update(
+                service_hook_web_service.settings_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/service_hooks.html", context
+            )
+
+    return RedirectResponse(
+        url="/admin/settings/service-hooks?saved=1", status_code=303
+    )
+
+
+@router.post(
+    "/settings/service-hooks/{hook_id}/executions/{execution_id}/retry",
+    response_class=HTMLResponse,
+)
+async def admin_settings_service_hooks_retry_execution(
+    request: Request,
+    hook_id: str,
+    execution_id: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Retry a failed/dead service hook execution."""
+    if auth and auth.organization_id:
+        success, error = service_hook_web_service.retry_execution(
+            db, auth.organization_id, hook_id, execution_id
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Service Hooks", db)
+            context.update(
+                service_hook_web_service.settings_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/service_hooks.html", context
+            )
+
+    return RedirectResponse(
+        url="/admin/settings/service-hooks?saved=1", status_code=303
+    )
+
+
 @router.get("/settings/payments", response_class=HTMLResponse)
 def admin_settings_payments(
     request: Request,
@@ -1217,6 +1529,50 @@ async def admin_settings_paystack_update(
     return RedirectResponse(
         url="/admin/settings/payments/paystack?saved=1", status_code=303
     )
+
+
+@router.get("/settings/coach", response_class=HTMLResponse)
+def admin_settings_coach(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Coach / AI settings page."""
+    context = _admin_base_context(request, auth, "Coach / AI Settings", db)
+    if auth and auth.organization_id:
+        context.update(
+            admin_settings_web_service.get_coach_context(db, auth.organization_id)
+        )
+    return templates.TemplateResponse(request, "admin/settings/coach.html", context)
+
+
+@router.post("/settings/coach", response_class=HTMLResponse)
+async def admin_settings_coach_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Update Coach / AI settings."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    data = dict(form)
+
+    if auth and auth.organization_id:
+        success, error = admin_settings_web_service.update_coach(
+            db, auth.organization_id, data
+        )
+        if not success:
+            context = _admin_base_context(request, auth, "Coach / AI Settings", db)
+            context.update(
+                admin_settings_web_service.get_coach_context(db, auth.organization_id)
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "admin/settings/coach.html", context
+            )
+
+    return RedirectResponse(url="/admin/settings/coach?saved=1", status_code=303)
 
 
 @router.get("/settings/advanced", response_class=HTMLResponse)

@@ -262,7 +262,14 @@ from app.models.finance.platform import (
     EventHandlerCheckpoint,
     EventOutbox,
     EventStatus,
+    HookExecutionMode,
+    HookHandlerType,
     IdempotencyRecord,
+    ServiceHook,
+    ServiceHookExecution,
+)
+from app.models.finance.platform import (
+    ExecutionStatus as HookExecutionStatus,
 )
 
 # Remita Integration
@@ -273,6 +280,7 @@ from app.models.finance.remita import (
 
 # Reporting Schema
 from app.models.finance.rpt import (
+    AnalysisCube,
     DisclosureChecklist,
     DisclosureStatus,
     FinancialStatementLine,
@@ -281,6 +289,7 @@ from app.models.finance.rpt import (
     ReportSchedule,
     ReportStatus,
     ReportType,
+    SavedAnalysis,
     ScheduleFrequency,
     StatementType,
 )
@@ -332,6 +341,9 @@ from app.models.inventory import (
     Item,
     ItemCategory,
     ItemType,
+    ReservationSourceType,
+    ReservationStatus,
+    StockReservation,
     TransactionType,
     Warehouse,
     WarehouseLocation,
@@ -344,6 +356,11 @@ __all__ = [
     "EventHandlerCheckpoint",
     "CheckpointStatus",
     "IdempotencyRecord",
+    "ServiceHook",
+    "HookHandlerType",
+    "HookExecutionMode",
+    "ServiceHookExecution",
+    "HookExecutionStatus",
     # Audit
     "AuditLog",
     "AuditAction",
@@ -486,6 +503,9 @@ __all__ = [
     "InventoryCount",
     "CountStatus",
     "InventoryCountLine",
+    "StockReservation",
+    "ReservationStatus",
+    "ReservationSourceType",
     # Tax
     "TaxJurisdiction",
     "TaxCode",
@@ -514,6 +534,8 @@ __all__ = [
     "ConsolidationStatus",
     "ConsolidatedBalance",
     # Reporting
+    "AnalysisCube",
+    "SavedAnalysis",
     "ReportDefinition",
     "ReportType",
     "ReportSchedule",

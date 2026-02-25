@@ -28,6 +28,7 @@ from app.api.expense_limits import router as expense_limits_router
 from app.api.files import legacy_router as files_legacy_router
 from app.api.files import router as files_router
 from app.api.finance import (
+    analysis_router,
     ap_router,
     ar_router,
     banking_router,
@@ -54,6 +55,7 @@ from app.api.pm import router as pm_router
 from app.api.procurement import router as procurement_router
 from app.api.rbac import router as rbac_router
 from app.api.scheduler import router as scheduler_router
+from app.api.service_hooks import router as service_hooks_router
 from app.api.settings import router as settings_router
 from app.api.support import router as support_router
 from app.api.sync.dotmac_crm import router as crm_sync_router
@@ -141,6 +143,11 @@ setup_otel(app)
 from app.services.audit_listener import register_audit_listeners  # noqa: E402
 
 register_audit_listeners()
+
+# Register field-level change tracking (user-facing change history)
+from app.services.audit.field_tracker import register_field_tracking  # noqa: E402
+
+register_field_tracking()
 
 app.add_middleware(ObservabilityMiddleware)
 register_error_handlers(app)
@@ -443,6 +450,7 @@ _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant
 _include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(payments_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(fx_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(analysis_router, dependencies=[Depends(require_tenant_auth)])
 # Payments webhook router - NO authentication (uses signature verification)
 _include_api_router(payments_webhook_router)
 
@@ -452,6 +460,7 @@ _include_api_router(people_hr_router, dependencies=[Depends(require_tenant_auth)
 # Expense Management (independent module)
 _include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(expense_limits_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(service_hooks_router, dependencies=[Depends(require_tenant_auth)])
 
 # Support/Helpdesk
 app.include_router(

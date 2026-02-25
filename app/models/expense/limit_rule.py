@@ -358,6 +358,11 @@ class ExpenseApproverLimit(Base, AuditMixin):
         nullable=True,
         comment="Monthly budget cap for total approvals. NULL = unlimited.",
     )
+    weekly_approval_budget: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 2),
+        nullable=True,
+        comment="Weekly budget cap for total approvals. NULL = unlimited.",
+    )
     currency_code: Mapped[str] = mapped_column(
         String(3),
         default="NGN",
@@ -503,6 +508,74 @@ class ExpenseApproverBudgetAdjustment(Base):
             f" month={self.adjustment_month}"
             f" amount={self.additional_amount}>"
         )
+
+
+class ExpenseApproverLimitReset(Base):
+    """Manual reset event for weekly approver budget usage."""
+
+    __tablename__ = "expense_approver_limit_reset"
+    __table_args__ = (
+        Index(
+            "idx_approver_limit_reset_lookup",
+            "organization_id",
+            "approver_id",
+            "approver_limit_id",
+            "reset_at",
+        ),
+        {"schema": "expense"},
+    )
+
+    reset_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
+        nullable=False,
+        index=True,
+    )
+    approver_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=False,
+    )
+    approver_limit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("expense.expense_approver_limit.approver_limit_id"),
+        nullable=False,
+    )
+    reset_reason: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Reviewer reason for resetting consumed weekly budget.",
+    )
+    reviewed_by_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id"),
+        nullable=False,
+    )
+    reviewed_from: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    reviewed_to: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    reviewed_claim_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    reset_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
 
 
 class ExpenseLimitEvaluation(Base):

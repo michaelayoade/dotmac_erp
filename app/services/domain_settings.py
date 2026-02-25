@@ -600,6 +600,8 @@ fleet_settings = DomainSettings(SettingDomain.fleet)
 procurement_settings = DomainSettings(SettingDomain.procurement)
 settings_settings = DomainSettings(SettingDomain.settings)
 payroll_settings = DomainSettings(SettingDomain.payroll)
+banking_settings = DomainSettings(SettingDomain.banking)
+coach_settings = DomainSettings(SettingDomain.coach)
 
 
 # =============================================================================

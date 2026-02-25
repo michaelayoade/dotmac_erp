@@ -203,6 +203,32 @@ class ARInvoiceService(ListResponseMixin):
         if not customer.is_active:
             raise ValidationError("Customer is not active")
 
+        # Auto-detect fiscal position and remap taxes/accounts
+        from app.services.finance.tax.fiscal_position_service import (
+            FiscalPositionService,
+        )
+
+        fp_service = FiscalPositionService(db)
+        customer_type = getattr(customer, "customer_type", None)
+        customer_classification = (
+            customer_type.value if hasattr(customer_type, "value") else customer_type
+        )
+        fiscal_position = fp_service.get_for_partner(
+            organization_id=org_id,
+            partner_type="customer",
+            partner_classification=customer_classification,
+        )
+        if fiscal_position:
+            for line in input.lines:
+                if line.tax_code_ids:
+                    line.tax_code_ids = fp_service.map_taxes(
+                        fiscal_position, line.tax_code_ids
+                    )
+                if line.revenue_account_id:
+                    line.revenue_account_id = fp_service.map_account(
+                        fiscal_position, line.revenue_account_id
+                    )
+
         # Validate lines
         if not input.lines:
             raise ValidationError("Invoice must have at least one line")
@@ -410,6 +436,33 @@ class ARInvoiceService(ListResponseMixin):
                         sequence=tax_detail.sequence,
                     )
                     db.add(line_tax)
+
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import AR_INVOICE_CREATED
+
+            emit_hook_event(
+                db,
+                event_name=AR_INVOICE_CREATED,
+                organization_id=org_id,
+                entity_type="Invoice",
+                entity_id=invoice.invoice_id,
+                actor_user_id=user_id,
+                payload={
+                    "invoice_id": str(invoice.invoice_id),
+                    "invoice_number": invoice.invoice_number,
+                    "invoice_type": invoice.invoice_type.value,
+                    "status": invoice.status.value,
+                    "customer_id": str(customer_id),
+                    "total_amount": str(invoice.total_amount),
+                    "currency_code": invoice.currency_code,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit ar.invoice.created hook for invoice %s",
+                invoice.invoice_id,
+            )
 
         db.commit()
         db.refresh(invoice)
@@ -830,6 +883,34 @@ class ARInvoiceService(ListResponseMixin):
             new_values={"status": "SUBMITTED"},
             user_id=user_id,
         )
+
+        try:
+            from app.services.hooks import emit_hook_event
+            from app.services.hooks.events import AR_INVOICE_SUBMITTED
+
+            hook_invoice_id = getattr(invoice, "invoice_id", inv_id)
+            hook_status = getattr(invoice.status, "value", str(invoice.status))
+            emit_hook_event(
+                db,
+                event_name=AR_INVOICE_SUBMITTED,
+                organization_id=org_id,
+                entity_type="Invoice",
+                entity_id=hook_invoice_id,
+                actor_user_id=user_id,
+                payload={
+                    "invoice_id": str(hook_invoice_id),
+                    "invoice_number": getattr(invoice, "invoice_number", ""),
+                    "status": hook_status,
+                    "customer_id": str(getattr(invoice, "customer_id", "")),
+                    "total_amount": str(getattr(invoice, "total_amount", "0")),
+                    "currency_code": getattr(invoice, "currency_code", ""),
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Failed to emit ar.invoice.submitted hook for invoice %s",
+                getattr(invoice, "invoice_id", inv_id),
+            )
 
         db.commit()
         db.refresh(invoice)

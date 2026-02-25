@@ -627,3 +627,160 @@ def sync_paystack_transactions(days_back: int = 1) -> dict[str, Any]:
     )
 
     return results
+
+
+@shared_task
+def rebuild_account_balances() -> dict[str, Any]:
+    """
+    Safety-net: rebuild all account balances from posted_ledger_line.
+
+    The primary balance update mechanism is event-driven (outbox_relay.py
+    handles ledger.posting.completed → AccountBalanceService.update_balance_for_posting).
+    This daily task catches any missed events by recalculating balances for
+    all open fiscal periods across all active organizations.
+
+    Returns:
+        Dict with rebuild statistics
+    """
+    from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+    from app.services.finance.gl.account_balance import AccountBalanceService
+
+    logger.info("Starting daily account balance rebuild (safety net)")
+
+    results: dict[str, Any] = {
+        "organizations_processed": 0,
+        "periods_rebuilt": 0,
+        "total_balance_records": 0,
+        "errors": [],
+    }
+
+    with SessionLocal() as db:
+        # Get all active organizations
+        organizations = db.scalars(
+            select(Organization).where(Organization.is_active.is_(True))
+        ).all()
+
+        for org in organizations:
+            try:
+                # Get open/reopened periods for this org
+                open_periods = db.scalars(
+                    select(FiscalPeriod).where(
+                        FiscalPeriod.organization_id == org.organization_id,
+                        FiscalPeriod.status.in_(
+                            [PeriodStatus.OPEN, PeriodStatus.REOPENED]
+                        ),
+                    )
+                ).all()
+
+                if not open_periods:
+                    continue
+
+                results["organizations_processed"] += 1
+
+                for period in open_periods:
+                    try:
+                        count = AccountBalanceService.rebuild_balances_for_period(
+                            db,
+                            organization_id=org.organization_id,
+                            fiscal_period_id=period.fiscal_period_id,
+                        )
+                        results["periods_rebuilt"] += 1
+                        results["total_balance_records"] += count
+
+                        logger.debug(
+                            "Rebuilt %d balance records for org %s period %s",
+                            count,
+                            org.organization_id,
+                            period.fiscal_period_id,
+                        )
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to rebuild balances for period %s (org %s)",
+                            period.fiscal_period_id,
+                            org.organization_id,
+                        )
+                        results["errors"].append(
+                            f"Period {period.fiscal_period_id}: {str(e)}"
+                        )
+
+            except Exception as e:
+                logger.exception(
+                    "Failed to process balance rebuild for org %s",
+                    org.organization_id,
+                )
+                results["errors"].append(f"Org {org.organization_id}: {str(e)}")
+
+        db.commit()
+
+    logger.info(
+        "Account balance rebuild complete: %d orgs, %d periods, %d records, %d errors",
+        results["organizations_processed"],
+        results["periods_rebuilt"],
+        results["total_balance_records"],
+        len(results["errors"]),
+    )
+    return results
+
+
+@shared_task
+def refresh_stale_balances(batch_size: int = 200) -> dict[str, Any]:
+    """
+    Process queued stale balance refresh entries.
+
+    Runs frequently and refreshes only account/period keys invalidated by
+    recent postings, keeping reporting aggregates current.
+    """
+    from app.services.finance.gl.balance_refresh import BalanceRefreshService
+
+    with SessionLocal() as db:
+        service = BalanceRefreshService(db)
+        results = service.process_queue(batch_size=batch_size)
+        db.commit()
+
+    if results["refreshed"] > 0 or results["errors"] > 0:
+        logger.info(
+            "Balance refresh: processed=%d refreshed=%d errors=%d",
+            results["processed"],
+            results["refreshed"],
+            results["errors"],
+        )
+    return results
+
+
+@shared_task
+def release_expired_stock_reservations(batch_size: int = 200) -> dict[str, Any]:
+    """Release inventory reservations that passed expiry timestamp."""
+    from app.services.inventory.stock_reservation import StockReservationService
+
+    with SessionLocal() as db:
+        service = StockReservationService(db)
+        results = service.release_expired(batch_size=batch_size)
+        db.commit()
+
+    if results["released"] > 0 or results["errors"] > 0:
+        logger.info(
+            "Expired stock reservations: checked=%d released=%d errors=%d",
+            results["checked"],
+            results["released"],
+            results["errors"],
+        )
+    return results
+
+
+@shared_task
+def refresh_analysis_cubes() -> dict[str, Any]:
+    """Refresh due analysis cube materialized views."""
+    from app.services.finance.rpt.analysis_cube import AnalysisCubeService
+
+    with SessionLocal() as db:
+        results = AnalysisCubeService(db).refresh_due_cubes()
+        db.commit()
+
+    if results["refreshed"] > 0 or results["errors"] > 0:
+        logger.info(
+            "Analysis cube refresh: checked=%d refreshed=%d errors=%d",
+            results["checked"],
+            results["refreshed"],
+            results["errors"],
+        )
+    return results

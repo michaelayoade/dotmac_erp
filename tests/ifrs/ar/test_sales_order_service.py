@@ -441,6 +441,41 @@ class TestConfirm:
 
         assert "Cannot confirm" in str(exc_info.value)
 
+    @patch(
+        "app.services.finance.ar.sales_order.SalesOrderService._reserve_stock_on_confirm"
+    )
+    def test_confirm_triggers_reservation_hook(self, mock_reserve_hook):
+        """Test confirmation calls stock reservation hook."""
+        mock_db = MagicMock()
+        so_id = uuid.uuid4()
+        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.APPROVED)
+        mock_db.get.return_value = mock_so
+
+        SalesOrderService.confirm(
+            db=mock_db,
+            so_id=str(so_id),
+        )
+
+        mock_reserve_hook.assert_called_once_with(mock_db, mock_so)
+
+    @patch("app.services.hooks.emit_hook_event")
+    @patch(
+        "app.services.finance.ar.sales_order.SalesOrderService._reserve_stock_on_confirm"
+    )
+    def test_confirm_emits_service_hook(self, _mock_reserve_hook, mock_emit_hook):
+        """Test confirmation emits sales.order.confirmed hook event."""
+        mock_db = MagicMock()
+        so_id = uuid.uuid4()
+        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.APPROVED)
+        mock_db.get.return_value = mock_so
+
+        SalesOrderService.confirm(
+            db=mock_db,
+            so_id=str(so_id),
+        )
+
+        mock_emit_hook.assert_called_once()
+
 
 class TestCreateShipment:
     """Tests for create_shipment method."""
@@ -585,6 +620,127 @@ class TestCreateShipment:
             )
 
         assert "Cannot ship" in str(exc_info.value)
+
+    @patch("app.services.inventory.stock_reservation.StockReservationService")
+    @patch("app.services.finance.ar.sales_order.is_feature_enabled")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.Shipment")
+    @patch("app.services.finance.ar.sales_order.ShipmentLine")
+    def test_create_shipment_fulfills_reservation(
+        self,
+        _mock_ship_line_class,
+        mock_shipment_class,
+        mock_numbering_class,
+        mock_feature_enabled,
+        mock_reservation_service_class,
+    ):
+        """Test shipment fulfillment updates reservation when enabled."""
+        mock_db = MagicMock()
+        so_id = uuid.uuid4()
+        line_id = uuid.uuid4()
+
+        mock_so_line = MockSalesOrderLine(
+            line_id=line_id,
+            so_id=so_id,
+            quantity_ordered=Decimal("10"),
+            quantity_shipped=Decimal("0"),
+        )
+        mock_so = MockSalesOrder(
+            so_id=so_id,
+            status=SOStatus.CONFIRMED,
+            lines=[mock_so_line],
+        )
+        mock_shipment = MockShipment(so_id=so_id)
+        mock_shipment_class.return_value = mock_shipment
+
+        mock_numbering = MagicMock()
+        mock_numbering.generate_next_number.return_value = "SHP-001"
+        mock_numbering_class.return_value = mock_numbering
+        mock_feature_enabled.return_value = True
+
+        mock_reservation = MagicMock(reservation_id=uuid.uuid4())
+        mock_reservation_service = MagicMock()
+        mock_reservation_service.get_reservation_for_line.return_value = (
+            mock_reservation
+        )
+        mock_reservation_service_class.return_value = mock_reservation_service
+
+        def mock_get(model_class, _id):
+            model_str = str(model_class)
+            if "SalesOrder" in model_str and "Line" not in model_str:
+                return mock_so
+            if "SalesOrderLine" in model_str:
+                return mock_so_line
+            return None
+
+        mock_db.get.side_effect = mock_get
+
+        SalesOrderService.create_shipment(
+            db=mock_db,
+            so_id=str(so_id),
+            shipment_date=date.today(),
+            created_by=str(uuid.uuid4()),
+            line_quantities=[{"line_id": str(line_id), "quantity": 4}],
+        )
+
+        mock_reservation_service.fulfill.assert_called_once_with(
+            mock_reservation.reservation_id,
+            Decimal("4"),
+        )
+
+    @patch("app.services.hooks.emit_hook_event")
+    @patch("app.services.finance.ar.sales_order.SyncNumberingService")
+    @patch("app.services.finance.ar.sales_order.Shipment")
+    @patch("app.services.finance.ar.sales_order.ShipmentLine")
+    def test_create_shipment_emits_service_hook(
+        self,
+        _mock_ship_line_class,
+        mock_shipment_class,
+        mock_numbering_class,
+        mock_emit_hook,
+    ):
+        """Test shipment creation emits shipment.created hook event."""
+        mock_db = MagicMock()
+        so_id = uuid.uuid4()
+        line_id = uuid.uuid4()
+
+        mock_so_line = MockSalesOrderLine(
+            line_id=line_id,
+            so_id=so_id,
+            quantity_ordered=Decimal("10"),
+            quantity_shipped=Decimal("0"),
+        )
+        mock_so = MockSalesOrder(
+            so_id=so_id,
+            status=SOStatus.CONFIRMED,
+            lines=[mock_so_line],
+        )
+        mock_shipment = MockShipment(so_id=so_id)
+        mock_shipment_class.return_value = mock_shipment
+
+        mock_numbering = MagicMock()
+        mock_numbering.generate_next_number.return_value = "SHP-001"
+        mock_numbering_class.return_value = mock_numbering
+
+        def mock_get(model_class, _id):
+            model_str = str(model_class)
+            if "SalesOrder" in model_str and "Line" not in model_str:
+                return mock_so
+            if "SalesOrderLine" in model_str:
+                return mock_so_line
+            return None
+
+        mock_db.get.side_effect = mock_get
+
+        SalesOrderService.create_shipment(
+            db=mock_db,
+            so_id=str(so_id),
+            shipment_date=date.today(),
+            created_by=str(uuid.uuid4()),
+            line_quantities=[{"line_id": str(line_id), "quantity": 4}],
+        )
+
+        mock_emit_hook.assert_called()
 
 
 class TestMarkDelivered:
@@ -819,6 +975,65 @@ class TestCancel:
             )
 
         assert "existing shipments" in str(exc_info.value)
+
+    @patch("app.services.inventory.stock_reservation.StockReservationService")
+    @patch("app.services.finance.ar.sales_order.is_feature_enabled")
+    def test_cancel_releases_reservations(
+        self,
+        mock_feature_enabled,
+        mock_reservation_service_class,
+    ):
+        """Test cancelling SO releases linked reservations."""
+        mock_db = MagicMock()
+        so_id = uuid.uuid4()
+        mock_so_line = MockSalesOrderLine(so_id=so_id)
+        mock_so = MockSalesOrder(
+            so_id=so_id,
+            status=SOStatus.CONFIRMED,
+            lines=[mock_so_line],
+            shipments=[],
+        )
+        mock_db.get.return_value = mock_so
+        mock_feature_enabled.return_value = True
+
+        reservation = MagicMock(reservation_id=uuid.uuid4())
+        mock_reservation_service = MagicMock()
+        mock_reservation_service.get_reservations_for_source.return_value = [
+            reservation
+        ]
+        mock_reservation_service_class.return_value = mock_reservation_service
+
+        SalesOrderService.cancel(
+            db=mock_db,
+            so_id=str(so_id),
+            cancelled_by=str(uuid.uuid4()),
+            reason="Customer request",
+        )
+
+        mock_reservation_service.cancel.assert_called_once()
+
+    @patch("app.services.hooks.emit_hook_event")
+    def test_cancel_emits_service_hook(self, mock_emit_hook):
+        """Test cancelling SO emits sales.order.cancelled hook event."""
+        mock_db = MagicMock()
+        so_id = uuid.uuid4()
+        mock_so_line = MockSalesOrderLine(so_id=so_id)
+        mock_so = MockSalesOrder(
+            so_id=so_id,
+            status=SOStatus.CONFIRMED,
+            lines=[mock_so_line],
+            shipments=[],
+        )
+        mock_db.get.return_value = mock_so
+
+        SalesOrderService.cancel(
+            db=mock_db,
+            so_id=str(so_id),
+            cancelled_by=str(uuid.uuid4()),
+            reason="Customer request",
+        )
+
+        mock_emit_hook.assert_called_once()
 
 
 class TestHold:

@@ -87,9 +87,14 @@ class TestCreateInvoice:
                             "app.services.finance.ar.invoice.SequenceService.get_next_number",
                             return_value="INV-0001",
                         ):
-                            ARInvoiceService.create_invoice(
-                                mock_db, org_id, invoice_input, user_id
-                            )
+                            with patch(
+                                "app.services.hooks.registry.HookRegistry.emit",
+                                return_value=[],
+                            ) as mock_emit:
+                                ARInvoiceService.create_invoice(
+                                    mock_db, org_id, invoice_input, user_id
+                                )
+                                mock_emit.assert_called_once()
 
         mock_db.add.assert_called()
         mock_db.commit.assert_called()
@@ -174,10 +179,17 @@ class TestSubmitInvoice:
         )
         mock_db.get.return_value = invoice
 
-        with patch("app.services.finance.ar.invoice.Invoice"):
+        with (
+            patch("app.services.finance.ar.invoice.Invoice"),
+            patch(
+                "app.services.hooks.registry.HookRegistry.emit",
+                return_value=[],
+            ) as mock_emit,
+        ):
             result = ARInvoiceService.submit_invoice(
                 mock_db, org_id, invoice.invoice_id, user_id
             )
+            mock_emit.assert_called_once()
 
         assert result.status == InvoiceStatus.SUBMITTED
         mock_db.commit.assert_called()

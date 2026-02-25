@@ -207,10 +207,15 @@ class TestPostSupplierPayment:
             with patch(
                 "app.services.finance.ap.ap_posting_adapter.APPostingAdapter.post_payment"
             ) as mock_post:
-                mock_post.return_value = MagicMock()  # Return a mock journal
-                result = SupplierPaymentService.post_payment(
-                    mock_db, org_id, payment.payment_id, user_id
-                )
+                with patch(
+                    "app.services.hooks.registry.HookRegistry.emit",
+                    return_value=[],
+                ) as mock_emit:
+                    mock_post.return_value = MagicMock()  # Return a mock journal
+                    result = SupplierPaymentService.post_payment(
+                        mock_db, org_id, payment.payment_id, user_id
+                    )
+                    mock_emit.assert_called_once()
 
         assert result.status == APPaymentStatus.SENT
         mock_db.commit.assert_called()

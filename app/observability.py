@@ -101,6 +101,30 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         if actor_id:
             actor_id_var.set(actor_id)
 
+        # Set change source for field-level tracking.
+        # Lazy import: field_tracker imports from app.observability (actor_id_var,
+        # request_id_var), so a module-level import here would create a circular
+        # dependency.
+        from app.services.audit.field_tracker import set_change_source
+
+        path = request.url.path
+        if path.startswith("/api/"):
+            set_change_source("api")
+        elif path.startswith(
+            (
+                "/finance/",
+                "/people/",
+                "/expense/",
+                "/inventory/",
+                "/procurement/",
+                "/public-sector/",
+                "/automation/",
+            )
+        ):
+            set_change_source("web_form")
+        else:
+            set_change_source("")
+
         start = time.monotonic()
         status_code = 500
         try:

@@ -13,6 +13,7 @@ from app.models.inventory.inventory_transaction import (
 from app.models.inventory.inventory_valuation import InventoryValuation
 from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
+from app.models.inventory.item_wac_ledger import ItemWACLedger
 from app.models.inventory.material_request import (
     MaterialRequest,
     MaterialRequestItem,
@@ -20,6 +21,11 @@ from app.models.inventory.material_request import (
     MaterialRequestType,
 )
 from app.models.inventory.price_list import PriceList, PriceListItem, PriceListType
+from app.models.inventory.stock_reservation import (
+    ReservationSourceType,
+    ReservationStatus,
+    StockReservation,
+)
 from app.models.inventory.warehouse import Warehouse
 from app.models.inventory.warehouse_location import WarehouseLocation
 
@@ -34,9 +40,13 @@ __all__ = [
     "InventoryTransaction",
     "TransactionType",
     "InventoryValuation",
+    "ItemWACLedger",
     "InventoryCount",
     "CountStatus",
     "InventoryCountLine",
+    "StockReservation",
+    "ReservationStatus",
+    "ReservationSourceType",
     "PriceList",
     "PriceListItem",
     "PriceListType",

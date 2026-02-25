@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import settings
 from app.db import Base
+from app.models.mixins import TrackedMixin
 
 if TYPE_CHECKING:
     from app.models.finance.banking.bank_account import BankAccount
@@ -53,7 +54,7 @@ class ReconciliationMatchType(str, enum.Enum):
     adjustment = "adjustment"  # Reconciling adjustment
 
 
-class BankReconciliation(Base):
+class BankReconciliation(Base, TrackedMixin):
     """
     Bank Reconciliation header.
 
@@ -68,6 +69,15 @@ class BankReconciliation(Base):
         Index("ix_bank_reconciliation_status", "bank_account_id", "status"),
         {"schema": "banking"},
     )
+
+    # Field-level change tracking
+    __tracked_fields__ = {
+        "status": {"label": "Status"},
+        "reconciliation_date": {"label": "Reconciliation Date"},
+        "statement_closing_balance": {"label": "Statement Balance"},
+    }
+    __tracking_entity_type__ = "BankReconciliation"
+    __tracking_pk_field__ = "reconciliation_id"
 
     # Primary key
     reconciliation_id: Mapped[UUID] = mapped_column(

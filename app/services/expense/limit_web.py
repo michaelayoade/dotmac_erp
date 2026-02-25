@@ -4,16 +4,27 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.expense import LimitActionType, LimitPeriodType, LimitScopeType
+from app.models.expense import (
+    ExpenseClaim,
+    ExpenseClaimStatus,
+    LimitActionType,
+    LimitPeriodType,
+    LimitScopeType,
+)
+from app.models.expense.expense_claim_action import (
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
+)
 from app.models.expense.limit_rule import (
     ExpenseApproverLimit,
 )
@@ -546,10 +557,8 @@ class ExpenseLimitWebService:
         # Budget adjustments
         adjustments = service.list_budget_adjustments(org_id, approver_limit_id)
 
-        # Current month usage stats
-        current_month_usage = self._build_current_month_usage(
-            db, org_id, limit, service
-        )
+        # Current week usage stats
+        current_week_usage = self._build_current_week_usage(db, org_id, limit, service)
 
         context = base_context(request, auth, "Approver Limit Details", "limits")
         context.update(
@@ -559,7 +568,7 @@ class ExpenseLimitWebService:
                 "scoped_approvers": scoped_employees,
                 "scoped_approvers_truncated": is_truncated,
                 "adjustments": adjustments,
-                "current_month_usage": current_month_usage,
+                "current_week_usage": current_week_usage,
             }
         )
         return templates.TemplateResponse(
@@ -636,7 +645,9 @@ class ExpenseLimitWebService:
         scope_type = _safe_form_text(form.get("scope_type"))
         scope_id = _safe_form_text(form.get("scope_id"))
         max_approval_amount = _safe_form_text(form.get("max_approval_amount"))
-        monthly_approval_budget = _safe_form_text(form.get("monthly_approval_budget"))
+        weekly_approval_budget = _safe_form_text(form.get("weekly_approval_budget"))
+        # Legacy monthly field intentionally disabled.
+        # monthly_approval_budget = _safe_form_text(form.get("monthly_approval_budget"))
         can_approve_own = _safe_form_text(form.get("can_approve_own_expenses")) in {
             "1",
             "true",
@@ -662,12 +673,12 @@ class ExpenseLimitWebService:
                 errors.get("max_approval_amount") or "Required"
             )
 
-        monthly_budget_value: Decimal | None = None
-        if monthly_approval_budget:
+        weekly_budget_value: Decimal | None = None
+        if weekly_approval_budget:
             try:
-                monthly_budget_value = Decimal(monthly_approval_budget)
+                weekly_budget_value = Decimal(weekly_approval_budget)
             except (ValueError, ArithmeticError):
-                errors["monthly_approval_budget"] = "Invalid amount"
+                errors["weekly_approval_budget"] = "Invalid amount"
 
         scope_options = self._get_scope_options(db, org_id)
 
@@ -675,7 +686,7 @@ class ExpenseLimitWebService:
             "scope_type": scope_type,
             "scope_id": scope_id,
             "max_approval_amount": max_approval_amount,
-            "monthly_approval_budget": monthly_approval_budget,
+            "weekly_approval_budget": weekly_approval_budget,
             "can_approve_own_expenses": can_approve_own,
             "is_active": is_active,
         }
@@ -702,7 +713,7 @@ class ExpenseLimitWebService:
                 scope_type=scope_type,
                 scope_id=coerce_uuid(scope_id) if scope_id else None,
                 max_approval_amount=max_amount_value,
-                monthly_approval_budget=monthly_budget_value,
+                weekly_approval_budget=weekly_budget_value,
                 can_approve_own_expenses=can_approve_own,
                 is_active=is_active,
             )
@@ -745,7 +756,9 @@ class ExpenseLimitWebService:
         scope_type = _safe_form_text(form.get("scope_type"))
         scope_id = _safe_form_text(form.get("scope_id"))
         max_approval_amount = _safe_form_text(form.get("max_approval_amount"))
-        monthly_approval_budget = _safe_form_text(form.get("monthly_approval_budget"))
+        weekly_approval_budget = _safe_form_text(form.get("weekly_approval_budget"))
+        # Legacy monthly field intentionally disabled.
+        # monthly_approval_budget = _safe_form_text(form.get("monthly_approval_budget"))
         can_approve_own = _safe_form_text(form.get("can_approve_own_expenses")) in {
             "1",
             "true",
@@ -771,12 +784,12 @@ class ExpenseLimitWebService:
                 errors.get("max_approval_amount") or "Required"
             )
 
-        monthly_budget_value: Decimal | None = None
-        if monthly_approval_budget:
+        weekly_budget_value: Decimal | None = None
+        if weekly_approval_budget:
             try:
-                monthly_budget_value = Decimal(monthly_approval_budget)
+                weekly_budget_value = Decimal(weekly_approval_budget)
             except (ValueError, ArithmeticError):
-                errors["monthly_approval_budget"] = "Invalid amount"
+                errors["weekly_approval_budget"] = "Invalid amount"
 
         scope_options = self._get_scope_options(db, org_id)
 
@@ -785,7 +798,7 @@ class ExpenseLimitWebService:
             "scope_type": scope_type,
             "scope_id": scope_id,
             "max_approval_amount": max_approval_amount,
-            "monthly_approval_budget": monthly_approval_budget,
+            "weekly_approval_budget": weekly_approval_budget,
             "can_approve_own_expenses": can_approve_own,
             "is_active": is_active,
         }
@@ -814,7 +827,7 @@ class ExpenseLimitWebService:
                 scope_type=scope_type,
                 scope_id=coerce_uuid(scope_id) if scope_id else None,
                 max_approval_amount=max_amount_value,
-                monthly_approval_budget=monthly_budget_value,
+                weekly_approval_budget=weekly_budget_value,
                 can_approve_own_expenses=can_approve_own,
                 is_active=is_active,
             )
@@ -1090,36 +1103,424 @@ class ExpenseLimitWebService:
             request, "expense/limits/evaluations.html", context
         )
 
+    def reviewer_approver_list_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        q: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> HTMLResponse:
+        """List approvers by actual approval activity for reviewer workflow."""
+        from app.models.people.hr.employee import Employee, EmployeeStatus
+        from app.models.person import Person
+
+        org_id = coerce_uuid(auth.organization_id)
+        search = (q or "").strip()
+        service = ExpenseLimitService(db)
+        today = date.today()
+        default_from = service._start_of_week_utc(datetime.now(UTC)).date()
+        try:
+            parsed_from = date.fromisoformat(from_date) if from_date else default_from
+        except ValueError:
+            parsed_from = default_from
+        try:
+            parsed_to = date.fromisoformat(to_date) if to_date else today
+        except ValueError:
+            parsed_to = today
+
+        activity_rows = db.execute(
+            select(
+                ExpenseClaim.approver_id.label("approver_id"),
+                func.count(
+                    case(
+                        (
+                            ExpenseClaimAction.action_type
+                            == ExpenseClaimActionType.APPROVE,
+                            1,
+                        ),
+                        else_=None,
+                    )
+                ).label("approved_count"),
+                func.count(
+                    case(
+                        (
+                            ExpenseClaimAction.action_type
+                            == ExpenseClaimActionType.REJECT,
+                            1,
+                        ),
+                        else_=None,
+                    )
+                ).label("rejected_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                ExpenseClaimAction.action_type
+                                == ExpenseClaimActionType.APPROVE,
+                                ExpenseClaim.total_approved_amount,
+                            ),
+                            else_=Decimal("0"),
+                        )
+                    ),
+                    Decimal("0"),
+                ).label("approved_amount"),
+                func.max(ExpenseClaimAction.created_at).label("last_action_at"),
+            )
+            .join(
+                ExpenseClaimAction, ExpenseClaimAction.claim_id == ExpenseClaim.claim_id
+            )
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id.isnot(None),
+                ExpenseClaimAction.action_type.in_(
+                    [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
+                ),
+                ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                func.date(ExpenseClaimAction.created_at) >= parsed_from,
+                func.date(ExpenseClaimAction.created_at) <= parsed_to,
+            )
+            .group_by(ExpenseClaim.approver_id)
+            .order_by(func.max(ExpenseClaimAction.created_at).desc())
+        ).all()
+
+        approver_ids = [row.approver_id for row in activity_rows if row.approver_id]
+        if not approver_ids:
+            context = base_context(request, auth, "Expense Reviewer", "limits-review")
+            context.update(
+                {
+                    "approvers": [],
+                    "filters": {
+                        "q": search,
+                        "from_date": parsed_from.isoformat(),
+                        "to_date": parsed_to.isoformat(),
+                    },
+                }
+            )
+            return templates.TemplateResponse(
+                request, "expense/limits/reviewer_approvers.html", context
+            )
+
+        employees = list(
+            db.scalars(
+                select(Employee)
+                .join(Person, Person.id == Employee.person_id)
+                .where(
+                    Employee.organization_id == org_id,
+                    Employee.employee_id.in_(approver_ids),
+                    Employee.status == EmployeeStatus.ACTIVE,
+                )
+                .order_by(Person.first_name, Person.last_name)
+            ).all()
+        )
+        employee_map = {employee.employee_id: employee for employee in employees}
+
+        approver_rows: list[dict[str, object]] = []
+        for row in activity_rows:
+            employee = employee_map.get(row.approver_id)
+            if employee is None:
+                continue
+
+            display_name = employee.person.name if employee.person else "Unknown"
+            if (
+                search
+                and search.lower() not in display_name.lower()
+                and (
+                    not employee.employee_code
+                    or search.lower() not in employee.employee_code.lower()
+                )
+            ):
+                continue
+
+            budget_info = service._get_approver_weekly_budget(org_id, employee)
+            weekly_budget = budget_info[0] if budget_info else None
+            limit_id = budget_info[1] if budget_info else None
+            max_approval_amount = Decimal("0")
+            from app.config import settings as _settings
+
+            currency_code = _settings.default_functional_currency_code
+            if limit_id:
+                max_approval_amount = db.scalar(
+                    select(ExpenseApproverLimit.max_approval_amount).where(
+                        ExpenseApproverLimit.organization_id == org_id,
+                        ExpenseApproverLimit.approver_limit_id == limit_id,
+                    )
+                ) or Decimal("0")
+                currency_code = (
+                    db.scalar(
+                        select(ExpenseApproverLimit.currency_code).where(
+                            ExpenseApproverLimit.organization_id == org_id,
+                            ExpenseApproverLimit.approver_limit_id == limit_id,
+                        )
+                    )
+                    or _settings.default_functional_currency_code
+                )
+            latest_reset = (
+                service.get_latest_weekly_reset(
+                    org_id,
+                    approver_id=employee.employee_id,
+                    approver_limit_id=limit_id,
+                    from_datetime=None,
+                )
+                if limit_id
+                else None
+            )
+
+            approver_rows.append(
+                {
+                    "employee_id": str(employee.employee_id),
+                    "employee_code": employee.employee_code or "-",
+                    "name": display_name,
+                    "limit_id": str(limit_id) if limit_id else None,
+                    "weekly_budget": weekly_budget,
+                    "max_approval_amount": max_approval_amount,
+                    "currency_code": currency_code,
+                    "last_reset_at": latest_reset.reset_at if latest_reset else None,
+                    "approved_count": int(row.approved_count or 0),
+                    "rejected_count": int(row.rejected_count or 0),
+                    "approved_amount": row.approved_amount or Decimal("0"),
+                    "last_action_at": row.last_action_at,
+                }
+            )
+
+        context = base_context(request, auth, "Expense Reviewer", "limits-review")
+        context.update(
+            {
+                "approvers": approver_rows,
+                "filters": {
+                    "q": search,
+                    "from_date": parsed_from.isoformat(),
+                    "to_date": parsed_to.isoformat(),
+                },
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/limits/reviewer_approvers.html", context
+        )
+
+    def reviewer_approver_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        approver_id: UUID,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> HTMLResponse | RedirectResponse:
+        """Show claims approved/rejected by one approver for reviewer decision."""
+        from app.models.people.hr.employee import Employee
+        from app.models.person import Person
+
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+        employee = db.scalar(
+            select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == approver_id,
+            )
+        )
+        if employee is None:
+            return RedirectResponse(
+                url="/expense/limits/reviewer/approvers", status_code=303
+            )
+
+        parsed_from: date | None = None
+        parsed_to: date | None = None
+        if from_date:
+            try:
+                parsed_from = date.fromisoformat(from_date)
+            except ValueError:
+                parsed_from = None
+        if to_date:
+            try:
+                parsed_to = date.fromisoformat(to_date)
+            except ValueError:
+                parsed_to = None
+
+        week_start = service._start_of_week_utc(datetime.now(UTC)).date()
+        if parsed_from is None:
+            parsed_from = week_start
+        if parsed_to is None:
+            parsed_to = date.today()
+
+        # Include both approvals and rejections executed by this approver.
+        actions = list(
+            db.execute(
+                select(ExpenseClaimAction, ExpenseClaim)
+                .join(
+                    ExpenseClaim,
+                    ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
+                )
+                .where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.approver_id == approver_id,
+                    ExpenseClaimAction.action_type.in_(
+                        [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
+                    ),
+                    ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                    func.date(ExpenseClaimAction.created_at) >= parsed_from,
+                    func.date(ExpenseClaimAction.created_at) <= parsed_to,
+                )
+                .order_by(ExpenseClaimAction.created_at.desc())
+            ).all()
+        )
+
+        budget_info = service._get_approver_weekly_budget(org_id, employee)
+        limit_id = budget_info[1] if budget_info else None
+        budget_amount = budget_info[0] if budget_info else None
+        latest_reset = (
+            service.get_latest_weekly_reset(
+                org_id,
+                approver_id=approver_id,
+                approver_limit_id=limit_id,
+                from_datetime=None,
+            )
+            if limit_id
+            else None
+        )
+
+        context = base_context(
+            request,
+            auth,
+            f"Reviewer - {employee.person.name if employee.person else employee.employee_code}",
+            "limits-review",
+        )
+        context.update(
+            {
+                "approver": employee,
+                "actions": actions,
+                "filters": {
+                    "from_date": parsed_from.isoformat(),
+                    "to_date": parsed_to.isoformat(),
+                },
+                "weekly_budget": budget_amount,
+                "limit_id": str(limit_id) if limit_id else None,
+                "last_reset": latest_reset,
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/limits/reviewer_approver_detail.html", context
+        )
+
+    def reviewer_reset_approver_budget_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        approver_id: UUID,
+        form_data: dict[str, object],
+    ) -> RedirectResponse:
+        """Create manual budget reset for one approver."""
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+
+        reason = _safe_form_text(form_data.get("reset_reason"))
+        reviewed_from_raw = _safe_form_text(form_data.get("reviewed_from"))
+        reviewed_to_raw = _safe_form_text(form_data.get("reviewed_to"))
+
+        try:
+            reviewed_from = (
+                date.fromisoformat(reviewed_from_raw) if reviewed_from_raw else None
+            )
+            reviewed_to = (
+                date.fromisoformat(reviewed_to_raw) if reviewed_to_raw else None
+            )
+        except ValueError:
+            return RedirectResponse(
+                url=f"/expense/limits/reviewer/approvers/{approver_id}?error=Invalid+review+date+filter",
+                status_code=303,
+            )
+
+        if not reason:
+            return RedirectResponse(
+                url=f"/expense/limits/reviewer/approvers/{approver_id}?error=Reset+reason+is+required",
+                status_code=303,
+            )
+
+        service.create_weekly_budget_reset(
+            org_id,
+            approver_id=approver_id,
+            reviewed_by_id=coerce_uuid(auth.person_id),
+            reset_reason=reason,
+            reviewed_from=reviewed_from,
+            reviewed_to=reviewed_to,
+        )
+        db.flush()
+        return RedirectResponse(
+            url=f"/expense/limits/reviewer/approvers/{approver_id}?success=Weekly+budget+usage+reset",
+            status_code=303,
+        )
+
     @staticmethod
-    def _build_current_month_usage(
+    def _build_current_week_usage(
         db: Session,
         org_id: UUID,
         limit: ExpenseApproverLimit,
         service: ExpenseLimitService,
     ) -> dict[str, object] | None:
-        """Build current month usage stats for the approver limit detail page.
+        """Build current week usage stats for the approver limit detail page.
 
-        Returns None when no monthly budget is configured (unlimited).
+        Returns None when no weekly budget is configured (unlimited).
         """
 
-        base_budget = limit.monthly_approval_budget
+        base_budget = limit.weekly_approval_budget
         if base_budget is None:
             return None
+        if limit.scope_type != "EMPLOYEE" or not limit.scope_id:
+            return {
+                "week_label": "Employee-level breakdown unavailable for this scope",
+                "base_budget": base_budget,
+                "used_amount": Decimal("0"),
+                "remaining_budget": base_budget,
+                "last_reset_at": None,
+            }
 
-        today = date.today()
+        now = datetime.now(UTC)
+        week_start = service._start_of_week_utc(now)
+        week_end = week_start + timedelta(days=6)
 
-        adjustment = service.get_budget_adjustment_for_month(
-            limit.approver_limit_id, today
+        latest_reset = service.get_latest_weekly_reset(
+            org_id,
+            approver_id=limit.scope_id,
+            approver_limit_id=limit.approver_limit_id,
+            from_datetime=week_start,
         )
-        effective_budget = base_budget + adjustment
-
-        month_label = today.strftime("%B %Y")
+        usage_start = latest_reset.reset_at if latest_reset is not None else week_start
+        used_amount = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(ExpenseClaim.total_approved_amount), Decimal("0")
+                )
+            )
+            .select_from(ExpenseClaim)
+            .join(
+                ExpenseClaimAction,
+                and_(
+                    ExpenseClaimAction.claim_id == ExpenseClaim.claim_id,
+                    ExpenseClaimAction.action_type == ExpenseClaimActionType.APPROVE,
+                    ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                ),
+            )
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.status.in_(
+                    [ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]
+                ),
+                ExpenseClaimAction.created_at >= usage_start,
+                ExpenseClaimAction.created_at <= now,
+                ExpenseClaim.approver_id == limit.scope_id,
+            )
+        ) or Decimal("0")
+        remaining_budget = base_budget - used_amount
 
         return {
-            "month_label": month_label,
+            "week_label": f"{week_start.date().isoformat()} - {week_end.date().isoformat()}",
             "base_budget": base_budget,
-            "adjustment": adjustment,
-            "effective_budget": effective_budget,
+            "used_amount": used_amount,
+            "remaining_budget": remaining_budget,
+            "last_reset_at": latest_reset.reset_at if latest_reset else None,
         }
 
     @staticmethod

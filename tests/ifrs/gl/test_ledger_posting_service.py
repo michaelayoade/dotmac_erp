@@ -211,6 +211,87 @@ class TestPostJournalEntry:
         assert exc.value.status_code == 400
         assert "closed" in exc.value.detail.lower()
 
+    def test_successful_post_emits_hook(self, mock_db, org_id, user_id):
+        """Test successful journal posting emits the GL hook event."""
+        request = PostingRequest(
+            organization_id=org_id,
+            journal_entry_id=uuid4(),
+            posting_date=date.today(),
+            idempotency_key=f"{org_id}:GL:test:post:v1",
+            source_module="GL",
+            posted_by_user_id=user_id,
+            entries=[
+                PostingEntry(
+                    account_id=uuid4(),
+                    debit_amount=Decimal("100.00"),
+                    credit_amount=Decimal("0"),
+                    debit_amount_functional=Decimal("100.00"),
+                    credit_amount_functional=Decimal("0"),
+                    original_currency_code="USD",
+                    exchange_rate=Decimal("1.0"),
+                ),
+                PostingEntry(
+                    account_id=uuid4(),
+                    debit_amount=Decimal("0"),
+                    credit_amount=Decimal("100.00"),
+                    debit_amount_functional=Decimal("0"),
+                    credit_amount_functional=Decimal("100.00"),
+                    original_currency_code="USD",
+                    exchange_rate=Decimal("1.0"),
+                ),
+            ],
+        )
+
+        journal = MagicMock(
+            journal_entry_id=request.journal_entry_id,
+            organization_id=org_id,
+            status=JournalStatus.APPROVED,
+            entry_date=date.today(),
+            reference="JRN-REF-1",
+            journal_number="JE-0001",
+            source_document_type=None,
+            source_document_id=None,
+            created_by_user_id=user_id,
+        )
+
+        mock_db.scalar.return_value = None
+        mock_db.get.return_value = journal
+        mock_db.scalars.return_value.all.return_value = [
+            MagicMock(
+                account_id=request.entries[0].account_id,
+                account_code="1000",
+            ),
+            MagicMock(
+                account_id=request.entries[1].account_id,
+                account_code="2000",
+            ),
+        ]
+
+        with (
+            patch(
+                "app.services.finance.gl.ledger_posting.PeriodGuardService.require_open_period",
+                return_value=uuid4(),
+            ),
+            patch(
+                "app.services.finance.gl.ledger_posting.LedgerPostingService._publish_posting_event",
+                return_value=None,
+            ),
+            patch(
+                "app.services.finance.gl.balance_invalidation.BalanceInvalidationService"
+            ) as mock_invalidator_cls,
+            patch(
+                "app.services.hooks.registry.HookRegistry.emit",
+                return_value=[],
+            ) as mock_emit,
+        ):
+            result = LedgerPostingService.post_journal_entry(mock_db, request)
+            mock_invalidator_cls.return_value.invalidate_batch.assert_called_once()
+            mock_emit.assert_called_once()
+
+        assert result.success is True
+        assert result.posted_lines == 2
+        mock_db.commit.assert_called_once()
+
 
 class TestPostingResult:
     """Tests for PostingResult dataclass."""

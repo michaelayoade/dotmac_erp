@@ -4,7 +4,8 @@ from urllib.parse import quote
 from fastapi import HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.services.common import (
     AuthenticationError,
@@ -21,7 +22,7 @@ from app.templates import templates
 logger = logging.getLogger(__name__)
 
 
-def _error_payload(code: str, message: str, details):
+def _error_payload(code: str, message: str, details: object) -> dict[str, object]:
     return {
         "code": code,
         "message": message,
@@ -55,10 +56,11 @@ def _is_html_request(request: Request) -> bool:
 
 
 def register_error_handlers(app) -> None:
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
+    async def _handle_http_exception(
+        request: Request, status_code: int, detail: object
+    ) -> Response:
         # For 401 errors on web routes, redirect to login
-        if exc.status_code == 401 and _is_html_request(request):
+        if status_code == 401 and _is_html_request(request):
             # Build the next URL from the current request path
             next_url = str(request.url.path)
             if request.url.query:
@@ -67,12 +69,21 @@ def register_error_handlers(app) -> None:
             return RedirectResponse(url=login_url, status_code=302)
 
         # For 403 errors on web routes, show a forbidden page or redirect
-        if exc.status_code == 403 and _is_html_request(request):
+        if status_code == 403 and _is_html_request(request):
             return RedirectResponse(url="/login?error=forbidden", status_code=302)
 
+        # For 404 errors on web routes, render the HTML 404 page
+        if status_code == 404 and _is_html_request(request):
+            message = detail if isinstance(detail, str) else "Page not found"
+            return templates.TemplateResponse(
+                request,
+                "errors/404.html",
+                {"message": message},
+                status_code=404,
+            )
+
         # For other errors or API requests, return JSON
-        detail = exc.detail
-        code = f"http_{exc.status_code}"
+        code = f"http_{status_code}"
         message = "Request failed"
         details = None
         if isinstance(detail, dict):
@@ -84,9 +95,19 @@ def register_error_handlers(app) -> None:
         else:
             details = detail
         return JSONResponse(
-            status_code=exc.status_code,
+            status_code=status_code,
             content=_error_payload(code, message, details),
         )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        return await _handle_http_exception(request, exc.status_code, exc.detail)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def starlette_http_exception_handler(
+        request: Request, exc: StarletteHTTPException
+    ):
+        return await _handle_http_exception(request, exc.status_code, exc.detail)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(

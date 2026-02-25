@@ -34,6 +34,7 @@ from app.schemas.inventory import (
     StockBalanceRead,
     TransactionCreate,
     TransactionRead,
+    ValuationReconciliationRead,
 )
 from app.services.auth_dependencies import require_tenant_permission
 from app.services.feature_flags import FEATURE_INVENTORY, require_feature
@@ -41,6 +42,7 @@ from app.services.inventory import (
     ItemCategoryInput,
     ItemInput,
     TransactionInput,
+    ValuationReconciliationService,
     inv_posting_adapter,
     inventory_balance_service,
     inventory_transaction_service,
@@ -572,6 +574,30 @@ def get_fifo_valuation_summary(
     """Get valuation summary for a period."""
     return fifo_valuation_service.get_valuation_summary(
         db, organization_id, fiscal_period_id
+    )
+
+
+@router.get(
+    "/valuation/reconciliation",
+    response_model=ValuationReconciliationRead,
+)
+def get_inventory_valuation_reconciliation(
+    organization_id: UUID = Depends(require_organization_id),
+    fiscal_period_id: UUID | None = Query(default=None),
+    auth: dict = Depends(require_tenant_permission("inventory:valuation:read")),
+    db: Session = Depends(get_db),
+):
+    """Compare inventory valuation against GL inventory balances."""
+    result = ValuationReconciliationService(db).reconcile(
+        organization_id=organization_id,
+        fiscal_period_id=fiscal_period_id,
+    )
+    return ValuationReconciliationRead(
+        fiscal_period_id=result.fiscal_period_id,
+        inventory_total=result.inventory_total,
+        gl_total=result.gl_total,
+        difference=result.difference,
+        is_balanced=result.is_balanced,
     )
 
 

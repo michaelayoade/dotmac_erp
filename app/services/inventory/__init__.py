@@ -63,11 +63,25 @@ from app.services.inventory.price_list import (
     ResolvedPrice,
     price_list_service,
 )
+from app.services.inventory.stock_reservation import (
+    ReservationConfig,
+    ReservationResult,
+    StockReservationService,
+)
 from app.services.inventory.transaction import (
     CostingResult,
     InventoryTransactionService,
     TransactionInput,
     inventory_transaction_service,
+)
+from app.services.inventory.valuation_reconciliation import (
+    ValuationReconciliationResult,
+    ValuationReconciliationService,
+)
+from app.services.inventory.wac_valuation import (
+    WACResult,
+    WACSnapshot,
+    WACValuationService,
 )
 from app.services.inventory.warehouse import (
     InventoryBalance,
@@ -97,6 +111,13 @@ __all__ = [
     "TransactionInput",
     "CostingResult",
     "inventory_transaction_service",
+    # WAC valuation
+    "WACValuationService",
+    "WACSnapshot",
+    "WACResult",
+    # Valuation reconciliation
+    "ValuationReconciliationService",
+    "ValuationReconciliationResult",
     # Posting
     "INVPostingAdapter",
     "INVPostingResult",
@@ -125,6 +146,10 @@ __all__ = [
     "PriceListInput",
     "PriceListItemInput",
     "ResolvedPrice",
+    # Stock reservation
+    "StockReservationService",
+    "ReservationResult",
+    "ReservationConfig",
     # Inventory Count
     "InventoryCountService",
     "inventory_count_service",

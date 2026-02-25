@@ -51,11 +51,15 @@ from app.tasks.expense import (
     settle_cash_advance_with_claim,
 )
 from app.tasks.finance import (
+    refresh_analysis_cubes,
+    refresh_stale_balances,
+    release_expired_stock_reservations,
     sync_paystack_transactions,
 )
 from app.tasks.fleet import (
     process_document_expiry_notifications,
 )
+from app.tasks.hooks import cleanup_old_hook_executions, execute_async_hook
 from app.tasks.hr import (
     calculate_hr_analytics,
     process_birthday_notifications,
@@ -157,6 +161,9 @@ __all__ = [
     "process_scheduled_workflow_rules",
     # Finance tasks
     "sync_paystack_transactions",
+    "refresh_analysis_cubes",
+    "refresh_stale_balances",
+    "release_expired_stock_reservations",
     # Banking tasks
     "auto_match_unreconciled_statements",
     # Analytics tasks
@@ -191,6 +198,8 @@ __all__ = [
     "run_data_health_check",
     # Notification tasks
     "process_pending_notification_emails",
+    "execute_async_hook",
+    "cleanup_old_hook_executions",
     # Project SLA tasks
     "process_project_sla_breaches",
     # Outbox relay tasks
