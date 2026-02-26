@@ -417,6 +417,21 @@ def delete_assignment(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Payroll Dashboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def payroll_dashboard(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Payroll module dashboard."""
+    return payroll_web_service.dashboard_response(request, auth, db)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Payroll Runs
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -455,6 +470,17 @@ async def create_run(
 ):
     """Create new payroll run."""
     return await payroll_web_service.create_run_response(request, auth, db)
+
+
+@router.get("/runs/{entry_id}/copy", response_class=HTMLResponse)
+def copy_run_form(
+    request: Request,
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Pre-populate new payroll run form from an existing run."""
+    return payroll_web_service.copy_run_form_response(request, auth, db, entry_id)
 
 
 @router.get("/runs/{entry_id}", response_class=HTMLResponse)
@@ -531,6 +557,57 @@ def delete_run(
 ):
     """Delete payroll run."""
     return payroll_web_service.delete_run_response(auth, db, entry_id)
+
+
+@router.post("/runs/{entry_id}/send-payslips")
+def send_payslips(
+    entry_id: str,
+    force: bool = Query(default=False),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Queue payslip emails for all posted slips in a payroll run."""
+    return payroll_web_service.send_payslips_response(auth, db, entry_id, force)
+
+
+@router.get("/runs/{entry_id}/email-status")
+def email_status(
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Get email sending progress for a payroll run."""
+    return payroll_web_service.email_status_response(auth, db, entry_id)
+
+
+@router.get("/runs/{entry_id}/export/paye")
+def export_paye(
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Export PAYE (income tax) data for a payroll run."""
+    return payroll_web_service.export_paye_response(auth, db, entry_id)
+
+
+@router.get("/runs/{entry_id}/export/pension")
+def export_pension(
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Export pension contribution data for a payroll run."""
+    return payroll_web_service.export_pension_response(auth, db, entry_id)
+
+
+@router.get("/runs/{entry_id}/export/nhf")
+def export_nhf(
+    entry_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Export NHF contribution data for a payroll run."""
+    return payroll_web_service.export_nhf_response(auth, db, entry_id)
 
 
 @router.get("/runs/{entry_id}/bank-upload")

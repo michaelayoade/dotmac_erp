@@ -108,7 +108,7 @@ class NHFExportService:
         if entry_id:
             stmt = stmt.where(SalarySlip.payroll_entry_id == entry_id)
 
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     def _split_name(self, full_name: str) -> tuple[str, str, str]:
         """

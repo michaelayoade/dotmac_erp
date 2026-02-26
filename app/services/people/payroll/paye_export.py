@@ -122,7 +122,7 @@ class PAYEExportService:
         if entry_id:
             stmt = stmt.where(SalarySlip.payroll_entry_id == entry_id)
 
-        return list(self.db.scalars(stmt).all())
+        return list(self.db.scalars(stmt).unique().all())
 
     def _generate_lirs_format(
         self,

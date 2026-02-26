@@ -80,7 +80,12 @@ class SlipWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Render salary slips list page."""
         org_id = coerce_uuid(auth.organization_id)
-        per_page = DEFAULT_PAGE_SIZE
+        try:
+            per_page = int(request.query_params.get("limit", str(DEFAULT_PAGE_SIZE)))
+        except (TypeError, ValueError):
+            per_page = DEFAULT_PAGE_SIZE
+        if per_page not in {25, 50, 100, 200}:
+            per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
         query = select(SalarySlip).where(SalarySlip.organization_id == org_id)
@@ -99,7 +104,15 @@ class SlipWebService:
         slips = db.scalars(
             query.order_by(SalarySlip.created_at.desc()).offset(offset).limit(per_page)
         ).all()
-        total_pages = (total + per_page - 1) // per_page
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+            offset = (page - 1) * per_page
+            slips = db.scalars(
+                query.order_by(SalarySlip.created_at.desc())
+                .offset(offset)
+                .limit(per_page)
+            ).all()
 
         # Get counts by status
         status_counts = {}

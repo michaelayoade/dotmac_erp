@@ -86,9 +86,11 @@
            class="app-sidebar flex flex-col overflow-hidden border-r border-slate-200 bg-white transition-all duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900">
 
         <!-- Logo/Brand -->
+        {% set people_brand_href = '/people' if 'people' in modules else ('/people/hr/discipline' if 'discipline' in modules else '/people/self/attendance') %}
+        {% set people_module_label = 'People' if 'people' in modules else ('Discipline' if 'discipline' in modules else 'Self Service') %}
         {% with
-            brand_href=('/people' if 'people' in modules else '/people/self/attendance'),
-            module_label=('People' if 'people' in modules else 'Self Service'),
+            brand_href=people_brand_href,
+            module_label=people_module_label,
             module_pill_class="border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
             module_logo_bg="from-violet-500 to-purple-600",
             module_logo_shadow="shadow-violet-500/25"
@@ -98,6 +100,7 @@
 
         <!-- Navigation -->
         <nav class="flex-1 space-y-1 overflow-y-auto p-3" aria-label="People navigation">
+            {% set switch_module = "discipline" if (active_module | default("people")) in ["discipline", "hr-discipline"] else "people" %}
             {% if "people" in modules %}
             <!-- Dashboard Link -->
             <a href="/people"
@@ -296,9 +299,9 @@
                 </div>
             </div>
 
-            <div x-data="{ open: ['self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses'].includes(activeModule) }">
+            <div x-data="{ open: ['self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) }">
                 <button @click="open = !open"
-                        :class="['self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        :class="['self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 1.104-.895 2-2 2s-2-.896-2-2 .895-2 2-2 2 .896 2 2zm0 0c0 1.104.895 2 2 2s2-.896 2-2-.895-2-2-2-2 .896-2 2zm9 1c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z"/>
@@ -321,15 +324,27 @@
                     {% if can_team_expenses %}
                     <a href="/people/self/team/expenses" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Team Expenses</a>
                     {% endif %}
+                    {% if 'discipline' in modules %}
+                    <a href="/people/self/team/discipline" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-white transition-colors">Team Discipline</a>
+                    {% endif %}
                 </div>
             </div>
 
 
-            {% with current_module="people" %}
+            {% with current_module=switch_module %}
                 {% include "partials/_module_switcher.html" %}
             {% endwith %}
 
             {% else %}
+            {% if "discipline" in modules %}
+            <a href="/people/hr/discipline"
+               :class="['discipline','hr-discipline'].includes(activeModule) ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all mb-2">
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Discipline Cases</span>
+            </a>
+            {% endif %}
+
             <!-- Self Service Navigation -->
             <a href="/people/self/attendance"
                :class="activeModule === 'self-attendance' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
@@ -395,10 +410,19 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Team Expenses</span>
             </a>
             {% endif %}
+
+            {% if 'discipline' in modules %}
+            <a href="/people/self/team/discipline"
+               :class="activeModule === 'self-team-discipline' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Team Discipline</span>
+            </a>
+            {% endif %}
             {% endif %}
 
 
-            {% with current_module="people" %}
+            {% with current_module=switch_module %}
                 {% include "partials/_module_switcher.html" %}
             {% endwith %}
             {% endif %}

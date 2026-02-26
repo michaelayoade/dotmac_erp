@@ -700,6 +700,7 @@ def create_payroll_entry(
         currency_code=data.currency_code,
         department_id=data.department_id,
         designation_id=data.designation_id,
+        employment_type_id=data.employment_type_id,
         source_bank_account_id=data.bank_account_id,
         notes=data.notes,
     )

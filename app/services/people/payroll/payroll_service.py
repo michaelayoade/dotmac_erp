@@ -586,6 +586,7 @@ class PayrollService:
         currency_code: str = "NGN",
         department_id: UUID | None = None,
         designation_id: UUID | None = None,
+        employment_type_id: UUID | None = None,
         source_bank_account_id: UUID | None = None,
         expense_account_id: UUID | None = None,
         notes: str | None = None,
@@ -607,10 +608,13 @@ class PayrollService:
             currency_code=currency_code,
             department_id=department_id,
             designation_id=designation_id,
+            employment_type_id=employment_type_id,
             source_bank_account_id=source_bank_account_id,
             expense_account_id=expense_account_id,
             notes=notes,
             status=PayrollEntryStatus.DRAFT,
+            payroll_year=start_date.year,
+            payroll_month=start_date.month,
         )
         self.db.add(entry)
         self.db.flush()
@@ -987,6 +991,52 @@ class PayrollService:
                 notify_err,
             )
 
+        # Process loan deductions — update loan balances
+        try:
+            from app.models.people.payroll.loan_repayment import (
+                SalarySlipLoanDeduction as SlipLoanLink,
+            )
+            from app.services.people.payroll.loan_service import LoanService
+
+            loan_svc = LoanService(self.db)
+
+            for slip in slips:
+                pending_links = list(
+                    self.db.scalars(
+                        select(SlipLoanLink).where(
+                            SlipLoanLink.slip_id == slip.slip_id,
+                            SlipLoanLink.repayment_id.is_(None),
+                        )
+                    ).all()
+                )
+
+                for link in pending_links:
+                    try:
+                        repayment = loan_svc.record_payroll_deduction(
+                            loan_id=link.loan_id,
+                            slip_id=slip.slip_id,
+                            amount=link.amount,
+                            principal_portion=link.principal_portion,
+                            interest_portion=link.interest_portion,
+                            repayment_date=entry.posting_date or now.date(),
+                            created_by_id=approver_id,
+                            skip_link_creation=True,
+                        )
+                        link.repayment_id = repayment.repayment_id
+                    except Exception as loan_err:
+                        logger.warning(
+                            "Failed to record loan deduction for slip %s, loan %s: %s",
+                            slip.slip_id,
+                            link.loan_id,
+                            loan_err,
+                        )
+        except Exception as e:
+            logger.warning(
+                "Failed to process loan deductions for entry %s: %s",
+                entry_id,
+                e,
+            )
+
         entry.status = PayrollEntryStatus.APPROVED
         self.db.flush()
 
@@ -1106,7 +1156,7 @@ class PayrollService:
             )
             .where(
                 SalaryStructureAssignment.organization_id == org_id,
-                SalaryStructureAssignment.from_date <= entry.start_date,
+                SalaryStructureAssignment.from_date <= entry.end_date,
                 or_(
                     SalaryStructureAssignment.to_date.is_(None),
                     SalaryStructureAssignment.to_date >= entry.start_date,
@@ -1118,6 +1168,8 @@ class PayrollService:
             query = query.where(Employee.department_id == entry.department_id)
         if entry.designation_id:
             query = query.where(Employee.designation_id == entry.designation_id)
+        if entry.employment_type_id:
+            query = query.where(Employee.employment_type_id == entry.employment_type_id)
         return list(self.db.scalars(query).all())
 
     def _update_entry_totals(self, entry: PayrollEntry) -> None:

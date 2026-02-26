@@ -40,6 +40,10 @@
             </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            <a href="/people/payroll/runs/{{ entry.entry_id }}/copy" class="btn btn-secondary">
+                {{ icon_svg("document", "h-4 w-4 mr-1") }}
+                Copy Run
+            </a>
             {% if entry.status.value != "DRAFT" and entry.status.value != "CANCELLED" %}
             <!-- Bank Upload Modal Trigger -->
             <div x-data="{ showBankModal: false }">
@@ -101,6 +105,36 @@
                 </div>
             </div>
             {% endif %}
+            {% if entry.status.value in ("POSTED", "APPROVED") %}
+            <!-- Statutory Exports Dropdown -->
+            <div x-data="{ showExports: false }" class="relative">
+                <button @click="showExports = !showExports" @click.away="showExports = false" type="button" class="btn btn-secondary">
+                    {{ icon_svg("download", "h-4 w-4 mr-1") }}
+                    Exports
+                    <svg class="h-4 w-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="showExports" x-cloak x-transition
+                     class="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 z-10">
+                    <a href="/people/payroll/runs/{{ entry.entry_id }}/export/paye"
+                       class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-t-lg">
+                        {{ icon_svg("document", "h-4 w-4 text-rose-500") }}
+                        PAYE Export
+                    </a>
+                    <a href="/people/payroll/runs/{{ entry.entry_id }}/export/pension"
+                       class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                        {{ icon_svg("document", "h-4 w-4 text-blue-500") }}
+                        Pension Export
+                    </a>
+                    <a href="/people/payroll/runs/{{ entry.entry_id }}/export/nhf"
+                       class="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-b-lg">
+                        {{ icon_svg("document", "h-4 w-4 text-amber-500") }}
+                        NHF Export
+                    </a>
+                </div>
+            </div>
+            {% endif %}
             {% if entry.status.value == "DRAFT" %}
             <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/generate" class="inline">
                 {{ request.state.csrf_form | safe }}
@@ -128,6 +162,11 @@
                 onsubmit="return confirm('This will delete all draft slips and regenerate them. Continue?')">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-secondary">Regenerate Slips</button>
+            </form>
+            <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/delete" class="inline"
+                onsubmit="return confirm('This will permanently delete this payroll run and all its salary slips. Continue?')">
+                {{ request.state.csrf_form | safe }}
+                <button type="submit" class="btn btn-danger-outline">Delete</button>
             </form>
             {% elif entry.status.value == "SUBMITTED" %}
             <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/approve" class="inline">
@@ -160,6 +199,88 @@
             <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400 font-mono">{{ "{:,.2f}".format(entry.total_net_pay or 0) }}</div>
         </div>
     </div>
+
+    <!-- Validation Warnings (DRAFT only) -->
+    {% if readiness_report %}
+    <div x-data="{ expandedBlocked: false, expandedReview: false }">
+        {% if readiness_report.blocked_count > 0 %}
+        <div class="rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-800/50 dark:bg-rose-900/20 p-4">
+            <button @click="expandedBlocked = !expandedBlocked" class="flex w-full items-center justify-between text-left">
+                <div class="flex items-center gap-3">
+                    {{ icon_svg("warning", "h-5 w-5 text-rose-600 dark:text-rose-400") }}
+                    <div>
+                        <p class="text-sm font-medium text-rose-800 dark:text-rose-200">
+                            {{ readiness_report.blocked_count }} employee(s) blocked from payroll
+                        </p>
+                        <p class="text-xs text-rose-600 dark:text-rose-400">
+                            Missing salary assignment or bank details — fix before generating slips
+                        </p>
+                    </div>
+                </div>
+                <svg class="h-5 w-5 text-rose-400 transition-transform" :class="expandedBlocked && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="expandedBlocked" x-cloak x-transition class="mt-3 border-t border-rose-200 dark:border-rose-800 pt-3">
+                <div class="space-y-1 max-h-48 overflow-y-auto">
+                    {% for emp in readiness_report.blocked_employees %}
+                    <div class="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-rose-100 dark:hover:bg-rose-900/30">
+                        <span class="text-rose-800 dark:text-rose-200">{{ emp.employee_name }} <span class="text-rose-500 dark:text-rose-400 text-xs">({{ emp.employee_code }})</span></span>
+                        <span class="text-xs text-rose-600 dark:text-rose-400">
+                            {% for issue in emp.issues if issue.severity == 'critical' %}{{ issue.message }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if readiness_report.needs_review_count > 0 %}
+        <div class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-900/20 p-4 {% if readiness_report.blocked_count > 0 %}mt-3{% endif %}">
+            <button @click="expandedReview = !expandedReview" class="flex w-full items-center justify-between text-left">
+                <div class="flex items-center gap-3">
+                    {{ icon_svg("clock", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
+                    <div>
+                        <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                            {{ readiness_report.needs_review_count }} employee(s) need review
+                        </p>
+                        <p class="text-xs text-amber-600 dark:text-amber-400">
+                            Missing tax profile, new hire proration, or other items to review
+                        </p>
+                    </div>
+                </div>
+                <svg class="h-5 w-5 text-amber-400 transition-transform" :class="expandedReview && 'rotate-180'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="expandedReview" x-cloak x-transition class="mt-3 border-t border-amber-200 dark:border-amber-800 pt-3">
+                <div class="space-y-1 max-h-48 overflow-y-auto">
+                    {% for emp in readiness_report.employees_needing_review %}
+                    <div class="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-amber-100 dark:hover:bg-amber-900/30">
+                        <span class="text-amber-800 dark:text-amber-200">{{ emp.employee_name }} <span class="text-amber-500 dark:text-amber-400 text-xs">({{ emp.employee_code }})</span></span>
+                        <span class="text-xs text-amber-600 dark:text-amber-400">
+                            {% for reason in emp.review_reasons %}{{ reason }}{% if not loop.last %}, {% endif %}{% endfor %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if readiness_report.blocked_count == 0 and readiness_report.needs_review_count == 0 %}
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-900/20 px-4 py-3">
+            <div class="flex items-center gap-3">
+                {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400") }}
+                <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                    All clear — {{ readiness_report.ready_count }} employee(s) ready for payroll
+                </p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <!-- Run Details -->
     <div class="card">
@@ -221,7 +342,7 @@
     </div>
 
     {% call(filter_attrs) compact_filters(
-        base_url="/people/payroll/runs/",
+        base_url="/people/payroll/runs/" ~ entry.entry_id,
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
@@ -313,7 +434,8 @@
                 total_pages=total_pages,
                 total_count=total_count,
                 limit=limit,
-                search=search
+                search=search,
+                filters={"status": slip_status}
             ) }}
         {% else %}
         <div class="p-8 text-center">

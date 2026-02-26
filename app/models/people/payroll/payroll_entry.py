@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from app.models.finance.gl.account import Account
     from app.models.finance.gl.journal_entry import JournalEntry
     from app.models.people.hr.department import Department
+    from app.models.people.hr.employment_type import EmploymentType
     from app.models.people.payroll.salary_slip import SalarySlip
 
 
@@ -150,6 +151,12 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         nullable=True,
         comment="Filter by designation",
     )
+    employment_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employment_type.employment_type_id"),
+        nullable=True,
+        comment="Filter by employment type",
+    )
     source_bank_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("banking.bank_accounts.bank_account_id"),
@@ -248,6 +255,10 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     department: Mapped[Optional["Department"]] = relationship(
         "Department",
         foreign_keys=[department_id],
+    )
+    employment_type: Mapped[Optional["EmploymentType"]] = relationship(
+        "EmploymentType",
+        foreign_keys=[employment_type_id],
     )
     salary_slips: Mapped[list["SalarySlip"]] = relationship(
         "SalarySlip",

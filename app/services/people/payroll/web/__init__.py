@@ -22,6 +22,7 @@ from .base import (
     parse_uuid,
 )
 from .component_web import ComponentWebService
+from .dashboard_web import PayrollDashboardService
 from .report_web import ReportWebService
 from .run_web import RunWebService
 from .slip_web import SlipWebService
@@ -36,6 +37,7 @@ class PayrollWebService(
     RunWebService,
     TaxWebService,
     ReportWebService,
+    PayrollDashboardService,
 ):
     """
     Unified Payroll Web Service facade.
@@ -70,6 +72,7 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     # Services
     "ComponentWebService",
+    "PayrollDashboardService",
     "SlipWebService",
     "StructureWebService",
     "RunWebService",

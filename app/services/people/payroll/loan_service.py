@@ -522,6 +522,7 @@ class LoanService:
         interest_portion: Decimal,
         repayment_date: date,
         created_by_id: UUID | None = None,
+        skip_link_creation: bool = False,
     ) -> LoanRepayment:
         """
         Record a loan deduction from payroll.
@@ -533,12 +534,11 @@ class LoanService:
 
         loan = self.db.get(EmployeeLoan, l_id)
         if not loan:
-            raise HTTPException(status_code=404, detail="Loan not found")
+            raise ValueError(f"Loan {loan_id} not found")
 
         if loan.status != LoanStatus.DISBURSED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot record repayment for loan with status: {loan.status.value}",
+            raise RuntimeError(
+                f"Cannot record repayment for loan with status: {loan.status.value}"
             )
 
         # Update loan balance
@@ -568,16 +568,17 @@ class LoanService:
 
         self.db.add(repayment)
 
-        # Create link record
-        link = SalarySlipLoanDeduction(
-            slip_id=s_id,
-            loan_id=l_id,
-            amount=amount,
-            principal_portion=principal_portion,
-            interest_portion=interest_portion,
-            repayment_id=repayment.repayment_id,
-        )
-        self.db.add(link)
+        # Create link record (skip if already created during slip generation)
+        if not skip_link_creation:
+            link = SalarySlipLoanDeduction(
+                slip_id=s_id,
+                loan_id=l_id,
+                amount=amount,
+                principal_portion=principal_portion,
+                interest_portion=interest_portion,
+                repayment_id=repayment.repayment_id,
+            )
+            self.db.add(link)
 
         self.db.flush()
 

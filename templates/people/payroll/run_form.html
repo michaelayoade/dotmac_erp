@@ -21,6 +21,25 @@
         <p class="text-sm text-slate-500 dark:text-slate-400">Create a batch payroll run to generate salary slips for multiple employees.</p>
     </div>
 
+    {% if copy_from %}
+    <div class="rounded-lg bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 p-4">
+        <div class="flex">
+            {{ icon_svg("document", "h-5 w-5 text-sky-500 flex-shrink-0") }}
+            <div class="ml-3">
+                <p class="text-sm font-medium text-sky-800 dark:text-sky-200">
+                    Copying from {{ copy_from.entry_number }}
+                </p>
+                <p class="text-sm text-sky-700 dark:text-sky-300 mt-0.5">
+                    {{ copy_from.payroll_frequency.value | title }}
+                    {% if copy_from.department %} &bull; {{ copy_from.department.department_name }}{% endif %}
+                    {% if copy_from.employment_type %} &bull; {{ copy_from.employment_type.type_name }}{% endif %}
+                    &mdash; dates advanced to next period. Review and adjust before saving.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if error %}
     <div class="rounded-lg bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 p-4">
         <div class="flex">
@@ -93,18 +112,20 @@
                 <div>
                     <label for="payroll_frequency" class="form-label">Payroll Frequency</label>
                     <select name="payroll_frequency" id="payroll_frequency" class="form-select w-full">
+                        {% set selected_freq = form_data.payroll_frequency if form_data.payroll_frequency else 'MONTHLY' %}
                         {% for freq in frequencies %}
-                        <option value="{{ freq }}" {% if freq == "MONTHLY" %}selected{% endif %}>{{ freq | title }}</option>
+                        <option value="{{ freq }}" {{ 'selected' if freq == selected_freq }}>{{ freq | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div>
                     <label for="currency_code" class="form-label">Currency</label>
+                    {% set selected_currency = form_data.currency_code if form_data.currency_code else 'NGN' %}
                     <select name="currency_code" id="currency_code" class="form-select w-full">
-                        <option value="NGN" selected>NGN - Nigerian Naira</option>
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="GBP">GBP - British Pound</option>
-                        <option value="EUR">EUR - Euro</option>
+                        <option value="NGN" {{ 'selected' if selected_currency == 'NGN' }}>NGN - Nigerian Naira</option>
+                        <option value="USD" {{ 'selected' if selected_currency == 'USD' }}>USD - US Dollar</option>
+                        <option value="GBP" {{ 'selected' if selected_currency == 'GBP' }}>GBP - British Pound</option>
+                        <option value="EUR" {{ 'selected' if selected_currency == 'EUR' }}>EUR - Euro</option>
                     </select>
                 </div>
                 <div>
@@ -152,7 +173,10 @@
                     <select name="department_id" id="department_id" class="form-select w-full">
                         <option value="">All Departments</option>
                         {% for dept in departments %}
-                        <option value="{{ dept.department_id }}">{{ dept.department_name }}</option>
+                        <option value="{{ dept.department_id }}"
+                            {{ 'selected' if form_data.department_id == dept.department_id | string }}>
+                            {{ dept.department_name }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
@@ -161,7 +185,25 @@
                     <select name="designation_id" id="designation_id" class="form-select w-full">
                         <option value="">All Designations</option>
                         {% for desig in designations %}
-                        <option value="{{ desig.designation_id }}">{{ desig.designation_name }}</option>
+                        <option value="{{ desig.designation_id }}"
+                            {{ 'selected' if form_data.designation_id == desig.designation_id | string }}>
+                            {{ desig.designation_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="employment_type_id" class="form-label">Employment Type</label>
+                    <select name="employment_type_id" id="employment_type_id" class="form-select w-full">
+                        <option value="">All Employment Types</option>
+                        {% if not employment_types %}
+                        <option value="" disabled>No employment types configured</option>
+                        {% endif %}
+                        {% for employment_type in employment_types %}
+                        <option value="{{ employment_type.employment_type_id }}"
+                            {{ 'selected' if form_data.employment_type_id == employment_type.employment_type_id | string }}>
+                            {{ employment_type.type_name }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
@@ -174,7 +216,7 @@
             <div>
                 <label for="notes" class="form-label">Internal Notes</label>
                 <textarea name="notes" id="notes" rows="3" class="form-input w-full"
-                    placeholder="Any notes about this payroll run...">{{ run.notes if run else '' }}</textarea>
+                    placeholder="Any notes about this payroll run...">{{ form_data.notes if form_data.notes else (run.notes if run else '') }}</textarea>
             </div>
         </div>
 

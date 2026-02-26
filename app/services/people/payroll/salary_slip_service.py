@@ -302,8 +302,9 @@ class SalarySlipService:
             )
 
         # Get active salary structure assignment
+        # Use end_date so mid-month joiners are included
         assignment = SalarySlipService.get_active_assignment(
-            db, org_id, emp_id, input.start_date
+            db, org_id, emp_id, input.end_date
         )
 
         if not assignment:
@@ -322,7 +323,28 @@ class SalarySlipService:
             # Default to calendar days in period (simplified)
             total_working_days = Decimal((input.end_date - input.start_date).days + 1)
 
-        payment_days = total_working_days - input.absent_days - input.leave_without_pay
+        # Prorate for mid-period joiners/leavers based on date_of_joining
+        from app.services.people.payroll.working_days_calculator import (
+            calculate_proration,
+        )
+
+        proration = calculate_proration(
+            db=db,
+            organization_id=org_id,
+            employee_joining_date=employee.date_of_joining,
+            period_start=input.start_date,
+            period_end=input.end_date,
+            employee_leaving_date=employee.date_of_leaving,
+        )
+
+        if proration.is_prorated:
+            payment_days = (
+                proration.payment_days - input.absent_days - input.leave_without_pay
+            )
+        else:
+            payment_days = (
+                total_working_days - input.absent_days - input.leave_without_pay
+            )
 
         # Generate slip number
         slip_number = SalarySlipService.generate_slip_number(db, org_id)
@@ -435,9 +457,10 @@ class SalarySlipService:
                 as_of_date=input.start_date,
             )
 
-            # Get or create statutory components
+            # Get or create statutory components (include employer contributions
+            # so EMPLOYER_PENSION_COMPONENT_CODE is available in the dict)
             statutory_components = SalarySlipService.get_statutory_components(
-                db, org_id, user_id
+                db, org_id, user_id, include_employer_contributions=True
             )
 
             # Add statutory deductions from PAYE calculation
@@ -528,6 +551,57 @@ class SalarySlipService:
                     and not component.do_not_include_in_total
                 ):
                     total_deduction += amount
+
+        # ── Loan / salary advance deductions ──────────────────────
+        from app.services.people.payroll.loan_service import LoanService
+
+        loan_svc = LoanService(db)
+        try:
+            loan_deductions = loan_svc.get_due_deductions(
+                emp_id, input.start_date, input.end_date
+            )
+        except Exception as loan_err:
+            logger.warning("Failed to get loan deductions for %s: %s", emp_id, loan_err)
+            loan_deductions = []
+
+        for loan_item in loan_deductions:
+            loan_component = SalarySlipService.get_or_create_statutory_component(
+                db,
+                org_id,
+                "LOAN_REPAYMENT",
+                "Loan/Advance Repayment",
+                "LOAN",
+                display_order=850,
+                created_by_id=user_id,
+            )
+
+            deduction_line = SalarySlipDeduction(
+                slip_id=slip.slip_id,
+                component_id=loan_component.component_id,
+                component_name=f"Loan - {loan_item.loan_type_name}",
+                abbr="LOAN",
+                amount=loan_item.amount,
+                default_amount=loan_item.amount,
+                statistical_component=False,
+                do_not_include_in_total=False,
+                display_order=850,
+            )
+            db.add(deduction_line)
+            total_deduction += loan_item.amount
+
+            # Link record (without repayment_id — balance not yet updated)
+            from app.models.people.payroll.loan_repayment import (
+                SalarySlipLoanDeduction as SlipLoanLink,
+            )
+
+            link = SlipLoanLink(
+                slip_id=slip.slip_id,
+                loan_id=loan_item.loan_id,
+                amount=loan_item.amount,
+                principal_portion=loan_item.principal_portion,
+                interest_portion=loan_item.interest_portion,
+            )
+            db.add(link)
 
         # Add unpaid suspension deduction if applicable
         from app.services.people.discipline import DisciplineService
@@ -770,7 +844,7 @@ class SalarySlipService:
             )
 
             statutory_components = SalarySlipService.get_statutory_components(
-                db, org_id, user_id
+                db, org_id, user_id, include_employer_contributions=True
             )
 
             statutory_deductions = [
