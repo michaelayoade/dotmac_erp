@@ -95,6 +95,16 @@
                 New Invoice
             </a>
 
+            <a href="/finance/ar/invoices/new?duplicate_from={{ invoice.invoice_id }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                {{ icon_svg("document", "h-4 w-4 text-slate-400") }}
+                Duplicate Invoice
+            </a>
+
+            <a href="/automation/recurring/new?source_type=invoice&source_id={{ invoice.invoice_id }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                {{ icon_svg("clock", "h-4 w-4 text-slate-400") }}
+                Make Recurring
+            </a>
+
             {# DRAFT extras: Edit (mobile), Delete #}
             {% if invoice.status == 'DRAFT' %}
             <a href="/finance/ar/invoices/{{ invoice.invoice_id }}/edit" class="flex sm:hidden items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">

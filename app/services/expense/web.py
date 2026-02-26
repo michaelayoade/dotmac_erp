@@ -10,6 +10,7 @@ import json
 import logging
 import mimetypes
 import re
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from decimal import Decimal
 from pathlib import Path
@@ -27,8 +28,11 @@ from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.domain_settings import SettingDomain
-from app.models.expense.expense_claim import (
+from app.models.expense import (
     ExpenseClaim,
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
     ExpenseClaimItem,
     ExpenseClaimStatus,
 )
@@ -41,7 +45,10 @@ from app.services.expense.expense_service import (
     ExpenseService,
     ExpenseServiceError,
 )
-from app.services.expense.limit_service import ExpenseLimitServiceError
+from app.services.expense.limit_service import (
+    ExpenseLimitService,
+    ExpenseLimitServiceError,
+)
 from app.services.file_upload import get_expense_receipt_upload, resolve_safe_path
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.pm.comment import comment_service
@@ -1428,6 +1435,124 @@ class ExpenseClaimsWebService:
         )
         return templates.TemplateResponse(
             request, "expense/reports/trends.html", context
+        )
+
+    @staticmethod
+    def my_approvals_report_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        start_date: str | None,
+        end_date: str | None,
+    ) -> HTMLResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        approver_id = coerce_uuid(auth.employee_id) if auth.employee_id else None
+        svc = ExpenseService(db)
+        limit_svc = ExpenseLimitService(db)
+
+        parsed_start = date_type.fromisoformat(start_date) if start_date else None
+        parsed_end = date_type.fromisoformat(end_date) if end_date else None
+
+        report_data = (
+            svc.get_my_approvals_report(
+                org_id,
+                approver_id=approver_id,
+                start_date=parsed_start,
+                end_date=parsed_end,
+            )
+            if approver_id
+            else {
+                "start_date": parsed_start or date_type.today().replace(day=1),
+                "end_date": parsed_end or date_type.today(),
+                "decisions": [],
+                "approved_count": 0,
+                "rejected_count": 0,
+                "approved_total": Decimal("0"),
+                "rejected_total": Decimal("0"),
+            }
+        )
+
+        weekly_balance = None
+        if approver_id:
+            approver = db.get(Employee, approver_id)
+            if approver is not None:
+                budget_info = limit_svc._get_approver_weekly_budget(org_id, approver)
+                if budget_info is not None:
+                    budget_amount, limit_id = budget_info
+                    now = datetime.now(UTC)
+                    week_start = limit_svc._start_of_week_utc(now)
+                    week_end = week_start + timedelta(days=6)
+                    latest_reset = limit_svc.get_latest_weekly_reset(
+                        org_id,
+                        approver_id=approver_id,
+                        approver_limit_id=limit_id,
+                        from_datetime=week_start,
+                    )
+                    usage_start = (
+                        latest_reset.reset_at
+                        if latest_reset is not None
+                        else week_start
+                    )
+                    used_amount = db.scalar(
+                        select(
+                            func.coalesce(
+                                func.sum(ExpenseClaim.total_approved_amount),
+                                Decimal("0"),
+                            )
+                        )
+                        .select_from(ExpenseClaim)
+                        .join(
+                            ExpenseClaimAction,
+                            and_(
+                                ExpenseClaimAction.claim_id == ExpenseClaim.claim_id,
+                                ExpenseClaimAction.action_type
+                                == ExpenseClaimActionType.APPROVE,
+                                ExpenseClaimAction.status
+                                == ExpenseClaimActionStatus.COMPLETED,
+                            ),
+                        )
+                        .where(
+                            ExpenseClaim.organization_id == org_id,
+                            ExpenseClaim.status.in_(
+                                [
+                                    ExpenseClaimStatus.APPROVED,
+                                    ExpenseClaimStatus.PAID,
+                                ]
+                            ),
+                            ExpenseClaimAction.created_at >= usage_start,
+                            ExpenseClaimAction.created_at <= now,
+                            ExpenseClaim.approver_id == approver_id,
+                        )
+                    ) or Decimal("0")
+                    weekly_balance = {
+                        "week_label": (
+                            f"{week_start.date().isoformat()} - "
+                            f"{week_end.date().isoformat()}"
+                        ),
+                        "budget": budget_amount,
+                        "used": used_amount,
+                        "remaining": budget_amount - used_amount,
+                        "last_reset_at": latest_reset.reset_at
+                        if latest_reset
+                        else None,
+                    }
+
+        context = base_context(
+            request,
+            auth,
+            "My Approvals Report",
+            "reports-my-approvals",
+        )
+        context.update(
+            {
+                "report": report_data,
+                "weekly_balance": weekly_balance,
+                "start_date": start_date or report_data["start_date"].isoformat(),
+                "end_date": end_date or report_data["end_date"].isoformat(),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/reports/my_approvals.html", context
         )
 
     @staticmethod

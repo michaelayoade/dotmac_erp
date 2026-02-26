@@ -34,6 +34,21 @@ def _normalize_form(form: Any) -> dict[str, str]:
     return {key: value if isinstance(value, str) else "" for key, value in form.items()}
 
 
+def _coerce_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return default
+    return default
+
+
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def admin_dashboard(
@@ -1344,13 +1359,9 @@ async def admin_settings_service_hooks_bulk_action(
             )
 
         if result:
-            requested = int(result.get("requested", len(hook_ids)))
-            processed = int(
-                result.get(
-                    "updated",
-                    result.get("deleted", 0),
-                )
-            )
+            requested = _coerce_int(result.get("requested"), len(hook_ids))
+            processed_raw = result.get("updated", result.get("deleted", 0))
+            processed = _coerce_int(processed_raw, 0)
             skipped = max(0, requested - processed)
             params = dict(base_params)
             params.update(
@@ -1371,7 +1382,9 @@ async def admin_settings_service_hooks_bulk_action(
     params = dict(base_params)
     params["saved"] = "1"
     query = urlencode(params)
-    return RedirectResponse(url=f"/admin/settings/service-hooks?{query}", status_code=303)
+    return RedirectResponse(
+        url=f"/admin/settings/service-hooks?{query}", status_code=303
+    )
 
 
 @router.post("/settings/service-hooks/{hook_id}/delete", response_class=HTMLResponse)

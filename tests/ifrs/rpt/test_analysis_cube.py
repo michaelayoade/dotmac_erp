@@ -96,7 +96,9 @@ def test_query_cube_validates_filter_field():
 
 def test_query_cube_rejects_invalid_source_view():
     service = AnalysisCubeService(MagicMock())
-    with patch.object(service, "_get_cube", return_value=_cube(source_view="rpt.sales;drop table")):
+    with patch.object(
+        service, "_get_cube", return_value=_cube(source_view="rpt.sales;drop table")
+    ):
         with pytest.raises(ValueError, match="Invalid source view"):
             service.query_cube(
                 uuid4(),

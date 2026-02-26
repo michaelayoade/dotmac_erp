@@ -99,7 +99,9 @@ class SavedAnalysis(Base):
         nullable=False,
     )
 
-    row_dimensions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    row_dimensions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     column_dimensions: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list
     )

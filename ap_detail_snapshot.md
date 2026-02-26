@@ -1,0 +1,336 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - link "Default Organization logo Default Organization Finance" [ref=e5] [cursor=pointer]:
+          - /url: /finance/dashboard
+          - img "Default Organization logo" [ref=e6]
+          - generic [ref=e7]:
+            - paragraph [ref=e8]: Default Organization
+            - generic [ref=e9]: Finance
+        - button "Close sidebar" [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+      - navigation "Finance navigation" [ref=e13]:
+        - link "Dashboard" [ref=e14] [cursor=pointer]:
+          - /url: /finance/dashboard
+          - img [ref=e15]
+          - generic [ref=e17]: Dashboard
+        - generic [ref=e18]: Core
+        - button "General Ledger" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: General Ledger
+          - img [ref=e24]
+        - generic [ref=e26]: Sub-Ledgers
+        - generic [ref=e27]:
+          - button "Accounts Payable" [ref=e28] [cursor=pointer]:
+            - img [ref=e29]
+            - generic [ref=e31]: Accounts Payable
+            - img [ref=e32]
+          - generic [ref=e34]:
+            - link "Suppliers" [ref=e35] [cursor=pointer]:
+              - /url: /finance/ap/suppliers
+            - link "Purchase Orders" [ref=e36] [cursor=pointer]:
+              - /url: /finance/ap/purchase-orders
+            - link "Goods Receipts" [ref=e37] [cursor=pointer]:
+              - /url: /finance/ap/goods-receipts
+            - link "Invoices" [ref=e38] [cursor=pointer]:
+              - /url: /finance/ap/invoices
+            - link "Payments" [ref=e39] [cursor=pointer]:
+              - /url: /finance/ap/payments
+            - link "Payment Batches" [ref=e40] [cursor=pointer]:
+              - /url: /finance/ap/payment-batches
+            - link "Aging Report" [ref=e41] [cursor=pointer]:
+              - /url: /finance/ap/aging
+        - button "Accounts Receivable" [ref=e43] [cursor=pointer]:
+          - img [ref=e44]
+          - generic [ref=e46]: Accounts Receivable
+          - img [ref=e47]
+        - button "Fixed Assets" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+          - generic [ref=e53]: Fixed Assets
+          - img [ref=e54]
+        - button "Tax" [ref=e57] [cursor=pointer]:
+          - img [ref=e58]
+          - generic [ref=e60]: Tax
+          - img [ref=e61]
+        - generic [ref=e63]: Treasury
+        - button "Banking" [ref=e65] [cursor=pointer]:
+          - img [ref=e66]
+          - generic [ref=e68]: Banking
+          - img [ref=e69]
+        - generic [ref=e71]: Reporting
+        - button "Reports" [ref=e73] [cursor=pointer]:
+          - img [ref=e74]
+          - generic [ref=e76]: Reports
+          - img [ref=e77]
+        - generic [ref=e79]: Automation
+        - button "Automation" [ref=e81] [cursor=pointer]:
+          - img [ref=e82]
+          - generic [ref=e84]: Automation
+          - img [ref=e85]
+        - generic [ref=e87]: Switch Module
+        - link "Public Sector" [ref=e88] [cursor=pointer]:
+          - /url: /public-sector/
+          - img [ref=e89]
+          - generic [ref=e91]: Public Sector
+        - link "People" [ref=e92] [cursor=pointer]:
+          - /url: /people/hr/employees
+          - img [ref=e93]
+          - generic [ref=e95]: People
+        - link "Discipline" [ref=e96] [cursor=pointer]:
+          - /url: /people/hr/discipline
+          - img [ref=e97]
+          - generic [ref=e99]: Discipline
+        - link "Inventory" [ref=e100] [cursor=pointer]:
+          - /url: /inventory/items
+          - img [ref=e101]
+          - generic [ref=e103]: Inventory
+        - link "Fleet" [ref=e104] [cursor=pointer]:
+          - /url: /fleet
+          - img [ref=e105]
+          - generic [ref=e107]: Fleet
+        - link "Support" [ref=e108] [cursor=pointer]:
+          - /url: /support/tickets
+          - img [ref=e109]
+          - generic [ref=e111]: Support
+        - link "Procurement" [ref=e112] [cursor=pointer]:
+          - /url: /procurement
+          - img [ref=e113]
+          - generic [ref=e115]: Procurement
+        - link "Projects" [ref=e116] [cursor=pointer]:
+          - /url: /projects
+          - img [ref=e117]
+          - generic [ref=e119]: Projects
+        - link "Expenses" [ref=e120] [cursor=pointer]:
+          - /url: /expense
+          - img [ref=e121]
+          - generic [ref=e123]: Expenses
+        - link "Coach" [ref=e124] [cursor=pointer]:
+          - /url: /coach/
+          - img [ref=e125]
+          - generic [ref=e127]: Coach
+        - link "Admin" [ref=e128] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e129]
+          - generic [ref=e132]: Admin
+      - generic [ref=e133]:
+        - link "Settings" [ref=e134] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e135]
+          - generic [ref=e138]: Settings
+        - link "Training & Help" [ref=e139] [cursor=pointer]:
+          - /url: /help
+          - img [ref=e140]
+          - generic [ref=e142]: Training & Help
+        - button "A admin" [ref=e145] [cursor=pointer]:
+          - generic [ref=e146]: A
+          - generic [ref=e148]: admin
+          - img [ref=e149]
+    - generic [ref=e151]:
+      - banner [ref=e152]:
+        - generic [ref=e153]:
+          - generic [ref=e154]:
+            - button "Open sidebar" [ref=e155] [cursor=pointer]:
+              - img [ref=e156]
+            - button "Go back" [ref=e158] [cursor=pointer]:
+              - img [ref=e159]
+              - generic [ref=e161]: Back
+            - generic [ref=e162]:
+              - heading "AP Invoice" [level=1] [ref=e163]
+              - navigation "Breadcrumb" [ref=e164]:
+                - list [ref=e165]:
+                  - listitem [ref=e166]:
+                    - link "Dashboard" [ref=e167] [cursor=pointer]:
+                      - /url: /dashboard
+                  - listitem [ref=e168]:
+                    - img [ref=e169]
+                    - link "AP Invoices" [ref=e171] [cursor=pointer]:
+                      - /url: /finance/ap/invoices
+                  - listitem [ref=e172]:
+                    - img [ref=e173]
+                    - generic [ref=e175]: SINV202602-0030
+            - button "Search..." [ref=e176] [cursor=pointer]:
+              - img [ref=e177]
+              - generic [ref=e179]: Search...
+          - generic [ref=e180]:
+            - generic [ref=e181]:
+              - link "Generate RRR" [ref=e182] [cursor=pointer]:
+                - /url: /finance/remita/generate?source_type=ap_invoice&source_id=f03bbb14-c363-4407-8269-a9d86de266ca&amount=91000.0&description=Remita%20payment%20for%20SINV202602-0030
+                - img [ref=e183]
+                - text: Generate RRR
+              - button "Print" [ref=e185] [cursor=pointer]:
+                - img [ref=e186]
+                - text: Print
+              - button "Approve" [ref=e189] [cursor=pointer]:
+                - img [ref=e190]
+                - generic [ref=e192]: Approve
+              - button "Reject" [ref=e194] [cursor=pointer]:
+                - img [ref=e195]
+                - generic [ref=e197]: Reject
+              - button "Void" [ref=e199] [cursor=pointer]:
+                - generic [ref=e200]: Void
+              - link "New Invoice" [ref=e201] [cursor=pointer]:
+                - /url: /finance/ap/invoices/new?invoice_id=f03bbb14-c363-4407-8269-a9d86de266ca
+                - img [ref=e202]
+                - text: New Invoice
+              - button [ref=e205] [cursor=pointer]:
+                - img [ref=e206]
+            - button "Toggle theme" [ref=e208] [cursor=pointer]:
+              - img [ref=e209]
+            - button "Notifications" [ref=e212] [cursor=pointer]:
+              - img [ref=e213]
+      - main [ref=e216]:
+        - generic [ref=e217]:
+          - generic [ref=e218]:
+            - generic [ref=e219]:
+              - img [ref=e221]
+              - generic [ref=e223]: Draft
+            - generic [ref=e225]:
+              - generic [ref=e226]: "2"
+              - generic [ref=e227]: Submitted
+            - generic [ref=e229]:
+              - generic [ref=e230]: "3"
+              - generic [ref=e231]: Approved
+            - generic [ref=e233]:
+              - generic [ref=e234]: "4"
+              - generic [ref=e235]: Posted
+            - generic [ref=e237]:
+              - generic [ref=e238]: "5"
+              - generic [ref=e239]: Paid
+          - generic [ref=e240]:
+            - generic [ref=e241]:
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - generic [ref=e244]: DO
+                  - generic [ref=e246]: Dotmac Technologies Ltd
+                - generic [ref=e247]:
+                  - generic [ref=e248]: Supplier Invoice
+                  - generic [ref=e249]: SINV202602-0030
+                  - generic [ref=e250]: Submitted
+              - generic [ref=e251]:
+                - generic [ref=e252]:
+                  - generic [ref=e254]: "Supplier Ref: IVN-2026-005"
+                  - generic [ref=e256]: Submitted
+                - generic [ref=e257]:
+                  - generic [ref=e258]:
+                    - generic [ref=e259]: Invoice Date
+                    - generic [ref=e260]: 26/02/2026
+                  - generic [ref=e261]:
+                    - generic [ref=e262]: Received Date
+                    - generic [ref=e263]: 26/02/2026
+                  - generic [ref=e264]:
+                    - generic [ref=e265]: Due Date
+                    - generic [ref=e266]: 28/03/2026
+                  - generic [ref=e267]:
+                    - generic [ref=e268]: Currency
+                    - generic [ref=e269]: NGN
+              - generic [ref=e270]:
+                - generic [ref=e271]:
+                  - generic [ref=e272]: Supplier
+                  - generic [ref=e273]:
+                    - generic [ref=e274]: Supplier Name
+                    - generic [ref=e275]: JP Link Network Ltd
+                  - generic [ref=e276]:
+                    - generic [ref=e277]: Supplier Code
+                    - generic [ref=e278]: JP Link Network Ltd
+                - generic [ref=e279]:
+                  - generic [ref=e280]: Invoice Lines
+                  - table [ref=e282]:
+                    - rowgroup [ref=e283]:
+                      - row "Description Qty Unit Price VAT/Tax Amount" [ref=e284]:
+                        - columnheader "Description" [ref=e285]
+                        - columnheader "Qty" [ref=e286]
+                        - columnheader "Unit Price" [ref=e287]
+                        - columnheader "VAT/Tax" [ref=e288]
+                        - columnheader "Amount" [ref=e289]
+                    - rowgroup [ref=e290]:
+                      - row "PoE Adapter 24V 7.000000 NGN 13,000.00 NGN 6,348.84 VAT-7.5 (inclusive) 7.50% NGN 91,000.00" [ref=e291]:
+                        - cell "PoE Adapter 24V" [ref=e292]:
+                          - generic [ref=e293]: PoE Adapter 24V
+                        - cell "7.000000" [ref=e294]
+                        - cell "NGN 13,000.00" [ref=e295]
+                        - cell "NGN 6,348.84 VAT-7.5 (inclusive) 7.50%" [ref=e296]:
+                          - generic [ref=e297]: NGN 6,348.84
+                          - generic [ref=e298]: VAT-7.5 (inclusive) 7.50%
+                        - cell "NGN 91,000.00" [ref=e299]
+                - generic [ref=e301]:
+                  - generic [ref=e302]:
+                    - generic [ref=e303]: Subtotal
+                    - generic [ref=e304]: NGN 91,000.00
+                  - generic [ref=e305]:
+                    - generic [ref=e306]: Tax (VAT)
+                    - generic [ref=e307]: NGN 0.00
+                  - generic [ref=e308]:
+                    - generic [ref=e309]: Total Amount
+                    - generic [ref=e310]: NGN 91,000.00
+              - generic [ref=e312]:
+                - generic [ref=e313]: Balance Due
+                - generic [ref=e314]: NGN 91,000.00
+            - generic [ref=e315]:
+              - heading "Comments" [level=3] [ref=e317]:
+                - img [ref=e318]
+                - text: Comments
+              - generic [ref=e320]:
+                - generic [ref=e321]:
+                  - generic [ref=e322]: Add Comment
+                  - textbox "Add Comment" [ref=e324]:
+                    - /placeholder: Add internal comment. Type @ to mention a teammate...
+                  - paragraph [ref=e325]:
+                    - text: Tag teammates directly in this field, for example
+                    - code [ref=e326]: "@Glory Olubo kindly review"
+                    - text: .
+                - button "Add Comment" [ref=e328] [cursor=pointer]:
+                  - generic [ref=e329]: Add Comment
+              - generic [ref=e331]:
+                - img [ref=e333]
+                - paragraph [ref=e335]: No comments yet
+                - paragraph [ref=e336]: Add a comment to capture context on this invoice.
+            - generic [ref=e337]:
+              - generic [ref=e338]:
+                - heading "Attachments 1" [level=3] [ref=e339]:
+                  - img [ref=e340]
+                  - text: Attachments
+                  - generic [ref=e342]: "1"
+                - button "Upload" [ref=e343] [cursor=pointer]:
+                  - img [ref=e344]
+                  - text: Upload
+              - generic [ref=e347]:
+                - generic [ref=e348]:
+                  - img [ref=e350]
+                  - generic [ref=e352]:
+                    - paragraph [ref=e353]: WhatsApp Image 2026-02-25 at 11.40.20 AM.jpeg
+                    - paragraph [ref=e354]: 186.8 KB · 26/02/2026 08:46
+                - generic [ref=e355]:
+                  - link "Download" [ref=e356] [cursor=pointer]:
+                    - /url: /finance/ap/attachments/f15ad15a-61e6-4cf0-8b27-6e773f36c1bb/download
+                    - img [ref=e357]
+                  - button "Delete" [ref=e360] [cursor=pointer]:
+                    - img [ref=e361]
+            - generic [ref=e363]:
+              - generic [ref=e364]:
+                - heading "Recent Activity" [level=3] [ref=e365]:
+                  - img [ref=e366]
+                  - text: Recent Activity
+                - generic [ref=e368]: Last 3 updates
+              - generic [ref=e369]:
+                - generic [ref=e370]:
+                  - generic [ref=e371]:
+                    - generic [ref=e372]: Updated
+                    - generic [ref=e373]: Simbiat Ahmed
+                    - generic [ref=e374]: 26/02/2026 08:46
+                  - paragraph [ref=e375]: "Fields: status"
+                  - paragraph [ref=e376]: Request 6a8c13c2-258a-4d01-a7d7-4abce51cb1c3 | IP 172.18.0.1
+                - generic [ref=e377]:
+                  - generic [ref=e378]:
+                    - generic [ref=e379]: Updated
+                    - generic [ref=e380]: Simbiat Ahmed
+                    - generic [ref=e381]: 26/02/2026 08:46
+                  - paragraph [ref=e382]: "Fields: status, submitted_at, submitted_by_user_id"
+                  - paragraph [ref=e383]: Request 6a8c13c2-258a-4d01-a7d7-4abce51cb1c3 | IP 172.18.0.1
+                - generic [ref=e384]:
+                  - generic [ref=e385]:
+                    - generic [ref=e386]: Created
+                    - generic [ref=e387]: Simbiat Ahmed
+                    - generic [ref=e388]: 26/02/2026 08:46
+                  - paragraph [ref=e389]: Request ff6c4302-a729-48cd-8ec5-27f65c87c19a | IP 172.18.0.1
+  - status

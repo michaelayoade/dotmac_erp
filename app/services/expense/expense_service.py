@@ -3003,3 +3003,103 @@ class ExpenseService:
             "total_approved": total_approved,
             "average_monthly": average_monthly,
         }
+
+    def get_my_approvals_report(
+        self,
+        org_id: UUID,
+        *,
+        approver_id: UUID,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        limit: int = 200,
+    ) -> dict:
+        """Get approvals/rejections performed by one approver in a period."""
+        from app.models.people.hr.employee import Employee
+        from app.models.person import Person
+
+        today = date.today()
+        if not start_date:
+            start_date = today.replace(day=1)
+        if not end_date:
+            end_date = today
+
+        rows = self.db.execute(
+            select(
+                ExpenseClaimAction.created_at.label("action_at"),
+                ExpenseClaimAction.action_type,
+                ExpenseClaim.claim_id,
+                ExpenseClaim.claim_number,
+                ExpenseClaim.claim_date,
+                ExpenseClaim.status,
+                ExpenseClaim.purpose,
+                ExpenseClaim.currency_code,
+                ExpenseClaim.total_claimed_amount,
+                ExpenseClaim.total_approved_amount,
+                Person.first_name,
+                Person.last_name,
+            )
+            .join(
+                ExpenseClaim,
+                ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
+            )
+            .outerjoin(Employee, Employee.employee_id == ExpenseClaim.employee_id)
+            .outerjoin(Person, Person.id == Employee.person_id)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id == approver_id,
+                ExpenseClaimAction.action_type.in_(
+                    [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
+                ),
+                ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                func.date(ExpenseClaimAction.created_at) >= start_date,
+                func.date(ExpenseClaimAction.created_at) <= end_date,
+            )
+            .order_by(ExpenseClaimAction.created_at.desc())
+            .limit(limit)
+        ).all()
+
+        decisions: list[dict] = []
+        approved_count = 0
+        rejected_count = 0
+        approved_total = Decimal("0")
+        rejected_total = Decimal("0")
+
+        for row in rows:
+            action_type = row.action_type.value
+            claimed_amount = row.total_claimed_amount or Decimal("0")
+            approved_amount = row.total_approved_amount or Decimal("0")
+            if action_type == ExpenseClaimActionType.APPROVE.value:
+                approved_count += 1
+                approved_total += approved_amount
+            else:
+                rejected_count += 1
+                rejected_total += claimed_amount
+
+            claimant_name = (
+                f"{(row.first_name or '').strip()} {(row.last_name or '').strip()}"
+            ).strip()
+            decisions.append(
+                {
+                    "action_at": row.action_at,
+                    "action_type": action_type,
+                    "claim_id": row.claim_id,
+                    "claim_number": row.claim_number,
+                    "claim_date": row.claim_date,
+                    "status": row.status.value if row.status else None,
+                    "purpose": row.purpose,
+                    "claimant_name": claimant_name or "Unknown",
+                    "currency_code": row.currency_code or "NGN",
+                    "claimed_amount": claimed_amount,
+                    "approved_amount": approved_amount,
+                }
+            )
+
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "decisions": decisions,
+            "approved_count": approved_count,
+            "rejected_count": rejected_count,
+            "approved_total": approved_total,
+            "rejected_total": rejected_total,
+        }

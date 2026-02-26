@@ -18,6 +18,7 @@ from app.web.deps import (
     WebAuthContext,
     get_db,
     require_self_service_access,
+    require_self_service_discipline_manager,
     require_self_service_expense_approver,
     require_self_service_leave_approver,
 )
@@ -658,7 +659,25 @@ def team_expense_requests(
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
     db: Session = Depends(get_db),
 ):
-    """Team expense approvals for direct reports."""
+    """Expense approvals history for current approver."""
+    return self_service_web_service.team_expenses_response(
+        request,
+        auth,
+        db,
+        status=status,
+        page=page,
+    )
+
+
+@router.get("/my-approvals", response_class=HTMLResponse)
+def my_expense_approvals(
+    request: Request,
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_self_service_expense_approver),
+    db: Session = Depends(get_db),
+):
+    """My approved/rejected expense decisions."""
     return self_service_web_service.team_expenses_response(
         request,
         auth,
@@ -768,4 +787,110 @@ async def file_discipline_appeal(
 
     return self_service_web_service.discipline_file_appeal_response(
         auth, db, case_id=case_id, appeal_reason=appeal_reason
+    )
+
+
+@router.get("/team/discipline", response_class=HTMLResponse)
+def team_discipline_cases(
+    request: Request,
+    include_closed: bool = Query(default=False),
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_self_service_discipline_manager),
+    db: Session = Depends(get_db),
+):
+    """List disciplinary cases for direct reports."""
+    return self_service_web_service.team_discipline_cases_response(
+        request=request,
+        auth=auth,
+        db=db,
+        include_closed=include_closed,
+        page=page,
+    )
+
+
+@router.get("/team/discipline/new", response_class=HTMLResponse)
+def team_discipline_new_case_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_discipline_manager),
+    db: Session = Depends(get_db),
+):
+    """Render form to create a discipline case for a direct report."""
+    return self_service_web_service.team_discipline_new_form_response(
+        request=request,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/team/discipline/new")
+async def team_discipline_create_case(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_discipline_manager),
+    db: Session = Depends(get_db),
+):
+    """Create a discipline case for a direct report and issue query."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    employee_id = _safe_form_text(form.get("employee_id"))
+    violation_type = _safe_form_text(form.get("violation_type"))
+    severity = _safe_form_text(form.get("severity"))
+    subject = _safe_form_text(form.get("subject"))
+    description = _safe_form_text(form.get("description")) or None
+    incident_date = _safe_form_text(form.get("incident_date")) or None
+    query_text = _safe_form_text(form.get("query_text"))
+    response_due_date = _safe_form_text(form.get("response_due_date"))
+
+    return self_service_web_service.team_discipline_create_case_response(
+        request=request,
+        auth=auth,
+        db=db,
+        employee_id=employee_id,
+        violation_type=violation_type,
+        severity=severity,
+        subject=subject,
+        description=description,
+        incident_date=incident_date,
+        query_text=query_text,
+        response_due_date=response_due_date,
+    )
+
+
+@router.get("/team/discipline/{case_id}", response_class=HTMLResponse)
+def team_discipline_case_detail(
+    case_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_discipline_manager),
+    db: Session = Depends(get_db),
+):
+    """View a team discipline case for a direct report."""
+    return self_service_web_service.team_discipline_case_detail_response(
+        request=request,
+        auth=auth,
+        db=db,
+        case_id=case_id,
+    )
+
+
+@router.post("/team/discipline/{case_id}/issue-query")
+async def team_discipline_issue_query(
+    case_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_discipline_manager),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Issue query on a team discipline case."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    query_text = _safe_form_text(form.get("query_text"))
+    response_due_date = _safe_form_text(form.get("response_due_date"))
+    return self_service_web_service.team_discipline_issue_query_response(
+        auth=auth,
+        db=db,
+        case_id=case_id,
+        query_text=query_text,
+        response_due_date=response_due_date,
     )

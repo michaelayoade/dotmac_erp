@@ -114,6 +114,25 @@
         {{ icon_svg("plus", "h-4 w-4") }}
         New Invoice
     </a>
+
+    {# More actions dropdown #}
+    <div x-data="{ open: false }" class="relative">
+        <button @click="open = !open" @click.away="open = false"
+                class="btn btn-secondary" :aria-expanded="open">
+            {{ icon_svg("chevron-down", "h-4 w-4") }}
+        </button>
+        <div x-show="open" x-cloak x-transition
+             class="absolute right-0 top-full mt-2 w-56 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg z-50 py-1">
+            <a href="/finance/ap/invoices/new?duplicate_from={{ invoice.invoice_id }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                {{ icon_svg("document", "h-4 w-4 text-slate-400") }}
+                Duplicate Invoice
+            </a>
+            <a href="/automation/recurring/new?source_type=bill&source_id={{ invoice.invoice_id }}" class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                {{ icon_svg("clock", "h-4 w-4 text-slate-400") }}
+                Make Recurring
+            </a>
+        </div>
+    </div>
 </div>
 {% endif %}
 {% endblock %}

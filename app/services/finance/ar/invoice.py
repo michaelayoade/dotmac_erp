@@ -211,7 +211,9 @@ class ARInvoiceService(ListResponseMixin):
         fp_service = FiscalPositionService(db)
         customer_type = getattr(customer, "customer_type", None)
         customer_classification = (
-            customer_type.value if hasattr(customer_type, "value") else customer_type
+            customer_type.value
+            if customer_type is not None and hasattr(customer_type, "value")
+            else customer_type
         )
         fiscal_position = fp_service.get_for_partner(
             organization_id=org_id,

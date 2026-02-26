@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 {% from "components/macros.html" import icon_svg %}
 
-{% block title %}Bad Request{% endblock %}
+{% block title %}Access Denied{% endblock %}
 
 {% block content %}
 <div class="min-h-[60vh] flex items-center justify-center px-4">
     <div class="max-w-md text-center">
         <div class="mb-6">
-            <span class="text-8xl font-bold text-amber-200 dark:text-amber-900/50">400</span>
+            <span class="text-8xl font-bold text-rose-200 dark:text-rose-900/50">403</span>
         </div>
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mb-3">
-            Bad Request
+            Access Denied
         </h1>
         <p class="text-slate-600 dark:text-slate-400 mb-8">
-            {{ message | default("Some required information is missing or invalid. Please check the form and try again.", true) }}
+            {{ message | default("You do not have permission to view this page. If you believe this is a mistake, please contact your administrator.", true) }}
         </p>
         <div class="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="javascript:history.back()" class="btn btn-secondary">

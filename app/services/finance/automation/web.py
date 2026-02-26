@@ -618,8 +618,14 @@ class AutomationWebService:
         db: Session,
         organization_id: str,
         template_id: str | None = None,
+        source_type: str | None = None,
+        source_id: str | None = None,
     ) -> dict:
-        """Get context for recurring template form."""
+        """Get context for recurring template form.
+
+        When source_type/source_id are provided, pre-fills form data from the
+        source entity (e.g. an invoice) so users can quickly set up recurrence.
+        """
         context: dict[str, Any] = {
             "template": None,
             "entity_types": [
@@ -631,6 +637,10 @@ class AutomationWebService:
                 for f in RecurringFrequency
             ],
             "is_edit": False,
+            "source_type": None,
+            "source_id": None,
+            "source_label": None,
+            "prefill": {},
         }
 
         if template_id:
@@ -639,6 +649,34 @@ class AutomationWebService:
                 logs = recurring_service.get_logs(db, template.template_id, limit=10)
                 context["template"] = _recurring_detail_view(template, logs)
                 context["is_edit"] = True
+
+        if source_type == "invoice" and source_id:
+            from app.models.finance.ar.invoice import Invoice
+
+            invoice = db.get(Invoice, coerce_uuid(source_id))
+            if invoice and invoice.organization_id == coerce_uuid(organization_id):
+                context["source_type"] = "invoice"
+                context["source_id"] = source_id
+                context["source_label"] = f"Invoice {invoice.invoice_number}"
+                context["prefill"] = {
+                    "template_name": f"Recurring: {invoice.invoice_number}",
+                    "entity_type": "INVOICE",
+                    "description": f"Auto-generated from invoice {invoice.invoice_number}",
+                }
+
+        if source_type == "bill" and source_id:
+            from app.models.finance.ap.supplier_invoice import SupplierInvoice
+
+            bill = db.get(SupplierInvoice, coerce_uuid(source_id))
+            if bill and bill.organization_id == coerce_uuid(organization_id):
+                context["source_type"] = "bill"
+                context["source_id"] = source_id
+                context["source_label"] = f"Invoice {bill.invoice_number}"
+                context["prefill"] = {
+                    "template_name": f"Recurring: {bill.invoice_number}",
+                    "entity_type": "BILL",
+                    "description": f"Auto-generated from supplier invoice {bill.invoice_number}",
+                }
 
         return context
 

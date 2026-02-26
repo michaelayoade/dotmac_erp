@@ -1,0 +1,139 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Approvals</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Expenses you approved or rejected.</p>
+        </div>
+        <a href="/expense/reports/summary" class="btn btn-secondary">
+            {{ icon_svg("document-report", "h-4 w-4 mr-1") }}
+            Other Reports
+        </a>
+    </div>
+
+    <div class="card">
+        <form method="get" class="p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="w-44">
+                    <label for="start_date" class="form-label">From</label>
+                    <input
+                        type="date"
+                        name="start_date"
+                        id="start_date"
+                        value="{{ start_date }}"
+                        class="form-input w-full"
+                    >
+                </div>
+                <div class="w-44">
+                    <label for="end_date" class="form-label">To</label>
+                    <input
+                        type="date"
+                        name="end_date"
+                        id="end_date"
+                        value="{{ end_date }}"
+                        class="form-input w-full"
+                    >
+                </div>
+                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Approved Claims</p>
+            <p class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{{ report.approved_count }}</p>
+            <p class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(report.approved_total) }}</p>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Rejected Claims</p>
+            <p class="text-2xl font-semibold text-rose-600 dark:text-rose-400">{{ report.rejected_count }}</p>
+            <p class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ "{:,.2f}".format(report.rejected_total) }}</p>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Period Decisions</p>
+            <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.approved_count + report.rejected_count }}</p>
+            {% if weekly_balance %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">Remaining weekly budget</p>
+            <p class="text-sm font-semibold font-mono {% if weekly_balance.remaining < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                {{ "{:,.2f}".format(weekly_balance.remaining) }}
+            </p>
+            {% else %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">Weekly budget not configured (unlimited).</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if weekly_balance %}
+    <div class="card p-5">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Current Week Balance</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ weekly_balance.week_label }}</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Budget</p>
+                <p class="text-sm font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(weekly_balance.budget) }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Used</p>
+                <p class="text-sm font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(weekly_balance.used) }}</p>
+            </div>
+            <div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Remaining</p>
+                <p class="text-sm font-mono {% if weekly_balance.remaining < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                    {{ "{:,.2f}".format(weekly_balance.remaining) }}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Approval Decisions</h2>
+        </div>
+        {% if report.decisions %}
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Date</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Claim</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
+                        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Decision</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Claimed</th>
+                        <th class="px-5 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Approved</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for item in report.decisions %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-5 py-3 text-sm text-slate-700 dark:text-slate-300">{{ item.action_at.strftime("%Y-%m-%d %H:%M") if item.action_at else "-" }}</td>
+                        <td class="px-5 py-3 text-sm">
+                            <a href="/expense/claims/{{ item.claim_id }}" class="font-mono text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300">{{ item.claim_number }}</a>
+                        </td>
+                        <td class="px-5 py-3 text-sm text-slate-700 dark:text-slate-300">{{ item.claimant_name }}</td>
+                        <td class="px-5 py-3 text-sm">
+                            {% if item.action_type == "APPROVE" %}
+                            <span class="inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">Approved</span>
+                            {% else %}
+                            <span class="inline-flex px-2.5 py-1 text-xs font-medium rounded-full bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">Rejected</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-5 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ "{:,.2f}".format(item.claimed_amount) }} {{ item.currency_code }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ "{:,.2f}".format(item.approved_amount) }} {{ item.currency_code }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center">
+            <p class="text-slate-500 dark:text-slate-400">No approvals or rejections found in this period.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

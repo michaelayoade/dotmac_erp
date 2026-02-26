@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -238,9 +240,32 @@ def _resolve_actor_user_id(auth: dict) -> UUID | None:
     if not actor:
         return None
     try:
-        return coerce_uuid(actor)
+        return cast(UUID, coerce_uuid(actor))
     except (TypeError, ValueError):
         return None
+
+
+def _as_int(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return default
+    return default
+
+
+def _as_str_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, dict)):
+        return [str(item) for item in value]
+    return []
 
 
 def _merge_policy_config(
@@ -509,9 +534,9 @@ def bulk_toggle_service_hooks(
         is_active=payload.enabled,
     )
     return ServiceHookBulkResult(
-        requested=int(result["requested"]),
-        processed=int(result["updated"]),
-        not_found_ids=list(result["not_found_ids"]),
+        requested=_as_int(result.get("requested"), len(payload.hook_ids)),
+        processed=_as_int(result.get("updated")),
+        not_found_ids=_as_str_list(result.get("not_found_ids")),
     )
 
 
@@ -539,7 +564,7 @@ def bulk_delete_service_hooks(
         organization_id=org_id,
     )
     return ServiceHookBulkResult(
-        requested=int(result["requested"]),
-        processed=int(result["deleted"]),
-        not_found_ids=list(result["not_found_ids"]),
+        requested=_as_int(result.get("requested"), len(payload.hook_ids)),
+        processed=_as_int(result.get("deleted")),
+        not_found_ids=_as_str_list(result.get("not_found_ids")),
     )

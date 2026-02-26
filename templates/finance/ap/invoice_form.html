@@ -251,6 +251,16 @@
         padding: 0.75rem 0.5rem;
         vertical-align: middle;
         border-bottom: 1px solid rgba(26, 31, 54, 0.05);
+        overflow: visible;
+    }
+
+    .lines-table td.line-item-cell {
+        position: relative;
+        z-index: 1;
+    }
+
+    .lines-table td.line-item-cell[data-open="true"] {
+        z-index: 70;
     }
 
     .dark .lines-table td {
@@ -259,6 +269,12 @@
 
     .lines-table tbody tr {
         transition: background-color 0.15s ease;
+        overflow: visible;
+    }
+
+    .lines-table tbody tr.line-row-open {
+        position: relative;
+        z-index: 65;
     }
 
     .lines-table tbody tr:hover {
@@ -522,6 +538,17 @@
         <!-- Form Result Messages -->
         <div id="form-result"></div>
 
+        {% if duplicate_source %}
+        <!-- Duplicate Invoice Banner -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 fade-up">
+            <div class="flex items-center gap-2">
+                {{ icon_svg("document", "h-5 w-5 text-blue-500") }}
+                <strong class="text-blue-700 dark:text-blue-400">Duplicating Invoice</strong>
+            </div>
+            <p class="text-blue-600 dark:text-blue-300 text-sm mt-1">Pre-filled from {{ duplicate_source.source_number }}. Review and adjust dates and amounts before saving.</p>
+        </div>
+        {% endif %}
+
         <!-- PO Reference Banner -->
         {% if selected_po %}
         <div class="rounded-xl bg-teal-50 border border-teal-200 p-4 dark:bg-teal-900/20 dark:border-teal-800 fade-up delay-1">
@@ -681,7 +708,7 @@
                 </button>
             </div>
 
-            <div class="line-table-wrap mt-8 overflow-x-auto -mx-2 px-2">
+            <div class="line-table-wrap mt-8 -mx-2 px-2">
                 <table class="lines-table min-w-[1100px]">
                     <thead>
                         <tr>
@@ -697,8 +724,8 @@
                     </thead>
                     <tbody>
                         <template x-for="(line, index) in form.lines" :key="index">
-                            <tr>
-                                <td>
+                            <tr :class="{ 'line-row-open': line.item_open }">
+                                <td class="line-item-cell" :data-open="line.item_open ? 'true' : 'false'">
                                     <div class="relative" @click.outside="line.item_open = false">
                                         <div class="relative">
                                             <input type="text"
@@ -721,7 +748,8 @@
                                         <div x-cloak
                                              x-show="line.item_open"
                                              x-transition
-                                             class="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                                             class="absolute mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                                             style="z-index: 200;"
                                              role="listbox">
                                             <template x-for="item in filteredItems(line.item_search)" :key="item.item_id">
                                                 <button type="button"
@@ -949,6 +977,25 @@ function invoiceForm() {
                 {% endfor %}
             ];
             {% elif not invoice %}
+            {% if duplicate_source and duplicate_source.lines %}
+            // Pre-populate from duplicated invoice
+            this.form.currency_code = '{{ duplicate_source.currency_code }}';
+            this.form.exchange_rate = '{{ duplicate_source.exchange_rate }}';
+            this.form.lines = [
+                {% for line in duplicate_source.lines %}
+                {
+                    item_id: '{{ line.item_id or "" }}',
+                    expense_account_id: '{{ line.expense_account_id }}',
+                    description: '{{ line.description }}',
+                    quantity: {{ line.quantity }},
+                    unit_price: {{ line.unit_price }},
+                    amount: {{ line.quantity * line.unit_price }},
+                    tax_code_id: '{{ line.tax_code_id }}',
+                    tax_amount: {{ line.tax_amount or 0 }}
+                },
+                {% endfor %}
+            ];
+            {% endif %}
             // Pre-populate lines from PO if available
             if (poLines && poLines.length > 0) {
                 this.form.lines = poLines.map(line => ({

@@ -824,6 +824,8 @@ class WebAuthContext:
             modules.append("settings")
         if self.is_admin or "expense:access" in scopes_set:
             modules.append("expense")
+        if self.is_admin or "discipline:access" in scopes_set:
+            modules.append("discipline")
         if self.is_admin or scopes_set.intersection(
             {
                 "coach:insights:read",
@@ -855,6 +857,7 @@ class WebAuthContext:
             "settings": "settings",
             "expense": "expense",
             "expenses": "expense",
+            "discipline": "discipline",
             "coach": "coach",
             "public_sector": "public_sector",
             "public-sector": "public_sector",
@@ -915,6 +918,8 @@ class WebAuthContext:
                 return "/settings"
             if module == "expense":
                 return "/expense"
+            if module == "discipline":
+                return "/people/hr/discipline"
             if module == "coach":
                 return "/coach/"
             if module == "self_service":
@@ -1524,6 +1529,80 @@ def require_self_service_access(
     return auth
 
 
+def require_discipline_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """
+    Require access to discipline management routes.
+
+    Allows users with explicit discipline permission, HR module access, or admin.
+    """
+    if auth.is_admin or auth.has_permission("discipline:access"):
+        return auth
+    if auth.has_module_access("people"):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Discipline access required",
+    )
+
+
+def require_discipline_cases_read(
+    auth: WebAuthContext = Depends(require_discipline_access),
+) -> WebAuthContext:
+    """Require permission to view discipline cases."""
+    if auth.is_admin or auth.has_module_access("people"):
+        return auth
+    if auth.has_permission("discipline:cases:read"):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Discipline case read permission required",
+    )
+
+
+def require_discipline_cases_create(
+    auth: WebAuthContext = Depends(require_discipline_access),
+) -> WebAuthContext:
+    """Require permission to create discipline cases."""
+    if auth.is_admin or auth.has_module_access("people"):
+        return auth
+    if auth.has_permission("discipline:cases:create"):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Discipline case create permission required",
+    )
+
+
+def require_discipline_cases_update(
+    auth: WebAuthContext = Depends(require_discipline_access),
+) -> WebAuthContext:
+    """Require permission to update discipline case records."""
+    if auth.is_admin or auth.has_module_access("people"):
+        return auth
+    if auth.has_permission("discipline:cases:update"):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Discipline case update permission required",
+    )
+
+
+def require_discipline_workflow_manage(
+    auth: WebAuthContext = Depends(require_discipline_access),
+) -> WebAuthContext:
+    """Require permission to execute discipline workflow actions."""
+    if auth.is_admin or auth.has_module_access("people"):
+        return auth
+    if auth.has_permission("discipline:workflow:manage"):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Discipline workflow permission required",
+    )
+
+
 def require_self_service_leave_approver(
     auth: WebAuthContext = Depends(require_self_service_access),
 ) -> WebAuthContext:
@@ -1544,6 +1623,28 @@ def require_self_service_leave_approver(
             detail="Leave approval permission required",
         )
     return auth
+
+
+def require_self_service_discipline_manager(
+    auth: WebAuthContext = Depends(require_self_service_access),
+) -> WebAuthContext:
+    """Require self-service access plus discipline manager permission."""
+    if auth.is_admin:
+        return auth
+    if auth.has_any_permission(
+        [
+            "discipline:access",
+            "discipline:cases:read",
+            "discipline:cases:create",
+            "discipline:cases:update",
+            "discipline:workflow:manage",
+        ]
+    ):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Team discipline permission required",
+    )
 
 
 def require_self_service_expense_approver(

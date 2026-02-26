@@ -276,11 +276,11 @@ def _execute_hook_handler(
         )
 
         module_name = hook.handler_config.get("email_module")
-        module = None
+        email_module = None
         if module_name:
             from app.services.email import EmailModule
 
-            module = EmailModule(str(module_name).upper())
+            email_module = EmailModule(str(module_name).upper())
 
         sent = send_email(
             db=db,
@@ -288,7 +288,7 @@ def _execute_hook_handler(
             subject=subject,
             body_html=body_html,
             body_text=body_text,
-            module=module,
+            module=email_module,
             organization_id=event.organization_id,
         )
         if not sent:
@@ -307,8 +307,8 @@ def _execute_hook_handler(
             )
 
         module_path, callable_name = target.split(":", 1)
-        module = import_module(module_path)
-        callback = getattr(module, callable_name, None)
+        target_module = import_module(module_path)
+        callback = getattr(target_module, callable_name, None)
         if callback is None or not callable(callback):
             raise ValueError(f"Internal service target not callable: {target}")
 

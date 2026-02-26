@@ -2239,7 +2239,8 @@ class ReportsWebService:
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Analysis", "reports")
-        cubes = AnalysisCubeService(db).list_cubes(auth.organization_id)
+        org_id = auth.organization_id
+        cubes = AnalysisCubeService(db).list_cubes(org_id) if org_id else []
         context["analysis_cubes"] = [
             {
                 "code": cube.code,
@@ -2252,7 +2253,9 @@ class ReportsWebService:
             }
             for cube in cubes
         ]
-        return templates.TemplateResponse(request, "finance/reports/analysis.html", context)
+        return templates.TemplateResponse(
+            request, "finance/reports/analysis.html", context
+        )
 
     # ─────────────────── CSV Export helpers ───────────────────
 

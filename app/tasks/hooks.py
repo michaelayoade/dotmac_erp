@@ -29,14 +29,16 @@ def _compute_retry_countdown(base_seconds: int, retry_count: int) -> int:
     safe_base = max(1, base_seconds)
     safe_retry_count = max(1, retry_count)
     countdown = safe_base * (2 ** (safe_retry_count - 1))
-    return min(countdown, MAX_RETRY_BACKOFF_SECONDS)
+    return int(min(countdown, MAX_RETRY_BACKOFF_SECONDS))
 
 
 def _trip_circuit_breaker_if_needed(db, hook: ServiceHook) -> bool:
     """Disable a hook if recent executions indicate sustained failures."""
     threshold_raw = hook.handler_config.get("circuit_breaker_failures")
+    if threshold_raw is None or isinstance(threshold_raw, bool):
+        return False
     try:
-        threshold = int(threshold_raw)
+        threshold = int(str(threshold_raw))
     except (TypeError, ValueError):
         return False
     if threshold <= 0:

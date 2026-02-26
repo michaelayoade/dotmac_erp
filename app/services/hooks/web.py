@@ -175,9 +175,7 @@ class ServiceHookWebService:
                     "webhook_method": config.get("method", "POST"),
                     "event_name_override": config.get("event_name_override"),
                     "webhook_timeout_seconds": config.get("timeout_seconds"),
-                    "circuit_breaker_failures": config.get(
-                        "circuit_breaker_failures"
-                    ),
+                    "circuit_breaker_failures": config.get("circuit_breaker_failures"),
                     "stats_success": int(stats.get("SUCCESS", 0)),
                     "stats_failed": int(stats.get("FAILED", 0)),
                     "stats_dead": int(stats.get("DEAD", 0)),

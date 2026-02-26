@@ -105,6 +105,8 @@ def downgrade() -> None:
     if not inspector.has_table("item_wac_ledger", schema="inv"):
         return
 
-    op.drop_index("ix_item_wac_org_warehouse", table_name="item_wac_ledger", schema="inv")
+    op.drop_index(
+        "ix_item_wac_org_warehouse", table_name="item_wac_ledger", schema="inv"
+    )
     op.drop_index("ix_item_wac_org_item", table_name="item_wac_ledger", schema="inv")
     op.drop_table("item_wac_ledger", schema="inv")

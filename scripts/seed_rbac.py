@@ -408,6 +408,11 @@ HR_PERMISSIONS = [
     # -------------------------------------------------------------------------
     ("hr:access", "Access HR/People module"),
     ("hr:dashboard", "View HR dashboard"),
+    ("discipline:access", "Access discipline management"),
+    ("discipline:cases:read", "View disciplinary cases"),
+    ("discipline:cases:create", "Create disciplinary cases"),
+    ("discipline:cases:update", "Update disciplinary case records"),
+    ("discipline:workflow:manage", "Manage disciplinary workflow actions"),
     # -------------------------------------------------------------------------
     # Employee Management (Core HR)
     # -------------------------------------------------------------------------
@@ -1181,6 +1186,11 @@ ROLE_PERMISSIONS = {
     "finance_manager": [
         "finance:access",
         "finance:dashboard",
+        "discipline:access",
+        "discipline:cases:read",
+        "discipline:cases:create",
+        "discipline:cases:update",
+        "discipline:workflow:manage",
         # Coach (role-scoped)
         "coach:insights:read",
         "coach:insights:feedback",
@@ -1692,6 +1702,11 @@ ROLE_PERMISSIONS = {
     "inventory_manager": [
         "finance:access",
         "finance:dashboard",
+        "discipline:access",
+        "discipline:cases:read",
+        "discipline:cases:create",
+        "discipline:cases:update",
+        "discipline:workflow:manage",
         # Coach
         "coach:insights:read",
         "coach:insights:feedback",
@@ -2296,6 +2311,11 @@ ROLE_PERMISSIONS = {
     "operations_manager": [
         "inventory:access",
         "inventory:dashboard",
+        "discipline:access",
+        "discipline:cases:read",
+        "discipline:cases:create",
+        "discipline:cases:update",
+        "discipline:workflow:manage",
         "fleet:access",
         "fleet:dashboard",
         "support:access",
@@ -2348,6 +2368,11 @@ ROLE_PERMISSIONS = {
     # Cross-Functional Roles
     # -------------------------------------------------------------------------
     "department_manager": [
+        "discipline:access",
+        "discipline:cases:read",
+        "discipline:cases:create",
+        "discipline:cases:update",
+        "discipline:workflow:manage",
         # Coach (team-scoped)
         "coach:insights:read",
         "coach:insights:read_team",

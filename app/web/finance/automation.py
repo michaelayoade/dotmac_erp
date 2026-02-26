@@ -5,6 +5,7 @@ HTML template routes for Recurring Transactions, Workflow Rules,
 Custom Fields, and Document Templates.
 """
 
+from datetime import date
 from typing import Any
 from uuid import UUID
 
@@ -105,6 +106,8 @@ def list_recurring(
 @router.get("/recurring/new", response_class=HTMLResponse)
 def new_recurring_form(
     request: Request,
+    source_type: str | None = Query(None),
+    source_id: str | None = Query(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -112,7 +115,12 @@ def new_recurring_form(
     context = base_context(request, auth, "New Recurring Template", "automation")
     context["form_data"] = {}
     context.update(
-        automation_web_service.recurring_form_context(db, str(auth.organization_id))
+        automation_web_service.recurring_form_context(
+            db,
+            str(auth.organization_id),
+            source_type=source_type,
+            source_id=source_id,
+        )
     )
     return templates.TemplateResponse(
         request, "finance/automation/recurring_form.html", context
@@ -175,14 +183,50 @@ async def create_recurring(
         data = dict(form_data)
 
     try:
-        input_data = automation_web_service.build_recurring_input(data)
+        source_type = data.pop("source_type", None)
+        source_id = data.pop("source_id", None)
 
-        template = recurring_service.create_template(
-            db=db,
-            organization_id=auth.organization_id,
-            input_data=input_data,
-            created_by=auth.user_id,
-        )
+        if source_type in ("invoice", "bill") and source_id:
+            # Create recurring template directly from the source entity
+            from app.models.finance.automation import RecurringFrequency
+            from app.services.formatters import parse_date as _parse_date
+
+            common_kwargs: dict = dict(
+                db=db,
+                organization_id=auth.organization_id,
+                template_name=data.get("template_name", ""),
+                frequency=RecurringFrequency(data["frequency"]),
+                start_date=_parse_date(data.get("start_date")) or date.today(),
+                created_by=auth.user_id,
+                end_date=_parse_date(data.get("end_date")),
+                occurrences_limit=int(data["occurrences_limit"])
+                if data.get("occurrences_limit")
+                else None,
+                auto_post=data.get("auto_post") == "on",
+                auto_send=data.get("auto_send") == "on",
+                days_before_due=int(data.get("days_before_due", 30)),
+                notify_on_generation=data.get("notify_on_generation") != "off",
+                notify_email=data.get("notify_email"),
+                description=data.get("description"),
+            )
+
+            if source_type == "invoice":
+                template = recurring_service.create_from_invoice(
+                    invoice_id=UUID(source_id), **common_kwargs
+                )
+            else:
+                template = recurring_service.create_from_bill(
+                    bill_id=UUID(source_id), **common_kwargs
+                )
+        else:
+            input_data = automation_web_service.build_recurring_input(data)
+
+            template = recurring_service.create_template(
+                db=db,
+                organization_id=auth.organization_id,
+                input_data=input_data,
+                created_by=auth.user_id,
+            )
 
         if "application/json" in content_type:
             return {"success": True, "template_id": str(template.template_id)}
@@ -201,7 +245,12 @@ async def create_recurring(
 
         context = base_context(request, auth, "New Recurring Template", "automation")
         context.update(
-            automation_web_service.recurring_form_context(db, str(auth.organization_id))
+            automation_web_service.recurring_form_context(
+                db,
+                str(auth.organization_id),
+                source_type=source_type,
+                source_id=source_id,
+            )
         )
         context["error"] = str(e)
         context["form_data"] = data

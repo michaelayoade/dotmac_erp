@@ -238,12 +238,13 @@ def new_invoice_form(
     request: Request,
     supplier_id: str | None = None,
     po_id: str | None = None,
+    duplicate_from: str | None = Query(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """New AP invoice form page."""
     return ap_web_service.invoice_new_form_response(
-        request, auth, supplier_id, po_id, db
+        request, auth, supplier_id, po_id, db, duplicate_from=duplicate_from
     )
 
 

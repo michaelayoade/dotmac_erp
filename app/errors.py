@@ -1,10 +1,11 @@
 import logging
+from html import escape
 from urllib.parse import quote
 
 from fastapi import HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.services.common import (
@@ -55,7 +56,92 @@ def _is_html_request(request: Request) -> bool:
     return not request.url.path.startswith("/api/")
 
 
+def _friendly_bad_request_message(detail: object) -> str:
+    """Return a user-friendly message for 400 errors."""
+    fallback = "Some required information is missing or invalid. Please check the form and try again."
+
+    if isinstance(detail, str):
+        message = detail.strip()
+        if not message:
+            return fallback
+        lowered = message.lower()
+        # Hide technical payload-like errors from end users
+        if any(
+            token in lowered
+            for token in (
+                "validation error",
+                "type_error",
+                "value_error",
+                "traceback",
+                "{",
+                "[",
+            )
+        ):
+            return fallback
+        return message
+
+    if isinstance(detail, dict):
+        # Prefer explicit user message if present
+        for key in ("message", "detail", "error"):
+            value = detail.get(key)
+            if isinstance(value, str) and value.strip():
+                candidate = value.strip()
+                lowered = candidate.lower()
+                if any(
+                    token in lowered
+                    for token in ("type_error", "value_error", "traceback")
+                ):
+                    return fallback
+                return candidate
+        return fallback
+
+    # Lists are commonly validation payloads; keep message plain for non-technical users
+    if isinstance(detail, list):
+        return fallback
+
+    return fallback
+
+
 def register_error_handlers(app) -> None:
+    def _error_template_response(
+        request: Request,
+        template_name: str,
+        context: dict[str, object],
+        *,
+        status_code: int,
+        fallback_title: str,
+    ) -> Response:
+        try:
+            template_context = dict(context)
+            template_context.setdefault("request", request)
+            rendered_html = templates.env.get_template(template_name).render(
+                template_context
+            )
+            return HTMLResponse(
+                status_code=status_code,
+                content=rendered_html,
+            )
+        except Exception:
+            logger.exception("Failed rendering error template %s", template_name)
+            message = context.get("message")
+            safe_message = (
+                escape(str(message))
+                if message is not None
+                else "An unexpected error occurred."
+            )
+            safe_title = escape(fallback_title)
+            return HTMLResponse(
+                status_code=status_code,
+                content=(
+                    "<!doctype html><html><head>"
+                    f"<title>{safe_title}</title>"
+                    "</head><body>"
+                    f"<h1>{safe_title}</h1>"
+                    f"<p>{safe_message}</p>"
+                    "</body></html>"
+                ),
+            )
+
     async def _handle_http_exception(
         request: Request, status_code: int, detail: object
     ) -> Response:
@@ -68,18 +154,41 @@ def register_error_handlers(app) -> None:
             login_url = f"/login?next={quote(next_url, safe='')}"
             return RedirectResponse(url=login_url, status_code=302)
 
-        # For 403 errors on web routes, show a forbidden page or redirect
+        # For 403 errors on web routes, render a user-friendly forbidden page
         if status_code == 403 and _is_html_request(request):
-            return RedirectResponse(url="/login?error=forbidden", status_code=302)
+            message = (
+                detail
+                if isinstance(detail, str)
+                else "You do not have permission to view this page."
+            )
+            return _error_template_response(
+                request,
+                "errors/403.html",
+                {"message": message},
+                status_code=403,
+                fallback_title="Forbidden",
+            )
 
         # For 404 errors on web routes, render the HTML 404 page
         if status_code == 404 and _is_html_request(request):
             message = detail if isinstance(detail, str) else "Page not found"
-            return templates.TemplateResponse(
+            return _error_template_response(
                 request,
                 "errors/404.html",
                 {"message": message},
                 status_code=404,
+                fallback_title="Page Not Found",
+            )
+
+        # For 400 errors on web routes, render a user-friendly bad request page
+        if status_code == 400 and _is_html_request(request):
+            message = _friendly_bad_request_message(detail)
+            return _error_template_response(
+                request,
+                "errors/400.html",
+                {"message": message},
+                status_code=400,
+                fallback_title="Bad Request",
             )
 
         # For other errors or API requests, return JSON
@@ -171,11 +280,12 @@ def register_error_handlers(app) -> None:
                         url=f"/projects/new?error={quote(message)}",
                         status_code=303,
                     )
-            return templates.TemplateResponse(
+            return _error_template_response(
                 request,
                 "errors/400.html",
                 {"message": message},
                 status_code=400,
+                fallback_title="Bad Request",
             )
         return JSONResponse(
             status_code=422,
@@ -239,7 +349,12 @@ def register_error_handlers(app) -> None:
     async def forbidden_error_handler(request: Request, exc: ForbiddenError):
         """Handle forbidden/permission errors (403)."""
         if _is_html_request(request):
-            return RedirectResponse(url="/login?error=forbidden", status_code=302)
+            return templates.TemplateResponse(
+                request,
+                "errors/403.html",
+                {"message": exc.message},
+                status_code=403,
+            )
         return JSONResponse(
             status_code=403,
             content=_error_payload("forbidden", exc.message, None),
@@ -286,7 +401,12 @@ def register_error_handlers(app) -> None:
     async def authorization_error_handler(request: Request, exc: AuthorizationError):
         """Handle authorization errors (403)."""
         if _is_html_request(request):
-            return RedirectResponse(url="/login?error=forbidden", status_code=302)
+            return templates.TemplateResponse(
+                request,
+                "errors/403.html",
+                {"message": exc.message},
+                status_code=403,
+            )
         return JSONResponse(
             status_code=403,
             content=_error_payload("authorization_error", exc.message, None),

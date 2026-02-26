@@ -761,6 +761,24 @@ def expense_trends_report(
     )
 
 
+@router.get("/reports/my-approvals", response_class=HTMLResponse)
+def my_approvals_report(
+    request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Approver decisions report for the logged-in user."""
+    return expense_claims_web_service.my_approvals_report_response(
+        request=request,
+        auth=auth,
+        db=db,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
 # =============================================================================
 # Cash Advance Management
 # =============================================================================

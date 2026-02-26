@@ -271,7 +271,9 @@ class SupplierInvoiceService(ListResponseMixin):
         fp_service = FiscalPositionService(db)
         supplier_type = getattr(supplier, "supplier_type", None)
         supplier_classification = (
-            supplier_type.value if hasattr(supplier_type, "value") else supplier_type
+            supplier_type.value
+            if supplier_type is not None and hasattr(supplier_type, "value")
+            else supplier_type
         )
         fiscal_position = fp_service.get_for_partner(
             organization_id=org_id,

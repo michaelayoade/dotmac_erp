@@ -109,7 +109,9 @@ def upgrade() -> None:
             sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
             sa.Column("cube_code", sa.String(length=50), nullable=False),
             sa.Column("name", sa.String(length=120), nullable=False),
-            sa.Column("created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column(
+                "created_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+            ),
             sa.Column(
                 "row_dimensions",
                 postgresql.JSONB(astext_type=sa.Text()),

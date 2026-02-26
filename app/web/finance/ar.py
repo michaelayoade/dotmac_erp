@@ -186,12 +186,13 @@ def list_invoices(
 def new_invoice_form(
     request: Request,
     customer_id: str | None = Query(None),
+    duplicate_from: str | None = Query(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """New AR invoice form page."""
     return ar_web_service.invoice_new_form_response(
-        request, auth, db, customer_id=customer_id
+        request, auth, db, customer_id=customer_id, duplicate_from=duplicate_from
     )
 
 

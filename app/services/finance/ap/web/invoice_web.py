@@ -388,7 +388,6 @@ class InvoiceWebService:
                     Item.is_purchaseable == True,
                 )
                 .order_by(Item.item_code)
-                .limit(200)
             ).all()
         ]
 
@@ -688,8 +687,9 @@ class InvoiceWebService:
         supplier_id: str | None,
         po_id: str | None,
         db: Session,
+        duplicate_from: str | None = None,
     ) -> HTMLResponse:
-        """Render new invoice form."""
+        """Render new invoice form, optionally pre-filled from a source invoice."""
         context = base_context(request, auth, "New AP Invoice", "ap")
         context.update(
             self.invoice_form_context(
@@ -699,9 +699,74 @@ class InvoiceWebService:
                 po_id=po_id,
             )
         )
+
+        if duplicate_from:
+            dup_ctx = self._duplicate_invoice_context(
+                db, str(auth.organization_id), duplicate_from
+            )
+            if dup_ctx:
+                context["duplicate_source"] = dup_ctx
+                # Re-build form context with source supplier pre-selected
+                if not supplier_id:
+                    supplier_obj = db.get(Supplier, coerce_uuid(dup_ctx["supplier_id"]))
+                    if supplier_obj:
+                        context["selected_supplier"] = supplier_option_view(
+                            supplier_obj
+                        )
+
         return templates.TemplateResponse(
             request, "finance/ap/invoice_form.html", context
         )
+
+    @staticmethod
+    def _duplicate_invoice_context(
+        db: Session,
+        organization_id: str,
+        invoice_id: str,
+    ) -> dict | None:
+        """Build pre-fill context from an existing AP invoice for duplication.
+
+        Returns a dict with supplier, line items, and metadata from the
+        source invoice — but no invoice_id/invoice_number so the form
+        creates a new invoice.
+        """
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(SupplierInvoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            return None
+
+        lines = db.scalars(
+            select(SupplierInvoiceLine)
+            .where(SupplierInvoiceLine.invoice_id == inv_id)
+            .order_by(SupplierInvoiceLine.line_number)
+        ).all()
+
+        return {
+            "source_number": invoice.invoice_number,
+            "supplier_id": str(invoice.supplier_id),
+            "currency_code": invoice.currency_code or "",
+            "supplier_invoice_number": invoice.supplier_invoice_number or "",
+            "comments": invoice.comments or "",
+            "exchange_rate": str(invoice.exchange_rate)
+            if invoice.exchange_rate
+            else "1",
+            "lines": [
+                {
+                    "item_id": str(line.item_id) if line.item_id else "",
+                    "expense_account_id": str(line.expense_account_id)
+                    if line.expense_account_id
+                    else "",
+                    "description": (line.description or "").replace("'", "\\'"),
+                    "quantity": line.quantity,
+                    "unit_price": line.unit_price,
+                    "tax_code_id": str(line.tax_code_id) if line.tax_code_id else "",
+                    "tax_amount": line.tax_amount or 0,
+                }
+                for line in lines
+            ],
+        }
 
     def invoice_edit_form_response(
         self,

@@ -54,9 +54,7 @@ class TestServiceHookWebService:
         assert ctx["hooks"][0]["stats_failed"] == 2
         assert len(ctx["hooks"][0]["recent_executions"]) == 1
         assert ctx["hooks"][0]["recent_executions"][0]["status"] == "FAILED"
-        assert (
-            ctx["hooks"][0]["recent_executions"][0]["response_status_code"] == 500
-        )
+        assert ctx["hooks"][0]["recent_executions"][0]["response_status_code"] == 500
         assert ctx["hooks"][0]["circuit_breaker_failures"] == 3
         assert ctx["hooks"][0]["webhook_timeout_seconds"] == 20
         assert "sales.order.confirmed" in ctx["available_events"]

@@ -15,8 +15,22 @@
 
 {% block content %}
 <div class="mx-auto max-w-3xl">
+    {% if source_label %}
+    <!-- Source Entity Banner -->
+    <div class="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+        <div class="flex items-center gap-2">
+            <strong class="text-blue-700 dark:text-blue-400">Creating from {{ source_label }}</strong>
+        </div>
+        <p class="text-blue-600 dark:text-blue-300 text-sm mt-1">The invoice details will be used as the template data. Choose a schedule below.</p>
+    </div>
+    {% endif %}
+
     <form method="post" action="/automation/recurring/{% if is_edit %}{{ template.template_id }}/edit{% else %}new{% endif %}" class="space-y-6">
         {{ request.state.csrf_form | safe }}
+        {% if source_type and source_id %}
+        <input type="hidden" name="source_type" value="{{ source_type }}">
+        <input type="hidden" name="source_id" value="{{ source_id }}">
+        {% endif %}
         <!-- Basic Info -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
@@ -26,17 +40,25 @@
                 <div>
                     <label for="template_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Template Name <span class="text-rose-500">*</span></label>
                     <input type="text" id="template_name" name="template_name" required
-                           value="{{ template.template_name if template else form_data.template_name | default('', true) }}"
+                           value="{{ template.template_name if template else (prefill.template_name if prefill.template_name is defined else form_data.template_name | default('', true)) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
                     <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
                     <textarea id="description" name="description" rows="3"
-                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ template.description if template else form_data.description | default('', true) }}</textarea>
+                              class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ template.description if template else (prefill.description if prefill.description is defined else form_data.description | default('', true)) }}</textarea>
                 </div>
                 {% if not is_edit %}
                 <div>
                     <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type <span class="text-rose-500">*</span></label>
+                    {% if source_type %}
+                    {# Entity type is locked when pre-filled from a source entity #}
+                    <input type="hidden" name="entity_type" value="{{ prefill.entity_type }}">
+                    <div class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-slate-600 cursor-not-allowed dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                        {{ prefill.entity_type | replace('_', ' ') | title }}
+                        <span class="text-xs text-slate-400 ml-2">(from {{ source_label }})</span>
+                    </div>
+                    {% else %}
                     <select id="entity_type" name="entity_type" required
                             class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         <option value="">Select type...</option>
@@ -44,6 +66,7 @@
                         <option value="{{ et.value }}" {{ 'selected' if form_data.entity_type == et.value else '' }}>{{ et.label }}</option>
                         {% endfor %}
                     </select>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>

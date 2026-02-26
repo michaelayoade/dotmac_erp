@@ -5,6 +5,7 @@ from pathlib import Path
 from threading import Lock
 from time import monotonic
 from unittest.mock import Mock
+from urllib.parse import parse_qs, unquote_plus, urlparse
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -71,6 +72,7 @@ from app.services import audit as audit_service
 from app.services.settings_seed import seed_all_settings
 from app.startup import log_startup_info, validate_startup
 from app.telemetry import setup_otel
+from app.templates import templates
 from app.web.admin import router as admin_web_router
 from app.web.admin_crm_sync import router as admin_crm_sync_router
 from app.web.admin_sync import router as admin_sync_router
@@ -154,6 +156,81 @@ register_error_handlers(app)
 # Rate limiting must come before CSRF to reject early
 app.middleware("http")(rate_limit_middleware)
 app.middleware("http")(csrf_middleware)
+
+
+def _is_html_request(request: Request) -> bool:
+    """Check if request expects HTML."""
+    accept = request.headers.get("accept", "")
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        return False
+    if request.url.path.startswith("/api/"):
+        return False
+    if request.url.path.startswith("/auth/") and not request.url.path.startswith(
+        "/auth/me"
+    ):
+        return False
+    if "text/html" in accept:
+        return True
+    return not request.url.path.startswith("/api/")
+
+
+def _map_error_token_to_status(error_value: str) -> int:
+    token = error_value.strip().lower().replace(" ", "_")
+    if token in {"forbidden", "access_denied", "unauthorized"}:
+        return 403
+    if token in {"not_found", "missing", "does_not_exist"}:
+        return 404
+    return 400
+
+
+def _friendly_redirect_error_message(error_value: str, status_code: int) -> str:
+    token = error_value.strip().lower().replace(" ", "_")
+    if token in {"forbidden", "access_denied", "unauthorized"}:
+        return "You do not have permission to access this page."
+    if token in {"not_found", "missing", "does_not_exist"}:
+        return "The requested item could not be found."
+    if status_code == 400 and token in {"invalid", "bad_request"}:
+        return "Some required information is missing or invalid. Please check the form and try again."
+    if "_" in error_value and error_value.lower() == token:
+        return error_value.replace("_", " ").capitalize()
+    return error_value
+
+
+@app.middleware("http")
+async def redirect_error_template_middleware(request: Request, call_next):
+    """Convert redirect error query params into user-facing error templates."""
+    response = await call_next(request)
+
+    if not _is_html_request(request):
+        return response
+    if request.headers.get("HX-Request", "").lower() == "true":
+        return response
+    if response.status_code not in {301, 302, 303, 307, 308}:
+        return response
+
+    location = response.headers.get("location")
+    if not location or "error=" not in location:
+        return response
+
+    try:
+        parsed = urlparse(location)
+        params = parse_qs(parsed.query or "")
+        raw_error = params.get("error", [None])[0]
+        if not raw_error:
+            return response
+        raw_message = unquote_plus(str(raw_error)).strip()
+        status_code = _map_error_token_to_status(raw_message)
+        message = _friendly_redirect_error_message(raw_message, status_code)
+        template_name = f"errors/{status_code}.html"
+        return templates.TemplateResponse(
+            request,
+            template_name,
+            {"message": message},
+            status_code=status_code,
+        )
+    except Exception:
+        return response
 
 
 @app.middleware("http")

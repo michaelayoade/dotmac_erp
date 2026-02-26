@@ -564,17 +564,88 @@ class InvoiceWebService:
         auth: WebAuthContext,
         db: Session,
         customer_id: str | None = None,
+        duplicate_from: str | None = None,
     ) -> HTMLResponse:
-        """Render new invoice form."""
+        """Render new invoice form, optionally pre-filled from a source invoice."""
         context = base_context(request, auth, "New AR Invoice", "ar")
         context.update(
             self.invoice_form_context(
                 db, str(auth.organization_id), customer_id=customer_id
             )
         )
+
+        if duplicate_from:
+            dup_ctx = self._duplicate_invoice_context(
+                db, str(auth.organization_id), duplicate_from
+            )
+            if dup_ctx:
+                context["duplicate_source"] = dup_ctx
+                # Pre-select + lock the customer from the source invoice
+                context["selected_customer_id"] = dup_ctx["customer_id"]
+                context["locked_customer"] = True
+
         return templates.TemplateResponse(
             request, "finance/ar/invoice_form.html", context
         )
+
+    @staticmethod
+    def _duplicate_invoice_context(
+        db: Session,
+        organization_id: str,
+        invoice_id: str,
+    ) -> dict | None:
+        """Build pre-fill context from an existing invoice for duplication.
+
+        Returns a dict with customer, line items, and metadata from the
+        source invoice — but no invoice_id/invoice_number so the form
+        creates a new invoice.
+        """
+        from app.models.finance.ar.invoice_line import InvoiceLine
+
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            return None
+
+        lines = db.scalars(
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
+            .order_by(InvoiceLine.line_number)
+        ).all()
+
+        return {
+            "source_number": invoice.invoice_number,
+            "customer_id": str(invoice.customer_id),
+            "currency_code": invoice.currency_code or "",
+            "po_number": getattr(invoice, "po_number", "") or "",
+            "notes": invoice.notes or "",
+            "terms": getattr(invoice, "payment_terms", "") or "",
+            "exchange_rate": str(invoice.exchange_rate)
+            if invoice.exchange_rate
+            else "1",
+            "lines": [
+                {
+                    "item_id": str(line.item_id) if line.item_id else "",
+                    "revenue_account_id": str(line.revenue_account_id)
+                    if line.revenue_account_id
+                    else "",
+                    "description": (line.description or "").replace("'", "\\'"),
+                    "quantity": line.quantity,
+                    "unit_price": line.unit_price,
+                    "tax_amount": line.tax_amount or 0,
+                    "line_taxes": list(
+                        db.scalars(
+                            select(InvoiceLineTax).where(
+                                InvoiceLineTax.line_id == line.line_id
+                            )
+                        ).all()
+                    ),
+                }
+                for line in lines
+            ],
+        }
 
     async def create_invoice_response(
         self,

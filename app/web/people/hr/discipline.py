@@ -23,7 +23,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.discipline.web import discipline_web_service
-from app.web.deps import WebAuthContext, get_db, require_hr_access
+from app.web.deps import (
+    WebAuthContext,
+    get_db,
+    require_discipline_cases_create,
+    require_discipline_cases_read,
+    require_discipline_cases_update,
+    require_discipline_workflow_manage,
+)
 
 router = APIRouter(prefix="/discipline", tags=["discipline-web"])
 
@@ -42,7 +49,7 @@ def list_cases(
     employee_id: str | None = None,
     include_closed: bool = False,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_read),
     db: Session = Depends(get_db),
 ):
     """List disciplinary cases with filters."""
@@ -62,7 +69,7 @@ def list_cases(
 @router.get("/new", response_class=HTMLResponse)
 def new_case_form(
     request: Request,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_create),
     db: Session = Depends(get_db),
 ):
     """Render form to create a new disciplinary case."""
@@ -77,7 +84,7 @@ def new_case_form(
 def discipline_employee_search(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=8, ge=1, le=20),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_read),
     db: Session = Depends(get_db),
 ):
     """Search active employees for discipline typeahead."""
@@ -91,7 +98,7 @@ def discipline_employee_search(
 
 
 @router.post("/new")
-def create_case(
+async def create_case(
     request: Request,
     employee_id: str | None = Form(None),
     violation_type: str | None = Form(None),
@@ -100,24 +107,39 @@ def create_case(
     description: str | None = Form(None),
     incident_date: str | None = Form(None),
     reported_by_id: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_create),
     db: Session = Depends(get_db),
 ):
     """Create a new disciplinary case."""
     form = getattr(request.state, "csrf_form", None)
+    if not hasattr(form, "get"):
+        try:
+            form = await request.form()
+        except Exception:
+            form = None
+
+    def _value(name: str, fallback: str | None = None) -> str | None:
+        raw = fallback
+        if form and hasattr(form, "get"):
+            candidate = form.get(name)
+            if isinstance(candidate, str) and candidate:
+                raw = candidate
+        if isinstance(raw, str):
+            raw = raw.strip()
+        return raw or None
+
+    employee_id = _value("employee_id", employee_id)
+    violation_type = _value("violation_type", violation_type)
+    severity = _value("severity", severity)
+    subject = _value("subject", subject)
+    description = _value("description", description)
+    incident_date = _value("incident_date", incident_date)
+    reported_by_id = _value("reported_by_id", reported_by_id)
     employee_name: str | None = None
     reported_by_name: str | None = None
-    if form:
-        # Prefer CSRF-parsed form data when available (middleware may consume body).
-        employee_id = form.get("employee_id") or employee_id
-        violation_type = form.get("violation_type") or violation_type
-        severity = form.get("severity") or severity
-        subject = form.get("subject") or subject
-        description = form.get("description") or description
-        incident_date = form.get("incident_date") or incident_date
-        reported_by_id = form.get("reported_by_id") or reported_by_id
-        employee_name = form.get("employee_name") or employee_name
-        reported_by_name = form.get("reported_by_name") or reported_by_name
+    if form and hasattr(form, "get"):
+        employee_name = _value("employee_name", employee_name)
+        reported_by_name = _value("reported_by_name", reported_by_name)
 
     if not employee_id or not violation_type or not severity or not subject:
         return discipline_web_service.case_new_form_response(
@@ -174,7 +196,7 @@ def create_case(
 def case_detail(
     request: Request,
     case_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_read),
     db: Session = Depends(get_db),
 ):
     """View disciplinary case details."""
@@ -197,7 +219,7 @@ def issue_query(
     case_id: UUID,
     query_text: str | None = Form(None),
     response_due_date: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Issue a query to the employee."""
@@ -228,7 +250,7 @@ def schedule_hearing(
     hearing_date: str | None = Form(None),
     hearing_location: str | None = Form(None),
     panel_chair_id: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Schedule a disciplinary hearing."""
@@ -259,7 +281,7 @@ def record_hearing(
     request: Request,
     case_id: UUID,
     hearing_notes: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Record hearing notes."""
@@ -290,7 +312,7 @@ def record_decision(
     action_description: str | None = Form(None),
     effective_date: str | None = Form(None),
     end_date: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Record decision and actions."""
@@ -323,7 +345,7 @@ def record_decision(
 @router.post("/{case_id}/close")
 def close_case(
     case_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Close a disciplinary case."""
@@ -337,7 +359,7 @@ def close_case(
 @router.post("/{case_id}/withdraw")
 def withdraw_case(
     case_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Withdraw a disciplinary case."""
@@ -351,7 +373,7 @@ def withdraw_case(
 @router.post("/{case_id}/delete")
 def delete_case(
     case_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_update),
     db: Session = Depends(get_db),
 ):
     """Delete a draft disciplinary case."""
@@ -374,7 +396,7 @@ def add_witness(
     employee_id: str | None = Form(None),
     external_name: str | None = Form(None),
     external_contact: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_update),
     db: Session = Depends(get_db),
 ):
     """Add a witness to a case."""
@@ -397,7 +419,7 @@ def add_witness(
 def acknowledge_response(
     case_id: UUID,
     response_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
     db: Session = Depends(get_db),
 ):
     """Acknowledge an employee response."""
@@ -422,7 +444,7 @@ def upload_document(
     document_type: str = Form(...),
     title: str | None = Form(None),
     description: str | None = Form(None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_update),
     db: Session = Depends(get_db),
 ):
     """Upload a document to a disciplinary case."""
@@ -472,7 +494,7 @@ def upload_document(
 def download_document(
     case_id: UUID,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_read),
     db: Session = Depends(get_db),
 ):
     """Download a document from a disciplinary case."""
@@ -526,7 +548,7 @@ def download_document(
 def delete_document(
     case_id: UUID,
     document_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_discipline_cases_update),
     db: Session = Depends(get_db),
 ):
     """Delete a document from a disciplinary case."""

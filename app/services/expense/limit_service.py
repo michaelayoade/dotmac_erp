@@ -1507,7 +1507,8 @@ class ExpenseLimitService:
         org_id: UUID,
         employee: Employee,
     ) -> tuple[Decimal, UUID] | None:
-        """Get weekly approval budget in priority: employee -> grade -> designation."""
+        """Get weekly approval budget in priority: employee -> grade -> designation -> role."""
+        from app.models.rbac import PersonRole
 
         def _lookup(
             scope_type: str, scope_id: UUID | None
@@ -1543,6 +1544,29 @@ class ExpenseLimitService:
             desig_row = _lookup("DESIGNATION", employee.designation_id)
             if desig_row is not None:
                 return desig_row
+
+        role_row = self.db.execute(
+            select(
+                ExpenseApproverLimit.weekly_approval_budget,
+                ExpenseApproverLimit.approver_limit_id,
+            )
+            .join(
+                PersonRole,
+                and_(
+                    PersonRole.role_id == ExpenseApproverLimit.scope_id,
+                    PersonRole.person_id == employee.person_id,
+                ),
+            )
+            .where(
+                ExpenseApproverLimit.organization_id == org_id,
+                ExpenseApproverLimit.is_active == True,
+                ExpenseApproverLimit.scope_type == "ROLE",
+                ExpenseApproverLimit.weekly_approval_budget.isnot(None),
+            )
+            .order_by(ExpenseApproverLimit.created_at.desc())
+        ).first()
+        if role_row is not None:
+            return role_row[0], role_row[1]
 
         return None
 

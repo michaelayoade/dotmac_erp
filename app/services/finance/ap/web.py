@@ -1080,7 +1080,6 @@ class APWebService:
                     Item.is_purchaseable.is_(True),
                 )
                 .order_by(Item.item_code)
-                .limit(200)
             ).all()
         ]
 

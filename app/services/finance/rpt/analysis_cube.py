@@ -70,9 +70,7 @@ class AnalysisCubeService:
             raise ValueError("Limit must be between 1 and 5000.")
 
         dim_map = {d["field"]: d for d in (cube.dimensions or []) if d.get("field")}
-        measure_map = {
-            m["field"]: m for m in (cube.measures or []) if m.get("field")
-        }
+        measure_map = {m["field"]: m for m in (cube.measures or []) if m.get("field")}
 
         select_parts: list[str] = []
         group_parts: list[str] = []
@@ -114,7 +112,7 @@ class AnalysisCubeService:
         group_clause = ", ".join(group_parts)
 
         sql = (
-            f"SELECT {select_clause} "
+            f"SELECT {select_clause} "  # nosec B608
             f"FROM {from_clause} "
             f"WHERE {where_clause} "
             f"GROUP BY {group_clause} "

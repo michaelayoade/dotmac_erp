@@ -828,7 +828,9 @@ class InventoryTransactionService(ListResponseMixin):
                 default="manual",
             )
         except Exception:
-            logger.exception("Failed reading inventory_valuation_mode; using manual mode.")
+            logger.exception(
+                "Failed reading inventory_valuation_mode; using manual mode."
+            )
             return False
         return str(mode or "manual").lower() == "real_time"
 

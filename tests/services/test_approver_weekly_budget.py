@@ -30,9 +30,10 @@ def reviewer_person_id():
     return uuid4()
 
 
-def _make_employee(employee_id, *, grade_id=None, designation_id=None):
+def _make_employee(employee_id, *, person_id=None, grade_id=None, designation_id=None):
     emp = MagicMock()
     emp.employee_id = employee_id
+    emp.person_id = person_id or uuid4()
     emp.grade_id = grade_id
     emp.designation_id = designation_id
     return emp
@@ -125,3 +126,39 @@ class TestWeeklyReset:
                     reviewed_by_id=reviewer_person_id,
                     reset_reason="No budget",
                 )
+
+
+class TestWeeklyBudgetLookupPriority:
+    def test_falls_through_to_role_when_no_employee_grade_designation(self, org_id):
+        db = MagicMock()
+        role_limit_id = uuid4()
+        employee = _make_employee(uuid4(), grade_id=uuid4(), designation_id=uuid4())
+
+        # employee -> None, grade -> None, designation -> None, role -> row
+        db.execute.return_value.first.side_effect = [
+            None,
+            None,
+            None,
+            (Decimal("400000"), role_limit_id),
+        ]
+
+        svc = ExpenseLimitService(db)
+        result = svc._get_approver_weekly_budget(org_id, employee)
+        assert result == (Decimal("400000"), role_limit_id)
+
+    def test_designation_takes_precedence_over_role(self, org_id):
+        db = MagicMock()
+        designation_limit_id = uuid4()
+        employee = _make_employee(uuid4(), grade_id=uuid4(), designation_id=uuid4())
+
+        # employee -> None, grade -> None, designation -> row (role should not run)
+        db.execute.return_value.first.side_effect = [
+            None,
+            None,
+            (Decimal("300000"), designation_limit_id),
+        ]
+
+        svc = ExpenseLimitService(db)
+        result = svc._get_approver_weekly_budget(org_id, employee)
+        assert result == (Decimal("300000"), designation_limit_id)
+        assert db.execute.call_count == 3

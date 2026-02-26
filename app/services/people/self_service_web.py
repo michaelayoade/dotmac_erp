@@ -6,19 +6,25 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote, urlencode
 from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
 from app.models.finance.core_org.pfa_directory import PFADirectory
-from app.models.people.exp import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
+from app.models.people.exp import (
+    ExpenseClaim,
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
+    ExpenseClaimStatus,
+)
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
@@ -28,6 +34,7 @@ from app.models.person import Person
 from app.models.rbac import PersonRole, Role
 from app.services.common import PaginationParams, ValidationError, coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.expense.limit_service import ExpenseLimitService
 from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.attendance import AttendanceService
 from app.services.people.attendance.attendance_service import AttendanceServiceError
@@ -1557,99 +1564,125 @@ class SelfServiceWebService:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
         try:
-            manager_employee_id = self._get_employee_id(db, org_id, person_id)
+            approver_employee_id = self._get_employee_id(db, org_id, person_id)
         except HTTPException as exc:
             if exc.status_code == 404:
                 return self._employee_required_response(
                     request,
                     auth,
                     db,
-                    "Team Expenses",
-                    "self-team-expenses",
+                    "My Approvals",
+                    "self-my-approvals",
                     detail=exc.detail,
                 )
             raise
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
-        report_ids = [emp.employee_id for emp in reports]
-        items = []
-        total = 0
-        pagination = PaginationParams.from_page(page, per_page=20)
+        report_data = ExpenseService(db, auth).get_my_approvals_report(
+            org_id,
+            approver_id=approver_employee_id,
+        )
+        decisions = report_data["decisions"]
+        if status:
+            status = status.upper()
+            if status not in {"APPROVED", "REJECTED"}:
+                raise HTTPException(status_code=400, detail="Invalid status")
+            action_filter = "APPROVE" if status == "APPROVED" else "REJECT"
+            decisions = [
+                d
+                for d in decisions
+                if d.get("action_type", "").upper() == action_filter
+            ]
 
-        if report_ids:
-            query = (
-                select(ExpenseClaim)
-                .options(
-                    joinedload(ExpenseClaim.items).joinedload(
-                        ExpenseClaimItem.category
-                    ),
-                    joinedload(ExpenseClaim.employee),
+        pagination = PaginationParams.from_page(page, per_page=20)
+        total = len(decisions)
+        items = decisions[pagination.offset : pagination.offset + pagination.limit]
+        total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
+
+        weekly_balance = None
+        approver = db.get(Employee, approver_employee_id)
+        if approver is not None:
+            limit_svc = ExpenseLimitService(db)
+            budget_info = limit_svc._get_approver_weekly_budget(org_id, approver)
+            if budget_info is not None:
+                budget_amount, limit_id = budget_info
+                now = datetime.now(UTC)
+                week_start = limit_svc._start_of_week_utc(now)
+                week_end = week_start + timedelta(days=6)
+                latest_reset = limit_svc.get_latest_weekly_reset(
+                    org_id,
+                    approver_id=approver_employee_id,
+                    approver_limit_id=limit_id,
+                    from_datetime=week_start,
                 )
-                .where(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.employee_id.in_(report_ids),
-                )
-            )
-            if status:
-                try:
-                    status_value = ExpenseClaimStatus(status)
-                except ValueError as exc:
-                    raise HTTPException(
-                        status_code=400, detail="Invalid status"
-                    ) from exc
-                query = query.where(ExpenseClaim.status == status_value)
-            query = query.order_by(ExpenseClaim.claim_date.desc())
-            count_query = select(func.count()).select_from(
-                select(ExpenseClaim)
-                .where(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.employee_id.in_(report_ids),
-                )
-                .subquery()
-            )
-            if status:
-                count_query = select(func.count()).select_from(
-                    select(ExpenseClaim)
+                usage_start = latest_reset.reset_at if latest_reset else week_start
+                used_amount = db.scalar(
+                    select(
+                        func.coalesce(
+                            func.sum(ExpenseClaim.total_approved_amount), Decimal("0")
+                        )
+                    )
+                    .select_from(ExpenseClaim)
+                    .join(
+                        ExpenseClaimAction,
+                        and_(
+                            ExpenseClaimAction.claim_id == ExpenseClaim.claim_id,
+                            ExpenseClaimAction.action_type
+                            == ExpenseClaimActionType.APPROVE,
+                            ExpenseClaimAction.status
+                            == ExpenseClaimActionStatus.COMPLETED,
+                        ),
+                    )
                     .where(
                         ExpenseClaim.organization_id == org_id,
-                        ExpenseClaim.employee_id.in_(report_ids),
-                        ExpenseClaim.status == status_value,
+                        ExpenseClaim.status.in_(
+                            [ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]
+                        ),
+                        ExpenseClaimAction.created_at >= usage_start,
+                        ExpenseClaimAction.created_at <= now,
+                        ExpenseClaim.approver_id == approver_employee_id,
                     )
-                    .subquery()
-                )
-            total = db.scalar(count_query) or 0
-            items = list(
-                db.scalars(query.offset(pagination.offset).limit(pagination.limit))
-                .unique()
-                .all()
-            )
+                ) or Decimal("0")
+                weekly_balance = {
+                    "week_label": (
+                        f"{week_start.date().isoformat()} - "
+                        f"{week_end.date().isoformat()}"
+                    ),
+                    "budget": budget_amount,
+                    "used": used_amount,
+                    "remaining": budget_amount - used_amount,
+                    "last_reset_at": latest_reset.reset_at if latest_reset else None,
+                }
 
-        total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
         context = base_context(
-            request, auth, "Team Expenses", "self-team-expenses", db=db
+            request, auth, "My Approvals", "self-my-approvals", db=db
         )
+        active_filters = build_active_filters(params={"status": status})
         context.update(
             {
-                "claims": items,
+                "approvals": items,
                 "status": status,
-                "statuses": [s.value for s in ExpenseClaimStatus],
+                "statuses": ["APPROVED", "REJECTED"],
                 "page": page,
                 "total_pages": total_pages,
                 "total": total,
                 "has_prev": page > 1,
                 "has_next": pagination.offset + pagination.limit < total,
+                "weekly_balance": weekly_balance,
+                "summary": {
+                    "approved_count": report_data["approved_count"],
+                    "rejected_count": report_data["rejected_count"],
+                    "approved_total": report_data["approved_total"],
+                    "rejected_total": report_data["rejected_total"],
+                },
+                "active_filters": active_filters,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
-            db, org_id, person_id, employee_id=manager_employee_id
+            db, org_id, person_id, employee_id=approver_employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = self._has_team_expense_approvals(
-            db, org_id, person_id, employee_id=manager_employee_id
+            db, org_id, person_id, employee_id=approver_employee_id
         )
         return templates.TemplateResponse(
             request, "people/self/team_expenses.html", context
@@ -1682,7 +1715,7 @@ class SelfServiceWebService:
             approver_id=manager_employee_id,
         )
         db.commit()
-        return RedirectResponse(url="/people/self/team/expenses", status_code=302)
+        return RedirectResponse(url="/people/self/my-approvals", status_code=302)
 
     def team_expense_reject_response(
         self,
@@ -1713,7 +1746,7 @@ class SelfServiceWebService:
             reason=reason or "Rejected",
         )
         db.commit()
-        return RedirectResponse(url="/people/self/team/expenses", status_code=302)
+        return RedirectResponse(url="/people/self/my-approvals", status_code=302)
 
     # ============ Payslips Self-Service ============
 
@@ -2069,6 +2102,441 @@ class SelfServiceWebService:
             url=f"/people/self/discipline/{case_id}?success=appeal_filed",
             status_code=303,
         )
+
+    def team_discipline_cases_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        include_closed: bool = False,
+        page: int = 1,
+    ) -> HTMLResponse:
+        """List discipline cases for direct reports."""
+        from app.models.people.discipline import CaseStatus, DisciplinaryCase
+
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            manager_employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "Team Discipline",
+                    "self-team-discipline",
+                    detail=exc.detail,
+                )
+            raise
+
+        employee_svc = EmployeeService(db, org_id)
+        reports = employee_svc.list_employees(
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            pagination=PaginationParams(offset=0, limit=1000),
+        ).items
+        report_ids = [emp.employee_id for emp in reports]
+        has_direct_reports = bool(report_ids)
+
+        pagination = PaginationParams.from_page(page, per_page=20)
+        total = 0
+        cases = []
+        if report_ids:
+            query = select(DisciplinaryCase).where(
+                DisciplinaryCase.organization_id == org_id,
+                DisciplinaryCase.employee_id.in_(report_ids),
+                DisciplinaryCase.is_deleted == False,  # noqa: E712
+            )
+            if not include_closed:
+                query = query.where(
+                    DisciplinaryCase.status.notin_(
+                        [CaseStatus.CLOSED, CaseStatus.WITHDRAWN]
+                    )
+                )
+            total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+            cases = list(
+                db.scalars(
+                    query.order_by(DisciplinaryCase.created_at.desc())
+                    .offset(pagination.offset)
+                    .limit(pagination.limit)
+                ).all()
+            )
+
+        total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
+        context = base_context(
+            request, auth, "Team Discipline", "self-team-discipline", db=db
+        )
+        context.update(
+            {
+                "cases": cases,
+                "include_closed": include_closed,
+                "has_direct_reports": has_direct_reports,
+                "page": page,
+                "total_pages": total_pages,
+                "total": total,
+                "has_prev": page > 1,
+                "has_next": pagination.offset + pagination.limit < total,
+            }
+        )
+        context["has_team_approvals"] = (
+            self._has_team_approvals(
+                db, org_id, person_id, employee_id=manager_employee_id
+            )
+            or self._has_team_expense_approvals(
+                db, org_id, person_id, employee_id=manager_employee_id
+            )
+            or has_direct_reports
+        )
+        context["can_team_leave"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_discipline"] = True
+        return templates.TemplateResponse(
+            request, "people/self/team_discipline.html", context
+        )
+
+    def team_discipline_new_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        error: str | None = None,
+        form_data: dict[str, str] | None = None,
+    ) -> HTMLResponse:
+        """Render form for creating team discipline case."""
+        from app.models.people.discipline import SeverityLevel, ViolationType
+
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            manager_employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "Team Discipline",
+                    "self-team-discipline",
+                    detail=exc.detail,
+                )
+            raise
+
+        employee_svc = EmployeeService(db, org_id)
+        reports = employee_svc.list_employees(
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            pagination=PaginationParams(offset=0, limit=1000),
+        ).items
+
+        context = base_context(
+            request, auth, "New Team Discipline Case", "self-team-discipline", db=db
+        )
+        context.update(
+            {
+                "error": error,
+                "form_data": form_data or {},
+                "reports": reports,
+                "has_direct_reports": bool(reports),
+                "violation_types": [v.value for v in ViolationType],
+                "severities": [s.value for s in SeverityLevel],
+            }
+        )
+        context["has_team_approvals"] = (
+            self._has_team_approvals(
+                db, org_id, person_id, employee_id=manager_employee_id
+            )
+            or self._has_team_expense_approvals(
+                db, org_id, person_id, employee_id=manager_employee_id
+            )
+            or bool(reports)
+        )
+        context["can_team_leave"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_discipline"] = True
+        return templates.TemplateResponse(
+            request, "people/self/team_discipline_new.html", context
+        )
+
+    def team_discipline_create_case_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        employee_id: str,
+        violation_type: str,
+        severity: str,
+        subject: str,
+        description: str | None = None,
+        incident_date: str | None = None,
+        query_text: str,
+        response_due_date: str,
+    ) -> RedirectResponse | HTMLResponse:
+        """Create a team discipline case and immediately issue a query."""
+        from app.models.people.discipline import SeverityLevel, ViolationType
+        from app.schemas.people.discipline import (
+            DisciplinaryCaseCreate,
+            IssueQueryRequest,
+        )
+        from app.services.people.discipline import DisciplineService
+
+        required = [
+            employee_id,
+            violation_type,
+            severity,
+            subject,
+            query_text,
+            response_due_date,
+        ]
+        form_data = {
+            "employee_id": employee_id,
+            "violation_type": violation_type,
+            "severity": severity,
+            "subject": subject,
+            "description": description or "",
+            "incident_date": incident_date or "",
+            "query_text": query_text,
+            "response_due_date": response_due_date,
+        }
+        if any(not str(value or "").strip() for value in required):
+            return self.team_discipline_new_form_response(
+                request,
+                auth,
+                db,
+                error="Employee, violation type, severity, subject, query text, and response due date are required.",
+                form_data=form_data,
+            )
+
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        manager_employee_id = self._get_employee_id(db, org_id, person_id)
+
+        employee_uuid = coerce_uuid(employee_id)
+        if employee_uuid is None:
+            return self.team_discipline_new_form_response(
+                request,
+                auth,
+                db,
+                error="Invalid employee selected.",
+                form_data=form_data,
+            )
+
+        employee_svc = EmployeeService(db, org_id)
+        reports = employee_svc.list_employees(
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            pagination=PaginationParams(offset=0, limit=1000),
+        ).items
+        report_ids = {emp.employee_id for emp in reports}
+        if employee_uuid not in report_ids:
+            return self.team_discipline_new_form_response(
+                request,
+                auth,
+                db,
+                error="You can only create cases for your direct reports.",
+                form_data=form_data,
+            )
+
+        try:
+            violation = ViolationType(violation_type)
+            severity_level = SeverityLevel(severity)
+        except ValueError:
+            return self.team_discipline_new_form_response(
+                request,
+                auth,
+                db,
+                error="Invalid violation type or severity.",
+                form_data=form_data,
+            )
+
+        try:
+            due_date = date.fromisoformat(response_due_date)
+            incident = date.fromisoformat(incident_date) if incident_date else None
+        except ValueError:
+            return self.team_discipline_new_form_response(
+                request,
+                auth,
+                db,
+                error="Dates must be in YYYY-MM-DD format.",
+                form_data=form_data,
+            )
+
+        service = DisciplineService(db)
+        try:
+            case = service.create_case(
+                org_id,
+                DisciplinaryCaseCreate(
+                    employee_id=employee_uuid,
+                    violation_type=violation,
+                    severity=severity_level,
+                    subject=subject,
+                    description=description,
+                    incident_date=incident,
+                    reported_date=date.today(),
+                    reported_by_id=manager_employee_id,
+                ),
+                created_by_id=person_id,
+            )
+            service.issue_query(
+                case.case_id,
+                IssueQueryRequest(query_text=query_text, response_due_date=due_date),
+                issued_by_id=person_id,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/self/team/discipline/{case.case_id}?success=case_created",
+                status_code=303,
+            )
+        except (ValidationError, HTTPException) as exc:
+            db.rollback()
+            message = getattr(exc, "detail", None) or str(exc)
+            return self.team_discipline_new_form_response(
+                request,
+                auth,
+                db,
+                error=message,
+                form_data=form_data,
+            )
+
+    def team_discipline_case_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        case_id: UUID,
+    ) -> HTMLResponse:
+        """View team discipline case detail."""
+        from app.models.people.discipline import CaseStatus
+        from app.services.people.discipline import DisciplineService
+
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        manager_employee_id = self._get_employee_id(db, org_id, person_id)
+
+        employee_svc = EmployeeService(db, org_id)
+        reports = employee_svc.list_employees(
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            pagination=PaginationParams(offset=0, limit=1000),
+        ).items
+        report_ids = {emp.employee_id for emp in reports}
+
+        try:
+            case = DisciplineService(db).get_case_detail(case_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        if case.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Case not found")
+        if case.employee_id not in report_ids:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        context = base_context(
+            request,
+            auth,
+            f"Team Case {case.case_number}",
+            "self-team-discipline",
+            db=db,
+        )
+        context.update(
+            {
+                "case": case,
+                "can_issue_query": case.status == CaseStatus.DRAFT,
+            }
+        )
+        context["has_team_approvals"] = (
+            self._has_team_approvals(
+                db, org_id, person_id, employee_id=manager_employee_id
+            )
+            or self._has_team_expense_approvals(
+                db, org_id, person_id, employee_id=manager_employee_id
+            )
+            or bool(report_ids)
+        )
+        context["can_team_leave"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_discipline"] = True
+        return templates.TemplateResponse(
+            request, "people/self/team_discipline_detail.html", context
+        )
+
+    def team_discipline_issue_query_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        case_id: UUID,
+        query_text: str,
+        response_due_date: str,
+    ) -> RedirectResponse:
+        """Issue query to employee for team discipline case."""
+        from app.schemas.people.discipline import IssueQueryRequest
+        from app.services.people.discipline import DisciplineService
+
+        if not query_text or not response_due_date:
+            return RedirectResponse(
+                url=f"/people/self/team/discipline/{case_id}?error={quote('Query text and response due date are required.')}",
+                status_code=303,
+            )
+
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        manager_employee_id = self._get_employee_id(db, org_id, person_id)
+
+        employee_svc = EmployeeService(db, org_id)
+        reports = employee_svc.list_employees(
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            pagination=PaginationParams(offset=0, limit=1000),
+        ).items
+        report_ids = {emp.employee_id for emp in reports}
+
+        service = DisciplineService(db)
+        case = service.get_case_or_404(case_id)
+        if case.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Case not found")
+        if case.employee_id not in report_ids:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        try:
+            due_date = date.fromisoformat(response_due_date)
+        except ValueError:
+            return RedirectResponse(
+                url=f"/people/self/team/discipline/{case_id}?error={quote('Response due date must be in YYYY-MM-DD format.')}",
+                status_code=303,
+            )
+
+        try:
+            service.issue_query(
+                case_id=case_id,
+                data=IssueQueryRequest(
+                    query_text=query_text, response_due_date=due_date
+                ),
+                issued_by_id=person_id,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/self/team/discipline/{case_id}?success=query_issued",
+                status_code=303,
+            )
+        except (ValidationError, HTTPException) as exc:
+            db.rollback()
+            message = quote(getattr(exc, "detail", None) or str(exc))
+            return RedirectResponse(
+                url=f"/people/self/team/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
 
 
 self_service_web_service = SelfServiceWebService()

@@ -109,7 +109,9 @@ class TestExecuteAsyncHook:
             hook_id=hook_id,
             organization_id=org_id,
             event_name="invoice.posted",
-            event_payload={"_hook_meta": {"entity_type": "ARInvoice", "entity_id": str(entity_id)}},
+            event_payload={
+                "_hook_meta": {"entity_type": "ARInvoice", "entity_id": str(entity_id)}
+            },
             status=ExecutionStatus.PENDING,
             retry_count=0,
             created_at=datetime.now(UTC),
@@ -168,7 +170,9 @@ class TestExecuteAsyncHook:
             hook_id=hook_id,
             organization_id=org_id,
             event_name="invoice.posted",
-            event_payload={"_hook_meta": {"entity_type": "ARInvoice", "entity_id": str(entity_id)}},
+            event_payload={
+                "_hook_meta": {"entity_type": "ARInvoice", "entity_id": str(entity_id)}
+            },
             status=ExecutionStatus.PENDING,
             retry_count=0,
             created_at=datetime.now(UTC),
@@ -231,7 +235,9 @@ class TestExecuteAsyncHook:
         )
         request = httpx.Request("POST", "https://example.com/hook")
         response = httpx.Response(status_code=400, request=request)
-        error = httpx.HTTPStatusError("client error", request=request, response=response)
+        error = httpx.HTTPStatusError(
+            "client error", request=request, response=response
+        )
 
         mock_db = MagicMock()
         mock_db.get.side_effect = [execution, hook]
@@ -286,7 +292,9 @@ class TestExecuteAsyncHook:
         )
         request = httpx.Request("POST", "https://example.com/hook")
         response = httpx.Response(status_code=502, request=request)
-        error = httpx.HTTPStatusError("server error", request=request, response=response)
+        error = httpx.HTTPStatusError(
+            "server error", request=request, response=response
+        )
 
         mock_db = MagicMock()
         mock_db.get.side_effect = [execution, hook]

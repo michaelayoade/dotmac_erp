@@ -82,6 +82,17 @@
         <!-- Form Result Messages -->
         <div id="form-result"></div>
 
+        {% if duplicate_source %}
+        <!-- Duplicate Invoice Banner -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 fade-up">
+            <div class="flex items-center gap-2">
+                {{ icon_svg("document", "h-5 w-5 text-blue-500") }}
+                <strong class="text-blue-700 dark:text-blue-400">Duplicating Invoice</strong>
+            </div>
+            <p class="text-blue-600 dark:text-blue-300 text-sm mt-1">Pre-filled from {{ duplicate_source.source_number }}. Review and adjust dates and amounts before saving.</p>
+        </div>
+        {% endif %}
+
         <!-- Header Information -->
         <div class="card p-6 fade-up delay-1">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Invoice Details</h2>
@@ -621,6 +632,30 @@ function invoiceForm() {
                 {% endfor %}
             ];
             // Recalculate taxes for existing lines
+            this.form.lines.forEach((_, idx) => this.calculateLineTaxes(idx));
+            {% endif %}
+            {% if duplicate_source and duplicate_source.lines %}
+            // Pre-fill from duplicated invoice (dates left empty for today's auto-fill)
+            this.form.po_number = '{{ duplicate_source.po_number }}';
+            this.form.currency_code = '{{ duplicate_source.currency_code }}';
+            this.form.terms = '{{ duplicate_source.terms }}';
+            this.form.notes = '{{ duplicate_source.notes }}';
+            this.form.exchange_rate = '{{ duplicate_source.exchange_rate }}';
+            this.form.lines = [
+                {% for line in duplicate_source.lines %}
+                {
+                    item_id: '{{ line.item_id or "" }}',
+                    revenue_account_id: '{{ line.revenue_account_id }}',
+                    description: '{{ line.description }}',
+                    quantity: {{ line.quantity }},
+                    unit_price: {{ line.unit_price }},
+                    amount: {{ line.quantity * line.unit_price }},
+                    tax_code_ids: [{% for lt in line.line_taxes %}'{{ lt.tax_code_id }}'{% if not loop.last %}, {% endif %}{% endfor %}],
+                    tax_amount: {{ line.tax_amount or 0 }},
+                    tax_details: []
+                },
+                {% endfor %}
+            ];
             this.form.lines.forEach((_, idx) => this.calculateLineTaxes(idx));
             {% endif %}
         },
