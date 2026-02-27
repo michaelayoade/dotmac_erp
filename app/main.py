@@ -239,6 +239,12 @@ async def csp_middleware(request: Request, call_next):
     response.headers["Content-Security-Policy"] = add_unsafe_eval_to_csp(
         response.headers.get("Content-Security-Policy")
     )
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
     return response
 
 
