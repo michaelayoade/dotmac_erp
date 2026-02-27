@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, stat
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.net import get_request_host, get_request_scheme
 from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
     AvatarUploadResponse,
@@ -359,12 +360,9 @@ def forgot_password(
 
 
 def _resolve_app_url(request: Request) -> str:
-    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").strip()
-    forwarded_host = (request.headers.get("x-forwarded-host") or "").strip()
-    if forwarded_host:
-        scheme = forwarded_proto or request.url.scheme
-        return f"{scheme}://{forwarded_host}".rstrip("/")
-    return str(request.base_url).rstrip("/")
+    scheme = get_request_scheme(request)
+    host = get_request_host(request) or request.url.netloc
+    return f"{scheme}://{host}".rstrip("/")
 
 
 @router.post(
