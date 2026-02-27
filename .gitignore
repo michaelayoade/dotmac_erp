@@ -97,3 +97,22 @@ node_modules/
 # Data backups
 books_backup/
 dotmac_books_backup.sql.gz
+
+# Seabone Agent Swarm
+.env.agent-swarm
+.seabone/active-tasks.json
+.seabone/completed-tasks.json
+.seabone/queue.json
+.seabone/model-memory.json
+.seabone/pm-state.json
+.seabone/orchestrator-state.json
+.seabone/ci-state.json
+.seabone/logs/
+.seabone/findings/
+.seabone/reports/
+.seabone/memory/
+.seabone/transcripts/
+.seabone/metrics/
+.seabone/prompts/
+.worktrees/
+.agent-run.sh
