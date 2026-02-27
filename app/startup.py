@@ -11,8 +11,13 @@ import os
 import re
 import sys
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.services.finance.automation.workflow import (
+    has_active_webhook_actions,
+    webhook_allowlist_configured,
+)
 from app.services.secrets import is_openbao_ref, resolve_openbao_ref
 
 logger = logging.getLogger(__name__)
@@ -236,6 +241,28 @@ def validate_openbao_connectivity() -> list[str]:
     return errors
 
 
+def warn_unconfigured_webhook_allowlist(db: Session | None = None) -> None:
+    """Warn when active webhook automation exists without an outbound allowlist."""
+    if db is None:
+        return
+
+    try:
+        if webhook_allowlist_configured(db):
+            return
+        if has_active_webhook_actions(db):
+            logger.warning(
+                "SECURITY: Active webhook automation rules exist, but no webhook "
+                "allowlist is configured. Set WEBHOOK_ALLOWED_HOSTS and/or "
+                "WEBHOOK_ALLOWED_DOMAINS (or corresponding automation settings) "
+                "to constrain outbound webhook targets."
+            )
+    except SQLAlchemyError:
+        logger.debug(
+            "Skipping webhook allowlist startup warning check due to database error",
+            exc_info=True,
+        )
+
+
 def validate_startup(db: Session | None = None, exit_on_failure: bool = True) -> bool:
     """Run all startup validations.
 
@@ -256,6 +283,9 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
 
     # Check required secrets (with OpenBao resolution)
     all_errors.extend(validate_required_secrets(db))
+
+    # Non-fatal security warning for potentially unsafe webhook automation config.
+    warn_unconfigured_webhook_allowlist(db)
 
     if all_errors:
         logger.error("=" * 60)

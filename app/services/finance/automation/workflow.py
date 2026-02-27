@@ -172,13 +172,33 @@ def _host_matches_allowlist(host: str, db: Session | None = None) -> bool:
     host = host.lower()
     allowed_hosts = _allowed_webhook_hosts(db)
     allowed_domains = _allowed_webhook_domains(db)
+    if not allowed_hosts and not allowed_domains:
+        return False
     if allowed_hosts and host in allowed_hosts:
         return True
     if allowed_domains:
         for domain in allowed_domains:
             if host == domain or host.endswith(f".{domain}"):
                 return True
-    return not allowed_hosts and not allowed_domains
+    return False
+
+
+def webhook_allowlist_configured(db: Session | None = None) -> bool:
+    return bool(_allowed_webhook_hosts(db) or _allowed_webhook_domains(db))
+
+
+def has_active_webhook_actions(db: Session) -> bool:
+    stmt = (
+        select(func.count())
+        .select_from(WorkflowRule)
+        .where(
+            and_(
+                WorkflowRule.is_active.is_(True),
+                WorkflowRule.action_type == ActionType.WEBHOOK,
+            )
+        )
+    )
+    return int(db.scalar(stmt) or 0) > 0
 
 
 def _validate_webhook_target(
