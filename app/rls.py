@@ -45,10 +45,12 @@ async def set_current_organization(
         db: The database session
         organization_id: The UUID of the current organization/tenant
     """
-    # SET LOCAL doesn't support parameterized queries, so we use string formatting
-    # The UUID type ensures the value is safe (no SQL injection possible)
-    org_id_str = str(organization_id)
-    await db.execute(text(f"SET LOCAL app.current_organization_id = '{org_id_str}'"))
+    # Use set_config() with parameterized query for security
+    # Parameterized queries prevent SQL injection even if UUID validation fails
+    await db.execute(
+        text("SELECT set_config('app.current_organization_id', :v, true)"),
+        {"v": str(organization_id)}
+    )
 
 
 async def clear_organization_context(db: AsyncSession) -> None:
@@ -58,7 +60,10 @@ async def clear_organization_context(db: AsyncSession) -> None:
     Args:
         db: The database session
     """
-    await db.execute(text("RESET app.current_organization_id"))
+    # Use RESET to completely remove the setting from the session context
+    await db.execute(
+        text("RESET app.current_organization_id")
+    )
 
 
 async def enable_rls_bypass(db: AsyncSession) -> None:
@@ -70,7 +75,11 @@ async def enable_rls_bypass(db: AsyncSession) -> None:
     Args:
         db: The database session
     """
-    await db.execute(text("SET LOCAL app.bypass_rls = 'true'"))
+    # Use set_config() for consistency
+    await db.execute(
+        text("SELECT set_config('app.bypass_rls', :v, true)"),
+        {"v": "true"}
+    )
 
 
 async def disable_rls_bypass(db: AsyncSession) -> None:
@@ -80,7 +89,11 @@ async def disable_rls_bypass(db: AsyncSession) -> None:
     Args:
         db: The database session
     """
-    await db.execute(text("SET LOCAL app.bypass_rls = 'false'"))
+    # Use set_config() for consistency
+    await db.execute(
+        text("SELECT set_config('app.bypass_rls', :v, true)"),
+        {"v": "false"}
+    )
 
 
 @asynccontextmanager
@@ -163,15 +176,20 @@ def set_current_organization_sync(
         db: The database session
         organization_id: The UUID of the current organization/tenant
     """
-    # SET LOCAL doesn't support parameterized queries, so we use string formatting
-    # The UUID type ensures the value is safe (no SQL injection possible)
-    org_id_str = str(organization_id)
-    db.execute(text(f"SET LOCAL app.current_organization_id = '{org_id_str}'"))
+    # Use set_config() with parameterized query for security
+    # Parameterized queries prevent SQL injection even if UUID validation fails
+    db.execute(
+        text("SELECT set_config('app.current_organization_id', :v, true)"),
+        {"v": str(organization_id)}
+    )
 
 
 def clear_organization_context_sync(db: Session) -> None:
     """Clear the current organization context (sync version)."""
-    db.execute(text("RESET app.current_organization_id"))
+    # Use RESET to completely remove the setting from the session context
+    db.execute(
+        text("RESET app.current_organization_id")
+    )
 
 
 def enable_rls_bypass_sync(db: Session) -> None:
@@ -181,7 +199,11 @@ def enable_rls_bypass_sync(db: Session) -> None:
     Args:
         db: The database session
     """
-    db.execute(text("SET LOCAL app.bypass_rls = 'true'"))
+    # Use set_config() for consistency
+    db.execute(
+        text("SELECT set_config('app.bypass_rls', :v, true)"),
+        {"v": "true"}
+    )
 
 
 def disable_rls_bypass_sync(db: Session) -> None:
@@ -191,7 +213,11 @@ def disable_rls_bypass_sync(db: Session) -> None:
     Args:
         db: The database session
     """
-    db.execute(text("SET LOCAL app.bypass_rls = 'false'"))
+    # Use set_config() for consistency
+    db.execute(
+        text("SELECT set_config('app.bypass_rls', :v, true)"),
+        {"v": "false"}
+    )
 
 
 @contextmanager

@@ -3,16 +3,16 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 # ---- Injected at spawn time ----
-WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-deps-002-v2
+WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-security-c1-7
 PROJECT_DIR=/home/dotmac/projects/dotmac_erp
 SCRIPT_DIR=/home/dotmac/.seabone/scripts
 ACTIVE_FILE=/home/dotmac/projects/dotmac_erp/.seabone/active-tasks.json
-LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-deps-002-v2.log
-TASK_ID=fix-deps-002-v2
-DESCRIPTION=Security\ fix:\ Update\ cryptography\ from\ 42.0.8\ to\ \>=44.0.1\ \(latest\ 46.0.5\)\ in\ pyproject.toml\ to\ fix\ CVE-2024-12797\ \(CVSS\ 8.1\ HIGH\ OpenSSL\ RSA-PSS\ authentication\ bypass\).\ Steps:\ 1\)\ Edit\ pyproject.toml:\ update\ cryptography\ version\ to\ \>=44.0.1.\ 2\)\ Run\ poetry\ add\ cryptography\>=44.0.1.\ 3\)\ Verify\ python-jose\ still\ works.\ 4\)\ Run\ make\ lint\ and\ pytest\ -x\ --tb=short.\ Commit:\ security:\ upgrade\ cryptography\ to\ \>=44.0.1\ \(CVE-2024-12797\)
-BRANCH=agent/fix-deps-002-v2
-ENGINE=codex
-MODEL=gpt-5.3-codex
+LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-security-c1-7.log
+TASK_ID=fix-security-c1-7
+DESCRIPTION=Security\ fix:\ Replace\ f-string\ interpolation\ in\ SET\ LOCAL\ app.current_organization_id.\ File:\ app/rls.py\,\ around\ line\ 51.\ Currently\ uses\ f-string\ to\ interpolate\ a\ UUID\ into\ a\ SET\ LOCAL\ statement.\ Fix:\ Replace\ with\ PostgreSQL\ set_config\(\)\ called\ via\ parameterized\ query:\ db.execute\(text\(\"SELECT\ set_config\(\'app.current_organization_id\'\,\ :v\,\ true\)\"\)\,\ \{\"v\":\ str\(organization_id\)\}\).\ Read\ the\ file\ first\ to\ understand\ all\ SET\ LOCAL\ usages\ \(line\ 51\ and\ any\ others\).\ Run\ make\ lint\ \&\&\ pytest\ -x\ --tb=short.\ Commit:\ security:\ use\ set_config\(\)\ for\ RLS\ org\ parameter\ \(defense-in-depth\)
+BRANCH=agent/fix-security-c1-7
+ENGINE=aider
+MODEL=deepseek-chat
 EVENT_LOG=/home/dotmac/projects/dotmac_erp/.seabone/logs/events.log
 CONFIG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/config.json
 PROJECT_NAME=dotmac_erp
