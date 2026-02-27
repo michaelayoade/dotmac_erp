@@ -25,6 +25,7 @@ from app.models.finance.platform.service_hook_execution import (
     ServiceHookExecution,
 )
 from app.services.feature_flags import FEATURE_SERVICE_HOOKS, is_feature_enabled
+from app.services.finance.automation.workflow import _validate_webhook_target
 
 logger = logging.getLogger(__name__)
 
@@ -344,9 +345,18 @@ def _execute_hook_handler(
     if hook.handler_type == HookHandlerType.WEBHOOK:
         import httpx
 
-        url = hook.handler_config.get("url")
+        url_value = hook.handler_config.get("url")
+        url = "" if url_value is None else str(url_value).strip()
         if not url:
             raise ValueError("Webhook hook requires handler_config.url")
+
+        is_valid, error_message = _validate_webhook_target(
+            url,
+            db,
+            allow_localhost=False,
+        )
+        if not is_valid:
+            raise ValueError(error_message or "Webhook target is not allowed")
 
         method = str(hook.handler_config.get("method", "POST")).upper()
         timeout_s = float(hook.handler_config.get("timeout_seconds", 15))
