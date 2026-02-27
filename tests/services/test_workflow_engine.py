@@ -18,6 +18,7 @@ from app.models.finance.automation.workflow_rule import (
     TriggerEvent,
     WorkflowEntityType,
 )
+from app.services.finance.automation import workflow as workflow_module
 from app.services.finance.automation.workflow import (
     TriggerContext,
     WorkflowService,
@@ -242,6 +243,24 @@ class TestValueComparison:
     def test_none_value(self, workflow_service):
         assert workflow_service._compare_values(None, "equals", None) is True
         assert workflow_service._compare_values(None, "equals", 5) is False
+
+
+class TestWebhookAllowlist:
+    def test_unconfigured_allowlist_defaults_to_deny(self, monkeypatch):
+        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
+        monkeypatch.delenv("WEBHOOK_ALLOWED_DOMAINS", raising=False)
+
+        assert workflow_module.webhook_allowlist_configured() is False
+        assert workflow_module._host_matches_allowlist("example.com") is False
+
+    def test_domain_allowlist_matches_host_and_subdomain(self, monkeypatch):
+        monkeypatch.delenv("WEBHOOK_ALLOWED_HOSTS", raising=False)
+        monkeypatch.setenv("WEBHOOK_ALLOWED_DOMAINS", "example.com")
+
+        assert workflow_module.webhook_allowlist_configured() is True
+        assert workflow_module._host_matches_allowlist("example.com") is True
+        assert workflow_module._host_matches_allowlist("api.example.com") is True
+        assert workflow_module._host_matches_allowlist("api.other.com") is False
 
 
 # ---------------------------------------------------------------------------

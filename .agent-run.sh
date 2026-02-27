@@ -3,14 +3,14 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 # ---- Injected at spawn time ----
-WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-deps-002-v2
+WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-security-c1-2
 PROJECT_DIR=/home/dotmac/projects/dotmac_erp
 SCRIPT_DIR=/home/dotmac/.seabone/scripts
 ACTIVE_FILE=/home/dotmac/projects/dotmac_erp/.seabone/active-tasks.json
-LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-deps-002-v2.log
-TASK_ID=fix-deps-002-v2
-DESCRIPTION=Security\ fix:\ Update\ cryptography\ from\ 42.0.8\ to\ \>=44.0.1\ \(latest\ 46.0.5\)\ in\ pyproject.toml\ to\ fix\ CVE-2024-12797\ \(CVSS\ 8.1\ HIGH\ OpenSSL\ RSA-PSS\ authentication\ bypass\).\ Steps:\ 1\)\ Edit\ pyproject.toml:\ update\ cryptography\ version\ to\ \>=44.0.1.\ 2\)\ Run\ poetry\ add\ cryptography\>=44.0.1.\ 3\)\ Verify\ python-jose\ still\ works.\ 4\)\ Run\ make\ lint\ and\ pytest\ -x\ --tb=short.\ Commit:\ security:\ upgrade\ cryptography\ to\ \>=44.0.1\ \(CVE-2024-12797\)
-BRANCH=agent/fix-deps-002-v2
+LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-security-c1-2.log
+TASK_ID=fix-security-c1-2
+DESCRIPTION=Security\ fix:\ Webhook\ allowlist\ defaults\ to\ open\ \(allow\ all\)\ when\ WEBHOOK_ALLOWED_HOSTS\ and\ WEBHOOK_ALLOWED_DOMAINS\ env\ vars\ are\ both\ unset.\ File:\ app/services/finance/automation/workflow.py\,\ around\ line\ 181\,\ function\ _host_matches_allowlist\(\).\ Currently\ returns\ True\ when\ no\ allowlist\ is\ configured\,\ enabling\ SSRF\ against\ external\ targets.\ Fix:\ 1\)\ Change\ the\ default\ to\ return\ False\ \(deny-all\)\ when\ neither\ env\ var\ is\ set.\ 2\)\ Add\ a\ startup\ log\ warning\ if\ webhook\ automation\ rules\ exist\ in\ the\ DB\ but\ no\ allowlist\ is\ configured\ \(check\ if\ there\ are\ any\ active\ webhook\ actions\ in\ the\ DB\ and\ log\ a\ WARNING\).\ 3\)\ Run\ make\ lint\ \&\&\ pytest\ -x\ --tb=short.\ Commit:\ security:\ default-deny\ webhook\ allowlist\ when\ unconfigured\ \(SSRF\ mitigation\)
+BRANCH=agent/fix-security-c1-2
 ENGINE=codex
 MODEL=gpt-5.3-codex
 EVENT_LOG=/home/dotmac/projects/dotmac_erp/.seabone/logs/events.log
