@@ -202,7 +202,10 @@ def has_active_webhook_actions(db: Session) -> bool:
 
 
 def _validate_webhook_target(
-    url: str, db: Session | None = None
+    url: str,
+    db: Session | None = None,
+    *,
+    allow_localhost: bool | None = None,
 ) -> tuple[bool, str | None]:
     if not url or not isinstance(url, str):
         return False, "Webhook URL is required"
@@ -219,7 +222,11 @@ def _validate_webhook_target(
     if not _host_matches_allowlist(host, db):
         return False, "Webhook host is not in the allowlist"
 
-    allow_localhost = _allow_localhost_webhooks(db)
+    allow_localhost_webhooks = (
+        _allow_localhost_webhooks(db)
+        if allow_localhost is None
+        else allow_localhost
+    )
     require_https = parsed.scheme == "http" and not _allow_insecure_webhooks(db)
     loopback_host = False
 
@@ -228,7 +235,7 @@ def _validate_webhook_target(
         if ip_value.is_loopback:
             loopback_host = True
         if _is_private_address(ip_value):
-            if not (allow_localhost and ip_value.is_loopback):
+            if not (allow_localhost_webhooks and ip_value.is_loopback):
                 return False, "Webhook target is not allowed"
     except ValueError:
         try:
@@ -241,10 +248,10 @@ def _validate_webhook_target(
             if ip_value.is_loopback:
                 loopback_host = True
             if _is_private_address(ip_value):
-                if not (allow_localhost and ip_value.is_loopback):
+                if not (allow_localhost_webhooks and ip_value.is_loopback):
                     return False, "Webhook target is not allowed"
 
-    if require_https and not (allow_localhost and loopback_host):
+    if require_https and not (allow_localhost_webhooks and loopback_host):
         return False, "Webhook URL must use https"
 
     return True, None

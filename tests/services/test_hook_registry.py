@@ -171,9 +171,11 @@ class TestHookRegistry:
 
         assert "ok:gl.journal.posted" in result["result"]
 
+    @patch("app.services.hooks.registry._validate_webhook_target")
     @patch("httpx.Client")
-    def test_execute_webhook_handler_posts(self, mock_client_cls):
+    def test_execute_webhook_handler_posts(self, mock_client_cls, mock_validate):
         db = MagicMock()
+        mock_validate.return_value = (True, None)
         event = HookEvent(
             event_name="sales.order.confirmed",
             organization_id=uuid4(),
@@ -202,6 +204,11 @@ class TestHookRegistry:
 
         result = _execute_hook_handler(db, hook, event)
 
+        mock_validate.assert_called_once_with(
+            "https://example.com/webhook",
+            db,
+            allow_localhost=False,
+        )
         assert result["status_code"] == 202
         assert "accepted" in result["body"]
         post_kwargs = client.post.call_args.kwargs
@@ -209,9 +216,13 @@ class TestHookRegistry:
         assert post_kwargs["json"]["event"] == "sales.order.confirmed"
         assert post_kwargs["json"]["payload"]["so_number"] == "SO-1001"
 
+    @patch("app.services.hooks.registry._validate_webhook_target")
     @patch("httpx.Client")
-    def test_execute_webhook_handler_surfaces_http_errors(self, mock_client_cls):
+    def test_execute_webhook_handler_surfaces_http_errors(
+        self, mock_client_cls, mock_validate
+    ):
         db = MagicMock()
+        mock_validate.return_value = (True, None)
         event = HookEvent(
             event_name="sales.order.confirmed",
             organization_id=uuid4(),
@@ -236,6 +247,37 @@ class TestHookRegistry:
 
         with pytest.raises(httpx.HTTPStatusError):
             _execute_hook_handler(db, hook, event)
+
+    @patch("app.services.hooks.registry._validate_webhook_target")
+    @patch("httpx.Client")
+    def test_execute_webhook_handler_rejects_disallowed_targets(
+        self, mock_client_cls, mock_validate
+    ):
+        db = MagicMock()
+        mock_validate.return_value = (False, "Webhook target is not allowed")
+        event = HookEvent(
+            event_name="sales.order.confirmed",
+            organization_id=uuid4(),
+            entity_type="SalesOrder",
+            entity_id=uuid4(),
+            actor_user_id=None,
+            payload={},
+        )
+        hook = _hook(
+            handler_type=HookHandlerType.WEBHOOK,
+            handler_config={"url": "http://127.0.0.1/webhook", "method": "POST"},
+            execution_mode=HookExecutionMode.SYNC,
+        )
+
+        with pytest.raises(ValueError, match="Webhook target is not allowed"):
+            _execute_hook_handler(db, hook, event)
+
+        mock_validate.assert_called_once_with(
+            "http://127.0.0.1/webhook",
+            db,
+            allow_localhost=False,
+        )
+        mock_client_cls.assert_not_called()
 
     def test_execute_event_outbox_handler_writes_entry(self):
         db = MagicMock()
