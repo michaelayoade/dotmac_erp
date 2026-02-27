@@ -5,7 +5,7 @@ import pyotp
 import pytest
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
-from jose import jwt
+import jwt
 from starlette.requests import Request
 
 from app.models.auth import AuthProvider, SessionStatus, UserCredential

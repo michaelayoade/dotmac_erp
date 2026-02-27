@@ -7,10 +7,10 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+import jwt
 import pyotp
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
-from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -378,14 +378,13 @@ def _decode_jwt(db: Session | None, token: str, expected_type: str) -> dict[str,
                 _jwt_secret(db),
                 algorithms=[algorithm],  # Strict: only allow configured algorithm
                 options={
-                    "require_exp": True,  # Require expiration claim
-                    "require_iat": True,  # Require issued-at claim
+                    "require": ["exp", "iat"],  # Require expiration and issued-at claims
                     "verify_exp": True,
                     "verify_iat": True,
                 },
             ),
         )
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid token") from exc
 
     if payload.get("typ") != expected_type:

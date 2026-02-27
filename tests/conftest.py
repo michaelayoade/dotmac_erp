@@ -12,7 +12,7 @@ import fastapi.routing as fastapi_routing
 import pytest
 import starlette.background as starlette_background
 import starlette.concurrency as starlette_concurrency
-from jose import jwt
+import jwt
 from sqlalchemy import String, Text, TypeDecorator, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool

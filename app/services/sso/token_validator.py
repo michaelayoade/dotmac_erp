@@ -176,7 +176,7 @@ def _decode_jwt_with_secret(
     Returns:
         Decoded payload dict or None if invalid
     """
-    from jose import JWTError, jwt
+    import jwt
 
     # Whitelist of allowed algorithms
     allowed_algorithms = frozenset(
@@ -193,8 +193,7 @@ def _decode_jwt_with_secret(
             secret,
             algorithms=[algorithm],
             options={
-                "require_exp": True,
-                "require_iat": True,
+                "require": ["exp", "iat"],
                 "verify_exp": True,
                 "verify_iat": True,
             },
@@ -210,6 +209,6 @@ def _decode_jwt_with_secret(
 
         return payload
 
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         logger.debug("JWT decode error: %s", e)
         return None
