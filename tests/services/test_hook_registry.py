@@ -171,6 +171,29 @@ class TestHookRegistry:
 
         assert "ok:gl.journal.posted" in result["result"]
 
+    def test_execute_internal_service_handler_rejects_non_allowlisted_target(self):
+        """Targets outside the explicit allowlist must be rejected before import."""
+        db = MagicMock()
+        event = HookEvent(
+            event_name="gl.journal.posted",
+            organization_id=uuid4(),
+            entity_type="JournalEntry",
+            entity_id=uuid4(),
+            actor_user_id=None,
+            payload={},
+        )
+        hook = _hook(
+            handler_type=HookHandlerType.INTERNAL_SERVICE,
+            handler_config={
+                "target": "app.services.finance.ar.invoice_service:InvoiceService.delete",
+                "kwargs": {},
+            },
+            execution_mode=HookExecutionMode.SYNC,
+        )
+
+        with pytest.raises(ValueError, match="not in the allowlist"):
+            _execute_hook_handler(db, hook, event)
+
     @patch("httpx.Client")
     def test_execute_webhook_handler_posts(self, mock_client_cls):
         db = MagicMock()

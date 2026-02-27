@@ -28,6 +28,19 @@ from app.services.feature_flags import FEATURE_SERVICE_HOOKS, is_feature_enabled
 
 logger = logging.getLogger(__name__)
 
+# Explicit allowlist of permitted INTERNAL_SERVICE hook targets.
+# Format: "module.path:callable_name"
+#
+# SECURITY: Only add entries here after a security review. Each callable
+# must accept exactly (*, db, event, hook, **kwargs) and perform a
+# narrowly-scoped, pre-approved side-effect. Never add generic service
+# methods or anything that can mutate data at arbitrary scale.
+ALLOWED_INTERNAL_HOOK_TARGETS: frozenset[str] = frozenset(
+    {
+        "app.services.hooks.callbacks:run",
+    }
+)
+
 
 @dataclass(frozen=True)
 class HookEvent:
@@ -299,6 +312,12 @@ def _execute_hook_handler(
         target = str(hook.handler_config.get("target") or "").strip()
         if not target:
             raise ValueError("Internal service hook requires handler_config.target")
+        if target not in ALLOWED_INTERNAL_HOOK_TARGETS:
+            raise ValueError(
+                f"Internal service target {target!r} is not in the allowlist. "
+                "Add it to ALLOWED_INTERNAL_HOOK_TARGETS after security review."
+            )
+        # Defense-in-depth: allowlisted targets must still live in app.services.
         if not target.startswith("app.services."):
             raise ValueError("Internal service target must be inside app.services")
         if ":" not in target:
