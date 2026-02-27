@@ -317,15 +317,6 @@ class LoanWebService:
         """Render new loan application form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        # Get active loan types
-        loan_types = list(
-            db.scalars(
-                select(LoanType)
-                .where(LoanType.organization_id == org_id, LoanType.is_active == True)
-                .order_by(LoanType.type_name)
-            ).all()
-        )
-
         # Get active employees
         employees = list(
             db.scalars(
@@ -341,12 +332,16 @@ class LoanWebService:
             emp_id = coerce_uuid(employee_id)
             selected_employee = db.get(Employee, emp_id)
 
+        interest_methods = [
+            (m.value, m.value.replace("_", " ").title()) for m in InterestMethod
+        ]
+
         context = base_context(request, auth, "New Loan Application", "payroll", db=db)
         context.update(
             {
-                "loan_types": loan_types,
                 "employees": employees,
                 "selected_employee": selected_employee,
+                "interest_methods": interest_methods,
             }
         )
 
@@ -367,14 +362,18 @@ class LoanWebService:
         form = await request.form()
 
         employee_id = coerce_uuid(str(form.get("employee_id", "")))
-        loan_type_id = coerce_uuid(str(form.get("loan_type_id", "")))
 
         try:
             principal_amount = Decimal(str(form.get("principal_amount", "0")))
             tenure_months = int(str(form.get("tenure_months", 1)))
+            interest_rate_str = str(form.get("interest_rate", "0")).strip()
+            interest_rate = (
+                Decimal(interest_rate_str) if interest_rate_str else Decimal("0")
+            )
         except (InvalidOperation, ValueError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid number: {e}")
 
+        interest_method = str(form.get("interest_method", "NONE")).strip()
         purpose = str(form.get("purpose", "")).strip() or None
 
         # Parse first repayment date if provided
@@ -389,9 +388,10 @@ class LoanWebService:
         loan_service = LoanService(db)
         loan_input = LoanApplicationInput(
             employee_id=employee_id,
-            loan_type_id=loan_type_id,
             principal_amount=principal_amount,
             tenure_months=tenure_months,
+            interest_rate=interest_rate,
+            interest_method=interest_method,
             purpose=purpose,
             first_repayment_date=first_repayment_date,
         )

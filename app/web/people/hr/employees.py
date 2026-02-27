@@ -196,6 +196,22 @@ async def resign_employee(
     )
 
 
+@router.post("/employees/{employee_id}/rehire")
+async def rehire_employee(
+    request: Request,
+    employee_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Rehire a previously separated employee."""
+    return await hr_web_service.rehire_employee_response(
+        request=request,
+        employee_id=employee_id,
+        auth=auth,
+        db=db,
+    )
+
+
 @router.post("/employees/{employee_id}/terminate")
 async def terminate_employee(
     request: Request,

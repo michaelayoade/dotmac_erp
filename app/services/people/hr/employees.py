@@ -1165,6 +1165,77 @@ class EmployeeService:
         employee.updated_by_id = self.principal.id if self.principal else None
         return employee
 
+    def rehire_employee(
+        self,
+        employee_id: uuid.UUID,
+        date_of_rejoining: date,
+        notes: str | None = None,
+    ) -> Employee:
+        """Rehire a previously separated employee.
+
+        Creates a completed onboarding record to preserve rehire history.
+        """
+        employee = self.get_employee(employee_id)
+
+        if employee.status not in {
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED,
+        }:
+            raise EmployeeStatusError(
+                employee.status.value,
+                "Only resigned, terminated, or retired employees can be rehired",
+            )
+
+        if employee.date_of_leaving and date_of_rejoining < employee.date_of_leaving:
+            raise ValidationError("Rehire date cannot be before date of leaving")
+
+        old_status = employee.status.value if employee.status else None
+
+        employee.status = EmployeeStatus.ACTIVE
+        employee.date_of_joining = date_of_rejoining
+        employee.date_of_leaving = None
+        employee.updated_at = datetime.now(UTC)
+        employee.updated_by_id = self.principal.id if self.principal else None
+
+        fire_audit_event(
+            db=self.db,
+            organization_id=employee.organization_id,
+            table_schema="hr",
+            table_name="employee",
+            record_id=str(employee.employee_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={
+                "status": EmployeeStatus.ACTIVE.value,
+                "date_of_joining": str(date_of_rejoining),
+            },
+            reason=notes,
+        )
+
+        try:
+            from app.models.people.hr.lifecycle import BoardingStatus
+            from app.services.people.hr.lifecycle import LifecycleService
+
+            lifecycle = LifecycleService(self.db)
+            onboarding = lifecycle.create_onboarding(
+                employee.organization_id,
+                employee_id=employee.employee_id,
+                date_of_joining=date_of_rejoining,
+                department_id=employee.department_id,
+                designation_id=employee.designation_id,
+                template_name="REHIRE",
+                notes=notes or f"Rehired from {old_status or 'UNKNOWN'} status",
+            )
+            onboarding.status = BoardingStatus.COMPLETED
+        except Exception:
+            logger.exception(
+                "Failed to create rehire lifecycle record for employee %s",
+                employee.employee_id,
+            )
+
+        return employee
+
     def set_on_leave(self, employee_id: uuid.UUID) -> Employee:
         """Set employee status to on leave.
 

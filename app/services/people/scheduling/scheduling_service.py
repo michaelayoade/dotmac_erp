@@ -10,7 +10,7 @@ import logging
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -67,6 +67,7 @@ class SchedulingService:
     """
 
     VALID_WORK_DAYS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
+    VALID_SHIFT_SLOTS = {"DAY", "NIGHT", "OFF"}
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -158,6 +159,7 @@ class SchedulingService:
         work_days: list[str] | None = None,
         day_work_days: list[str] | None = None,
         night_work_days: list[str] | None = None,
+        pattern_lines: list[dict] | None = None,
         description: str | None = None,
         is_active: bool = True,
     ) -> ShiftPattern:
@@ -170,18 +172,22 @@ class SchedulingService:
         resolved_day_work_days = day_work_days
         resolved_night_work_days = night_work_days
         if rotation_type == RotationType.ROTATING:
+            cycle_weeks = 2
             resolved_day_work_days = (
                 day_work_days or work_days or ["MON", "TUE", "WED", "THU", "FRI"]
             )
             resolved_night_work_days = (
                 night_work_days or work_days or ["MON", "TUE", "WED", "THU", "FRI"]
             )
+        else:
+            pattern_lines = None
 
         self._validate_day_codes("work_days", resolved_work_days)
         if resolved_day_work_days is not None:
             self._validate_day_codes("day_work_days", resolved_day_work_days)
         if resolved_night_work_days is not None:
             self._validate_day_codes("night_work_days", resolved_night_work_days)
+        self._validate_pattern_lines(pattern_lines)
 
         pattern = ShiftPattern(
             organization_id=org_id,
@@ -193,6 +199,7 @@ class SchedulingService:
             work_days=resolved_work_days,
             day_work_days=resolved_day_work_days,
             night_work_days=resolved_night_work_days,
+            pattern_lines=pattern_lines,
             day_shift_type_id=day_shift_type_id,
             night_shift_type_id=night_shift_type_id,
             is_active=is_active,
@@ -220,6 +227,7 @@ class SchedulingService:
         "night_shift_type_id",
         "day_work_days",
         "night_work_days",
+        "pattern_lines",
     }
 
     def update_pattern(
@@ -245,10 +253,13 @@ class SchedulingService:
             and not pattern.night_shift_type_id
         ):
             raise SchedulingServiceError("Rotating patterns require a night shift type")
+        if pattern.rotation_type != RotationType.ROTATING:
+            pattern.pattern_lines = None
 
         # Maintain backward compatibility for existing rotating patterns:
         # default missing rotating day lists to generic work_days.
         if pattern.rotation_type == RotationType.ROTATING:
+            pattern.cycle_weeks = 2
             if not pattern.day_work_days:
                 pattern.day_work_days = pattern.work_days or [
                     "MON",
@@ -273,6 +284,7 @@ class SchedulingService:
             self._validate_day_codes("day_work_days", pattern.day_work_days)
         if pattern.night_work_days is not None:
             self._validate_day_codes("night_work_days", pattern.night_work_days)
+        self._validate_pattern_lines(pattern.pattern_lines)
 
         try:
             self.db.flush()
@@ -298,6 +310,29 @@ class SchedulingService:
             raise SchedulingServiceError(
                 f"{field_name} contains invalid day codes: {invalid_codes}"
             )
+
+    def _validate_pattern_lines(self, pattern_lines: list[dict] | None) -> None:
+        """Validate optional rotating pattern lines payload."""
+        if pattern_lines is None:
+            return
+        for idx, line in enumerate(pattern_lines):
+            if not isinstance(line, dict):
+                raise SchedulingServiceError(f"pattern_lines[{idx}] must be an object")
+            week_index = line.get("week_index")
+            day = line.get("day")
+            shift_slot = line.get("shift_slot")
+            if week_index not in (1, 2):
+                raise SchedulingServiceError(
+                    f"pattern_lines[{idx}].week_index must be 1 or 2"
+                )
+            if day not in self.VALID_WORK_DAYS:
+                raise SchedulingServiceError(
+                    f"pattern_lines[{idx}].day must be one of {sorted(self.VALID_WORK_DAYS)}"
+                )
+            if shift_slot not in self.VALID_SHIFT_SLOTS:
+                raise SchedulingServiceError(
+                    f"pattern_lines[{idx}].shift_slot must be one of {sorted(self.VALID_SHIFT_SLOTS)}"
+                )
 
     def delete_pattern(self, org_id: UUID, pattern_id: UUID) -> None:
         """Delete a shift pattern (soft delete by deactivating)."""
@@ -409,9 +444,13 @@ class SchedulingService:
     ) -> ShiftPatternAssignment:
         """Create a pattern assignment for an employee."""
         # Verify pattern exists
-        self.get_pattern(org_id, shift_pattern_id)
+        pattern = self.get_pattern(org_id, shift_pattern_id)
+        if not pattern.is_active:
+            raise SchedulingServiceError("Cannot assign an inactive shift pattern")
+        if effective_to and effective_to < effective_from:
+            raise SchedulingServiceError("effective_to cannot be before effective_from")
 
-        # Check for overlapping active assignments in the same department
+        # Check for overlapping active assignments for the employee
         self._check_overlapping_assignment(
             org_id, employee_id, department_id, effective_from, effective_to
         )
@@ -491,6 +530,7 @@ class SchedulingService:
     ) -> ShiftPatternAssignment:
         """Update a pattern assignment."""
         assignment = self.get_assignment(org_id, assignment_id)
+        original_employee_id = assignment.employee_id
 
         for key, value in kwargs.items():
             if not hasattr(assignment, key):
@@ -499,6 +539,35 @@ class SchedulingService:
             if value is None and key not in self.ASSIGNMENT_CLEARABLE_FIELDS:
                 continue
             setattr(assignment, key, value)
+
+        if assignment.shift_pattern_id:
+            pattern = self.get_pattern(org_id, assignment.shift_pattern_id)
+            if not pattern.is_active:
+                raise SchedulingServiceError("Cannot assign an inactive shift pattern")
+
+        if (
+            assignment.effective_to
+            and assignment.effective_to < assignment.effective_from
+        ):
+            raise SchedulingServiceError("effective_to cannot be before effective_from")
+
+        # Re-run overlap validation when assignment shape changes.
+        if (
+            assignment.employee_id != original_employee_id
+            or "employee_id" in kwargs
+            or "department_id" in kwargs
+            or "effective_from" in kwargs
+            or "effective_to" in kwargs
+            or "is_active" in kwargs
+        ) and assignment.is_active:
+            self._check_overlapping_assignment(
+                org_id=org_id,
+                employee_id=assignment.employee_id,
+                department_id=assignment.department_id,
+                effective_from=assignment.effective_from,
+                effective_to=assignment.effective_to,
+                exclude_assignment_id=assignment.pattern_assignment_id,
+            )
 
         self.db.flush()
         logger.info("Updated pattern assignment: %s", assignment_id)
@@ -530,6 +599,7 @@ class SchedulingService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftSchedule]:
         """List shift schedules."""
+        self._auto_complete_elapsed_months(org_id)
         query = (
             select(ShiftSchedule)
             .where(ShiftSchedule.organization_id == org_id)
@@ -646,16 +716,41 @@ class SchedulingService:
         schedule_month: str,
     ) -> ScheduleStatus | None:
         """Get the overall status for a month's schedule."""
-        result = self.db.scalar(
-            select(ShiftSchedule.status)
+        self._auto_complete_elapsed_months(org_id)
+        statuses = set(
+            self.db.scalars(
+                select(ShiftSchedule.status).where(
+                    ShiftSchedule.organization_id == org_id,
+                    ShiftSchedule.department_id == department_id,
+                    ShiftSchedule.schedule_month == schedule_month,
+                )
+            ).all()
+        )
+        if not statuses:
+            return None
+        if ScheduleStatus.DRAFT in statuses:
+            return ScheduleStatus.DRAFT
+        if ScheduleStatus.PUBLISHED in statuses:
+            return ScheduleStatus.PUBLISHED
+        return ScheduleStatus.COMPLETED
+
+    def _auto_complete_elapsed_months(self, org_id: UUID) -> None:
+        """
+        Mark published schedules as COMPLETED once the month has ended.
+
+        This keeps the schedule lifecycle moving without requiring manual closure.
+        """
+        today = date.today()
+        current_month_key = today.strftime("%Y-%m")
+        self.db.execute(
+            update(ShiftSchedule)
             .where(
                 ShiftSchedule.organization_id == org_id,
-                ShiftSchedule.department_id == department_id,
-                ShiftSchedule.schedule_month == schedule_month,
+                ShiftSchedule.status == ScheduleStatus.PUBLISHED,
+                ShiftSchedule.schedule_month < current_month_key,
             )
-            .limit(1)
+            .values(status=ScheduleStatus.COMPLETED)
         )
-        return result
 
     def get_active_assignment_for_employee(
         self,
@@ -686,24 +781,28 @@ class SchedulingService:
         department_id: UUID,
         effective_from: date,
         effective_to: date | None,
+        exclude_assignment_id: UUID | None = None,
     ) -> None:
         """
-        Check for overlapping active assignments for the same employee in the same department.
+        Check for overlapping active assignments for the same employee.
 
         Raises SchedulingServiceError if an overlap is found.
         """
-        # Build query to find overlapping assignments
+        # Build query to find overlapping assignments.
         # An assignment overlaps if:
-        # - Same org, employee, department
+        # - Same org, employee
         # - Is active
         # - Date ranges overlap: existing.from <= new.to AND existing.to >= new.from
         #   (accounting for NULL effective_to meaning "ongoing")
         query = select(ShiftPatternAssignment).where(
             ShiftPatternAssignment.organization_id == org_id,
             ShiftPatternAssignment.employee_id == employee_id,
-            ShiftPatternAssignment.department_id == department_id,
             ShiftPatternAssignment.is_active == True,  # noqa: E712
         )
+        if exclude_assignment_id:
+            query = query.where(
+                ShiftPatternAssignment.pattern_assignment_id != exclude_assignment_id
+            )
 
         # Check for date overlap
         # If new assignment has no end date, it overlaps with anything that starts before or has no end
@@ -728,7 +827,7 @@ class SchedulingService:
         existing = self.db.scalar(query)
         if existing:
             raise SchedulingServiceError(
-                f"Employee already has an active pattern assignment in this department "
+                f"Employee already has an active pattern assignment "
                 f"from {existing.effective_from} to {existing.effective_to or 'ongoing'}. "
                 f"End or deactivate the existing assignment first."
             )

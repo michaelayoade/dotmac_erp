@@ -4,15 +4,81 @@
 {% block content %}
 {{ topbar("Coach Insights") }}
 
+{% set selected_category = category or '' %}
+{% set selected_severity = severity or '' %}
+{% set current_page = page if page is defined else 1 %}
+{% set current_per_page = per_page if per_page is defined else 50 %}
+{% set total_pages = ((total + current_per_page - 1) // current_per_page) if current_per_page > 0 else 1 %}
+{% set has_prev = current_page > 1 %}
+{% set has_next = current_page < total_pages %}
+
 <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
   <div class="text-sm text-slate-600 dark:text-slate-300">
     Showing {{ items|length }} of {{ total }} insight(s)
   </div>
-  <div class="flex items-center gap-2">
-    <a class="btn btn-secondary" href="/coach/insights?include_expired={{ 'true' if not include_expired else 'false' }}">
+
+  <form method="GET" action="/coach/insights" class="flex flex-wrap items-end gap-2">
+    <div>
+      <label for="category" class="block text-xs font-medium text-slate-600 dark:text-slate-300">Category</label>
+      <select id="category" name="category" class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <option value="" {% if not selected_category %}selected{% endif %}>All</option>
+        <option value="cash_flow" {% if selected_category|lower == 'cash_flow' %}selected{% endif %}>Cash Flow</option>
+        <option value="efficiency" {% if selected_category|lower == 'efficiency' %}selected{% endif %}>Efficiency</option>
+        <option value="workforce" {% if selected_category|lower == 'workforce' %}selected{% endif %}>Workforce</option>
+        <option value="supply_chain" {% if selected_category|lower == 'supply_chain' %}selected{% endif %}>Supply Chain</option>
+        <option value="revenue" {% if selected_category|lower == 'revenue' %}selected{% endif %}>Revenue</option>
+        <option value="compliance" {% if selected_category|lower == 'compliance' %}selected{% endif %}>Compliance</option>
+        <option value="data_quality" {% if selected_category|lower == 'data_quality' %}selected{% endif %}>Data Quality</option>
+        <option value="assets" {% if selected_category|lower == 'assets' %}selected{% endif %}>Assets</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="per_page" class="block text-xs font-medium text-slate-600 dark:text-slate-300">Per page</label>
+      <select id="per_page" name="per_page" class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <option value="25" {% if current_per_page == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if current_per_page == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if current_per_page == 100 %}selected{% endif %}>100</option>
+        <option value="200" {% if current_per_page == 200 %}selected{% endif %}>200</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="severity" class="block text-xs font-medium text-slate-600 dark:text-slate-300">Severity</label>
+      <select id="severity" name="severity" class="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <option value="" {% if not selected_severity %}selected{% endif %}>All</option>
+        <option value="urgent" {% if selected_severity|lower == 'urgent' %}selected{% endif %}>Urgent</option>
+        <option value="warning" {% if selected_severity|lower == 'warning' %}selected{% endif %}>Warning</option>
+        <option value="attention" {% if selected_severity|lower == 'attention' %}selected{% endif %}>Attention</option>
+        <option value="info" {% if selected_severity|lower == 'info' %}selected{% endif %}>Info</option>
+      </select>
+    </div>
+
+    <input type="hidden" name="page" value="1">
+    <input type="hidden" name="include_expired" value="{{ 'true' if include_expired else 'false' }}">
+    <button class="btn btn-secondary" type="submit">Apply</button>
+    <a class="btn btn-secondary" href="/coach/insights?category={{ selected_category }}&severity={{ selected_severity }}&per_page={{ current_per_page }}&include_expired={{ 'true' if not include_expired else 'false' }}&page=1">
       {% if include_expired %}Hide expired{% else %}Include expired{% endif %}
     </a>
-  </div>
+  </form>
+</div>
+
+<div class="mt-4 flex flex-wrap gap-2">
+  <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">Quick categories</span>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&severity={{ selected_severity }}&category=">All</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&severity={{ selected_severity }}&category=cash_flow">Cash Flow</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&severity={{ selected_severity }}&category=efficiency">Efficiency</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&severity={{ selected_severity }}&category=workforce">Workforce</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&severity={{ selected_severity }}&category=compliance">Compliance</a>
+</div>
+
+<div class="mt-2 flex flex-wrap gap-2">
+  <span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">Quick severity</span>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity=">All</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity=urgent">Urgent</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity=warning">Warning</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity=attention">Attention</a>
+  <a class="btn btn-secondary" href="/coach/insights?page=1&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity=info">Info</a>
 </div>
 
 <div class="mt-6 space-y-4">
@@ -24,4 +90,24 @@
     {{ empty_state("No insights yet", "If Coach is enabled, daily insights will appear after scheduled tasks run.", icon="chart") }}
   {% endif %}
 </div>
+
+{% if total_pages > 1 %}
+<div class="mt-6 flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
+  {% if has_prev %}
+  <a class="btn btn-secondary" href="/coach/insights?page={{ current_page - 1 }}&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity={{ selected_severity }}">Previous</a>
+  {% else %}
+  <span class="btn btn-secondary pointer-events-none opacity-50">Previous</span>
+  {% endif %}
+
+  <div class="text-sm text-slate-600 dark:text-slate-300">
+    Page {{ current_page }} of {{ total_pages }}
+  </div>
+
+  {% if has_next %}
+  <a class="btn btn-secondary" href="/coach/insights?page={{ current_page + 1 }}&per_page={{ current_per_page }}&include_expired={{ 'true' if include_expired else 'false' }}&category={{ selected_category }}&severity={{ selected_severity }}">Next</a>
+  {% else %}
+  <span class="btn btn-secondary pointer-events-none opacity-50">Next</span>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

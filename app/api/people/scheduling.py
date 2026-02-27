@@ -38,6 +38,7 @@ from app.schemas.people.scheduling import (
     ShiftScheduleUpdate,
     # Swap Requests
     SwapRequestCreate,
+    SwapRequestDecline,
     SwapRequestListResponse,
     SwapRequestRead,
     SwapRequestReview,
@@ -155,6 +156,11 @@ def create_pattern(
             work_days=payload.work_days,
             day_work_days=payload.day_work_days,
             night_work_days=payload.night_work_days,
+            pattern_lines=(
+                [line.model_dump() for line in payload.pattern_lines]
+                if payload.pattern_lines
+                else None
+            ),
             day_shift_type_id=payload.day_shift_type_id,
             night_shift_type_id=payload.night_shift_type_id,
             is_active=payload.is_active,
@@ -589,6 +595,28 @@ def accept_swap_request(
             org_id=organization_id,
             request_id=request_id,
             accepting_employee_id=employee_id,
+        )
+        return SwapRequestRead.model_validate(request)
+    except Exception as e:
+        handle_scheduling_error(e)
+
+
+@router.post("/swaps/{request_id}/decline", response_model=SwapRequestRead)
+def decline_swap_request(
+    request_id: UUID,
+    payload: SwapRequestDecline,
+    organization_id: UUID = Depends(require_organization_id),
+    employee_id: UUID = Depends(require_current_employee_id),
+    db: Session = Depends(get_db),
+):
+    """Target employee declines the swap request."""
+    try:
+        svc = SwapService(db)
+        request = svc.decline_swap_request(
+            org_id=organization_id,
+            request_id=request_id,
+            declining_employee_id=employee_id,
+            reason=payload.reason,
         )
         return SwapRequestRead.model_validate(request)
     except Exception as e:

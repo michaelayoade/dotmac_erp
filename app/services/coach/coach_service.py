@@ -238,12 +238,14 @@ class CoachService:
         per_page: int = 50,
         include_expired: bool = False,
         category: str | None = None,
+        severity: str | None = None,
     ) -> tuple[list[CoachInsight], int]:
         if page < 1 or per_page < 1:
             raise ValueError("Invalid pagination parameters")
 
         org_id = coerce_uuid(organization_id)
         normalized_category = self._normalize_category(category)
+        normalized_severity = self._normalize_severity(severity)
 
         stmt = select(CoachInsight).where(CoachInsight.organization_id == org_id)
 
@@ -252,6 +254,9 @@ class CoachService:
 
         if normalized_category:
             stmt = stmt.where(CoachInsight.category == normalized_category)
+
+        if normalized_severity:
+            stmt = stmt.where(CoachInsight.severity == normalized_severity)
 
         if scope.audiences is not None:
             if not scope.audiences:
@@ -275,6 +280,15 @@ class CoachService:
             return None
         normalized = category.strip().replace("-", "_").upper()
         return normalized or None
+
+    def _normalize_severity(self, severity: str | None) -> str | None:
+        """Normalize and validate severity query values for DB filtering."""
+        if not severity:
+            return None
+        normalized = severity.strip().replace("-", "_").upper()
+        if normalized not in {"INFO", "ATTENTION", "WARNING", "URGENT"}:
+            return None
+        return normalized
 
     def update_feedback(
         self,

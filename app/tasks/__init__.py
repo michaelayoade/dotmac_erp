@@ -28,6 +28,7 @@ from app.tasks.coach import (
     generate_daily_supply_chain_insights,
     generate_daily_workforce_insights,
     generate_weekly_finance_report,
+    generate_weekly_hr_report,
 )
 from app.tasks.data_health import (
     auto_post_approved_invoices,
@@ -186,6 +187,7 @@ __all__ = [
     "generate_daily_supply_chain_insights",
     "generate_daily_workforce_insights",
     "generate_weekly_finance_report",
+    "generate_weekly_hr_report",
     # Data health tasks
     "cleanup_old_notifications",
     "process_stuck_outbox_events",

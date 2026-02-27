@@ -54,6 +54,7 @@ from app.schemas.people.hr import (
     LocationListResponse,
     LocationRead,
     LocationUpdate,
+    RehireRequest,
     ResignationRequest,
     TerminationRequest,
 )
@@ -926,6 +927,23 @@ def resign_employee(
     """Record employee resignation."""
     svc = EmployeeService(db, organization_id)
     emp = svc.resign_employee(employee_id, payload.date_of_leaving)
+    return EmployeeRead.model_validate(emp)
+
+
+@router.post("/employees/{employee_id}/rehire", response_model=EmployeeRead)
+def rehire_employee(
+    employee_id: UUID,
+    payload: RehireRequest,
+    organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db),
+):
+    """Rehire a previously separated employee."""
+    svc = EmployeeService(db, organization_id)
+    emp = svc.rehire_employee(
+        employee_id,
+        payload.date_of_rejoining,
+        notes=payload.notes,
+    )
     return EmployeeRead.model_validate(emp)
 
 

@@ -96,11 +96,11 @@ class EmployeeLoan(Base):
         nullable=False,
     )
 
-    # Loan type reference
-    loan_type_id: Mapped[uuid.UUID] = mapped_column(
+    # Loan type reference (optional — loans can be created without a type)
+    loan_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payroll.loan_type.loan_type_id"),
-        nullable=False,
+        nullable=True,
     )
 
     # Loan amounts

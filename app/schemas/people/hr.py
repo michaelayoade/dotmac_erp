@@ -470,6 +470,13 @@ class ResignationRequest(BaseModel):
     date_of_leaving: date
 
 
+class RehireRequest(BaseModel):
+    """Employee rehire request."""
+
+    date_of_rejoining: date
+    notes: str | None = None
+
+
 class BulkUpdateRequest(BaseModel):
     """Bulk employee update request."""
 

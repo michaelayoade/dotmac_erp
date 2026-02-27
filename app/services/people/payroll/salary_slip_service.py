@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -129,13 +129,11 @@ class SalarySlipService:
         org_id = coerce_uuid(organization_id)
 
         # Check if component exists
-        component = (
-            db.query(SalaryComponent)
-            .filter(
+        component = db.scalar(
+            select(SalaryComponent).where(
                 SalaryComponent.organization_id == org_id,
                 SalaryComponent.component_code == component_code,
             )
-            .first()
         )
 
         if component:
@@ -208,6 +206,81 @@ class SalarySlipService:
             components[code] = component
 
         return components
+
+    @staticmethod
+    def _apply_loan_deductions(
+        db: Session,
+        *,
+        org_id: UUID,
+        user_id: UUID,
+        slip: SalarySlip,
+        employee_id: UUID,
+        period_start: date,
+        period_end: date,
+        gross_pay: Decimal,
+        total_deduction: Decimal,
+    ) -> Decimal:
+        """Attach due loan/salary-advance deductions to a slip and return new total."""
+        from app.models.people.payroll.loan_repayment import (
+            SalarySlipLoanDeduction as SlipLoanLink,
+        )
+        from app.services.people.payroll.loan_service import LoanService
+
+        # Ensure link records do not linger across slip recalculations.
+        db.execute(delete(SlipLoanLink).where(SlipLoanLink.slip_id == slip.slip_id))
+
+        loan_svc = LoanService(db)
+        try:
+            loan_deductions = loan_svc.get_due_deductions(
+                employee_id,
+                period_start,
+                period_end,
+                gross_pay=gross_pay,
+                total_existing_deductions=total_deduction,
+                exclude_slip_id=slip.slip_id,
+                organization_id=org_id,
+            )
+        except Exception as loan_err:
+            logger.warning(
+                "Failed to get loan deductions for %s: %s", employee_id, loan_err
+            )
+            loan_deductions = []
+
+        for loan_item in loan_deductions:
+            loan_component = SalarySlipService.get_or_create_statutory_component(
+                db,
+                org_id,
+                "LOAN_REPAYMENT",
+                "Loan/Advance Repayment",
+                "LOAN",
+                display_order=850,
+                created_by_id=user_id,
+            )
+
+            deduction_line = SalarySlipDeduction(
+                slip_id=slip.slip_id,
+                component_id=loan_component.component_id,
+                component_name=f"Loan - {loan_item.loan_type_name}",
+                abbr="LOAN",
+                amount=loan_item.amount,
+                default_amount=loan_item.amount,
+                statistical_component=False,
+                do_not_include_in_total=False,
+                display_order=850,
+            )
+            db.add(deduction_line)
+            total_deduction += loan_item.amount
+
+            link = SlipLoanLink(
+                slip_id=slip.slip_id,
+                loan_id=loan_item.loan_id,
+                amount=loan_item.amount,
+                principal_portion=loan_item.principal_portion,
+                interest_portion=loan_item.interest_portion,
+            )
+            db.add(link)
+
+        return total_deduction
 
     @staticmethod
     def generate_slip_number(db: Session, organization_id: UUID) -> str:
@@ -346,6 +419,9 @@ class SalarySlipService:
                 total_working_days - input.absent_days - input.leave_without_pay
             )
 
+        # Ensure payment_days never goes negative
+        payment_days = max(payment_days, Decimal("0"))
+
         # Generate slip number
         slip_number = SalarySlipService.generate_slip_number(db, org_id)
 
@@ -380,8 +456,6 @@ class SalarySlipService:
         gross_pay = Decimal("0")
         basic_pay = Decimal("0")  # Track basic salary for PAYE calculation
         base_amount = assignment.base or Decimal("0")
-        variable_amount = assignment.variable or Decimal("0")
-        variable_amount = assignment.variable or Decimal("0")
         variable_amount = assignment.variable or Decimal("0")
 
         for struct_earning in structure.earnings:
@@ -552,57 +626,6 @@ class SalarySlipService:
                 ):
                     total_deduction += amount
 
-        # ── Loan / salary advance deductions ──────────────────────
-        from app.services.people.payroll.loan_service import LoanService
-
-        loan_svc = LoanService(db)
-        try:
-            loan_deductions = loan_svc.get_due_deductions(
-                emp_id, input.start_date, input.end_date
-            )
-        except Exception as loan_err:
-            logger.warning("Failed to get loan deductions for %s: %s", emp_id, loan_err)
-            loan_deductions = []
-
-        for loan_item in loan_deductions:
-            loan_component = SalarySlipService.get_or_create_statutory_component(
-                db,
-                org_id,
-                "LOAN_REPAYMENT",
-                "Loan/Advance Repayment",
-                "LOAN",
-                display_order=850,
-                created_by_id=user_id,
-            )
-
-            deduction_line = SalarySlipDeduction(
-                slip_id=slip.slip_id,
-                component_id=loan_component.component_id,
-                component_name=f"Loan - {loan_item.loan_type_name}",
-                abbr="LOAN",
-                amount=loan_item.amount,
-                default_amount=loan_item.amount,
-                statistical_component=False,
-                do_not_include_in_total=False,
-                display_order=850,
-            )
-            db.add(deduction_line)
-            total_deduction += loan_item.amount
-
-            # Link record (without repayment_id — balance not yet updated)
-            from app.models.people.payroll.loan_repayment import (
-                SalarySlipLoanDeduction as SlipLoanLink,
-            )
-
-            link = SlipLoanLink(
-                slip_id=slip.slip_id,
-                loan_id=loan_item.loan_id,
-                amount=loan_item.amount,
-                principal_portion=loan_item.principal_portion,
-                interest_portion=loan_item.interest_portion,
-            )
-            db.add(link)
-
         # Add unpaid suspension deduction if applicable
         from app.services.people.discipline import DisciplineService
 
@@ -666,7 +689,19 @@ class SalarySlipService:
                         suspension.payroll_processed = True
 
         # Update slip totals
-        net_pay = gross_pay - total_deduction
+        total_deduction = SalarySlipService._apply_loan_deductions(
+            db,
+            org_id=org_id,
+            user_id=user_id,
+            slip=slip,
+            employee_id=emp_id,
+            period_start=input.start_date,
+            period_end=input.end_date,
+            gross_pay=gross_pay,
+            total_deduction=total_deduction,
+        )
+
+        net_pay = max(gross_pay - total_deduction, Decimal("0"))
         exchange_rate = slip.exchange_rate or Decimal("1.0")
 
         slip.gross_pay = gross_pay
@@ -676,8 +711,7 @@ class SalarySlipService:
         slip.total_deduction_functional = total_deduction * exchange_rate
         slip.net_pay_functional = net_pay * exchange_rate
 
-        db.commit()
-        db.refresh(slip)
+        db.flush()
 
         return slip
 
@@ -734,8 +768,9 @@ class SalarySlipService:
                 detail=f"Salary slip already exists for this period: {existing.slip_number}",
             )
 
+        # Use end_date so mid-month joiners are included (matches create path)
         assignment = SalarySlipService.get_active_assignment(
-            db, org_id, emp_id, input.start_date
+            db, org_id, emp_id, input.end_date
         )
         if not assignment:
             raise HTTPException(
@@ -751,7 +786,31 @@ class SalarySlipService:
         if total_working_days is None:
             total_working_days = Decimal((input.end_date - input.start_date).days + 1)
 
-        payment_days = total_working_days - input.absent_days - input.leave_without_pay
+        # Prorate for mid-period joiners/leavers (matches create path)
+        from app.services.people.payroll.working_days_calculator import (
+            calculate_proration,
+        )
+
+        proration = calculate_proration(
+            db=db,
+            organization_id=org_id,
+            employee_joining_date=employee.date_of_joining,
+            period_start=input.start_date,
+            period_end=input.end_date,
+            employee_leaving_date=employee.date_of_leaving,
+        )
+
+        if proration.is_prorated:
+            payment_days = (
+                proration.payment_days - input.absent_days - input.leave_without_pay
+            )
+        else:
+            payment_days = (
+                total_working_days - input.absent_days - input.leave_without_pay
+            )
+
+        # Ensure payment_days never goes negative
+        payment_days = max(payment_days, Decimal("0"))
 
         slip.employee_id = emp_id
         slip.employee_name = employee.full_name
@@ -936,7 +995,78 @@ class SalarySlipService:
                 ):
                     total_deduction += amount
 
-        net_pay = gross_pay - total_deduction
+        # Add unpaid suspension deduction if applicable (matches create path)
+        from app.services.people.discipline import DisciplineService
+
+        discipline_service = DisciplineService(db)
+        unpaid_suspensions = discipline_service.get_unpaid_suspensions(
+            org_id, emp_id, input.start_date, input.end_date
+        )
+
+        if unpaid_suspensions:
+            total_suspension_days = Decimal("0")
+            for suspension in unpaid_suspensions:
+                susp_start = max(suspension.effective_date, input.start_date)
+                susp_end = min(suspension.end_date or input.end_date, input.end_date)
+                if susp_start <= susp_end:
+                    days = Decimal(str((susp_end - susp_start).days + 1))
+                    total_suspension_days += days
+
+            if total_suspension_days > 0:
+                daily_rate = (
+                    gross_pay / total_working_days
+                    if total_working_days > 0
+                    else Decimal("0")
+                )
+                suspension_deduction = (daily_rate * total_suspension_days).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+
+                if suspension_deduction > 0:
+                    susp_component = (
+                        SalarySlipService.get_or_create_statutory_component(
+                            db,
+                            org_id,
+                            "SUSPENSION_DEDUCT",
+                            "Unpaid Suspension",
+                            "SUSP",
+                            display_order=900,
+                            created_by_id=user_id,
+                        )
+                    )
+
+                    slip.deductions.append(
+                        SalarySlipDeduction(
+                            slip_id=slip.slip_id,
+                            component_id=susp_component.component_id,
+                            component_name=susp_component.component_name,
+                            abbr=susp_component.abbr,
+                            amount=suspension_deduction,
+                            default_amount=suspension_deduction,
+                            statistical_component=False,
+                            do_not_include_in_total=False,
+                            display_order=900,
+                        )
+                    )
+                    total_deduction += suspension_deduction
+
+                    for suspension in unpaid_suspensions:
+                        suspension.payroll_processed = True
+
+        # Apply loan deductions
+        total_deduction = SalarySlipService._apply_loan_deductions(
+            db,
+            org_id=org_id,
+            user_id=user_id,
+            slip=slip,
+            employee_id=emp_id,
+            period_start=input.start_date,
+            period_end=input.end_date,
+            gross_pay=gross_pay,
+            total_deduction=total_deduction,
+        )
+
+        net_pay = max(gross_pay - total_deduction, Decimal("0"))
         exchange_rate = slip.exchange_rate or Decimal("1.0")
 
         slip.gross_pay = gross_pay
@@ -946,8 +1076,7 @@ class SalarySlipService:
         slip.total_deduction_functional = total_deduction * exchange_rate
         slip.net_pay_functional = net_pay * exchange_rate
 
-        db.commit()
-        db.refresh(slip)
+        db.flush()
 
         return slip
 
@@ -1048,8 +1177,7 @@ class SalarySlipService:
         slip.status_changed_at = datetime.now(UTC)
         slip.status_changed_by_id = user_id
 
-        db.commit()
-        db.refresh(slip)
+        db.flush()
 
         return slip
 
@@ -1086,28 +1214,11 @@ class SalarySlipService:
         slip.status_changed_at = datetime.now(UTC)
         slip.status_changed_by_id = user_id
 
-        try:
-            from app.services.people.payroll.payroll_notifications import (
-                PayrollNotificationService,
-            )
+        # NOTE: Do NOT send payslip-posted notifications here.
+        # Approval != posting. Employees are notified only when
+        # payslips are posted and emails are explicitly triggered.
 
-            notification_service = PayrollNotificationService(db)
-            employee = slip.employee or db.get(Employee, slip.employee_id)
-            if employee:
-                notification_service.notify_payslip_posted(
-                    slip, employee, queue_email=True
-                )
-        except Exception as notify_err:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "Payroll approve: failed to notify for slip %s: %s",
-                slip.slip_id,
-                notify_err,
-            )
-
-        db.commit()
-        db.refresh(slip)
+        db.flush()
 
         return slip
 

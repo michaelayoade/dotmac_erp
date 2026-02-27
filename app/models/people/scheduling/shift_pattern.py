@@ -118,6 +118,14 @@ class ShiftPattern(Base, AuditMixin):
         nullable=True,
         comment='For ROTATING patterns: night-shift days, e.g. ["SAT","SUN"]',
     )
+    pattern_lines: Mapped[list | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Optional 2-week pattern lines for rotating schedules. "
+            "Each entry: {'week_index':1|2,'day':'MON'..'SUN','shift_slot':'DAY|NIGHT|OFF'}"
+        ),
+    )
 
     # Shift type references
     day_shift_type_id: Mapped[uuid.UUID] = mapped_column(

@@ -970,72 +970,47 @@ class PayrollService:
             slip.status_changed_at = now
             slip.status_changed_by_id = approver_id
 
-        try:
-            from app.services.people.payroll.payroll_notifications import (
-                PayrollNotificationService,
-            )
-
-            notification_service = PayrollNotificationService(self.db)
-            for slip in slips:
-                employee = slip.employee or self.db.get(Employee, slip.employee_id)
-                if employee:
-                    notification_service.notify_payslip_posted(
-                        slip, employee, queue_email=True
-                    )
-        except Exception as notify_err:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "Payroll approve: failed to notify slips for entry %s: %s",
-                entry_id,
-                notify_err,
-            )
+        # NOTE: Do NOT send payslip-posted notifications here.
+        # Approval != posting. Employees should only be notified when
+        # the payslip is actually posted to GL and emails are explicitly
+        # triggered via the "Send Payslip Emails" action.
 
         # Process loan deductions — update loan balances
-        try:
-            from app.models.people.payroll.loan_repayment import (
-                SalarySlipLoanDeduction as SlipLoanLink,
+        from app.models.people.payroll.loan_repayment import (
+            SalarySlipLoanDeduction as SlipLoanLink,
+        )
+        from app.services.people.payroll.loan_service import LoanService
+
+        loan_svc = LoanService(self.db)
+
+        for slip in slips:
+            pending_links = list(
+                self.db.scalars(
+                    select(SlipLoanLink).where(
+                        SlipLoanLink.slip_id == slip.slip_id,
+                        SlipLoanLink.repayment_id.is_(None),
+                    )
+                ).all()
             )
-            from app.services.people.payroll.loan_service import LoanService
 
-            loan_svc = LoanService(self.db)
-
-            for slip in slips:
-                pending_links = list(
-                    self.db.scalars(
-                        select(SlipLoanLink).where(
-                            SlipLoanLink.slip_id == slip.slip_id,
-                            SlipLoanLink.repayment_id.is_(None),
-                        )
-                    ).all()
-                )
-
-                for link in pending_links:
-                    try:
-                        repayment = loan_svc.record_payroll_deduction(
-                            loan_id=link.loan_id,
-                            slip_id=slip.slip_id,
-                            amount=link.amount,
-                            principal_portion=link.principal_portion,
-                            interest_portion=link.interest_portion,
-                            repayment_date=entry.posting_date or now.date(),
-                            created_by_id=approver_id,
-                            skip_link_creation=True,
-                        )
-                        link.repayment_id = repayment.repayment_id
-                    except Exception as loan_err:
-                        logger.warning(
-                            "Failed to record loan deduction for slip %s, loan %s: %s",
-                            slip.slip_id,
-                            link.loan_id,
-                            loan_err,
-                        )
-        except Exception as e:
-            logger.warning(
-                "Failed to process loan deductions for entry %s: %s",
-                entry_id,
-                e,
-            )
+            for link in pending_links:
+                try:
+                    repayment = loan_svc.record_payroll_deduction(
+                        loan_id=link.loan_id,
+                        slip_id=slip.slip_id,
+                        amount=link.amount,
+                        principal_portion=link.principal_portion,
+                        interest_portion=link.interest_portion,
+                        repayment_date=entry.posting_date or now.date(),
+                        created_by_id=approver_id,
+                        skip_link_creation=True,
+                    )
+                except Exception as loan_err:
+                    raise PayrollServiceError(
+                        "Failed to process loan deduction "
+                        f"for slip {slip.slip_number} and loan {link.loan_id}: {loan_err}"
+                    ) from loan_err
+                link.repayment_id = repayment.repayment_id
 
         entry.status = PayrollEntryStatus.APPROVED
         self.db.flush()
@@ -1084,13 +1059,13 @@ class PayrollService:
         paid_slips: list[SalarySlip] = []
 
         for slip in slips:
-            if slip.status != SalarySlipStatus.APPROVED:
+            if slip.status != SalarySlipStatus.POSTED:
                 errors.append(
-                    {"slip_id": str(slip.slip_id), "reason": "Slip not approved"}
+                    {"slip_id": str(slip.slip_id), "reason": "Slip not posted"}
                 )
                 continue
             slip.status = SalarySlipStatus.PAID
-            slip.paid_at = func.now()
+            slip.paid_at = datetime.now(UTC)
             slip.paid_by_id = paid_by_id
             slip.payment_reference = payment_reference
             updated += 1
@@ -1110,8 +1085,7 @@ class PayrollService:
                     notify_err,
                 )
 
-        # Commit changes before dispatching events
-        self.db.commit()
+        self.db.flush()
 
         # Dispatch events after commit to ensure persistence
         for slip in paid_slips:

@@ -116,13 +116,38 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
 
     with SessionLocal() as db:
         try:
+            from sqlalchemy import select
+            from sqlalchemy.orm import joinedload, selectinload
+
             from app.models.email_profile import EmailModule
+            from app.models.finance.core_org.organization import Organization
+            from app.models.people.hr.employee import Employee
             from app.models.people.payroll.salary_slip import SalarySlip
+            from app.models.people.payroll.salary_slip_component import (
+                SalarySlipDeduction,
+            )
             from app.services.email import send_email
             from app.services.people.payroll.payslip_pdf import PayslipPDFService
 
             slip_uuid = uuid.UUID(slip_id)
-            slip = db.get(SalarySlip, slip_uuid)
+            # Eagerly load all relationships needed for PDF generation
+            # to avoid lazy-load failures if DB connection drops mid-task.
+            stmt = (
+                select(SalarySlip)
+                .options(
+                    joinedload(SalarySlip.employee)
+                    .joinedload(Employee.organization)
+                    .joinedload(Organization.branding),
+                    joinedload(SalarySlip.employee).joinedload(Employee.department),
+                    joinedload(SalarySlip.employee).joinedload(Employee.designation),
+                    selectinload(SalarySlip.earnings),
+                    selectinload(SalarySlip.deductions).joinedload(
+                        SalarySlipDeduction.component
+                    ),
+                )
+                .where(SalarySlip.slip_id == slip_uuid)
+            )
+            slip = db.scalar(stmt)
 
             if not slip:
                 result["error"] = f"Salary slip {slip_id} not found"

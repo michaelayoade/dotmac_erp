@@ -8,7 +8,7 @@ import logging
 import uuid
 from typing import Any, TypedDict, cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
@@ -901,6 +901,10 @@ class SettingsWebService:
         self, db, organization_id: uuid.UUID
     ) -> dict[str, Any]:
         """Get Coach / AI settings for the form."""
+        from app.config import settings as app_settings
+        from app.models.coach.insight import CoachInsight
+        from app.models.coach.report import CoachReport
+
         specs = list_specs(SettingDomain.coach)
         settings: dict[str, dict[str, Any]] = {}
 
@@ -918,7 +922,62 @@ class SettingsWebService:
                 "max": spec.max_value,
             }
 
-        return {"coach_settings": settings}
+        deepseek_base = resolve_value(db, SettingDomain.coach, "deepseek_base_url")
+        deepseek_key = resolve_value(db, SettingDomain.coach, "deepseek_api_key")
+        llama_base = resolve_value(db, SettingDomain.coach, "llama_base_url")
+        llama_key = resolve_value(db, SettingDomain.coach, "llama_api_key")
+
+        deepseek_configured = bool(deepseek_base and deepseek_key)
+        llama_configured = bool(llama_base and llama_key)
+
+        active_insights = int(
+            db.scalar(
+                select(func.count(CoachInsight.insight_id)).where(
+                    CoachInsight.organization_id == organization_id,
+                    CoachInsight.valid_until >= func.current_date(),
+                )
+            )
+            or 0
+        )
+        total_reports = int(
+            db.scalar(
+                select(func.count(CoachReport.report_id)).where(
+                    CoachReport.organization_id == organization_id
+                )
+            )
+            or 0
+        )
+        last_insight_at = db.scalar(
+            select(func.max(CoachInsight.created_at)).where(
+                CoachInsight.organization_id == organization_id
+            )
+        )
+        last_report_at = db.scalar(
+            select(func.max(CoachReport.created_at)).where(
+                CoachReport.organization_id == organization_id
+            )
+        )
+
+        coach_status = {
+            "enabled": bool(getattr(app_settings, "coach_enabled", False)),
+            "default_backend": getattr(app_settings, "coach_llm_default_backend", ""),
+            "deepseek_configured": deepseek_configured,
+            "llama_configured": llama_configured,
+            "configured_backends": [
+                b
+                for b, configured in (
+                    ("deepseek", deepseek_configured),
+                    ("llama", llama_configured),
+                )
+                if configured
+            ],
+            "active_insights": active_insights,
+            "total_reports": total_reports,
+            "last_insight_at": last_insight_at,
+            "last_report_at": last_report_at,
+        }
+
+        return {"coach_settings": settings, "coach_status": coach_status}
 
     def update_coach_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]

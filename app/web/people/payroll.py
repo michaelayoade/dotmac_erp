@@ -5,11 +5,14 @@ HTML template routes for Salary Components, Structures, and Slips.
 All business logic is delegated to the payroll_web_service.
 """
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.payroll.web import payroll_web_service
+from app.services.people.payroll.web.loan_web import loan_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(prefix="/payroll", tags=["payroll-web"])
@@ -414,6 +417,163 @@ def delete_assignment(
 ):
     """Delete salary structure assignment."""
     return payroll_web_service.delete_assignment_response(auth, db, assignment_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Loans / Salary Advances
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/loans", response_class=HTMLResponse)
+def list_loans(
+    request: Request,
+    search: str | None = None,
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Employee loans list page."""
+    return loan_web_service.list_loans_response(request, auth, db, search, status, page)
+
+
+@router.get("/loan")
+def loan_singular_redirect() -> RedirectResponse:
+    """Redirect singular loan path to canonical loans listing."""
+    return RedirectResponse(url="/people/payroll/loans", status_code=302)
+
+
+@router.get("/loans/")
+def loans_trailing_slash_redirect() -> RedirectResponse:
+    """Redirect trailing slash loans path to canonical loans listing."""
+    return RedirectResponse(url="/people/payroll/loans", status_code=302)
+
+
+@router.get("/loans/new", response_class=HTMLResponse)
+def new_loan_form(
+    request: Request,
+    employee_id: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """New loan application form."""
+    return loan_web_service.loan_form_response(request, auth, db, employee_id)
+
+
+@router.post("/loans/new")
+async def create_loan(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new employee loan application."""
+    return await loan_web_service.create_loan_response(request, auth, db)
+
+
+@router.get("/loans/{loan_id}", response_class=HTMLResponse)
+def view_loan(
+    request: Request,
+    loan_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Loan details page."""
+    return loan_web_service.loan_detail_response(request, auth, db, str(loan_id))
+
+
+@router.post("/loans/{loan_id}/approve")
+def approve_loan(
+    loan_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Approve a pending loan."""
+    return loan_web_service.approve_loan_response(auth, db, str(loan_id))
+
+
+@router.post("/loans/{loan_id}/reject")
+async def reject_loan(
+    request: Request,
+    loan_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Reject a pending loan."""
+    return await loan_web_service.reject_loan_response(request, auth, db, str(loan_id))
+
+
+@router.post("/loans/{loan_id}/disburse")
+async def disburse_loan(
+    request: Request,
+    loan_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Mark an approved loan as disbursed."""
+    return await loan_web_service.disburse_loan_response(
+        request, auth, db, str(loan_id)
+    )
+
+
+@router.get("/loans/types", response_class=HTMLResponse)
+def list_loan_types(
+    request: Request,
+    search: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Loan types list page."""
+    return loan_web_service.list_loan_types_response(request, auth, db, search)
+
+
+@router.get("/loans/types/")
+def loan_types_trailing_slash_redirect() -> RedirectResponse:
+    """Redirect trailing slash loan types path to canonical loan types listing."""
+    return RedirectResponse(url="/people/payroll/loans/types", status_code=302)
+
+
+@router.get("/loans/types/new", response_class=HTMLResponse)
+def new_loan_type_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """New loan type form."""
+    return loan_web_service.loan_type_form_response(request, auth, db)
+
+
+@router.get("/loans/types/{loan_type_id}/edit", response_class=HTMLResponse)
+def edit_loan_type_form(
+    request: Request,
+    loan_type_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Edit loan type form."""
+    return loan_web_service.loan_type_form_response(request, auth, db, loan_type_id)
+
+
+@router.post("/loans/types/new")
+async def create_loan_type(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new loan type."""
+    return await loan_web_service.save_loan_type_response(request, auth, db)
+
+
+@router.post("/loans/types/{loan_type_id}")
+async def update_loan_type(
+    request: Request,
+    loan_type_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Update an existing loan type."""
+    return await loan_web_service.save_loan_type_response(
+        request, auth, db, loan_type_id
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

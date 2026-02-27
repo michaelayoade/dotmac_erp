@@ -284,8 +284,8 @@ class TestPAYECalculator:
         - Monthly PAYE: ₦63,230
         """
         # Setup mock to return NTA 2025 bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -331,8 +331,8 @@ class TestPAYECalculator:
 
     def test_calculate_low_income_no_tax(self, mock_db, org_id, nta_2025_bands):
         """Test that income below 800K pays no tax."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -347,8 +347,8 @@ class TestPAYECalculator:
 
     def test_calculate_high_income(self, mock_db, org_id, nta_2025_bands):
         """Test high income calculation using all tax bands."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -366,7 +366,7 @@ class TestPAYECalculator:
         self, mock_db, org_id, employee_id, nta_2025_bands
     ):
         """Test tax exempt employee pays no tax."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
 
         # Create exempt profile with all required fields
         exempt_profile = EmployeeTaxProfile(
@@ -381,7 +381,7 @@ class TestPAYECalculator:
             annual_rent=Decimal("0"),
             rent_receipt_verified=False,
         )
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = exempt_profile
+        mock_db.scalar.return_value = exempt_profile
 
         calculator = PAYECalculator(mock_db)
 
@@ -398,8 +398,8 @@ class TestPAYECalculator:
 
     def test_effective_rate_calculation(self, mock_db, org_id, nta_2025_bands):
         """Test effective tax rate calculation."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -430,8 +430,8 @@ class TestPAYECalculator:
 
     def test_custom_statutory_rates(self, mock_db, org_id, nta_2025_bands):
         """Test custom statutory rates override defaults."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -454,8 +454,8 @@ class TestPAYECalculator:
 
     def test_breakdown_to_dict(self, mock_db, org_id, nta_2025_bands):
         """Test PAYEBreakdown serialization."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -488,7 +488,7 @@ class TestPAYECalculatorSeeding:
 
     def test_seed_nta_2025_bands(self, mock_db, org_id):
         """Test seeding default NTA 2025 bands."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
         bands = calculator.seed_nta_2025_bands(org_id)
@@ -508,9 +508,7 @@ class TestPAYECalculatorSeeding:
     def test_seed_does_not_duplicate(self, mock_db, org_id, nta_2025_bands):
         """Test seeding doesn't duplicate existing bands."""
         # Return existing band
-        mock_db.query.return_value.filter.return_value.first.return_value = (
-            nta_2025_bands[0]
-        )
+        mock_db.scalar.return_value = nta_2025_bands[0]
 
         calculator = PAYECalculator(mock_db)
         bands = calculator.seed_nta_2025_bands(org_id)
@@ -527,8 +525,8 @@ class TestPAYEEdgeCases:
 
     def test_very_high_income(self, mock_db, org_id, nta_2025_bands):
         """Test calculation for very high income (₦100M+ annually)."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -549,8 +547,8 @@ class TestPAYEEdgeCases:
 
     def test_exact_band_boundary_800k(self, mock_db, org_id, nta_2025_bands):
         """Test income at or below first band boundary (₦800,000)."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -567,8 +565,8 @@ class TestPAYEEdgeCases:
 
     def test_exact_band_boundary_3m(self, mock_db, org_id, nta_2025_bands):
         """Test income exactly at second band boundary (₦3,000,000)."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -585,8 +583,8 @@ class TestPAYEEdgeCases:
 
     def test_zero_gross_income(self, mock_db, org_id, nta_2025_bands):
         """Test calculation with zero gross income."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -602,8 +600,8 @@ class TestPAYEEdgeCases:
 
     def test_statutory_deductions_exceed_gross(self, mock_db, org_id, nta_2025_bands):
         """Test when statutory deductions exceed gross income."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -626,7 +624,7 @@ class TestPAYEEdgeCases:
         self, mock_db, org_id, employee_id, nta_2025_bands
     ):
         """Test that expired tax profile is not used."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
 
         # Profile that expired in the past
         EmployeeTaxProfile(
@@ -643,7 +641,7 @@ class TestPAYEEdgeCases:
         )
 
         # Return None when querying (simulating the filter excluding expired profile)
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 
@@ -660,8 +658,8 @@ class TestPAYEEdgeCases:
 
     def test_maximum_rent_relief_cap(self, mock_db, org_id, nta_2025_bands):
         """Test that rent relief is capped at ₦500,000."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
 
         calculator = PAYECalculator(mock_db)
 

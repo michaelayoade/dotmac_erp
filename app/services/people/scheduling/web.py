@@ -69,6 +69,52 @@ class SchedulingWebService:
         return str(value).strip()
 
     @staticmethod
+    def _day_codes() -> list[str]:
+        return ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+
+    @staticmethod
+    def _extract_pattern_lines(form_data: Any) -> list[dict]:
+        lines: list[dict] = []
+        for week in (1, 2):
+            for day in SchedulingWebService._day_codes():
+                slot = SchedulingWebService._get_form_str(
+                    form_data, f"pattern_line_w{week}_{day}", "OFF"
+                ).upper()
+                if slot not in {"DAY", "NIGHT", "OFF"}:
+                    slot = "OFF"
+                lines.append(
+                    {
+                        "week_index": week,
+                        "day": day,
+                        "shift_slot": slot,
+                    }
+                )
+        return lines
+
+    @staticmethod
+    def _pattern_line_map(pattern: dict | None) -> dict[str, str]:
+        line_map: dict[str, str] = {}
+        lines = (pattern or {}).get("pattern_lines", []) if pattern else []
+        for line in lines:
+            week_index = line.get("week_index")
+            day = line.get("day")
+            slot = line.get("shift_slot")
+            if week_index in (1, 2) and isinstance(day, str) and isinstance(slot, str):
+                line_map[f"w{week_index}_{day}"] = slot
+        return line_map
+
+    @staticmethod
+    def _default_pattern_line_map() -> dict[str, str]:
+        """Default to weekdays day-shift and weekends off for both weeks."""
+        line_map: dict[str, str] = {}
+        for week in (1, 2):
+            for day in SchedulingWebService._day_codes():
+                line_map[f"w{week}_{day}"] = (
+                    "DAY" if day in {"MON", "TUE", "WED", "THU", "FRI"} else "OFF"
+                )
+        return line_map
+
+    @staticmethod
     def _get_employees(db: Session, org_id: UUID) -> list[Employee]:
         """Get active employees for dropdowns."""
         stmt = (
@@ -194,8 +240,9 @@ class SchedulingWebService:
             {
                 "shift_types": shift_types,
                 "rotation_types": [r.value for r in RotationType],
-                "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+                "work_days_options": SchedulingWebService._day_codes(),
                 "pattern": {},
+                "pattern_line_map": SchedulingWebService._default_pattern_line_map(),
                 "error": None,
             }
         )
@@ -241,6 +288,7 @@ class SchedulingWebService:
         night_shift_type_id = SchedulingWebService._parse_uuid(
             SchedulingWebService._get_form_str(form_data, "night_shift_type_id")
         )
+        pattern_lines = SchedulingWebService._extract_pattern_lines(form_data)
 
         if not pattern_code or not pattern_name or day_shift_type_id is None:
             shift_types = SchedulingWebService._get_shift_types(db, org_id)
@@ -253,15 +301,7 @@ class SchedulingWebService:
                 {
                     "shift_types": shift_types,
                     "rotation_types": [r.value for r in RotationType],
-                    "work_days_options": [
-                        "MON",
-                        "TUE",
-                        "WED",
-                        "THU",
-                        "FRI",
-                        "SAT",
-                        "SUN",
-                    ],
+                    "work_days_options": [*SchedulingWebService._day_codes()],
                     "pattern": {
                         "pattern_code": pattern_code,
                         "pattern_name": pattern_name,
@@ -271,7 +311,11 @@ class SchedulingWebService:
                         "work_days": work_days,
                         "day_work_days": day_work_days,
                         "night_work_days": night_work_days,
+                        "pattern_lines": pattern_lines,
                     },
+                    "pattern_line_map": SchedulingWebService._pattern_line_map(
+                        {"pattern_lines": pattern_lines}
+                    ),
                     "error": error_message,
                 }
             )
@@ -295,6 +339,7 @@ class SchedulingWebService:
                 else ["MON", "TUE", "WED", "THU", "FRI"],
                 day_work_days=day_work_days if day_work_days else None,
                 night_work_days=night_work_days if night_work_days else None,
+                pattern_lines=pattern_lines,
                 day_shift_type_id=day_shift_type_id,
                 night_shift_type_id=night_shift_type_id,
             )
@@ -310,15 +355,7 @@ class SchedulingWebService:
                 {
                     "shift_types": shift_types,
                     "rotation_types": [r.value for r in RotationType],
-                    "work_days_options": [
-                        "MON",
-                        "TUE",
-                        "WED",
-                        "THU",
-                        "FRI",
-                        "SAT",
-                        "SUN",
-                    ],
+                    "work_days_options": [*SchedulingWebService._day_codes()],
                     "pattern": {
                         "pattern_code": pattern_code,
                         "pattern_name": pattern_name,
@@ -328,7 +365,11 @@ class SchedulingWebService:
                         "work_days": work_days,
                         "day_work_days": day_work_days,
                         "night_work_days": night_work_days,
+                        "pattern_lines": pattern_lines,
                     },
+                    "pattern_line_map": SchedulingWebService._pattern_line_map(
+                        {"pattern_lines": pattern_lines}
+                    ),
                     "error": str(e),
                 }
             )
@@ -355,7 +396,7 @@ class SchedulingWebService:
             {
                 "shift_types": shift_types,
                 "rotation_types": [r.value for r in RotationType],
-                "work_days_options": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+                "work_days_options": SchedulingWebService._day_codes(),
                 "pattern": {
                     "shift_pattern_id": str(pattern.shift_pattern_id),
                     "pattern_code": pattern.pattern_code,
@@ -366,12 +407,17 @@ class SchedulingWebService:
                     "work_days": pattern.work_days,
                     "day_work_days": pattern.day_work_days or [],
                     "night_work_days": pattern.night_work_days or [],
+                    "pattern_lines": pattern.pattern_lines or [],
                     "day_shift_type_id": str(pattern.day_shift_type_id),
                     "night_shift_type_id": str(pattern.night_shift_type_id)
                     if pattern.night_shift_type_id
                     else "",
                     "is_active": pattern.is_active,
                 },
+                "pattern_line_map": SchedulingWebService._pattern_line_map(
+                    {"pattern_lines": pattern.pattern_lines or []}
+                )
+                or SchedulingWebService._default_pattern_line_map(),
                 "error": None,
                 "is_edit": True,
             }
@@ -409,6 +455,7 @@ class SchedulingWebService:
             night_shift_type_id = SchedulingWebService._parse_uuid(
                 SchedulingWebService._get_form_str(form_data, "night_shift_type_id")
             )
+            pattern_lines = SchedulingWebService._extract_pattern_lines(form_data)
 
             svc.update_pattern(
                 org_id,
@@ -434,6 +481,7 @@ class SchedulingWebService:
                 work_days=work_days if work_days else None,
                 day_work_days=day_work_days if day_work_days else None,
                 night_work_days=night_work_days if night_work_days else None,
+                pattern_lines=pattern_lines,
                 day_shift_type_id=SchedulingWebService._parse_uuid(
                     SchedulingWebService._get_form_str(form_data, "day_shift_type_id")
                 ),

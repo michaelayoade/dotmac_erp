@@ -284,7 +284,7 @@ class SwapService:
                 title="Shift Swap Request",
                 message=f"You have a new shift swap request for {target_schedule.shift_date}. Please review and accept or decline.",
                 channel=NotificationChannel.BOTH,
-                action_url="/people/self/swap-requests",
+                action_url="/people/self/scheduling/swaps",
             )
         except Exception as e:
             logger.warning("Failed to send swap request notification: %s", e)
@@ -343,7 +343,7 @@ class SwapService:
                     title="Swap Request Accepted",
                     message="Your shift swap request has been accepted and is pending manager approval.",
                     channel=NotificationChannel.BOTH,
-                    action_url="/people/self/swap-requests",
+                    action_url="/people/self/scheduling/swaps",
                 )
             except Exception as e:
                 logger.warning(
@@ -488,7 +488,7 @@ class SwapService:
                     title=title,
                     message=message,
                     channel=NotificationChannel.BOTH,
-                    action_url="/people/self/swap-requests",
+                    action_url="/people/self/scheduling/swaps",
                 )
             except Exception as e:
                 logger.warning("Failed to send swap decision notification: %s", e)
@@ -636,7 +636,7 @@ class SwapService:
                 title="Swap Request Declined",
                 message=f"{target_name} has declined your shift swap request.",
                 channel=NotificationChannel.BOTH,
-                action_url="/people/self/swap-requests",
+                action_url="/people/self/scheduling/swaps",
             )
         except Exception as e:
             logger.warning("Failed to send swap declined notification: %s", e)

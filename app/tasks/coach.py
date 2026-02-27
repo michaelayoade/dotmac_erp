@@ -418,3 +418,47 @@ def generate_weekly_finance_report(organization_id: str | None = None) -> dict:
                 )
 
     return results
+
+
+@shared_task
+def generate_weekly_hr_report(organization_id: str | None = None) -> dict:
+    """Generate weekly HR digest report for each organization."""
+    if not app_settings.coach_enabled:
+        return {"skipped": True, "reason": "coach_disabled"}
+
+    results: dict[str, Any] = {
+        "organizations_processed": 0,
+        "reports_written": 0,
+        "errors": [],
+    }
+
+    with SessionLocal() as db:
+        org_query = select(Organization).where(Organization.is_active == True)  # noqa: E712
+        if organization_id:
+            org_query = org_query.where(
+                Organization.organization_id == uuid.UUID(organization_id)
+            )
+
+        orgs = db.scalars(org_query).all()
+        for org in orgs:
+            try:
+                from app.services.coach.report_generator import ReportGenerator
+
+                generator = ReportGenerator(db)
+                report = generator.generate_weekly_hr_report(org.organization_id)
+                if report:
+                    db.add(report)
+                    db.commit()
+                    results["reports_written"] += 1
+                results["organizations_processed"] += 1
+            except Exception as exc:
+                logger.exception(
+                    "Weekly HR report failed for org %s",
+                    org.organization_id,
+                )
+                db.rollback()
+                results["errors"].append(
+                    {"organization_id": str(org.organization_id), "error": str(exc)}
+                )
+
+    return results

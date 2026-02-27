@@ -21,10 +21,37 @@ from app.models.people.scheduling import (
 
 # Valid day codes for work_days
 VALID_DAY_CODES = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
+VALID_SHIFT_SLOTS = {"DAY", "NIGHT", "OFF"}
 
 # =============================================================================
 # Shift Pattern Schemas
 # =============================================================================
+
+
+class PatternLineInput(BaseModel):
+    """Line item for week-based rotating pattern."""
+
+    week_index: int = Field(ge=1, le=2)
+    day: str
+    shift_slot: str
+
+    @field_validator("day")
+    @classmethod
+    def validate_day(cls, v: str) -> str:
+        if v not in VALID_DAY_CODES:
+            raise ValueError(
+                f"Invalid day code: {v}. Valid values are: {sorted(VALID_DAY_CODES)}"
+            )
+        return v
+
+    @field_validator("shift_slot")
+    @classmethod
+    def validate_shift_slot(cls, v: str) -> str:
+        if v not in VALID_SHIFT_SLOTS:
+            raise ValueError(
+                f"Invalid shift_slot: {v}. Valid values are: {sorted(VALID_SHIFT_SLOTS)}"
+            )
+        return v
 
 
 class ShiftPatternBase(BaseModel):
@@ -49,6 +76,7 @@ class ShiftPatternBase(BaseModel):
     )
     day_shift_type_id: UUID
     night_shift_type_id: UUID | None = None
+    pattern_lines: list[PatternLineInput] | None = None
     is_active: bool = True
 
     @field_validator("work_days")
@@ -101,6 +129,7 @@ class ShiftPatternUpdate(BaseModel):
     night_work_days: list[str] | None = None
     day_shift_type_id: UUID | None = None
     night_shift_type_id: UUID | None = None
+    pattern_lines: list[PatternLineInput] | None = None
     is_active: bool | None = None
 
     @field_validator("work_days")
@@ -415,6 +444,12 @@ class SwapRequestReview(BaseModel):
     """Manager review of swap request."""
 
     notes: str | None = None
+
+
+class SwapRequestDecline(BaseModel):
+    """Target employee decline payload."""
+
+    reason: str | None = None
 
 
 class SwapRequestRead(BaseModel):

@@ -777,6 +777,44 @@ class HRWebService:
             request, "people/hr/employee_detail.html", context
         )
 
+    async def rehire_employee_response(
+        self,
+        request: Request,
+        employee_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse | HTMLResponse:
+        """Rehire a previously separated employee."""
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+        date_of_rejoining = self._form_str(form, "date_of_rejoining")
+        notes = self._form_str(form, "notes")
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = EmployeeService(db, org_id)
+
+        rejoining_date = self._parse_date(date_of_rejoining)
+
+        if rejoining_date:
+            svc.rehire_employee(employee_id, rejoining_date, notes=notes or None)
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
+            )
+
+        employee = svc.get_employee(employee_id)
+        context = self._employee_detail_context(request, auth, db, employee)
+        context.update(
+            {
+                "employee": employee,
+                "error": "Please provide a valid rehire date.",
+            }
+        )
+        return templates.TemplateResponse(
+            request, "people/hr/employee_detail.html", context
+        )
+
     async def terminate_employee_response(
         self,
         request: Request,

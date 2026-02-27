@@ -78,6 +78,86 @@ def my_attendance(
     return self_service_web_service.attendance_response(request, auth, db, month=month)
 
 
+@router.get("/scheduling/schedules", response_class=HTMLResponse)
+def my_schedules(
+    request: Request,
+    year_month: str | None = Query(None, description="Month in YYYY-MM format"),
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+):
+    """Self-service schedule view."""
+    return self_service_web_service.scheduling_schedules_response(
+        request, auth, db, year_month=year_month
+    )
+
+
+@router.get("/scheduling/swaps", response_class=HTMLResponse)
+def my_swap_requests(
+    request: Request,
+    year_month: str | None = Query(None, description="Month in YYYY-MM format"),
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+):
+    """Self-service swap request page."""
+    return self_service_web_service.scheduling_swaps_response(
+        request, auth, db, year_month=year_month, page=page
+    )
+
+
+@router.post("/scheduling/swaps/request")
+async def request_swap(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Create a shift swap request."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    return self_service_web_service.scheduling_create_swap_response(auth, db, form=form)
+
+
+@router.post("/scheduling/swaps/{request_id}/accept")
+async def accept_swap(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Accept a swap request as target employee."""
+    return self_service_web_service.scheduling_accept_swap_response(
+        auth, db, request_id=request_id
+    )
+
+
+@router.post("/scheduling/swaps/{request_id}/decline")
+async def decline_swap(
+    request_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Decline a swap request as target employee."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    return self_service_web_service.scheduling_decline_swap_response(
+        auth, db, request_id=request_id, form=form
+    )
+
+
+@router.post("/scheduling/swaps/{request_id}/cancel")
+async def cancel_swap(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Cancel a swap request as requester."""
+    return self_service_web_service.scheduling_cancel_swap_response(
+        auth, db, request_id=request_id
+    )
+
+
 @router.post("/attendance/check-in")
 async def my_check_in(
     request: Request,

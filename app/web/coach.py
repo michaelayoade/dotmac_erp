@@ -61,12 +61,23 @@ def insights_list(
     per_page: int = Query(50, ge=1, le=200),
     include_expired: bool = Query(False),
     category: str = Query(""),
+    severity: str = Query(""),
 ):
     context = base_context(request, auth, "Coach Insights", "coach", db=db)
     svc = CoachService(db)
 
     if not svc.is_enabled():
-        context.update({"items": [], "total": 0, "page": page, "per_page": per_page})
+        context.update(
+            {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "per_page": per_page,
+                "include_expired": include_expired,
+                "category": category,
+                "severity": severity,
+            }
+        )
         return templates.TemplateResponse(request, "coach/insights.html", context)
 
     scope = _build_scope(svc, auth)
@@ -77,6 +88,7 @@ def insights_list(
         per_page=per_page,
         include_expired=include_expired,
         category=category,
+        severity=severity,
     )
 
     context.update(
@@ -87,6 +99,7 @@ def insights_list(
             "per_page": per_page,
             "include_expired": include_expired,
             "category": category,
+            "severity": severity,
         }
     )
     return templates.TemplateResponse(request, "coach/insights.html", context)

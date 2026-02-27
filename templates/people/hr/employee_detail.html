@@ -142,6 +142,18 @@
                     </div>
                 </form>
                 {% endif %}
+
+                {% if employee.status.value in ['RESIGNED', 'TERMINATED', 'RETIRED'] %}
+                <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/rehire" class="space-y-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <label for="rehire_date" class="form-label">Rehire Date</label>
+                    <div class="flex flex-col gap-2">
+                        <input type="date" id="rehire_date" name="date_of_rejoining" class="form-input w-full">
+                        <input type="text" name="notes" placeholder="Notes (optional)" class="form-input w-full">
+                        <button type="submit" class="btn btn-primary">Rehire</button>
+                    </div>
+                </form>
+                {% endif %}
             </div>
         </div>
     </div>

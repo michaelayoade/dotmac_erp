@@ -29,6 +29,8 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
+from app.models.people.scheduling import ScheduleStatus, SwapRequestStatus
+from app.models.people.scheduling.shift_schedule import ShiftSchedule
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
@@ -44,6 +46,7 @@ from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.info_change_service import InfoChangeService
 from app.services.people.leave import LeaveService
 from app.services.people.payroll.paye_calculator import PAYECalculator
+from app.services.people.scheduling import SchedulingService, SwapService
 from app.services.settings.bank_directory import OrgBankDirectoryService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -874,6 +877,309 @@ class SelfServiceWebService:
             )
         db.commit()
         return RedirectResponse(url="/people/self/attendance", status_code=302)
+
+    def scheduling_schedules_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        year_month: str | None = None,
+    ) -> HTMLResponse:
+        """Self-service monthly schedule view."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "My Schedule",
+                    "self-attendance",
+                    detail=exc.detail,
+                )
+            raise
+
+        resolved_month = year_month or date.today().strftime("%Y-%m")
+        svc = SchedulingService(db)
+        schedules = svc.list_schedules(
+            org_id=org_id,
+            employee_id=employee_id,
+            schedule_month=resolved_month,
+            pagination=PaginationParams(offset=0, limit=200),
+        )
+
+        context = base_context(request, auth, "My Schedule", "self-attendance", db=db)
+        context.update(
+            {
+                "year_month": resolved_month,
+                "schedules": schedules.items,
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        return templates.TemplateResponse(
+            request, "people/self/scheduling_schedules.html", context
+        )
+
+    def scheduling_swaps_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        year_month: str | None = None,
+        page: int = 1,
+    ) -> HTMLResponse:
+        """Self-service swap requests page."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return self._employee_required_response(
+                    request,
+                    auth,
+                    db,
+                    "My Shift Swaps",
+                    "self-attendance",
+                    detail=exc.detail,
+                )
+            raise
+
+        resolved_month = year_month or date.today().strftime("%Y-%m")
+        pager = PaginationParams.from_page(page, per_page=20)
+        swap_svc = SwapService(db)
+        my_requests = swap_svc.get_my_requests(
+            org_id=org_id,
+            employee_id=employee_id,
+            pagination=pager,
+        )
+        pending_acceptance = swap_svc.get_pending_acceptance(
+            org_id=org_id,
+            employee_id=employee_id,
+            pagination=PaginationParams(offset=0, limit=50),
+        )
+
+        my_schedules = list(
+            db.scalars(
+                select(ShiftSchedule).where(
+                    ShiftSchedule.organization_id == org_id,
+                    ShiftSchedule.employee_id == employee_id,
+                    ShiftSchedule.schedule_month == resolved_month,
+                    ShiftSchedule.status == ScheduleStatus.PUBLISHED,
+                )
+            ).all()
+        )
+        my_schedule_ids = {s.shift_schedule_id for s in my_schedules}
+
+        coworker_schedules = list(
+            db.scalars(
+                select(ShiftSchedule)
+                .where(
+                    ShiftSchedule.organization_id == org_id,
+                    ShiftSchedule.schedule_month == resolved_month,
+                    ShiftSchedule.status == ScheduleStatus.PUBLISHED,
+                    ShiftSchedule.employee_id != employee_id,
+                )
+                .order_by(ShiftSchedule.shift_date, ShiftSchedule.employee_id)
+                .limit(400)
+            ).all()
+        )
+        employee_ids = {s.employee_id for s in coworker_schedules}
+        employees = list(
+            db.scalars(
+                select(Employee).where(Employee.employee_id.in_(employee_ids))
+            ).all()
+        )
+        employee_map = {
+            emp.employee_id: (
+                emp.full_name or emp.employee_code or str(emp.employee_id)
+            )
+            for emp in employees
+        }
+
+        target_options = [
+            {
+                "id": str(s.shift_schedule_id),
+                "label": f"{employee_map.get(s.employee_id, str(s.employee_id))} - {s.shift_date.isoformat()}",
+            }
+            for s in coworker_schedules
+        ]
+
+        context = base_context(
+            request, auth, "My Shift Swaps", "self-attendance", db=db
+        )
+        context.update(
+            {
+                "year_month": resolved_month,
+                "my_requests": my_requests.items,
+                "pending_acceptance": pending_acceptance.items,
+                "my_schedule_options": my_schedules,
+                "target_schedule_options": target_options,
+                "my_schedule_ids": {str(sid) for sid in my_schedule_ids},
+                "swap_statuses": [s.value for s in SwapRequestStatus],
+            }
+        )
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
+        return templates.TemplateResponse(
+            request, "people/self/scheduling_swaps.html", context
+        )
+
+    def scheduling_create_swap_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        form: dict,
+    ) -> RedirectResponse:
+        """Create swap request from self-service page."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        year_month = str(form.get("year_month") or date.today().strftime("%Y-%m"))
+        try:
+            requester_schedule_id = coerce_uuid(
+                str(form.get("requester_schedule_id", ""))
+            )
+            target_schedule_id = coerce_uuid(str(form.get("target_schedule_id", "")))
+        except Exception:
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?year_month={year_month}&error={quote('Invalid schedule selection')}",
+                status_code=303,
+            )
+        reason_raw = form.get("reason")
+        reason = str(reason_raw).strip() if isinstance(reason_raw, str) else None
+        if not requester_schedule_id or not target_schedule_id:
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?year_month={year_month}&error={quote('Both schedules are required')}",
+                status_code=303,
+            )
+        try:
+            SwapService(db).create_swap_request(
+                org_id=org_id,
+                requester_id=employee_id,
+                requester_schedule_id=requester_schedule_id,
+                target_schedule_id=target_schedule_id,
+                reason=reason,
+            )
+            db.commit()
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?year_month={year_month}&success={quote('Swap request submitted')}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?year_month={year_month}&error={quote(str(exc))}",
+                status_code=303,
+            )
+
+    def scheduling_accept_swap_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        request_id: UUID,
+    ) -> RedirectResponse:
+        """Accept a pending swap request as target employee."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        try:
+            SwapService(db).accept_swap_request(
+                org_id=org_id,
+                request_id=request_id,
+                accepting_employee_id=employee_id,
+            )
+            db.commit()
+            return RedirectResponse(
+                "/people/self/scheduling/swaps?success=accepted",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?error={quote(str(exc))}",
+                status_code=303,
+            )
+
+    def scheduling_decline_swap_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        request_id: UUID,
+        form: dict,
+    ) -> RedirectResponse:
+        """Decline a pending swap request as target employee."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        reason_raw = form.get("reason")
+        reason = str(reason_raw).strip() if isinstance(reason_raw, str) else None
+        try:
+            SwapService(db).decline_swap_request(
+                org_id=org_id,
+                request_id=request_id,
+                declining_employee_id=employee_id,
+                reason=reason,
+            )
+            db.commit()
+            return RedirectResponse(
+                "/people/self/scheduling/swaps?success=declined",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?error={quote(str(exc))}",
+                status_code=303,
+            )
+
+    def scheduling_cancel_swap_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        request_id: UUID,
+    ) -> RedirectResponse:
+        """Cancel own swap request."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+        try:
+            SwapService(db).cancel_swap_request(
+                org_id=org_id,
+                request_id=request_id,
+                requester_id=employee_id,
+            )
+            db.commit()
+            return RedirectResponse(
+                "/people/self/scheduling/swaps?success=cancelled",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/self/scheduling/swaps?error={quote(str(exc))}",
+                status_code=303,
+            )
 
     def leave_response(
         self,

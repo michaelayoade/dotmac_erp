@@ -219,26 +219,11 @@ class PayrollGLAdapter:
             slip.journal_entry_id = journal.journal_entry_id
             slip.status = SalarySlipStatus.POSTED
 
-            # Trigger payslip posted notification
-            try:
-                from app.services.people.payroll.payroll_notifications import (
-                    PayrollNotificationService,
-                )
+            # NOTE: Do NOT send payslip notifications here.
+            # Payslip emails are triggered explicitly via "Send Payslip Emails"
+            # action, which calls process_payroll_entry_notifications.
 
-                notification_service = PayrollNotificationService(db)
-                employee = slip.employee
-                if employee:
-                    notification_service.notify_payslip_posted(
-                        slip, employee, queue_email=True
-                    )
-            except Exception as notify_err:
-                logger.warning(
-                    "Failed to send notification for slip %s: %s",
-                    slip_id,
-                    notify_err,
-                )
-
-            db.commit()
+            db.flush()
 
             logger.info(
                 f"Posted salary slip {slip_id} to GL as journal {journal.journal_entry_id}"
@@ -330,7 +315,7 @@ class PayrollGLAdapter:
             # Update payroll status
             if failed_count == 0:
                 payroll.status = PayrollEntryStatus.POSTED
-                db.commit()
+                db.flush()
 
             logger.info(
                 f"Payroll run {payroll_entry_id}: posted {posted_count}, failed {failed_count}"
@@ -392,7 +377,7 @@ class PayrollGLAdapter:
             slip.journal_entry_id = None
             slip.status = SalarySlipStatus.APPROVED
 
-            db.commit()
+            db.flush()
 
             logger.info(f"Reversed salary slip {slip_id} posting")
 
@@ -477,11 +462,24 @@ class PayrollGLAdapter:
                     if ded.statistical_component:
                         continue
                     comp = ded.component
-                    if not comp or not comp.liability_account_id:
+                    if not comp:
                         logger.warning(
-                            f"Deduction component {ded.component_id} has no liability account, skipping"
+                            "Deduction %s has no component, skipping",
+                            ded.component_id,
                         )
                         continue
+
+                    # Use component's liability account, or fall back to
+                    # salary payable so the journal stays balanced.
+                    liability_acc_id = comp.liability_account_id
+                    if not liability_acc_id:
+                        liability_acc_id = org.salary_payable_account_id
+                        logger.info(
+                            "Deduction component %s (%s) has no liability account, "
+                            "using salary payable as fallback",
+                            comp.component_code,
+                            comp.component_name,
+                        )
 
                     key = comp.component_id
                     if key in deductions_by_component:
@@ -491,7 +489,7 @@ class PayrollGLAdapter:
                         deductions_by_component[key] = (
                             comp.component_name,
                             ded.amount,
-                            comp.liability_account_id,
+                            liability_acc_id,
                         )
 
             # Build journal lines
@@ -645,7 +643,7 @@ class PayrollGLAdapter:
                 slip.posted_at = now
                 slip.posted_by_id = user_id
 
-            db.commit()
+            db.flush()
 
             logger.info(
                 f"Posted payroll run {payroll.entry_id} to GL as consolidated journal {journal.journal_entry_id}: "

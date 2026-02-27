@@ -4,9 +4,13 @@ Payslip PDF Generation Service.
 Generates PDF payslips using WeasyPrint and Jinja2 templates.
 """
 
+import base64
 import logging
+import mimetypes
+import os
 from datetime import datetime
 from decimal import Decimal
+from urllib.parse import urlparse
 from uuid import UUID
 
 from jinja2 import Environment, FileSystemLoader
@@ -14,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.people.payroll.salary_slip import SalarySlip
 from app.services.formatters import format_currency_compact
+from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -83,20 +88,47 @@ class PayslipPDFService:
         # Get organization info and branding
         primary_color = "#0d9488"
         accent_color = "#14b8a6"
-        if (
-            not organization_name
-            and hasattr(slip, "organization")
-            and slip.organization
-        ):
+        resolved_logo_url = logo_url
+        resolved_org_name = organization_name
+        resolved_org_address = organization_address
+        render_base_url = self._pdf_asset_base_url()
+
+        org = None
+        if hasattr(slip, "organization") and slip.organization:
             org = slip.organization
-            organization_name = org.organization_name
+        elif getattr(slip, "employee", None) and getattr(
+            slip.employee, "organization", None
+        ):
+            org = slip.employee.organization
+
+        if org:
+            if not resolved_org_name:
+                branding_name = (
+                    org.branding.display_name
+                    if org.branding and org.branding.display_name
+                    else None
+                )
+                resolved_org_name = (
+                    branding_name or org.trading_name or org.legal_name or "Company"
+                )
+            if not resolved_org_address:
+                addr_parts = [org.address_line1, org.address_line2, org.city, org.state]
+                resolved_org_address = ", ".join([p for p in addr_parts if p]) or None
             if org.branding:
                 primary_color = org.branding.primary_color or primary_color
                 accent_color = org.branding.accent_color or accent_color
-                if not logo_url and org.branding.logo_url:
-                    logo_url = org.branding.logo_url
-            if not logo_url and org.logo_url:
-                logo_url = org.logo_url
+                if not resolved_logo_url and org.branding.logo_url:
+                    resolved_logo_url = org.branding.logo_url
+            if not resolved_logo_url and org.logo_url:
+                resolved_logo_url = org.logo_url
+
+        resolved_logo_url = self._resolve_logo_url(resolved_logo_url, render_base_url)
+        embedded_logo_data = self._try_embed_branding_logo(
+            resolved_logo_url,
+            organization_id=slip.organization_id,
+        )
+        if embedded_logo_data:
+            resolved_logo_url = embedded_logo_data
 
         # Get employee info
         employee = slip.employee
@@ -118,9 +150,9 @@ class PayslipPDFService:
         # Prepare template context
         context = {
             "slip": slip,
-            "organization_name": organization_name or "Company",
-            "organization_address": organization_address,
-            "logo_url": logo_url,
+            "organization_name": resolved_org_name or "Company",
+            "organization_address": resolved_org_address,
+            "logo_url": resolved_logo_url,
             "primary_color": primary_color,
             "accent_color": accent_color,
             "employee_name": employee_name,
@@ -148,7 +180,7 @@ class PayslipPDFService:
         html_content = template.render(**context)
 
         # Generate PDF
-        html = HTML(string=html_content)
+        html = HTML(string=html_content, base_url=render_base_url)
         pdf_bytes: bytes = html.write_pdf()
 
         logger.info("Generated PDF for payslip %s", slip.slip_number)
@@ -184,3 +216,85 @@ class PayslipPDFService:
             organization_address=organization_address,
             logo_url=logo_url,
         )
+
+    @staticmethod
+    def _pdf_asset_base_url() -> str:
+        """
+        Base URL used by WeasyPrint to resolve relative asset paths.
+
+        Prefer explicit PDF_ASSET_BASE_URL; fallback to APP_URL; then internal service URL.
+        """
+        return (
+            os.getenv("PDF_ASSET_BASE_URL") or os.getenv("APP_URL") or "http://app:8002"
+        ).rstrip("/")
+
+    @staticmethod
+    def _resolve_logo_url(logo_url: str | None, base_url: str) -> str | None:
+        """Resolve logo URL to absolute URL for WeasyPrint fetcher."""
+        if not logo_url:
+            return None
+        parsed = urlparse(logo_url)
+        if parsed.scheme in {"http", "https"}:
+            return logo_url
+        if logo_url.startswith("/"):
+            return f"{base_url}{logo_url}"
+        return f"{base_url}/{logo_url.lstrip('/')}"
+
+    @staticmethod
+    def _extract_branding_s3_key(logo_url: str) -> str | None:
+        """Extract branding S3 key from logo URL path."""
+        parsed = urlparse(logo_url)
+        path = parsed.path or logo_url
+        marker = "/files/branding/"
+        legacy_marker = "/branding/"
+
+        remainder: str | None = None
+        if marker in path:
+            remainder = path.split(marker, 1)[1]
+        elif path.startswith(legacy_marker):
+            remainder = path[len(legacy_marker) :]
+
+        if not remainder:
+            return None
+
+        parts = [p for p in remainder.split("/") if p]
+        if len(parts) < 2:
+            return None
+
+        org_id = parts[0]
+        filename = parts[1]
+        if not org_id or not filename:
+            return None
+        return f"branding/{org_id}/{filename}"
+
+    @staticmethod
+    def _try_embed_branding_logo(
+        logo_url: str | None,
+        organization_id: UUID | None = None,
+    ) -> str | None:
+        """Inline branding logo as a data URI to avoid auth-gated HTTP fetches."""
+        if not logo_url:
+            return None
+
+        s3_key = PayslipPDFService._extract_branding_s3_key(logo_url)
+        if not s3_key:
+            return None
+
+        # Guard against cross-organization logo leakage in generated PDFs.
+        if organization_id:
+            key_org = s3_key.split("/", 2)[1]
+            if key_org != str(organization_id):
+                return None
+
+        try:
+            data = get_storage().download(s3_key)
+        except Exception as exc:
+            logger.warning("Failed to download branding logo %s: %s", s3_key, exc)
+            return None
+
+        if not data:
+            return None
+
+        content_type = mimetypes.guess_type(s3_key)[0] or "image/png"
+        encoded = base64.b64encode(data).decode("ascii")
+        return f"data:{content_type};base64,{encoded}"

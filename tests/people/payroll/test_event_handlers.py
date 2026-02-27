@@ -575,7 +575,7 @@ class MockSlip:
         self.organization_id = uuid.uuid4()
         self.employee_id = uuid.uuid4()
         self.employee = MagicMock(employee_id=self.employee_id)
-        self.status = SalarySlipStatus.APPROVED
+        self.status = SalarySlipStatus.POSTED
         self.paid_at = None
         self.paid_by_id = None
         self.payment_reference = None
@@ -602,10 +602,10 @@ def test_payout_dispatches_after_commit(dispatcher):
     # Track order of calls
     call_order = []
 
-    def commit_side_effect():
-        call_order.append("commit")
+    def flush_side_effect():
+        call_order.append("flush")
 
-    mock_db.commit.side_effect = commit_side_effect
+    mock_db.flush.side_effect = flush_side_effect
 
     def dispatch_side_effect(*_args, **_kwargs):
         call_order.append("dispatch")
@@ -623,4 +623,4 @@ def test_payout_dispatches_after_commit(dispatcher):
             payment_reference="REF",
         )
 
-    assert call_order == ["commit", "dispatch"]
+    assert call_order == ["flush", "dispatch"]

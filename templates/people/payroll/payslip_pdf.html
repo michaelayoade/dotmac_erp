@@ -45,6 +45,14 @@
             flex: 1;
         }
 
+        .company-logo {
+            max-height: 44px;
+            max-width: 180px;
+            margin-bottom: 6px;
+            object-fit: contain;
+            display: block;
+        }
+
         .company-name {
             font-size: 16pt;
             font-weight: bold;
@@ -358,7 +366,11 @@
         <!-- Header -->
         <div class="header">
             <div class="company-info">
+                {% if logo_url %}
+                <img src="{{ logo_url }}" alt="{{ organization_name }} Logo" class="company-logo">
+                {% else %}
                 <div class="company-name">{{ organization_name }}</div>
+                {% endif %}
                 {% if organization_address %}
                 <div class="company-address">{{ organization_address }}</div>
                 {% endif %}
@@ -367,7 +379,7 @@
                 <div class="document-title">Salary Slip</div>
                 <div class="document-number">{{ slip.slip_number }}</div>
                 <div class="document-period">
-                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ pay_period_end | format_date }}
+                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ pay_period_end.strftime('%B %d, %Y') }}
                 </div>
             </div>
         </div>

@@ -38,33 +38,6 @@
                 </select>
             </div>
 
-            {# Loan Type #}
-            <div class="form-group">
-                <label for="loan_type_id" class="form-label">Loan Type <span class="text-rose-500">*</span></label>
-                <select name="loan_type_id" id="loan_type_id" class="form-select w-full" required onchange="updateLoanTypeDetails()">
-                    <option value="">-- Select Loan Type --</option>
-                    {% for lt in loan_types %}
-                    <option value="{{ lt.loan_type_id }}"
-                            data-min="{{ lt.min_amount }}"
-                            data-max="{{ lt.max_amount or '' }}"
-                            data-min-tenure="{{ lt.min_tenure_months }}"
-                            data-max-tenure="{{ lt.max_tenure_months }}"
-                            data-rate="{{ lt.default_interest_rate }}"
-                            data-method="{{ lt.interest_method.value }}">
-                        {{ lt.type_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <div id="loan-type-details" class="hidden mt-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600 dark:text-slate-400">
-                        <div>Amount: <span id="lt-amount-range" class="font-medium text-slate-900 dark:text-white"></span></div>
-                        <div>Tenure: <span id="lt-tenure-range" class="font-medium text-slate-900 dark:text-white"></span></div>
-                        <div>Interest Rate: <span id="lt-rate" class="font-medium text-slate-900 dark:text-white"></span></div>
-                        <div>Interest Method: <span id="lt-method" class="font-medium text-slate-900 dark:text-white"></span></div>
-                    </div>
-                </div>
-            </div>
-
             {# Principal Amount #}
             <div class="form-group">
                 <label for="principal_amount" class="form-label">Principal Amount <span class="text-rose-500">*</span></label>
@@ -83,6 +56,25 @@
                 <input type="number" name="tenure_months" id="tenure_months"
                     class="form-input w-full"
                     required min="1" max="60" value="12">
+            </div>
+
+            {# Interest Rate & Method #}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label for="interest_rate" class="form-label">Interest Rate (% p.a.)</label>
+                    <input type="number" name="interest_rate" id="interest_rate"
+                        class="form-input w-full font-mono"
+                        min="0" max="100" step="0.01" value="0">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Annual interest rate. Set to 0 for interest-free loans.</p>
+                </div>
+                <div class="form-group">
+                    <label for="interest_method" class="form-label">Interest Method</label>
+                    <select name="interest_method" id="interest_method" class="form-select w-full">
+                        {% for value, label in interest_methods %}
+                        <option value="{{ value }}" {% if value == 'NONE' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
 
             {# First Repayment Date #}
@@ -131,48 +123,11 @@
 </div>
 
 <script>
-function updateLoanTypeDetails() {
-    const select = document.getElementById('loan_type_id');
-    const details = document.getElementById('loan-type-details');
-    const option = select.options[select.selectedIndex];
-
-    if (!option.value) {
-        details.classList.add('hidden');
-        return;
-    }
-
-    const min = parseFloat(option.dataset.min) || 0;
-    const max = option.dataset.max ? parseFloat(option.dataset.max) : null;
-    const minTenure = parseInt(option.dataset.minTenure) || 1;
-    const maxTenure = parseInt(option.dataset.maxTenure) || 60;
-    const rate = parseFloat(option.dataset.rate) || 0;
-    const method = option.dataset.method || 'NONE';
-
-    document.getElementById('lt-amount-range').textContent =
-        max ? `${min.toLocaleString()} - ${max.toLocaleString()}` : `Min ${min.toLocaleString()}`;
-    document.getElementById('lt-tenure-range').textContent = `${minTenure} - ${maxTenure} months`;
-    document.getElementById('lt-rate').textContent = rate + '% p.a.';
-    document.getElementById('lt-method').textContent = method.replace('_', ' ');
-
-    // Update input constraints
-    document.getElementById('principal_amount').min = min;
-    if (max) document.getElementById('principal_amount').max = max;
-    document.getElementById('tenure_months').min = minTenure;
-    document.getElementById('tenure_months').max = maxTenure;
-
-    details.classList.remove('hidden');
-    calculateLoan();
-}
-
 function calculateLoan() {
-    const select = document.getElementById('loan_type_id');
-    const option = select.options[select.selectedIndex];
-    if (!option.value) return;
-
     const principal = parseFloat(document.getElementById('principal_amount').value) || 0;
     const tenure = parseInt(document.getElementById('tenure_months').value) || 1;
-    const rate = parseFloat(option.dataset.rate) || 0;
-    const method = option.dataset.method || 'NONE';
+    const rate = parseFloat(document.getElementById('interest_rate').value) || 0;
+    const method = document.getElementById('interest_method').value || 'NONE';
 
     let totalInterest = 0;
     let totalRepayable = principal;
@@ -207,5 +162,7 @@ function calculateLoan() {
 
 document.getElementById('principal_amount').addEventListener('input', calculateLoan);
 document.getElementById('tenure_months').addEventListener('input', calculateLoan);
+document.getElementById('interest_rate').addEventListener('input', calculateLoan);
+document.getElementById('interest_method').addEventListener('change', calculateLoan);
 </script>
 {% endblock %}

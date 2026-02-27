@@ -52,3 +52,33 @@ def payroll_assignments() -> RedirectResponse:
 @router.get("/assignments/new")
 def payroll_assignments_new() -> RedirectResponse:
     return _redirect("/assignments/new")
+
+
+@router.get("/loans")
+def payroll_loans() -> RedirectResponse:
+    return _redirect("/loans")
+
+
+@router.get("/loan")
+def payroll_loan_singular() -> RedirectResponse:
+    return _redirect("/loans")
+
+
+@router.get("/loans/")
+def payroll_loans_slash() -> RedirectResponse:
+    return _redirect("/loans")
+
+
+@router.get("/loans/new")
+def payroll_loans_new() -> RedirectResponse:
+    return _redirect("/loans/new")
+
+
+@router.get("/loans/types")
+def payroll_loan_types() -> RedirectResponse:
+    return _redirect("/loans/types")
+
+
+@router.get("/loans/types/")
+def payroll_loan_types_slash() -> RedirectResponse:
+    return _redirect("/loans/types")

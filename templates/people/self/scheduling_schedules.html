@@ -1,0 +1,48 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}My Schedule{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Schedule</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Published and draft shifts for the selected month.</p>
+        </div>
+        <form method="get" class="flex items-center gap-2">
+            <input type="month" name="year_month" value="{{ year_month }}" class="form-input">
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            <a href="/people/self/scheduling/swaps?year_month={{ year_month }}" class="btn btn-primary">Go To Swaps</a>
+        </form>
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800/60">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Shift</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Department</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for s in schedules %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ s.shift_date.strftime('%a, %d %b %Y') }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ s.shift_type.shift_name if s.shift_type else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ s.department.department_name if s.department else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ s.status.value }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">No schedules found for this month.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

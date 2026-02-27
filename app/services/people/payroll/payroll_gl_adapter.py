@@ -282,7 +282,7 @@ class PayrollGLAdapter:
         slip.posted_at = datetime.now(UTC)
         slip.posted_by_id = user_id
 
-        db.commit()
+        db.flush()
 
         return PayrollPostingResult(
             success=True,
@@ -346,7 +346,7 @@ class PayrollGLAdapter:
             # Update slip status
             slip.status = SalarySlipStatus.CANCELLED
 
-            db.commit()
+            db.flush()
 
             return PayrollPostingResult(
                 success=True,
@@ -479,11 +479,19 @@ class PayrollGLAdapter:
                             description=f"Pension Payable - {slip.employee_name}",
                         )
                     )
-            elif not do_not_include and liability_acc:
-                # Normal deduction: credit liability
+            elif not do_not_include:
+                # Normal deduction: credit liability account (or salary payable
+                # as fallback so the journal stays balanced).
+                effective_acc = liability_acc or payroll_payable_account_id
+                if not liability_acc:
+                    logger.info(
+                        "Deduction component %s has no liability account, "
+                        "using salary payable as fallback",
+                        comp_code,
+                    )
                 journal_lines.append(
                     JournalLineInput(
-                        account_id=liability_acc,
+                        account_id=effective_acc,
                         debit_amount=Decimal("0"),
                         credit_amount=deduction.amount,
                         debit_amount_functional=Decimal("0"),
@@ -605,7 +613,7 @@ class PayrollGLAdapter:
         )
 
         # Group deductions by liability account
-        deductions_by_account: dict[UUID, tuple[str, Decimal, UUID | None]] = {}
+        deductions_by_account: dict[UUID, tuple[str, Decimal, UUID | None, str]] = {}
 
         for slip in slips:
             for ded in getattr(slip, "deductions", None) or []:
@@ -628,17 +636,19 @@ class PayrollGLAdapter:
                 if liability_acc:
                     key = cast(UUID, liability_acc)
                     if key in deductions_by_account:
-                        name, amt, exp = deductions_by_account[key]
+                        name, amt, exp, code = deductions_by_account[key]
                         deductions_by_account[key] = (
                             name,
                             amt + ded.amount,
                             exp or expense_acc,
+                            code,
                         )
                     else:
                         deductions_by_account[key] = (
                             comp_name,
                             ded.amount,
                             expense_acc,
+                            comp_code,
                         )
 
         # Build journal lines
@@ -665,8 +675,13 @@ class PayrollGLAdapter:
         )
 
         # Add employer pension expense lines
-        for _acc_id, (comp_name, amount, expense_acc) in deductions_by_account.items():
-            if expense_acc and "PENSION_EMPLOYER" in comp_name.upper():
+        for _acc_id, (
+            _comp_name,
+            amount,
+            expense_acc,
+            comp_code,
+        ) in deductions_by_account.items():
+            if expense_acc and comp_code == EMPLOYER_PENSION_COMPONENT_CODE:
                 journal_lines.append(
                     JournalLineInput(
                         account_id=expense_acc,
@@ -679,7 +694,7 @@ class PayrollGLAdapter:
                 )
 
         # Credits: Each deduction type
-        for acc_id, (comp_name, amount, _) in deductions_by_account.items():
+        for acc_id, (comp_name, amount, _, _code) in deductions_by_account.items():
             if amount <= 0:
                 continue
             journal_lines.append(
@@ -865,7 +880,7 @@ class PayrollGLAdapter:
                 if ded.statistical_component:
                     continue
                 comp = ded.component
-                if not comp or not comp.liability_account_id:
+                if not comp:
                     continue
                 # Skip deductions marked as do_not_include_in_total
                 # except employer pension which we still want to post
@@ -875,6 +890,16 @@ class PayrollGLAdapter:
                 ):
                     continue
 
+                # Use component liability account, fall back to salary payable
+                liability_acc = comp.liability_account_id
+                if not liability_acc:
+                    liability_acc = org.salary_payable_account_id
+                    logger.info(
+                        "Deduction component %s has no liability account, "
+                        "using salary payable as fallback",
+                        comp.component_code,
+                    )
+
                 key = comp.component_id
                 if key in deductions_by_component:
                     name, amt, acc_id = deductions_by_component[key]
@@ -883,7 +908,7 @@ class PayrollGLAdapter:
                     deductions_by_component[key] = (
                         comp.component_name,
                         ded.amount,
-                        comp.liability_account_id,
+                        liability_acc,
                     )
 
         # 5. Build journal lines
@@ -995,7 +1020,7 @@ class PayrollGLAdapter:
         entry.status = PayrollEntryStatus.POSTED
         entry.journal_entry_id = journal.journal_entry_id
 
-        db.commit()
+        db.flush()
 
         return PayrollPostingResult(
             success=True,

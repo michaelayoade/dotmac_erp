@@ -3,8 +3,15 @@ from __future__ import annotations
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from uuid import uuid4
 
-from app.services.people.payroll.payroll_service import PayrollService
+import pytest
+
+from app.models.people.payroll.salary_slip import SalarySlipStatus
+from app.services.people.payroll.payroll_service import (
+    PayrollService,
+    PayrollServiceError,
+)
 
 
 def _make_query(return_rows):
@@ -74,3 +81,50 @@ def test_get_payroll_ytd_report_aggregates_totals_and_names():
 
     assert result["rows"][0]["employee_name"] == "Ada Lovelace"
     assert result["rows"][1]["employee_name"] == "Grace Hopper"
+
+
+def test_approve_payroll_entry_fails_when_loan_posting_fails(monkeypatch):
+    db = MagicMock()
+    svc = PayrollService(db)
+
+    creator_id = uuid4()
+    approver_id = uuid4()
+    slip = SimpleNamespace(
+        slip_id="slip-1",
+        slip_number="SLIP-001",
+        status=SalarySlipStatus.SUBMITTED,
+        created_by_id=creator_id,
+        employee=None,
+        employee_id="emp-1",
+    )
+    entry = SimpleNamespace(
+        salary_slips=[slip],
+        posting_date=None,
+        status=None,
+        entry_id="entry-1",
+    )
+    svc.get_payroll_entry = MagicMock(return_value=entry)
+
+    pending_link = SimpleNamespace(
+        loan_id="loan-1",
+        amount=Decimal("100.00"),
+        principal_portion=Decimal("100.00"),
+        interest_portion=Decimal("0.00"),
+        repayment_id=None,
+    )
+    db.scalars.return_value = SimpleNamespace(all=lambda: [pending_link])
+
+    class _FailingLoanService:
+        def __init__(self, _db):
+            pass
+
+        def record_payroll_deduction(self, **_kwargs):
+            raise RuntimeError("simulated failure")
+
+    monkeypatch.setattr(
+        "app.services.people.payroll.loan_service.LoanService",
+        _FailingLoanService,
+    )
+
+    with pytest.raises(PayrollServiceError, match="Failed to process loan deduction"):
+        svc.approve_payroll_entry(uuid4(), "entry-1", approved_by=approver_id)

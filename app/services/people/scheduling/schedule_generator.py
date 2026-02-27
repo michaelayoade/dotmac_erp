@@ -156,13 +156,17 @@ class ScheduleGenerator:
                 shift_type_id = self._determine_shift_type(
                     pattern, assignment, current_date, month_start
                 )
-
-                # Check if this weekday is in the applicable work days
-                weekday = current_date.weekday()
-                weekday_name = list(DAY_TO_WEEKDAY.keys())[weekday]
-                work_days = self._get_work_days_for_shift(pattern, shift_type_id)
-                if weekday_name not in work_days:
+                if shift_type_id is None:
                     continue
+
+                # Pattern lines already encode day-level selection, so legacy
+                # work-day filtering only applies when no lines are configured.
+                if not pattern.pattern_lines:
+                    weekday = current_date.weekday()
+                    weekday_name = list(DAY_TO_WEEKDAY.keys())[weekday]
+                    work_days = self._get_work_days_for_shift(pattern, shift_type_id)
+                    if weekday_name not in work_days:
+                        continue
 
                 # Check if employee is on leave
                 if current_date in employee_leave:
@@ -292,7 +296,7 @@ class ScheduleGenerator:
                     title="Schedule Published",
                     message=f"Your shift schedule for {year_month} has been published. Please review your assigned shifts.",
                     channel=NotificationChannel.BOTH,
-                    action_url=f"/people/self/schedule?year_month={year_month}",
+                    action_url=f"/people/self/scheduling/schedules?year_month={year_month}",
                 )
             except Exception as e:
                 logger.warning(
@@ -351,10 +355,16 @@ class ScheduleGenerator:
             self.db.scalars(
                 select(ShiftPatternAssignment)
                 .options(joinedload(ShiftPatternAssignment.shift_pattern))
+                .join(
+                    ShiftPattern,
+                    ShiftPattern.shift_pattern_id
+                    == ShiftPatternAssignment.shift_pattern_id,
+                )
                 .where(
                     ShiftPatternAssignment.organization_id == org_id,
                     ShiftPatternAssignment.department_id == department_id,
                     ShiftPatternAssignment.is_active == True,  # noqa: E712
+                    ShiftPattern.is_active == True,  # noqa: E712
                     ShiftPatternAssignment.effective_from <= month_end,
                     or_(
                         ShiftPatternAssignment.effective_to.is_(None),
@@ -421,7 +431,7 @@ class ScheduleGenerator:
         assignment: ShiftPatternAssignment,
         current_date: date,
         month_start: date,
-    ) -> UUID:
+    ) -> UUID | None:
         """
         Determine the shift type for a given date based on pattern rotation.
 
@@ -437,7 +447,14 @@ class ScheduleGenerator:
                 return pattern.night_shift_type_id
             return pattern.day_shift_type_id
 
-        # ROTATING pattern
+        # ROTATING pattern with explicit lines
+        line_found, line_shift = self._resolve_pattern_line_shift(
+            pattern, assignment, current_date
+        )
+        if line_found:
+            return line_shift
+
+        # Legacy ROTATING pattern behavior
         # Calculate which week of the cycle we're in
         # Use a reference point (the pattern's effective_from or assignment's effective_from)
         reference_date = assignment.effective_from
@@ -464,6 +481,36 @@ class ScheduleGenerator:
             return pattern.day_shift_type_id
         else:
             return pattern.night_shift_type_id or pattern.day_shift_type_id
+
+    def _resolve_pattern_line_shift(
+        self,
+        pattern: ShiftPattern,
+        assignment: ShiftPatternAssignment,
+        current_date: date,
+    ) -> tuple[bool, UUID | None]:
+        """Resolve shift assignment from explicit pattern lines when provided."""
+        if pattern.rotation_type != RotationType.ROTATING or not pattern.pattern_lines:
+            return (False, None)
+
+        days_since_start = max((current_date - assignment.effective_from).days, 0)
+        week_number = days_since_start // 7
+        adjusted_week = (week_number + assignment.rotation_week_offset) % 2
+        week_index = adjusted_week + 1
+        weekday_name = list(DAY_TO_WEEKDAY.keys())[current_date.weekday()]
+
+        for line in pattern.pattern_lines:
+            if line.get("week_index") == week_index and line.get("day") == weekday_name:
+                slot = line.get("shift_slot")
+                if slot == "OFF":
+                    return (True, None)
+                if slot == "NIGHT":
+                    return (
+                        True,
+                        pattern.night_shift_type_id or pattern.day_shift_type_id,
+                    )
+                return (True, pattern.day_shift_type_id)
+
+        return (False, None)
 
     def _get_work_days_for_shift(
         self,

@@ -1,0 +1,124 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}My Shift Swaps{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">My Shift Swaps</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Request swaps and respond to pending requests.</p>
+        </div>
+        <form method="get" class="flex items-center gap-2">
+            <input type="month" name="year_month" value="{{ year_month }}" class="form-input">
+            <button type="submit" class="btn btn-secondary">Filter</button>
+            <a href="/people/self/scheduling/schedules?year_month={{ year_month }}" class="btn btn-secondary">My Schedule</a>
+        </form>
+    </div>
+
+    {% if request.query_params.get('success') %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ request.query_params.get('success') }}</div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">{{ request.query_params.get('error') }}</div>
+    {% endif %}
+
+    <div class="card p-5 space-y-4">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Request A Swap</h2>
+        <form method="post" action="/people/self/scheduling/swaps/request" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="year_month" value="{{ year_month }}">
+            <div>
+                <label class="form-label" for="requester_schedule_id">My Schedule</label>
+                <select id="requester_schedule_id" name="requester_schedule_id" class="form-select w-full" required>
+                    <option value="">Select...</option>
+                    {% for s in my_schedule_options %}
+                    <option value="{{ s.shift_schedule_id }}">{{ s.shift_date.strftime('%Y-%m-%d') }} - {{ s.shift_type.shift_name if s.shift_type else '-' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="target_schedule_id">Target Schedule</label>
+                <select id="target_schedule_id" name="target_schedule_id" class="form-select w-full" required>
+                    <option value="">Select...</option>
+                    {% for opt in target_schedule_options %}
+                    <option value="{{ opt.id }}">{{ opt.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label class="form-label" for="reason">Reason</label>
+                <textarea id="reason" name="reason" rows="2" class="form-input w-full" placeholder="Optional"></textarea>
+            </div>
+            <div class="md:col-span-2 flex justify-end">
+                <button type="submit" class="btn btn-primary">Submit Request</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card p-5 space-y-4">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Pending My Acceptance</h2>
+        <div class="space-y-3">
+            {% for req in pending_acceptance %}
+            <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <div class="text-sm text-slate-700 dark:text-slate-300">
+                    <strong>{{ req.requester.full_name if req.requester else 'Employee' }}</strong>
+                    requested a swap: {{ req.requester_schedule.shift_date if req.requester_schedule else '-' }}
+                    ↔ {{ req.target_schedule.shift_date if req.target_schedule else '-' }}
+                </div>
+                <div class="flex gap-2">
+                    <form method="post" action="/people/self/scheduling/swaps/{{ req.swap_request_id }}/accept">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button type="submit" class="btn btn-primary">Accept</button>
+                    </form>
+                    <form method="post" action="/people/self/scheduling/swaps/{{ req.swap_request_id }}/decline" class="flex items-center gap-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="text" name="reason" class="form-input" placeholder="Decline reason (optional)">
+                        <button type="submit" class="btn btn-secondary">Decline</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-500">No pending swaps requiring your response.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card p-5 space-y-4">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">My Requests</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800/60">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Created</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Target</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for req in my_requests %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.created_at.strftime('%Y-%m-%d %H:%M') if req.created_at else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.target_employee.full_name if req.target_employee else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.status.value }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
+                            {% if req.status.value in ['PENDING', 'TARGET_ACCEPTED'] %}
+                            <form method="post" action="/people/self/scheduling/swaps/{{ req.swap_request_id }}/cancel" class="inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <button type="submit" class="btn btn-secondary">Cancel</button>
+                            </form>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">No swap requests yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

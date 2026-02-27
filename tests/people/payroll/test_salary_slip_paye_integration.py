@@ -53,9 +53,7 @@ class TestGetOrCreateStatutoryComponent:
     def mock_db(self):
         """Create mock database session."""
         session = MagicMock()
-        session.query = MagicMock(return_value=session)
-        session.filter = MagicMock(return_value=session)
-        session.first = MagicMock(return_value=None)
+        session.scalar = MagicMock(return_value=None)
         session.add = MagicMock()
         session.flush = MagicMock()
         return session
@@ -67,7 +65,7 @@ class TestGetOrCreateStatutoryComponent:
 
     def test_creates_new_component(self, mock_db, org_id):
         """Test creating a new statutory component when none exists."""
-        mock_db.first.return_value = None
+        mock_db.scalar.return_value = None
 
         SalarySlipService.get_or_create_statutory_component(
             db=mock_db,
@@ -103,7 +101,7 @@ class TestGetOrCreateStatutoryComponent:
             component_type=SalaryComponentType.DEDUCTION,
             is_statutory=True,
         )
-        mock_db.first.return_value = existing_component
+        mock_db.scalar.return_value = existing_component
 
         component = SalarySlipService.get_or_create_statutory_component(
             db=mock_db,
@@ -125,9 +123,7 @@ class TestGetStatutoryComponents:
     def mock_db(self):
         """Create mock database session."""
         session = MagicMock()
-        session.query = MagicMock(return_value=session)
-        session.filter = MagicMock(return_value=session)
-        session.first = MagicMock(return_value=None)
+        session.scalar = MagicMock(return_value=None)
         session.add = MagicMock()
         session.flush = MagicMock()
         return session
@@ -139,7 +135,7 @@ class TestGetStatutoryComponents:
 
     def test_creates_all_statutory_components(self, mock_db, org_id):
         """Test that all 4 statutory components are created."""
-        mock_db.first.return_value = None
+        mock_db.scalar.return_value = None
 
         components = SalarySlipService.get_statutory_components(mock_db, org_id)
 

@@ -53,7 +53,11 @@ class PayrollNotificationService:
             )
             return
 
-        # Create in-app notification
+        # Create in-app notification.
+        # Always use IN_APP channel here — when queue_email=True, the dedicated
+        # send_payslip_email Celery task sends a rich HTML email with PDF attachment.
+        # Using BOTH would cause a duplicate plain-text email from the
+        # process_pending_notification_emails beat task.
         self._notification_service.create(
             self.db,
             organization_id=slip.organization_id,
@@ -66,9 +70,7 @@ class PayrollNotificationService:
                 f"Your payslip for {slip.start_date.strftime('%B %Y')} "
                 f"is now available. Net pay: {slip.currency_code} {slip.net_pay:,.2f}"
             ),
-            channel=NotificationChannel.BOTH
-            if queue_email
-            else NotificationChannel.IN_APP,
+            channel=NotificationChannel.IN_APP,
             action_url=f"/people/self/payslips/{slip.slip_id}",
         )
 

@@ -25,6 +25,7 @@ from app.models.people.payroll.loan_repayment import (
     SalarySlipLoanDeduction,
 )
 from app.models.people.payroll.loan_type import InterestMethod, LoanType
+from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -56,9 +57,11 @@ class LoanApplicationInput:
     """Input for creating a loan application."""
 
     employee_id: UUID
-    loan_type_id: UUID
     principal_amount: Decimal
     tenure_months: int
+    loan_type_id: UUID | None = None
+    interest_rate: Decimal | None = None
+    interest_method: str | None = None
     purpose: str | None = None
     first_repayment_date: date | None = None
 
@@ -165,7 +168,6 @@ class LoanService:
         """
         org_id = coerce_uuid(organization_id)
         emp_id = coerce_uuid(input.employee_id)
-        type_id = coerce_uuid(input.loan_type_id)
         user_id = coerce_uuid(created_by_id)
 
         # Validate employee exists
@@ -186,62 +188,86 @@ class LoanService:
         if not result.is_valid:
             raise HTTPException(status_code=400, detail=result.message)
 
-        # Validate loan type
-        loan_type = self.db.get(LoanType, type_id)
-        if not loan_type or loan_type.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Loan type not found")
+        # Resolve interest rate and method — from loan type or direct input
+        loan_type: LoanType | None = None
+        type_id: UUID | None = None
+        requires_approval = True  # default
 
-        if not loan_type.is_active:
-            raise HTTPException(status_code=400, detail="Loan type is not active")
+        if input.loan_type_id:
+            type_id = coerce_uuid(input.loan_type_id)
+            loan_type = self.db.get(LoanType, type_id)
+            if not loan_type or loan_type.organization_id != org_id:
+                raise HTTPException(status_code=404, detail="Loan type not found")
 
-        # Validate amount
-        if input.principal_amount < loan_type.min_amount:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Amount must be at least {loan_type.min_amount}",
-            )
+            if not loan_type.is_active:
+                raise HTTPException(status_code=400, detail="Loan type is not active")
 
-        if loan_type.max_amount and input.principal_amount > loan_type.max_amount:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Amount cannot exceed {loan_type.max_amount}",
-            )
-
-        # Validate tenure
-        if input.tenure_months < loan_type.min_tenure_months:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Tenure must be at least {loan_type.min_tenure_months} months",
-            )
-
-        if input.tenure_months > loan_type.max_tenure_months:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Tenure cannot exceed {loan_type.max_tenure_months} months",
-            )
-
-        # Validate service duration
-        if loan_type.min_service_months > 0:
-            service_months = self._calculate_service_months(employee)
-            if service_months < loan_type.min_service_months:
+            # Validate amount against type constraints
+            if input.principal_amount < loan_type.min_amount:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Employee must have at least {loan_type.min_service_months} months of service",
+                    detail=f"Amount must be at least {loan_type.min_amount}",
+                )
+            if loan_type.max_amount and input.principal_amount > loan_type.max_amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Amount cannot exceed {loan_type.max_amount}",
                 )
 
-        # Check for existing active loans of same type (optional policy)
-        existing = self.db.scalar(
-            select(EmployeeLoan).where(
-                EmployeeLoan.employee_id == emp_id,
-                EmployeeLoan.loan_type_id == type_id,
-                EmployeeLoan.status == LoanStatus.DISBURSED,
-            )
-        )
+            # Validate tenure against type constraints
+            if input.tenure_months < loan_type.min_tenure_months:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Tenure must be at least {loan_type.min_tenure_months} months",
+                )
+            if input.tenure_months > loan_type.max_tenure_months:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Tenure cannot exceed {loan_type.max_tenure_months} months",
+                )
 
-        if existing:
+            # Validate service duration
+            if loan_type.min_service_months > 0:
+                service_months = self._calculate_service_months(employee)
+                if service_months < loan_type.min_service_months:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Employee must have at least {loan_type.min_service_months} months of service",
+                    )
+
+            # Check for existing active loans of same type
+            existing = self.db.scalar(
+                select(EmployeeLoan).where(
+                    EmployeeLoan.employee_id == emp_id,
+                    EmployeeLoan.loan_type_id == type_id,
+                    EmployeeLoan.status == LoanStatus.DISBURSED,
+                )
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Employee already has an active {loan_type.type_name} loan",
+                )
+
+            interest_rate = loan_type.default_interest_rate
+            interest_method = loan_type.interest_method
+            requires_approval = loan_type.requires_approval
+        else:
+            # Direct input — no loan type
+            interest_rate = (
+                input.interest_rate if input.interest_rate is not None else Decimal("0")
+            )
+            method_str = input.interest_method or "NONE"
+            interest_method = InterestMethod(method_str)
+
+        # Basic validation
+        if input.principal_amount <= 0:
             raise HTTPException(
-                status_code=400,
-                detail=f"Employee already has an active {loan_type.type_name} loan",
+                status_code=400, detail="Principal amount must be positive"
+            )
+        if input.tenure_months < 1:
+            raise HTTPException(
+                status_code=400, detail="Tenure must be at least 1 month"
             )
 
         # Calculate loan terms
@@ -249,8 +275,8 @@ class LoanService:
             self.calculate_loan_terms(
                 input.principal_amount,
                 input.tenure_months,
-                loan_type.default_interest_rate,
-                loan_type.interest_method,
+                interest_rate,
+                interest_method,
             )
         )
 
@@ -272,7 +298,7 @@ class LoanService:
             employee_id=emp_id,
             loan_type_id=type_id,
             principal_amount=input.principal_amount,
-            interest_rate=loan_type.default_interest_rate,
+            interest_rate=interest_rate,
             total_interest=total_interest,
             total_repayable=total_repayable,
             tenure_months=input.tenure_months,
@@ -280,9 +306,7 @@ class LoanService:
             outstanding_balance=total_repayable,
             first_repayment_date=first_repayment,
             purpose=input.purpose,
-            status=LoanStatus.PENDING
-            if loan_type.requires_approval
-            else LoanStatus.APPROVED,
+            status=LoanStatus.PENDING if requires_approval else LoanStatus.APPROVED,
             created_by_id=user_id,
         )
 
@@ -430,6 +454,7 @@ class LoanService:
         self,
         employee_id: UUID,
         as_of_date: date | None = None,
+        organization_id: UUID | None = None,
     ) -> list[EmployeeLoan]:
         """Get all active (disbursed, not completed) loans for an employee."""
         emp_id = coerce_uuid(employee_id)
@@ -444,6 +469,11 @@ class LoanService:
             .order_by(EmployeeLoan.disbursement_date)
         )
 
+        if organization_id is not None:
+            stmt = stmt.where(
+                EmployeeLoan.organization_id == coerce_uuid(organization_id)
+            )
+
         return list(self.db.scalars(stmt).all())
 
     def get_due_deductions(
@@ -451,6 +481,11 @@ class LoanService:
         employee_id: UUID,
         period_start: date,
         period_end: date,
+        *,
+        gross_pay: Decimal | None = None,
+        total_existing_deductions: Decimal = Decimal("0"),
+        exclude_slip_id: UUID | None = None,
+        organization_id: UUID | None = None,
     ) -> list[LoanDeductionItem]:
         """
         Get loan deductions due for an employee in a pay period.
@@ -459,13 +494,16 @@ class LoanService:
         """
         emp_id = coerce_uuid(employee_id)
 
-        # Get active loans
-        active_loans = self.get_active_loans_for_employee(emp_id)
+        # Get active loans (filtered by org_id when available)
+        active_loans = self.get_active_loans_for_employee(
+            emp_id, organization_id=organization_id
+        )
 
         if not active_loans:
             return []
 
-        deductions = []
+        deductions: list[LoanDeductionItem] = []
+        running_loan_deductions = Decimal("0")
 
         for loan in active_loans:
             # Check if repayment is due in this period
@@ -473,13 +511,38 @@ class LoanService:
                 # Loan repayment hasn't started yet
                 continue
 
+            if self._has_repayment_in_period(loan.loan_id, period_start, period_end):
+                continue
+
+            if self._has_linked_slip_deduction_in_period(
+                loan.loan_id,
+                period_start,
+                period_end,
+                exclude_slip_id=exclude_slip_id,
+            ):
+                continue
+
             # Calculate amount for this period
-            amount = loan.monthly_installment
+            amount = _round_currency(loan.monthly_installment)
             balance = loan.outstanding_balance
 
             # Handle final payment (may be less than regular installment)
             if amount > balance:
                 amount = balance
+
+            if gross_pay is not None and gross_pay > 0:
+                min_net_pay = _round_currency(gross_pay * self.MIN_NET_PAY_RATIO)
+                max_allowed_total_deduction = gross_pay - min_net_pay
+                used_deductions = total_existing_deductions + running_loan_deductions
+                remaining_capacity = _round_currency(
+                    max_allowed_total_deduction - used_deductions
+                )
+                if remaining_capacity <= 0:
+                    continue
+                if amount > remaining_capacity:
+                    amount = remaining_capacity
+            if amount <= 0:
+                continue
 
             # Calculate principal/interest split (simplified for FLAT/NONE)
             if loan.interest_rate == 0 or loan.total_interest == 0:
@@ -487,7 +550,6 @@ class LoanService:
                 interest_portion = Decimal("0")
             else:
                 # Approximate split based on remaining balance ratio
-                balance / loan.total_repayable
                 interest_portion = _round_currency(
                     amount * (loan.total_interest / loan.total_repayable)
                 )
@@ -510,8 +572,46 @@ class LoanService:
                     is_final_payment=is_final,
                 )
             )
+            running_loan_deductions += amount
 
         return deductions
+
+    def _has_repayment_in_period(
+        self, loan_id: UUID, period_start: date, period_end: date
+    ) -> bool:
+        return (
+            self.db.scalar(
+                select(LoanRepayment.repayment_id).where(
+                    LoanRepayment.loan_id == loan_id,
+                    LoanRepayment.repayment_type == RepaymentType.PAYROLL_DEDUCTION,
+                    LoanRepayment.repayment_date >= period_start,
+                    LoanRepayment.repayment_date <= period_end,
+                )
+            )
+            is not None
+        )
+
+    def _has_linked_slip_deduction_in_period(
+        self,
+        loan_id: UUID,
+        period_start: date,
+        period_end: date,
+        *,
+        exclude_slip_id: UUID | None,
+    ) -> bool:
+        stmt = (
+            select(SalarySlipLoanDeduction.deduction_id)
+            .join(SalarySlip, SalarySlip.slip_id == SalarySlipLoanDeduction.slip_id)
+            .where(
+                SalarySlipLoanDeduction.loan_id == loan_id,
+                SalarySlip.start_date == period_start,
+                SalarySlip.end_date == period_end,
+                SalarySlip.status != SalarySlipStatus.CANCELLED,
+            )
+        )
+        if exclude_slip_id:
+            stmt = stmt.where(SalarySlip.slip_id != coerce_uuid(exclude_slip_id))
+        return self.db.scalar(stmt) is not None
 
     def record_payroll_deduction(
         self,
@@ -617,6 +717,12 @@ class LoanService:
             )
 
         if amount > loan.outstanding_balance:
+            logger.info(
+                "Manual payment %s exceeds outstanding %s for loan %s, capping",
+                amount,
+                loan.outstanding_balance,
+                loan.loan_number,
+            )
             amount = loan.outstanding_balance
 
         # Calculate split (simplified)
