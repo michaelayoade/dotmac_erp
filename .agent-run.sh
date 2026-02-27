@@ -3,16 +3,16 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 # ---- Injected at spawn time ----
-WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-deps-002-v2
+WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-security-c2-4
 PROJECT_DIR=/home/dotmac/projects/dotmac_erp
 SCRIPT_DIR=/home/dotmac/.seabone/scripts
 ACTIVE_FILE=/home/dotmac/projects/dotmac_erp/.seabone/active-tasks.json
-LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-deps-002-v2.log
-TASK_ID=fix-deps-002-v2
-DESCRIPTION=Security\ fix:\ Update\ cryptography\ from\ 42.0.8\ to\ \>=44.0.1\ \(latest\ 46.0.5\)\ in\ pyproject.toml\ to\ fix\ CVE-2024-12797\ \(CVSS\ 8.1\ HIGH\ OpenSSL\ RSA-PSS\ authentication\ bypass\).\ Steps:\ 1\)\ Edit\ pyproject.toml:\ update\ cryptography\ version\ to\ \>=44.0.1.\ 2\)\ Run\ poetry\ add\ cryptography\>=44.0.1.\ 3\)\ Verify\ python-jose\ still\ works.\ 4\)\ Run\ make\ lint\ and\ pytest\ -x\ --tb=short.\ Commit:\ security:\ upgrade\ cryptography\ to\ \>=44.0.1\ \(CVE-2024-12797\)
-BRANCH=agent/fix-deps-002-v2
-ENGINE=codex
-MODEL=gpt-5.3-codex
+LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-security-c2-4.log
+TASK_ID=fix-security-c2-4
+DESCRIPTION=Security\ fix:\ Stop\ leaking\ internal\ exception\ messages\ in\ import/export\ API\ 500\ responses.\ File:\ app/api/finance/import_export.py\,\ around\ line\ 360.\ The\ preview\ and\ import\ execute\ endpoints\ return\ raw\ Python\ exception\ strings\ like\ \'Preview\ failed:\ \{str\(e\)\}\'\ in\ HTTP\ 500\ response\ bodies\,\ potentially\ leaking\ internal\ file\ paths\,\ database\ schema\ details\,\ or\ library\ error\ strings.\ Fix:\ 1\)\ Separate\ ValueError\ from\ unexpected\ exceptions:\ keep\ specific\ ValueError\ messages\ in\ 400\ responses\ \(intentional\ user-facing\ validation\)\,\ but\ for\ unexpected\ exceptions\ log\ the\ full\ exception\ via\ logger.exception\(\)\ and\ return\ a\ generic\ message\ \'An\ unexpected\ error\ occurred\;\ please\ contact\ support.\'\ in\ the\ HTTP\ 500\ detail.\ Read\ the\ file\ first\ to\ understand\ both\ endpoints\ and\ their\ current\ error\ handling.\ Run\ make\ lint\ \&\&\ pytest\ -x\ --tb=short.\ Commit:\ fix:\ sanitize\ exception\ messages\ in\ import/export\ API\ error\ responses
+BRANCH=agent/fix-security-c2-4
+ENGINE=aider
+MODEL=deepseek-chat
 EVENT_LOG=/home/dotmac/projects/dotmac_erp/.seabone/logs/events.log
 CONFIG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/config.json
 PROJECT_NAME=dotmac_erp
