@@ -1,6 +1,11 @@
+import ipaddress
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from starlette.requests import Request
+
+import app.net as app_net
+from app.api import auth_flow as auth_flow_api
 from app.models.auth import (
     Session as AuthSession,
 )
@@ -12,6 +17,36 @@ from app.models.person import Person
 from app.services import auth_flow as auth_flow_service
 from app.services.auth_flow import hash_password
 from tests.conftest import DEFAULT_TEST_ORG_ID
+
+
+def _build_request(
+    *,
+    client_host: str,
+    host: str,
+    forwarded_host: str | None = None,
+    forwarded_proto: str | None = None,
+    scheme: str = "http",
+) -> Request:
+    headers = [(b"host", host.encode())]
+    if forwarded_host is not None:
+        headers.append((b"x-forwarded-host", forwarded_host.encode()))
+    if forwarded_proto is not None:
+        headers.append((b"x-forwarded-proto", forwarded_proto.encode()))
+
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "POST",
+        "path": "/auth/forgot-password",
+        "raw_path": b"/auth/forgot-password",
+        "query_string": b"",
+        "root_path": "",
+        "headers": headers,
+        "client": (client_host, 12345),
+        "server": (host, 80),
+        "scheme": scheme,
+    }
+    return Request(scope)
 
 
 class TestLoginAPI:
@@ -315,6 +350,42 @@ class TestPasswordAPI:
         response = client.post("/auth/forgot-password", json=payload)
         # Should still return success to prevent email enumeration
         assert response.status_code == 200
+
+    def test_resolve_app_url_ignores_untrusted_forwarded_host(self, monkeypatch):
+        """X-Forwarded-* headers should be ignored for untrusted clients."""
+        monkeypatch.setattr(
+            app_net,
+            "_TRUSTED_PROXY_NETWORKS",
+            [ipaddress.ip_network("10.0.0.0/8")],
+        )
+        request = _build_request(
+            client_host="198.51.100.10",
+            host="internal.local",
+            forwarded_host="attacker.example",
+            forwarded_proto="https",
+        )
+
+        app_url = auth_flow_api._resolve_app_url(request)
+
+        assert app_url == "http://internal.local"
+
+    def test_resolve_app_url_uses_trusted_forwarded_host(self, monkeypatch):
+        """X-Forwarded-* headers should be honored for trusted proxies."""
+        monkeypatch.setattr(
+            app_net,
+            "_TRUSTED_PROXY_NETWORKS",
+            [ipaddress.ip_network("10.0.0.0/8")],
+        )
+        request = _build_request(
+            client_host="10.1.2.3",
+            host="internal.local",
+            forwarded_host="erp.example.com,attacker.example",
+            forwarded_proto="https",
+        )
+
+        app_url = auth_flow_api._resolve_app_url(request)
+
+        assert app_url == "https://erp.example.com"
 
     def test_reset_password_revokes_sessions(self, client, db_session, person):
         """Test reset password revokes active sessions."""
