@@ -3,14 +3,14 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 # ---- Injected at spawn time ----
-WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-deps-001-v2
+WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-security-c1-1
 PROJECT_DIR=/home/dotmac/projects/dotmac_erp
-SCRIPT_DIR=/home/dotmac/.seabone/scripts
+SCRIPT_DIR=/home/dotmac/projects/dotmac_erp/scripts
 ACTIVE_FILE=/home/dotmac/projects/dotmac_erp/.seabone/active-tasks.json
-LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-deps-001-v2.log
-TASK_ID=fix-deps-001-v2
-DESCRIPTION=Security\ fix:\ Update\ Jinja2\ from\ 3.1.4\ to\ 3.1.6\ in\ pyproject.toml\ to\ fix\ CVE-2024-56201\ and\ CVE-2024-56326\ \(CVSS\ 8.1\ HIGH\ sandbox\ bypass\).\ Steps:\ 1\)\ Edit\ pyproject.toml:\ change\ jinja2\ version\ constraint\ to\ \>=3.1.6.\ 2\)\ Run\ poetry\ update\ jinja2.\ 3\)\ Run\ make\ lint.\ 4\)\ Run\ pytest\ -x\ --tb=short.\ Commit:\ security:\ upgrade\ jinja2\ to\ 3.1.6\ \(CVE-2024-56201\,\ CVE-2024-56326\)
-BRANCH=agent/fix-deps-001-v2
+LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-security-c1-1.log
+TASK_ID=fix-security-c1-1
+DESCRIPTION=Security\ fix:\ CRM\ webhook\ endpoint\ skips\ HMAC\ verification\ when\ CRM_WEBHOOK_SECRET\ is\ not\ configured.\ File:\ app/api/crm.py\,\ around\ line\ 115.\ The\ verify_crm_signature\(\)\ function\ returns\ True\ unconditionally\ when\ settings.crm_webhook_secret\ is\ falsy\,\ allowing\ any\ unauthenticated\ request\ to\ inject\ fake\ CRM\ events\ \(ticket/project\ manipulation\).\ Fix:\ 1\)\ Change\ verify_crm_signature\(\)\ to\ return\ False\ when\ secret\ is\ not\ configured.\ 2\)\ In\ the\ webhook\ route\ handler\,\ if\ secret\ is\ not\ configured\ reject\ with\ HTTP\ 503\ \(Service\ Unavailable\)\ so\ misconfigured\ deployments\ fail\ loudly.\ 3\)\ Read\ the\ function\ carefully\ before\ editing\ to\ understand\ the\ full\ signature\ flow.\ 4\)\ Run\ make\ lint\ \&\&\ pytest\ -x\ --tb=short.\ Commit:\ security:\ require\ CRM_WEBHOOK_SECRET\ for\ webhook\ authentication
+BRANCH=agent/fix-security-c1-1
 ENGINE=codex
 MODEL=gpt-5.3-codex
 EVENT_LOG=/home/dotmac/projects/dotmac_erp/.seabone/logs/events.log
@@ -75,11 +75,13 @@ if [[ "$ENGINE" == "claude" ]]; then
 elif [[ "$ENGINE" == "claude-frontend" ]]; then
     echo "[RUN] Claude Frontend Design Specialist..."
 
+    # Load the frontend design system prompt
     FRONTEND_PROMPT=""
     if [[ -f "$PROMPTS_DIR/frontend-design.md" ]]; then
         FRONTEND_PROMPT=$(cat "$PROMPTS_DIR/frontend-design.md")
     fi
 
+    # Build the full prompt: system context + task
     FULL_TASK="$FRONTEND_PROMPT
 
 ---
@@ -139,6 +141,7 @@ elif [[ "$ENGINE" == "codex" ]]; then
 elif [[ "$ENGINE" == "codex-test" ]]; then
     echo "[RUN] Codex Testing Specialist..."
 
+    # Load the testing system prompt
     TEST_PROMPT=""
     if [[ -f "$PROMPTS_DIR/testing-agent.md" ]]; then
         TEST_PROMPT=$(cat "$PROMPTS_DIR/testing-agent.md")
@@ -181,15 +184,19 @@ ${DESCRIPTION}
 elif [[ "$ENGINE" == "codex-senior" ]]; then
     echo "[RUN] Codex Senior Dev (Escalation)..."
 
+    # Load the senior dev system prompt
     SENIOR_PROMPT=""
     if [[ -f "$PROMPTS_DIR/senior-dev.md" ]]; then
         SENIOR_PROMPT=$(cat "$PROMPTS_DIR/senior-dev.md")
     fi
 
+    # Check for previous agent logs to provide context
     PREV_LOG_CONTEXT=""
+    # Extract base task ID (strip -v2, -v3 suffixes for escalation lookups)
     BASE_TASK_ID=$(echo "$TASK_ID" | sed -E 's/-v[0-9]+$//')
     for prev_log in "$LOG_DIR/${BASE_TASK_ID}"*.log; do
         if [[ -f "$prev_log" && "$prev_log" != "$LOG_FILE" ]]; then
+            # Get last 80 lines of previous attempts
             PREV_LOG_CONTEXT="${PREV_LOG_CONTEXT}
 
 --- Previous attempt log: $(basename "$prev_log") ---
