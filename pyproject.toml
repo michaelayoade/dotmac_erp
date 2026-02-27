@@ -28,7 +28,7 @@ opentelemetry-instrumentation-celery = "0.47b0"
 python-jose = {version = "3.3.0", extras = ["cryptography"]}
 passlib = {version = "1.7.4", extras = ["bcrypt"]}
 pyotp = "2.9.0"
-cryptography = "42.0.8"
+cryptography = ">=44.0.1"
 gunicorn = "^23.0.0"
 weasyprint = "^62.0"
 python-dateutil = "^2.9.0"
