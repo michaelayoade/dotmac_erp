@@ -10,7 +10,7 @@ load_dotenv()
 class Settings:
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+psycopg://postgres:postgres@localhost:5434/dotmac_erp",
+        # No default value - this is now required for security
     )
     db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "5"))
     db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
@@ -218,6 +218,14 @@ class Settings:
     )
     coach_cache_ttl_hours: int = int(os.getenv("COACH_CACHE_TTL_HOURS", "24"))
     coach_max_insights_per_run: int = int(os.getenv("COACH_MAX_INSIGHTS_PER_RUN", "20"))
+
+    def __post_init__(self):
+        """Validate settings after initialization."""
+        if not self.database_url:
+            raise ValueError(
+                "DATABASE_URL environment variable is required and cannot be empty. "
+                "Please set it in your .env file or environment variables."
+            )
 
 
 settings = Settings()

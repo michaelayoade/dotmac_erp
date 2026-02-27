@@ -3,16 +3,16 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 # ---- Injected at spawn time ----
-WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-deps-002-v2
+WORKTREE_DIR=/home/dotmac/projects/dotmac_erp/.worktrees/fix-security-c1-8
 PROJECT_DIR=/home/dotmac/projects/dotmac_erp
 SCRIPT_DIR=/home/dotmac/.seabone/scripts
 ACTIVE_FILE=/home/dotmac/projects/dotmac_erp/.seabone/active-tasks.json
-LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-deps-002-v2.log
-TASK_ID=fix-deps-002-v2
-DESCRIPTION=Security\ fix:\ Update\ cryptography\ from\ 42.0.8\ to\ \>=44.0.1\ \(latest\ 46.0.5\)\ in\ pyproject.toml\ to\ fix\ CVE-2024-12797\ \(CVSS\ 8.1\ HIGH\ OpenSSL\ RSA-PSS\ authentication\ bypass\).\ Steps:\ 1\)\ Edit\ pyproject.toml:\ update\ cryptography\ version\ to\ \>=44.0.1.\ 2\)\ Run\ poetry\ add\ cryptography\>=44.0.1.\ 3\)\ Verify\ python-jose\ still\ works.\ 4\)\ Run\ make\ lint\ and\ pytest\ -x\ --tb=short.\ Commit:\ security:\ upgrade\ cryptography\ to\ \>=44.0.1\ \(CVE-2024-12797\)
-BRANCH=agent/fix-deps-002-v2
-ENGINE=codex
-MODEL=gpt-5.3-codex
+LOG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/logs/fix-security-c1-8.log
+TASK_ID=fix-security-c1-8
+DESCRIPTION=Security\ fix:\ Remove\ default\ database\ credentials\ from\ config.py.\ File:\ app/config.py\,\ around\ line\ 13.\ The\ DATABASE_URL\ field\ has\ a\ default\ of\ postgresql+psycopg://postgres:postgres@localhost:5432/dotmac_erp\ which\ would\ be\ used\ in\ production\ if\ the\ env\ var\ is\ missing.\ Fix:\ Remove\ the\ default\ value\ so\ a\ missing\ DATABASE_URL\ raises\ a\ clear\ Pydantic\ validation\ error\ at\ startup.\ Read\ app/config.py\ first\ to\ understand\ the\ Settings\ class\ structure.\ Run\ make\ lint\ \&\&\ pytest\ -x\ --tb=short\ \(note:\ tests\ may\ need\ to\ set\ DATABASE_URL\ explicitly\ if\ they\ relied\ on\ the\ default\).\ Commit:\ security:\ require\ explicit\ DATABASE_URL\ configuration\,\ remove\ default\ credentials
+BRANCH=agent/fix-security-c1-8
+ENGINE=aider
+MODEL=deepseek-chat
 EVENT_LOG=/home/dotmac/projects/dotmac_erp/.seabone/logs/events.log
 CONFIG_FILE=/home/dotmac/projects/dotmac_erp/.seabone/config.json
 PROJECT_NAME=dotmac_erp
