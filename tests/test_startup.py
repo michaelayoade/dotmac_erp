@@ -8,9 +8,7 @@ from app import startup
 
 def test_warn_unconfigured_webhook_allowlist_logs_warning(monkeypatch, caplog):
     mock_db = MagicMock()
-    monkeypatch.setattr(
-        startup, "webhook_allowlist_configured", lambda db: False
-    )
+    monkeypatch.setattr(startup, "webhook_allowlist_configured", lambda db: False)
     monkeypatch.setattr(startup, "has_active_webhook_actions", lambda db: True)
 
     with caplog.at_level(logging.WARNING):

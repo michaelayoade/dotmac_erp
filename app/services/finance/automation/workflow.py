@@ -223,9 +223,7 @@ def _validate_webhook_target(
         return False, "Webhook host is not in the allowlist"
 
     allow_localhost_webhooks = (
-        _allow_localhost_webhooks(db)
-        if allow_localhost is None
-        else allow_localhost
+        _allow_localhost_webhooks(db) if allow_localhost is None else allow_localhost
     )
     require_https = parsed.scheme == "http" and not _allow_insecure_webhooks(db)
     loopback_host = False
