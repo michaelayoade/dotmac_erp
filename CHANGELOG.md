@@ -12,6 +12,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Security
 - **Jinja2 upgraded to >=3.1.6** — fixes CVE-2024-56201 and CVE-2024-56326 (CVSS 8.1 HIGH sandbox bypass allowing arbitrary code execution via crafted templates) (PR #4)
 - **cryptography upgraded to >=44.0.1** — fixes CVE-2024-12797 (CVSS 8.1 HIGH OpenSSL RSA-PSS authentication bypass when using mTLS or certificate verification) (PR #3)
+- **python-jose replaced with PyJWT 2.x** — CVE-2024-33663 (algorithm confusion attack: ECDSA key could forge EdDSA tokens); python-jose is abandoned; PyJWT is actively maintained (PR #6)
+- **passlib replaced with direct bcrypt>=4.0.0** — passlib 1.7.4 is abandoned and misreads bcrypt>=4.0.0 version strings, risking silent fallback to insecure hashing (PR #11)
+- **CRM webhook now requires CRM_WEBHOOK_SECRET** — previously `verify_crm_signature()` returned `True` unconditionally when the secret was not configured, allowing unauthenticated injection of CRM events; now returns HTTP 503 if unconfigured (PR #5)
+- **Host header injection in password reset fixed** — `_resolve_app_url()` previously read `X-Forwarded-Host` without trusted proxy validation; now uses `app.net.get_request_host()` which enforces `TRUSTED_PROXY_IPS` (PR #9)
+- **Added X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy headers** — four standard security response headers were missing from all responses (PR #8)
+- **Webhook allowlist default-deny when unconfigured** — `_host_matches_allowlist()` previously returned `True` (allow all) when `WEBHOOK_ALLOWED_HOSTS`/`WEBHOOK_ALLOWED_DOMAINS` were unset, enabling SSRF; now returns `False` (deny all) with a startup warning if active webhook rules exist (PR #10)
+- **SSRF protection applied to service hook webhook handler** — `registry.py` WEBHOOK handler now calls `_validate_webhook_target()` before dispatching HTTP requests, blocking private IPs and loopback regardless of allowlist state (PR #13)
+- **RLS `SET LOCAL` uses parameterized `set_config()`** — `app/rls.py` previously interpolated organization UUID via f-string into a `SET LOCAL` statement; replaced with `SELECT set_config(...)` to eliminate injection vector (defense-in-depth) (PR #16)
+- **Materialized view refresh uses safe identifier** — `analysis_cube.py` f-string interpolation in `REFRESH MATERIALIZED VIEW` replaced with a safely-composed identifier (PR #12)
+- **DATABASE_URL default credentials removed** — `app/config.py` no longer falls back to `postgres:postgres`; a missing `DATABASE_URL` now raises a Pydantic validation error at startup (PR #17)
+
+### Fixed
+- **Narrow exception handling in `secrets.py`** — bare `except Exception` replaced with `except SQLAlchemyError` so unexpected errors are not silently swallowed when reading the `openbao_allow_insecure` setting (PR #14)
+- **Sanitized exception messages in import/export API** — internal file paths and schema details no longer leaked in HTTP 500 responses; `ValueError` remains user-visible via 400, unexpected errors return a generic message and log via `logger.exception()` (PR #15)
 
 ## [2026-02-26]
 
