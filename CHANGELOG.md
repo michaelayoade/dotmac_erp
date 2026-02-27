@@ -9,7 +9,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [2026-02-27]
 
+### Added
+- **Employee rehire endpoint** — new `POST /people/employees/{id}/rehire` API endpoint with schema validation and service layer support; reinstates terminated employees without creating a new record
+- **Scheduling self-service views** — employees can now view their own schedules and shift swaps via the self-service portal (`/people/self/scheduling`)
+- **Shift pattern rotation lines** — shift patterns now support configurable rotation lines (days per rotation cycle), with migration and updated pattern form UI
+- **Employee loan type nullable** — `loan_type_id` on `EmployeeLoan` made optional via migration; supports ad-hoc loan entries without a predefined type
+- **Coach task queue** — new `app/tasks/coach.py` Celery task for automated coach insight generation, wired into the beat schedule
+- **Payslip PDF branding tests** — new test suite `tests/services/test_payslip_pdf_branding.py` covering logo and branding embedding in PDF payslips
+- **Scheduling rotation line tests** — new test suite `tests/services/test_scheduling_rotation_lines.py` covering shift pattern rotation logic
+
+### Fixed
+- **Payroll: triple payslip email eliminated** — `notify_payslip_posted()` was being called from approval paths (approval ≠ posting) and from individual GL posting paths causing emails sent 2–3× per slip; removed from approval/posting paths and consolidated to the explicit "Send Payslip Emails" action; notification channel changed from `BOTH` to `IN_APP` (dedicated Celery task handles email)
+- **Payroll: PDF attachment failures** — Celery `send_payslip_email` task was triggering lazy-load failures when the DB connection dropped mid-task; all relationships now eagerly loaded (`employee`, `org`, `branding`, `department`, `designation`, `earnings`, `deductions`)
+- **Payroll: payout status check corrected** — payout status check used `APPROVED` when posted payrolls have status `POSTED`; also replaced `func.now()` with `datetime.now(UTC)` for timezone-aware comparison
+- **Payroll: salary slip assignment lookup** — update path used incorrect assignment lookup, causing proration and suspension deduction errors for mid-period changes
+- **Payroll: net pay floor** — `net_pay` can no longer go negative; minimum clamped to 0 in both `create` and `update` paths
+- **Payroll: employer pension detection** — employer pension was identified by string matching on component name (fragile); now uses component code lookup
+- **Payroll: duplicate variable_amount assignment** — redundant double-assignment of `variable_amount` removed from salary slip service
+- **Payroll: PAYE calculator SQLAlchemy 2.0 migration** — all `db.query()` calls in `paye_calculator.py` migrated to `select()` + `db.scalars()`
+- **Payroll: loan multi-tenancy** — `organization_id` filter added to all loan queries in payroll service (previously queried across all orgs)
+- **Payroll: service layer commit discipline** — `db.commit()` replaced with `db.flush()` in 12 locations across 4 service files (`payroll_service.py`, `salary_slip_service.py`, `paye_calculator.py`, payroll tasks); caller now controls transaction boundary
+- **`payment_days` calculation** — proration now correctly computes `payment_days` from the salary period dates rather than defaulting to calendar days
+
 ### Changed
+- **Payslip PDF** — branding and logo embedding improved; org logo now consistently renders in generated PDF payslips
+- **Coach insights** — insight generation updated with new signal types and settings page improvements (`admin/settings/coach.html`)
+- **Finance settings web service** — extended with additional form context methods for settings management pages
 - **Docker Compose switched to pre-built GHCR image** — `docker-compose.yml` app service now pulls `ghcr.io/michaelayoade/dotmac_erp:latest` instead of building from source (`build: .`); deployment no longer requires Docker build toolchain or source access
 - **Frontend accessibility and responsive fixes** — template audit across 11 templates: dark-mode pairing corrected on `macros.html`, fleet detail pages (`document_detail.html`, `incident_detail.html`, `maintenance_detail.html`), `people/hr/employees.html`, `procurement/contracts/detail.html`, and `projects/templates/form.html`; responsive layout and form structure fixes in `expense/claim_item_detail.html`, `finance/banking/rule_form.html`, `finance/reports/analysis.html`, and `admin/settings/branding.html` (PR #20)
 - **Web route handlers converted from `async def` to `def`** — ~394 `async def` handlers across ~44 files in `app/web/` converted to synchronous `def` to comply with CLAUDE.md architecture rules; SQLAlchemy sessions are sync and `async def` route handlers were unnecessary overhead that could mask session lifecycle issues (PR #21)
