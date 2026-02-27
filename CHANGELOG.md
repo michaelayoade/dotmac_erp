@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - **Frontend accessibility and responsive fixes** — template audit across 11 templates: dark-mode pairing corrected on `macros.html`, fleet detail pages (`document_detail.html`, `incident_detail.html`, `maintenance_detail.html`), `people/hr/employees.html`, `procurement/contracts/detail.html`, and `projects/templates/form.html`; responsive layout and form structure fixes in `expense/claim_item_detail.html`, `finance/banking/rule_form.html`, `finance/reports/analysis.html`, and `admin/settings/branding.html` (PR #20)
+- **Web route handlers converted from `async def` to `def`** — ~394 `async def` handlers across ~44 files in `app/web/` converted to synchronous `def` to comply with CLAUDE.md architecture rules; SQLAlchemy sessions are sync and `async def` route handlers were unnecessary overhead that could mask session lifecycle issues (PR #21)
 
 ### Security
 - **Jinja2 upgraded to >=3.1.6** — fixes CVE-2024-56201 and CVE-2024-56326 (CVSS 8.1 HIGH sandbox bypass allowing arbitrary code execution via crafted templates) (PR #4)
