@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import DomainSetting, SettingDomain
@@ -50,8 +51,8 @@ def _openbao_allow_insecure(db: Session | None) -> bool:
                     else setting.value_text
                 )
                 return _coerce_bool(raw, default=False)
-        except Exception:
-            logger.exception("Ignored exception")
+        except SQLAlchemyError:
+            logger.debug("Failed to read openbao_allow_insecure setting", exc_info=True)
     return _coerce_bool(os.getenv("OPENBAO_ALLOW_INSECURE"), default=False)
 
 
