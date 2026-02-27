@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import logging
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
+import bcrypt
 import pyotp
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, Request, Response, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -38,12 +40,39 @@ from app.services.secrets import resolve_secret
 
 logger = logging.getLogger(__name__)
 
-PASSWORD_CONTEXT = CryptContext(
-    schemes=["pbkdf2_sha256", "bcrypt"],
-    default="pbkdf2_sha256",
-    deprecated="auto",
-)
 _REFRESH_REUSE_GRACE_SECONDS = 30
+
+
+def _ab64_decode(data: str) -> bytes:
+    """Decode passlib's adapted base64 (ab64) format.
+
+    Passlib ab64 uses '.' instead of '+' and omits trailing padding.
+    Used only for backward-compatible verification of legacy pbkdf2_sha256 hashes.
+    """
+    data = data.replace(".", "+")
+    pad = len(data) % 4
+    if pad:
+        data += "=" * (4 - pad)
+    return base64.b64decode(data)
+
+
+def _verify_pbkdf2_sha256_passlib(password: str, hash_str: str) -> bool:
+    """Verify a passlib-format pbkdf2_sha256 hash using stdlib only.
+
+    Handles legacy hashes created by passlib before migration to bcrypt.
+    Format: $pbkdf2-sha256$<rounds>$<salt_ab64>$<hash_ab64>
+    """
+    try:
+        parts = hash_str.split("$")
+        if len(parts) != 5 or parts[1] != "pbkdf2-sha256":
+            return False
+        rounds = int(parts[2])
+        salt = _ab64_decode(parts[3])
+        expected = _ab64_decode(parts[4])
+        derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, rounds)
+        return hmac.compare_digest(derived, expected)
+    except Exception:  # noqa: BLE001 — catch-all intentional for malformed hash input
+        return False
 
 
 def _env_value(name: str) -> str | None:
@@ -603,13 +632,18 @@ def require_strong_password(password: str) -> None:
 
 
 def hash_password(password: str) -> str:
-    return cast(str, PASSWORD_CONTEXT.hash(password))
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
     if not password_hash:
         return False
-    return bool(PASSWORD_CONTEXT.verify(password, password_hash))
+    if password_hash.startswith(("$2b$", "$2a$", "$2y$")):
+        return bool(bcrypt.checkpw(password.encode(), password_hash.encode()))
+    if password_hash.startswith("$pbkdf2-sha256$"):
+        return _verify_pbkdf2_sha256_passlib(password, password_hash)
+    logger.warning("Unknown password hash format, cannot verify")
+    return False
 
 
 def revoke_sessions_for_person(
