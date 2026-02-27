@@ -48,10 +48,18 @@ Unified ERP for finance, HR, and operations. Multi-tenant business software buil
 - **Expenses**
   - Expense tracking and categorization
   - Cost allocation
+  - Approve-with-corrections workflow (inline line-item editing by approvers)
+  - Weekly budget limits per approver
 
 - **Leases**
   - Lease contract management
   - Right-of-use asset and liability calculation
+
+- **Public Sector (IPSAS)**
+  - Fund accounting and appropriation management
+  - Commitment tracking and virements
+  - IPSAS-compliant financial reporting
+  - Standalone module at `/public-sector/`
 
 ### People & HR Modules
 
@@ -65,7 +73,10 @@ Unified ERP for finance, HR, and operations. Multi-tenant business software buil
 
 - **Payroll**
   - Salary processing and payslips
-  - Tax deductions and benefits
+  - Tax deductions and benefits (PAYE, pension, NHF)
+  - Salary advance loan deduction automation
+  - Employment type filtering (permanent vs contractor runs)
+  - Payroll dashboard with run statistics and quick actions
 
 - **Recruitment**
   - Job postings and applicant tracking
@@ -98,11 +109,14 @@ Unified ERP for finance, HR, and operations. Multi-tenant business software buil
   - Celery workers with Redis broker
   - Database-backed Beat scheduler
   - Recurring transaction automation
+  - Outbox relay for near-real-time GL balance updates
+  - Service hooks registry for event-driven integrations
 
 - **Observability**
   - Prometheus metrics
   - OpenTelemetry distributed tracing
   - Structured JSON logging
+  - PostgreSQL slow-query and bloat diagnostics (`pg_stat_statements`)
 
 ## Tech Stack
 
