@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import quoted_name
 
 from app.models.finance.rpt.analysis_cube import AnalysisCube
 
@@ -152,10 +153,19 @@ class AnalysisCubeService:
     def refresh_cube(self, cube: AnalysisCube, *, now: datetime | None = None) -> None:
         """Refresh one materialized view with concurrent fallback."""
         view_name = self._safe_view(cube.source_view)
+        # Use quoted_name to safely quote the identifier
+        # Split schema and table if present
+        if "." in view_name:
+            schema, table = view_name.split(".", 1)
+            quoted_view = quoted_name(schema, quote=True) + "." + quoted_name(table, quote=True)
+        else:
+            quoted_view = quoted_name(view_name, quote=True)
+        
         try:
-            self.db.execute(text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {view_name}"))
+            # Use text() with string formatting for the identifier (safe because we use quoted_name)
+            self.db.execute(text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {quoted_view}"))
         except Exception:
-            self.db.execute(text(f"REFRESH MATERIALIZED VIEW {view_name}"))
+            self.db.execute(text(f"REFRESH MATERIALIZED VIEW {quoted_view}"))
         cube.last_refreshed_at = now or datetime.now(UTC)
 
     def _get_cube(self, organization_id: UUID, cube_code: str) -> AnalysisCube:
