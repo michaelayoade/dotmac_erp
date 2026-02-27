@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -183,25 +183,38 @@ def _host_matches_allowlist(host: str, db: Session | None = None) -> bool:
 
 def _validate_webhook_target(
     url: str, db: Session | None = None
-) -> tuple[bool, str | None]:
+) -> tuple[bool, str | None, str | None]:
+    """Validate a webhook target URL.
+
+    Returns ``(is_valid, error_message, resolved_ip)``.
+
+    *resolved_ip* is the first IP address obtained by resolving the hostname
+    via DNS.  It is ``None`` when the host is already an IP literal (no DNS
+    lookup is performed, so there is no TOCTOU window).  Callers should pin
+    the outgoing HTTP request to *resolved_ip* so that a second DNS lookup
+    never occurs — this prevents DNS-rebinding attacks where a malicious
+    domain returns a public IP during validation and then switches to an
+    internal address before the actual connection.
+    """
     if not url or not isinstance(url, str):
-        return False, "Webhook URL is required"
+        return False, "Webhook URL is required", None
 
     parsed = urlsplit(url)
     if parsed.scheme not in {"https", "http"}:
-        return False, "Webhook URL must use http or https"
+        return False, "Webhook URL must use http or https", None
     if parsed.username or parsed.password:
-        return False, "Webhook URL must not include credentials"
+        return False, "Webhook URL must not include credentials", None
     if not parsed.hostname:
-        return False, "Webhook URL must include a host"
+        return False, "Webhook URL must include a host", None
 
     host = parsed.hostname
     if not _host_matches_allowlist(host, db):
-        return False, "Webhook host is not in the allowlist"
+        return False, "Webhook host is not in the allowlist", None
 
     allow_localhost = _allow_localhost_webhooks(db)
     require_https = parsed.scheme == "http" and not _allow_insecure_webhooks(db)
     loopback_host = False
+    first_resolved_ip: str | None = None
 
     try:
         ip_value = ipaddress.ip_address(host)
@@ -209,12 +222,13 @@ def _validate_webhook_target(
             loopback_host = True
         if _is_private_address(ip_value):
             if not (allow_localhost and ip_value.is_loopback):
-                return False, "Webhook target is not allowed"
+                return False, "Webhook target is not allowed", None
+        # Host is already an IP literal — no DNS resolution, no TOCTOU risk.
     except ValueError:
         try:
             addr_info = socket.getaddrinfo(host, None)
         except socket.gaierror:
-            return False, "Webhook host could not be resolved"
+            return False, "Webhook host could not be resolved", None
         for _, _, _, _, sockaddr in addr_info:
             ip_str = sockaddr[0]
             ip_value = ipaddress.ip_address(ip_str)
@@ -222,12 +236,14 @@ def _validate_webhook_target(
                 loopback_host = True
             if _is_private_address(ip_value):
                 if not (allow_localhost and ip_value.is_loopback):
-                    return False, "Webhook target is not allowed"
+                    return False, "Webhook target is not allowed", None
+            if first_resolved_ip is None:
+                first_resolved_ip = str(ip_value)
 
     if require_https and not (allow_localhost and loopback_host):
-        return False, "Webhook URL must use https"
+        return False, "Webhook URL must use https", None
 
-    return True, None
+    return True, None, first_resolved_ip
 
 
 @dataclass
@@ -1055,7 +1071,7 @@ class WorkflowService:
 
         url_value = config.get("url")
         url = "" if url_value is None else str(url_value)
-        is_valid, error_message = _validate_webhook_target(url, db)
+        is_valid, error_message, resolved_ip = _validate_webhook_target(url, db)
         if not is_valid:
             return ActionResult(success=False, error_message=error_message)
 
@@ -1080,6 +1096,38 @@ class WorkflowService:
                     continue
                 headers[key_str] = value_str
 
+        # Prevent DNS rebinding (TOCTOU): pin the TCP connection to the IP
+        # address resolved during validation so no second DNS lookup occurs.
+        # A malicious domain could pass validation with a public IP then flip
+        # its DNS to an internal address before httpx establishes the connection.
+        request_url = url
+        request_extensions: dict[str, Any] = {}
+        if resolved_ip is not None:
+            parsed_req = urlsplit(url)
+            original_hostname = parsed_req.hostname or ""
+            # IPv6 addresses must be bracketed inside a URL netloc.
+            netloc_ip = f"[{resolved_ip}]" if ":" in resolved_ip else resolved_ip
+            if parsed_req.port:
+                netloc_ip = f"{netloc_ip}:{parsed_req.port}"
+            request_url = urlunsplit(
+                (
+                    parsed_req.scheme,
+                    netloc_ip,
+                    parsed_req.path,
+                    parsed_req.query,
+                    parsed_req.fragment,
+                )
+            )
+            # Preserve the original hostname for HTTP/1.1 virtual-host routing.
+            headers["Host"] = original_hostname
+            # For HTTPS, instruct httpcore to verify the TLS certificate against
+            # the original hostname rather than the numeric IP so that legitimate
+            # server certificates are still accepted.
+            if parsed_req.scheme == "https":
+                request_extensions["sni_hostname"] = original_hostname.encode(
+                    "ascii"
+                )
+
         try:
             payload = {
                 "entity_type": context.entity_type,
@@ -1092,9 +1140,10 @@ class WorkflowService:
             with httpx.Client(timeout=timeout, follow_redirects=False) as client:
                 response = client.request(
                     method=method,
-                    url=url,
+                    url=request_url,
                     json=payload,
                     headers=headers,
+                    extensions=request_extensions if request_extensions else None,
                 )
                 response.raise_for_status()
 
