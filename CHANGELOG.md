@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026-02-27]
+
+### Security
+- **Jinja2 upgraded to >=3.1.6** — fixes CVE-2024-56201 and CVE-2024-56326 (CVSS 8.1 HIGH sandbox bypass allowing arbitrary code execution via crafted templates) (PR #4)
+- **cryptography upgraded to >=44.0.1** — fixes CVE-2024-12797 (CVSS 8.1 HIGH OpenSSL RSA-PSS authentication bypass when using mTLS or certificate verification) (PR #3)
+
 ## [2026-02-26]
 
 ### Added
