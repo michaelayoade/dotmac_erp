@@ -113,8 +113,8 @@ def verify_crm_signature(payload: bytes, signature: str) -> bool:
         True if signature is valid
     """
     if not settings.crm_webhook_secret:
-        logger.warning("CRM webhook secret not configured - skipping verification")
-        return True  # Allow in development
+        logger.error("CRM webhook secret not configured - verification failed")
+        return False
 
     expected = hmac.new(
         settings.crm_webhook_secret.encode(),
@@ -335,6 +335,13 @@ async def crm_webhook(
     - project.updated: Project modified
     - project.deleted: Project deleted
     """
+    if not settings.crm_webhook_secret:
+        logger.error("CRM webhook secret not configured - rejecting webhook")
+        raise HTTPException(
+            status_code=503,
+            detail="CRM webhook authentication is not configured",
+        )
+
     from app.services.crm import CRMClient
     from app.services.crm.sync import ProjectSyncService, TicketSyncService
 
@@ -342,14 +349,13 @@ async def crm_webhook(
     raw_body = await request.body()
 
     # Verify signature
-    if settings.crm_webhook_secret:
-        if not x_crm_signature:
-            logger.warning("CRM webhook received without signature")
-            raise HTTPException(status_code=400, detail="Missing signature")
+    if not x_crm_signature:
+        logger.warning("CRM webhook received without signature")
+        raise HTTPException(status_code=400, detail="Missing signature")
 
-        if not verify_crm_signature(raw_body, x_crm_signature):
-            logger.warning("CRM webhook signature verification failed")
-            raise HTTPException(status_code=401, detail="Invalid signature")
+    if not verify_crm_signature(raw_body, x_crm_signature):
+        logger.warning("CRM webhook signature verification failed")
+        raise HTTPException(status_code=401, detail="Invalid signature")
 
     # Parse payload
     try:
