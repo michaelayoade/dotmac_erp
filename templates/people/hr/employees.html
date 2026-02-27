@@ -161,7 +161,7 @@
                         <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" data-row-prefix>Where</p>
                         <div class="grid grid-cols-1 gap-2 md:grid-cols-12">
                         <div class="md:col-span-4">
-                            <label class="form-label text-[11px]">Field</label>
+                            <label class="form-label text-xs">Field</label>
                             <select class="form-select w-full text-sm" data-row-field>
                                 <option value="status">Status</option>
                                 <option value="employee_code">Employee Code</option>
@@ -175,11 +175,11 @@
                             </select>
                         </div>
                         <div class="md:col-span-4">
-                            <label class="form-label text-[11px]">Operator</label>
+                            <label class="form-label text-xs">Operator</label>
                             <select class="form-select w-full text-sm" data-row-operator></select>
                         </div>
                         <div class="md:col-span-3">
-                            <label class="form-label text-[11px]">Value</label>
+                            <label class="form-label text-xs">Value</label>
                             <div data-row-value-host></div>
                         </div>
                         <div class="md:col-span-1 md:flex md:items-end">
@@ -726,7 +726,7 @@ function employeeBulkActions() {
         const joinHost = document.createElement('div');
         joinHost.dataset.rowJoinContainer = '1';
         joinHost.className = 'mb-2 w-full';
-        joinHost.innerHTML = '<label class="form-label text-[11px]">Condition</label>';
+        joinHost.innerHTML = '<label class="form-label text-xs">Condition</label>';
         joinHost.appendChild(joinSelect);
         row.insertBefore(joinHost, row.children[1]);
 

@@ -70,7 +70,13 @@
   'DR': 'badge-overdue',
   'DEBIT': 'badge-overdue',
   'CR': 'badge-approved',
-  'CREDIT': 'badge-approved'
+  'CREDIT': 'badge-approved',
+  'MINOR': 'badge-draft',
+  'MODERATE': 'badge-pending',
+  'MAJOR': 'badge-overdue',
+  'TOTAL_LOSS': 'badge-rejected',
+  'TOTAL LOSS': 'badge-rejected',
+  'NO EXPIRY': 'badge-draft'
 } %}
 {% set badge_class = badge_classes.get(status_upper, badge_classes.get(status_clean, 'badge-draft')) %}
 <span class="{{ badge_class }}">{{ status|replace('_', ' ')|title }}</span>

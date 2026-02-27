@@ -1,5 +1,5 @@
 {% extends "procurement/base_procurement.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
 {% block page_title %}Contract {{ contract.contract_number }}{% endblock %}
 
@@ -87,7 +87,7 @@
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ ms.due_date }}</td>
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(ms.amount) }}</td>
                         <td class="px-4 py-3">
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if ms.paid %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400{% elif ms.overdue %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{% if ms.paid %}Paid{% elif ms.overdue %}Overdue{% else %}Pending{% endif %}</span>
+                            {% if ms.paid %}{{ status_badge("PAID", "sm") }}{% elif ms.overdue %}{{ status_badge("OVERDUE", "sm") }}{% else %}{{ status_badge("PENDING", "sm") }}{% endif %}
                         </td>
                     </tr>
                     {% endfor %}

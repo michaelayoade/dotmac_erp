@@ -505,7 +505,7 @@
                         <div class="preview-panel" :style="getPreviewStyles()">
                             <!-- Header -->
                             <div class="preview-header" style="background: #0f172a">
-                                <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
+                                <div class="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
                                      :style="{ backgroundColor: config.primary_color || '#0d9488' }">
                                     <span x-text="config.brand_mark || 'DM'"></span>
                                 </div>
@@ -535,17 +535,17 @@
                                     <!-- Stats -->
                                     <div class="grid grid-cols-2 gap-1.5 mb-2">
                                         <div class="preview-card" :style="{ borderRadius: getBorderRadius(), background: previewDark ? '#1e293b' : 'white' }">
-                                            <p class="text-[10px]" :style="{ color: previewDark ? '#94a3b8' : '#64748b' }">Revenue</p>
+                                            <p class="text-xs" :style="{ color: previewDark ? '#94a3b8' : '#64748b' }">Revenue</p>
                                             <p class="text-xs font-bold" :style="{ color: previewDark ? 'white' : '#0f172a', fontFamily: config.font_family_mono || 'JetBrains Mono, monospace' }">&#8358;24,500</p>
                                         </div>
                                         <div class="preview-card" :style="{ borderRadius: getBorderRadius(), background: previewDark ? '#1e293b' : 'white' }">
-                                            <p class="text-[10px]" :style="{ color: previewDark ? '#94a3b8' : '#64748b' }">Invoices</p>
+                                            <p class="text-xs" :style="{ color: previewDark ? '#94a3b8' : '#64748b' }">Invoices</p>
                                             <p class="text-xs font-bold" :style="{ color: previewDark ? 'white' : '#0f172a', fontFamily: config.font_family_mono || 'JetBrains Mono, monospace' }">12</p>
                                         </div>
                                     </div>
 
                                     <!-- Button -->
-                                    <button type="button" class="w-full text-center text-white text-[11px] font-medium py-1.5 px-2"
+                                    <button type="button" class="w-full text-center text-white text-xs font-medium py-1.5 px-2"
                                             :style="getButtonStyles()">
                                         Create Invoice
                                     </button>

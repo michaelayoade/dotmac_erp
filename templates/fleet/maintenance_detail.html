@@ -31,7 +31,7 @@
                     <div class="mt-2 flex flex-wrap items-center gap-2">
                         {{ status_badge(record.status) }}
                         {% if record.is_overdue %}
-                        <span class="inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">Overdue</span>
+                        {{ status_badge("OVERDUE", "sm") }}
                         {% endif %}
                     </div>
                 </div>
