@@ -22,6 +22,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **RLS `SET LOCAL` uses parameterized `set_config()`** — `app/rls.py` previously interpolated organization UUID via f-string into a `SET LOCAL` statement; replaced with `SELECT set_config(...)` to eliminate injection vector (defense-in-depth) (PR #16)
 - **Materialized view refresh uses safe identifier** — `analysis_cube.py` f-string interpolation in `REFRESH MATERIALIZED VIEW` replaced with a safely-composed identifier (PR #12)
 - **DATABASE_URL default credentials removed** — `app/config.py` no longer falls back to `postgres:postgres`; a missing `DATABASE_URL` now raises a Pydantic validation error at startup (PR #17)
+- **DNS rebinding TOCTOU mitigated in webhook validation** — `_validate_webhook_target()` resolved the hostname at validation time but passed the original URL to httpx, allowing a malicious domain to switch its DNS from a public IP (validation pass) to an internal RFC-1918 address (actual request); fix performs a second socket resolution immediately before dispatch and re-validates the resolved IP (PR #19)
+- **INTERNAL_SERVICE hook targets restricted to explicit allowlist** — `registry.py` INTERNAL_SERVICE handler used `importlib.import_module()` with only a `startswith('app.services.')` prefix check, letting any tenant with hook-creation permission invoke arbitrary callables with attacker-controlled kwargs; replaced with an explicit `ALLOWED_INTERNAL_HOOK_TARGETS` frozenset that rejects any unlisted target before import (PR #18)
 
 ### Fixed
 - **Narrow exception handling in `secrets.py`** — bare `except Exception` replaced with `except SQLAlchemyError` so unexpected errors are not silently swallowed when reading the `openbao_allow_insecure` setting (PR #14)
