@@ -25,7 +25,6 @@ from app.models.finance.platform.service_hook_execution import (
     ServiceHookExecution,
 )
 from app.services.feature_flags import FEATURE_SERVICE_HOOKS, is_feature_enabled
-from app.services.finance.automation.workflow import _validate_webhook_target
 
 logger = logging.getLogger(__name__)
 
@@ -349,6 +348,8 @@ def _execute_hook_handler(
         url = "" if url_value is None else str(url_value).strip()
         if not url:
             raise ValueError("Webhook hook requires handler_config.url")
+
+        from app.services.finance.automation.workflow import _validate_webhook_target
 
         is_valid, error_message = _validate_webhook_target(
             url,
