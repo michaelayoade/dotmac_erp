@@ -1,0 +1,28 @@
+[
+  {
+    "id": "erp-fix-tests",
+    "finding_date": "2026-02-28",
+    "severity": "high",
+    "category": "quality",
+    "task": "Fix failing tests in dotmac_erp. Run pytest tests/ -v, identify failures, fix them. Check for missing fixtures, broken imports, or schema changes.",
+    "engine": "aider",
+    "priority_score": 90,
+    "track": "quality",
+    "status": "pending",
+    "attempt_count": 0,
+    "estimated_effort": 5
+  },
+  {
+    "id": "erp-fix-precommit",
+    "finding_date": "2026-02-28",
+    "severity": "medium",
+    "category": "quality",
+    "task": "Fix pre-commit hook failures in dotmac_erp. Run pre-commit run --all-files, fix ruff lint/format issues.",
+    "engine": "aider",
+    "priority_score": 60,
+    "track": "quality",
+    "status": "pending",
+    "attempt_count": 0,
+    "estimated_effort": 2
+  }
+]
