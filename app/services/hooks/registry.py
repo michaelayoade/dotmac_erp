@@ -29,6 +29,25 @@ from app.services.feature_flags import FEATURE_SERVICE_HOOKS, is_feature_enabled
 logger = logging.getLogger(__name__)
 
 
+def _validate_webhook_target(
+    url: str,
+    db: Any = None,
+    *,
+    allow_localhost: bool | None = None,
+) -> tuple[bool, str | None]:
+    """Validate a webhook URL target.
+
+    Delegates to the workflow module implementation. Defined here at module
+    level so that tests can patch ``app.services.hooks.registry._validate_webhook_target``
+    without triggering the circular import that would result from a top-level import.
+    """
+    from app.services.finance.automation.workflow import (
+        _validate_webhook_target as _wf_validate,
+    )
+
+    return _wf_validate(url, db, allow_localhost=allow_localhost)
+
+
 @dataclass(frozen=True)
 class HookEvent:
     """Event payload emitted by a domain service."""
@@ -348,8 +367,6 @@ def _execute_hook_handler(
         url = "" if url_value is None else str(url_value).strip()
         if not url:
             raise ValueError("Webhook hook requires handler_config.url")
-
-        from app.services.finance.automation.workflow import _validate_webhook_target
 
         is_valid, error_message = _validate_webhook_target(
             url,
