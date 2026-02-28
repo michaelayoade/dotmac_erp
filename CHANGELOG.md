@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [2026-02-28]
+
+### Added
+- **Seabone agent orchestration scripts** — `scripts/` directory now contains the full Seabone multi-agent automation suite: `orchestrator.sh` (task queue driver), `coordinator.sh` (deterministic cycle scheduler), `fleet-manager.sh` (agent lifecycle), `spawn-agent.sh` (worktree-isolated agent launcher), `sentinel.sh` (health monitor), `pm-agent.sh` (project manager), `analyst.sh` (codebase analysis), `docs-agent.sh` (documentation agent), `deps-agent.sh` (dependency auditor), `metrics-agent.sh` (KPI tracker), `rollback-agent.sh` (revert handler), `conflict-detector.sh` (merge conflict guard), `shared-context.sh` (cross-agent context sharing), `json-lock.sh` (atomic JSON state updates), `batch-tasks.sh` (bulk task injection), `list-tasks.sh` (task queue inspector), `check-agents.sh` (agent health checks), `review-pr.sh` (automated PR review), `ci-monitor.sh` (CI status poller), `cleanup-worktrees.sh` (stale worktree cleanup), `notify-telegram.sh` (Telegram alerting)
+
 ## [2026-02-27]
 
 ### Added
