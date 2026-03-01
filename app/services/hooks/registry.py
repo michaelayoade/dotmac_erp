@@ -168,6 +168,20 @@ class HookRegistry:
             execution.executed_at = datetime.now(UTC)
 
 
+def _validate_webhook_target(
+    url: str,
+    db: Session,
+    *,
+    allow_localhost: bool = False,
+) -> tuple[bool, str | None]:
+    """Lazy-import wrapper to avoid circular import with workflow module."""
+    from app.services.finance.automation.workflow import (
+        _validate_webhook_target as _inner,
+    )
+
+    return _inner(url, db, allow_localhost=allow_localhost)
+
+
 def _execute_hook_handler(
     db: Session,
     hook: ServiceHook,
@@ -348,8 +362,6 @@ def _execute_hook_handler(
         url = "" if url_value is None else str(url_value).strip()
         if not url:
             raise ValueError("Webhook hook requires handler_config.url")
-
-        from app.services.finance.automation.workflow import _validate_webhook_target
 
         is_valid, error_message = _validate_webhook_target(
             url,
