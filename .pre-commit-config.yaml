@@ -1,3 +1,5 @@
+
+exclude: ^\.seabone/
 repos:
   # Ruff: fast linting + formatting (replaces flake8, isort, black)
   - repo: https://github.com/astral-sh/ruff-pre-commit

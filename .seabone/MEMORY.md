@@ -4,35 +4,35 @@
 
 ### From CLAUDE.md
 > # DotMac ERP
-> 
+>
 > IFRS-based multi-tenant ERP system. FastAPI + SQLAlchemy 2.0 + Celery + Jinja2/Alpine.js.
-> 
+>
 > ## Quick Commands
-> 
+>
 > ```bash
 > # Quality (or use: make check)
 > make lint                        # ruff check app/
 > make format                      # ruff format + fix
 > make type-check                  # mypy app/
-> 
+>
 > # Testing (or use: make test)
 > pytest tests/path/test_file.py -v  # Specific test
 > pytest -x --tb=short               # Stop on first failure
 > make test-cov                      # With coverage
-> 
+>
 > # Database
 > make migrate                     # alembic upgrade head
 > make migrate-new msg="desc"      # New migration
 
 ### From README
 > # Dotmac ERP
-> 
+>
 > Unified ERP for finance, HR, and operations. Multi-tenant business software built with FastAPI, featuring comprehensive financial modules, human resources, authentication, RBAC, audit logging, background jobs, and full observability.
-> 
+>
 > ## Features
-> 
+>
 > ### Financial Modules
-> 
+>
 > - **General Ledger (GL)**
 >   - Chart of Accounts management
 
