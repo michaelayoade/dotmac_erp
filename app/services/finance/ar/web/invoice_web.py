@@ -880,6 +880,140 @@ class InvoiceWebService:
                 status_code=303,
             )
 
+    def invoice_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Return the edit invoice form with existing invoice data."""
+        from app.models.finance.ar.invoice_line import InvoiceLine
+
+        org_id = coerce_uuid(auth.organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            return RedirectResponse(
+                url="/finance/ar/invoices?error=Invoice+not+found",
+                status_code=303,
+            )
+
+        if invoice.status != InvoiceStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error=Only+draft+invoices+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit AR Invoice", "ar")
+        context.update(self.invoice_form_context(db, str(auth.organization_id)))
+
+        lines = db.scalars(
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
+            .order_by(InvoiceLine.line_number)
+        ).all()
+
+        context["invoice"] = {
+            "invoice_id": str(invoice.invoice_id),
+            "invoice_number": invoice.invoice_number,
+            "customer_id": str(invoice.customer_id),
+            "invoice_date": invoice.invoice_date,
+            "due_date": invoice.due_date,
+            "currency_code": invoice.currency_code,
+            "po_number": "",
+            "description": invoice.notes,
+            "notes": invoice.notes,
+            "internal_notes": invoice.internal_notes,
+            "terms": "",
+            "cost_center_id": None,
+            "project_id": None,
+            "lines": [
+                {
+                    "line_id": str(line.line_id),
+                    "item_id": str(line.item_id) if line.item_id else "",
+                    "revenue_account_id": str(line.revenue_account_id)
+                    if line.revenue_account_id
+                    else "",
+                    "description": line.description or "",
+                    "quantity": line.quantity,
+                    "unit_price": line.unit_price,
+                    "tax_amount": line.tax_amount or 0,
+                    "line_taxes": list(
+                        db.scalars(
+                            select(InvoiceLineTax).where(
+                                InvoiceLineTax.line_id == line.line_id
+                            )
+                        ).all()
+                    ),
+                }
+                for line in lines
+            ],
+        }
+
+        return templates.TemplateResponse(
+            request, "finance/ar/invoice_form.html", context
+        )
+
+    async def update_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle invoice update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        org_id = coerce_uuid(auth.organization_id)
+        user_id = coerce_uuid(auth.user_id)
+
+        try:
+            input_data = self.build_invoice_input(db, data, org_id)
+
+            invoice = ar_invoice_service.update_invoice(
+                db=db,
+                organization_id=org_id,
+                invoice_id=coerce_uuid(invoice_id),
+                input=input_data,
+                updated_by_user_id=user_id,
+            )
+
+            if "application/json" in content_type:
+                return JSONResponse(
+                    content={
+                        "success": True,
+                        "invoice_id": str(invoice.invoice_id),
+                    }
+                )
+
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice.invoice_id}?success=Invoice+updated+successfully",
+                status_code=303,
+            )
+
+        except (ValueError, RuntimeError) as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit AR Invoice", "ar")
+            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(
+                request, "finance/ar/invoice_form.html", context
+            )
+
     async def upload_invoice_attachment_response(
         self,
         invoice_id: str,

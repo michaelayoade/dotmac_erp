@@ -22,6 +22,7 @@ Usage:
         pass
 """
 
+import re
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
@@ -29,6 +30,33 @@ from contextlib import asynccontextmanager, contextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+
+# Pattern for validating UUID strings - only allows hex digits and hyphens
+# This prevents SQL injection since these characters cannot break out of the string
+_UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
+
+
+def _validate_uuid_string(value: str) -> str:
+    """
+    Validate that a string is a valid UUID format.
+
+    This ensures only valid UUID strings are used in SQL, preventing any
+    possibility of SQL injection through this path.
+
+    Args:
+        value: The string to validate
+
+    Returns:
+        The validated string
+
+    Raises:
+        ValueError: If the string is not a valid UUID format
+    """
+    if not _UUID_PATTERN.match(value):
+        raise ValueError(f"Invalid UUID format: {value}")
+    return value
 
 
 async def set_current_organization(
@@ -44,11 +72,19 @@ async def set_current_organization(
     Args:
         db: The database session
         organization_id: The UUID of the current organization/tenant
+
+    Note:
+        SET LOCAL doesn't support parameterized queries, so we use string
+        formatting with explicit UUID validation. The UUID type ensures
+        the value is safe (no SQL injection possible).
     """
-    # SET LOCAL doesn't support parameterized queries, so we use string formatting
-    # The UUID type ensures the value is safe (no SQL injection possible)
     org_id_str = str(organization_id)
-    await db.execute(text(f"SET LOCAL app.current_organization_id = '{org_id_str}'"))
+    # Validate UUID format before using in SQL
+    _validate_uuid_str = _validate_uuid_string(org_id_str)
+    # SET LOCAL sets a GUC string param — no ::uuid cast (it's not a SQL value)
+    await db.execute(
+        text(f"SET LOCAL app.current_organization_id = '{_validate_uuid_str}'")
+    )
 
 
 async def clear_organization_context(db: AsyncSession) -> None:
@@ -162,11 +198,17 @@ def set_current_organization_sync(
     Args:
         db: The database session
         organization_id: The UUID of the current organization/tenant
+
+    Note:
+        SET LOCAL doesn't support parameterized queries, so we use string
+        formatting with explicit UUID validation. The UUID type ensures
+        the value is safe (no SQL injection possible).
     """
-    # SET LOCAL doesn't support parameterized queries, so we use string formatting
-    # The UUID type ensures the value is safe (no SQL injection possible)
     org_id_str = str(organization_id)
-    db.execute(text(f"SET LOCAL app.current_organization_id = '{org_id_str}'"))
+    # Validate UUID format before using in SQL
+    validated = _validate_uuid_string(org_id_str)
+    # SET LOCAL sets a GUC string param — no ::uuid cast (it's not a SQL value)
+    db.execute(text(f"SET LOCAL app.current_organization_id = '{validated}'"))
 
 
 def clear_organization_context_sync(db: Session) -> None:

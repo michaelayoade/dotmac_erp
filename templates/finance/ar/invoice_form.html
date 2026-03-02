@@ -560,6 +560,7 @@ function customerSearch() {
 }
 
 function invoiceForm() {
+    const _invoiceId = '{{ invoice.invoice_id if invoice else "" }}';
     return {
         form: {
             customer_id: '{{ invoice.customer_id if invoice else selected_customer_id }}',
@@ -930,7 +931,13 @@ function invoiceForm() {
             }
 
             try {
-                const response = await fetch('/finance/ar/invoices/new', {
+                const submitUrl = _invoiceId
+                    ? `/finance/ar/invoices/${_invoiceId}/edit`
+                    : '/finance/ar/invoices/new';
+                const successMsg = _invoiceId
+                    ? 'Invoice updated successfully'
+                    : 'Invoice created successfully';
+                const response = await fetch(submitUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -941,7 +948,7 @@ function invoiceForm() {
 
                 if (response.ok) {
                     window.dispatchEvent(new CustomEvent('show-toast', {
-                        detail: { message: 'Invoice created successfully', type: 'success' }
+                        detail: { message: successMsg, type: 'success' }
                     }));
                     setTimeout(() => {
                         window.location.href = '/finance/ar/invoices';

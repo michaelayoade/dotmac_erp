@@ -1531,6 +1531,7 @@ class ARInvoiceService(ListResponseMixin):
         db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == inv_id))
         db.delete(invoice)
         db.flush()
+        db.commit()
 
     @staticmethod
     def delete_credit_note(
@@ -1581,6 +1582,7 @@ class ARInvoiceService(ListResponseMixin):
         db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == cn_id))
         db.delete(credit_note)
         db.flush()
+        db.commit()
 
 
 # Module-level singleton instance
