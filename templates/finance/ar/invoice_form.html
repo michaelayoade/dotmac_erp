@@ -133,10 +133,16 @@
                         {% endfor %}
                     </select>
                     {# Searchable customer dropdown #}
-                    <div class="relative" x-data="customerSearch()" @click.outside="open = false">
-                        <input type="text" x-model="query" @focus="open = true" @input="open = true"
-                               :placeholder="selectedLabel || 'Search customers...'"
-                               :class="{'text-slate-400': !selectedLabel && !query}"
+                    <div class="relative" x-data="customerSearch()" @click.outside="open = false; searching = false">
+                        <!-- Selected customer display (visible when customer selected and not searching) -->
+                        <div x-show="selectedLabel && !searching" @click="searching = true; $nextTick(() => $refs.custSearch.focus())"
+                             class="form-input w-full cursor-pointer flex items-center justify-between group">
+                            <span class="text-slate-900 dark:text-white font-medium truncate" x-text="selectedLabel"></span>
+                            <span class="text-xs text-slate-400 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">Change</span>
+                        </div>
+                        <!-- Search input (visible when no customer or actively searching) -->
+                        <input x-ref="custSearch" x-show="!selectedLabel || searching" type="text" x-model="query" @focus="open = true" @input="open = true"
+                               placeholder="Search customers..."
                                class="form-input w-full" autocomplete="off"
                                aria-label="Search customers" role="combobox" aria-expanded="false"
                                :aria-expanded="open ? 'true' : 'false'">
@@ -358,7 +364,7 @@
                                                        :checked="line.tax_code_ids && line.tax_code_ids.includes('{{ tax.tax_code_id }}')"
                                                        @change="toggleTaxCode(index, '{{ tax.tax_code_id }}', $event.target.checked)"
                                                        class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
-                                                <span class="ml-2 text-sm text-slate-900 dark:text-white">{{ tax.tax_code }} ({{ tax.tax_rate }}{% if tax.tax_rate < 1 %}%{% endif %}){% if tax.is_inclusive %} <span class="text-xs text-amber-600 dark:text-amber-400">Incl.</span>{% endif %}</span>
+                                                <span class="ml-2 text-sm text-slate-900 dark:text-white">{{ tax.tax_code }} ({{ tax.rate }}%){% if tax.is_inclusive %} <span class="text-xs text-amber-600 dark:text-amber-400">Incl.</span>{% endif %}</span>
                                             </label>
                                             {% else %}
                                             <tr>
@@ -529,6 +535,7 @@ function customerSearch() {
     return {
         query: '',
         open: false,
+        searching: false,
         get selectedLabel() {
             const cid = this.form ? this.form.customer_id : '';
             if (!cid) return '';
@@ -555,6 +562,7 @@ function customerSearch() {
             }
             this.query = '';
             this.open = false;
+            this.searching = false;
         }
     };
 }
@@ -924,10 +932,10 @@ function invoiceForm() {
             }
             const missingTax = this.form.lines.some(l => !l.tax_code_ids || l.tax_code_ids.length === 0);
             if (missingTax) {
+                // Warn but don't block — tax-exempt invoices are valid
                 window.dispatchEvent(new CustomEvent('show-toast', {
-                    detail: { message: 'Please select a tax code for each line', type: 'error' }
+                    detail: { message: 'Some lines have no tax code selected. The invoice will be saved without tax.', type: 'warning' }
                 }));
-                return;
             }
 
             try {
