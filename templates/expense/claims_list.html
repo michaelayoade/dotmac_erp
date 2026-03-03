@@ -1,6 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import empty_state, live_search, pagination, icon_svg %}
+{% from "components/macros.html" import empty_state, live_search, pagination, icon_svg, status_badge %}
 {% block page_title %}Expense Claims{% endblock %}
 
 {% block breadcrumbs %}
@@ -82,7 +82,7 @@
                         <td class="hidden sm:table-cell text-slate-500">{{ claim.claim_date }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ claim.total_claimed_amount }}</td>
                         <td>
-                            <span class="badge badge-neutral">{{ claim.status.value | replace('_', ' ') | title if claim.status else 'Draft' }}</span>
+                            {{ status_badge(claim.status.value if claim.status else 'DRAFT', 'sm') }}
                         </td>
                         <td class="text-right">
                             <div class="inline-flex items-center gap-2">

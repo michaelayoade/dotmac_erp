@@ -433,9 +433,7 @@ class ExpenseDashboardService:
                     "claim_number": claim.claim_number or "",
                     "employee_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
                     "amount": _format_currency(claim.total_claimed_amount, currency),
-                    "status": str(claim.status).replace("_", " ").title()
-                    if claim.status
-                    else "Draft",
+                    "status": claim.status.value if claim.status else "DRAFT",
                     "date": claim.claim_date.strftime("%b %d, %Y")
                     if claim.claim_date
                     else "",
@@ -877,9 +875,7 @@ class ExpenseDashboardService:
                     "title": claim.purpose or f"Expense #{claim.claim_number}",
                     "employee_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
                     "amount": _format_currency(claim.total_claimed_amount, currency),
-                    "status": str(claim.status).replace("_", " ").title()
-                    if claim.status
-                    else "Draft",
+                    "status": claim.status.value if claim.status else "DRAFT",
                     "date": claim.claim_date.strftime("%b %d, %Y")
                     if claim.claim_date
                     else "",
