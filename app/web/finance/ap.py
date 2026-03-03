@@ -683,6 +683,28 @@ async def create_purchase_order(
     return await ap_web_service.create_purchase_order_response(request, auth, db)
 
 
+@router.post("/purchase-orders/{po_id}/edit")
+async def update_purchase_order(
+    request: Request,
+    po_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle purchase order edit form submission."""
+    return await ap_web_service.update_purchase_order_response(request, auth, db, po_id)
+
+
+@router.post("/purchase-orders/{po_id}/delete")
+def delete_purchase_order(
+    request: Request,
+    po_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle purchase order deletion."""
+    return ap_web_service.delete_purchase_order_response(request, auth, db, po_id)
+
+
 @router.post("/purchase-orders/{po_id}/submit")
 def submit_purchase_order(
     request: Request,

@@ -312,6 +312,8 @@ function purchaseOrderForm() {
             const selected = this.suppliers.find(s => s.supplier_id === this.formData.supplier_id);
             if (selected) {
                 this.supplierSearch = `${selected.supplier_code} - ${selected.supplier_name}`;
+            } else if (existingOrder?.supplier_name) {
+                this.supplierSearch = existingOrder.supplier_name;
             }
             this.lines = this.lines.map((line) => this.normalizeLine(line));
         },

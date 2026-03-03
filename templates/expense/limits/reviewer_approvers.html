@@ -8,10 +8,8 @@
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Expense Reviewer</h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review approver decisions and reset weekly consumed budgets</p>
         </div>
-        <form method="get" class="grid grid-cols-1 gap-2 sm:grid-cols-4">
+        <form method="get" class="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search approver">
-            <input type="date" name="from_date" value="{{ filters.from_date }}" class="form-input">
-            <input type="date" name="to_date" value="{{ filters.to_date }}" class="form-input">
             <button class="btn btn-secondary" type="submit">Filter</button>
         </form>
     </div>

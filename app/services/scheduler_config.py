@@ -222,9 +222,13 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.coach.generate_weekly_hr_report",
             "schedule": crontab(hour=7, minute=40, day_of_week=1),  # Monday 7:40 AM
         },
+        "finance-reminders": {
+            "task": "app.tasks.finance.process_all_finance_reminders",
+            "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
+        },
         "expense-approval-reminders": {
             "task": "app.tasks.expense.process_expense_approval_reminders",
-            "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
+            "schedule": crontab(hour=8, minute=15),  # Daily at 8:15 AM
         },
         "expense-stuck-transfers": {
             "task": "app.tasks.expense.poll_stuck_expense_transfers",

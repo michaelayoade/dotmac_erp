@@ -47,6 +47,13 @@ logger = logging.getLogger(__name__)
 # Used as fallback when no real user ID is available (e.g. batch sync).
 SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 
+# Minimum date for Splynx financial document sync.
+# Records older than this are skipped (pre-2026 data was imported via the
+# ERPNext clean sweep migration and must not be duplicated by Splynx sync).
+# NOTE: Splynx invoice API silently ignores date_from/date_to params, so
+# this floor is enforced client-side after parsing each record's date.
+SPLYNX_SYNC_MIN_DATE = date(2026, 1, 1)
+
 
 class PaystackReconcileResult(TypedDict):
     matched_by_reference: int
@@ -1099,6 +1106,11 @@ class SplynxSyncService:
         invoice_date = self._parse_date(splynx_invoice.date_created) or date.today()
         due_date = self._parse_date(splynx_invoice.date_till) or invoice_date
 
+        # Skip records before the sync floor date (pre-2026 data managed via ERPNext)
+        if invoice_date < SPLYNX_SYNC_MIN_DATE:
+            result.skipped += 1
+            return
+
         # Calculate amount paid (total - due)
         amount_paid = splynx_invoice.total - splynx_invoice.total_due
 
@@ -1470,6 +1482,11 @@ class SplynxSyncService:
 
         # Parse payment date
         payment_date = self._parse_date(splynx_payment.date) or date.today()
+
+        # Skip records before the sync floor date (pre-2026 data managed via ERPNext)
+        if payment_date < SPLYNX_SYNC_MIN_DATE:
+            result.skipped += 1
+            return
 
         if local_id:
             payment = self.db.get(CustomerPayment, local_id)
@@ -2056,6 +2073,11 @@ class SplynxSyncService:
 
         # Parse date
         cn_date = self._parse_date(splynx_cn.date_created) or date.today()
+
+        # Skip records before the sync floor date (pre-2026 data managed via ERPNext)
+        if cn_date < SPLYNX_SYNC_MIN_DATE:
+            result.skipped += 1
+            return
 
         # Extract tax from credit note total
         cn_subtotal, cn_tax = self._extract_tax(splynx_cn.total)

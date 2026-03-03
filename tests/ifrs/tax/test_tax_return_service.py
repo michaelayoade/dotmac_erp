@@ -1,6 +1,11 @@
 """
 Tests for TaxReturnService - Tax return preparation and filing.
+
+Covers prepare_return, review_return, file_return, record_payment,
+create_amendment, get, list, get_box_values, and auto_refresh_return.
 """
+
+from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -8,7 +13,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
 from app.services.finance.tax.tax_return import (
     TaxReturnBoxValue,
@@ -17,28 +21,10 @@ from app.services.finance.tax.tax_return import (
 )
 
 
-class MockTaxReturnStatus:
-    """Mock status enum."""
-
-    DRAFT = "draft"
-    PREPARED = "prepared"
-    REVIEWED = "reviewed"
-    FILED = "filed"
-    AMENDED = "amended"
-
-
-class MockTaxReturnType:
-    """Mock return type enum."""
-
-    VAT = "vat"
-    GST = "gst"
-    SALES_TAX = "sales_tax"
-
-
 class MockTaxReturn:
     """Mock TaxReturn model."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 
         self.return_id = kwargs.get("return_id", uuid4())
@@ -74,12 +60,13 @@ class MockTaxReturn:
 class MockTaxPeriod:
     """Mock TaxPeriod model."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         from app.models.finance.tax.tax_period import TaxPeriodStatus
 
         self.period_id = kwargs.get("period_id", uuid4())
         self.organization_id = kwargs.get("organization_id", uuid4())
         self.fiscal_period_id = kwargs.get("fiscal_period_id", uuid4())
+        self.jurisdiction_id = kwargs.get("jurisdiction_id", uuid4())
         self.period_name = kwargs.get("period_name", "2024-01")
         self.status = kwargs.get("status", TaxPeriodStatus.OPEN)
 
@@ -87,7 +74,7 @@ class MockTaxPeriod:
 class TestTaxReturnServicePrepareReturn:
     """Tests for prepare_return method."""
 
-    def test_prepare_return_success(self, mock_db):
+    def test_prepare_return_success(self, mock_db: MagicMock) -> None:
         """Test successful return preparation."""
         from app.models.finance.tax.tax_period import TaxPeriodStatus
         from app.models.finance.tax.tax_return import TaxReturnType
@@ -103,20 +90,22 @@ class TestTaxReturnServicePrepareReturn:
             status=TaxPeriodStatus.OPEN,
         )
 
-        # Setup mock queries
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.group_by.return_value = mock_query
-        mock_query.first.side_effect = [
+        # db.scalar() is called 4 times:
+        # 1. TaxPeriod lookup
+        # 2. Existing TaxReturn check
+        # 3. Output tax sum (_calculate_tax_totals)
+        # 4. Input tax sum (_calculate_tax_totals)
+        mock_db.scalar.side_effect = [
             mock_period,
-            None,
-        ]  # Period found, no existing return
-        mock_query.scalar.side_effect = [
-            Decimal("10000"),
-            Decimal("3000"),
-        ]  # Output, input tax
-        mock_query.all.return_value = []  # Box values
-        mock_db.query.return_value = mock_query
+            None,  # No existing return
+            Decimal("10000"),  # Output tax
+            Decimal("3000"),  # Input tax
+        ]
+
+        # _calculate_box_values uses db.execute().all()
+        mock_execute_result = MagicMock()
+        mock_execute_result.all.return_value = []
+        mock_db.execute.return_value = mock_execute_result
 
         input_data = TaxReturnInput(
             tax_period_id=period_id,
@@ -127,16 +116,13 @@ class TestTaxReturnServicePrepareReturn:
         TaxReturnService.prepare_return(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
-    def test_prepare_return_period_not_found(self, mock_db):
+    def test_prepare_return_period_not_found(self, mock_db: MagicMock) -> None:
         """Test preparation with missing period."""
         from app.models.finance.tax.tax_return import TaxReturnType
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = None
 
         input_data = TaxReturnInput(
             tax_period_id=uuid4(),
@@ -144,13 +130,10 @@ class TestTaxReturnServicePrepareReturn:
             return_type=TaxReturnType.VAT,
         )
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="Tax period not found"):
             TaxReturnService.prepare_return(mock_db, uuid4(), input_data, uuid4())
 
-        assert exc.value.status_code == 404
-        assert "Tax period not found" in exc.value.detail
-
-    def test_prepare_return_period_not_open(self, mock_db):
+    def test_prepare_return_period_not_open(self, mock_db: MagicMock) -> None:
         """Test preparation with non-open period."""
         from app.models.finance.tax.tax_period import TaxPeriodStatus
         from app.models.finance.tax.tax_return import TaxReturnType
@@ -160,10 +143,7 @@ class TestTaxReturnServicePrepareReturn:
             organization_id=org_id, status=TaxPeriodStatus.FILED
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_period
 
         input_data = TaxReturnInput(
             tax_period_id=uuid4(),
@@ -171,12 +151,10 @@ class TestTaxReturnServicePrepareReturn:
             return_type=TaxReturnType.VAT,
         )
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="status"):
             TaxReturnService.prepare_return(mock_db, org_id, input_data, uuid4())
 
-        assert exc.value.status_code == 400
-
-    def test_prepare_return_existing_non_draft(self, mock_db):
+    def test_prepare_return_existing_non_draft(self, mock_db: MagicMock) -> None:
         """Test preparation when non-draft return exists."""
         from app.models.finance.tax.tax_period import TaxPeriodStatus
         from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
@@ -185,10 +163,7 @@ class TestTaxReturnServicePrepareReturn:
         mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.OPEN)
         existing_return = MockTaxReturn(status=TaxReturnStatus.PREPARED)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_period, existing_return]
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.side_effect = [mock_period, existing_return]
 
         input_data = TaxReturnInput(
             tax_period_id=uuid4(),
@@ -196,17 +171,14 @@ class TestTaxReturnServicePrepareReturn:
             return_type=TaxReturnType.VAT,
         )
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="already exists"):
             TaxReturnService.prepare_return(mock_db, org_id, input_data, uuid4())
-
-        assert exc.value.status_code == 400
-        assert "already exists" in exc.value.detail
 
 
 class TestTaxReturnServiceReviewReturn:
     """Tests for review_return method."""
 
-    def test_review_return_success(self, mock_db):
+    def test_review_return_success(self, mock_db: MagicMock) -> None:
         """Test successful return review."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -222,30 +194,22 @@ class TestTaxReturnServiceReviewReturn:
             prepared_by_user_id=preparer_id,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
         TaxReturnService.review_return(mock_db, org_id, return_id, reviewer_id)
 
         assert mock_return.status == TaxReturnStatus.REVIEWED
         assert mock_return.reviewed_by_user_id == reviewer_id
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
-    def test_review_return_not_found(self, mock_db):
+    def test_review_return_not_found(self, mock_db: MagicMock) -> None:
         """Test review of non-existent return."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = None
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="Tax return not found"):
             TaxReturnService.review_return(mock_db, uuid4(), uuid4(), uuid4())
 
-        assert exc.value.status_code == 404
-
-    def test_review_return_wrong_status(self, mock_db):
+    def test_review_return_wrong_status(self, mock_db: MagicMock) -> None:
         """Test review of return in wrong status."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -254,18 +218,12 @@ class TestTaxReturnServiceReviewReturn:
             organization_id=org_id, status=TaxReturnStatus.DRAFT
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="Cannot review"):
             TaxReturnService.review_return(mock_db, org_id, uuid4(), uuid4())
 
-        assert exc.value.status_code == 400
-        assert "Cannot review" in exc.value.detail
-
-    def test_review_return_sod_violation(self, mock_db):
+    def test_review_return_sod_violation(self, mock_db: MagicMock) -> None:
         """Test review by same user who prepared (SoD check)."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -278,22 +236,16 @@ class TestTaxReturnServiceReviewReturn:
             prepared_by_user_id=user_id,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="Segregation of Duties"):
             TaxReturnService.review_return(mock_db, org_id, uuid4(), user_id)
-
-        assert exc.value.status_code == 400
-        assert "Segregation of Duties" in exc.value.detail
 
 
 class TestTaxReturnServiceFileReturn:
     """Tests for file_return method."""
 
-    def test_file_return_success(self, mock_db):
+    def test_file_return_success(self, mock_db: MagicMock) -> None:
         """Test successful return filing."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -307,11 +259,8 @@ class TestTaxReturnServiceFileReturn:
         )
         mock_period = MockTaxPeriod()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_return, mock_period]
-        mock_query.update.return_value = 0
-        mock_db.query.return_value = mock_query
+        # db.scalar() called twice: TaxReturn lookup, TaxPeriod lookup
+        mock_db.scalar.side_effect = [mock_return, mock_period]
 
         TaxReturnService.file_return(
             mock_db, org_id, return_id, uuid4(), filing_reference="REF-001"
@@ -320,7 +269,7 @@ class TestTaxReturnServiceFileReturn:
         assert mock_return.status == TaxReturnStatus.FILED
         assert mock_return.filing_reference == "REF-001"
 
-    def test_file_return_wrong_status(self, mock_db):
+    def test_file_return_wrong_status(self, mock_db: MagicMock) -> None:
         """Test filing return in wrong status."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -329,21 +278,16 @@ class TestTaxReturnServiceFileReturn:
             organization_id=org_id, status=TaxReturnStatus.DRAFT
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="Cannot file"):
             TaxReturnService.file_return(mock_db, org_id, uuid4(), uuid4())
-
-        assert exc.value.status_code == 400
 
 
 class TestTaxReturnServiceRecordPayment:
     """Tests for record_payment method."""
 
-    def test_record_payment_success(self, mock_db):
+    def test_record_payment_success(self, mock_db: MagicMock) -> None:
         """Test successful payment recording."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -357,10 +301,8 @@ class TestTaxReturnServiceRecordPayment:
         )
         mock_period = MockTaxPeriod()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_return, mock_period]
-        mock_db.query.return_value = mock_query
+        # db.scalar() called twice: TaxReturn lookup, TaxPeriod lookup
+        mock_db.scalar.side_effect = [mock_return, mock_period]
 
         TaxReturnService.record_payment(
             mock_db,
@@ -373,7 +315,7 @@ class TestTaxReturnServiceRecordPayment:
         assert mock_return.is_paid is True
         assert mock_return.payment_reference == "PAY-001"
 
-    def test_record_payment_not_filed(self, mock_db):
+    def test_record_payment_not_filed(self, mock_db: MagicMock) -> None:
         """Test payment recording on unfiled return."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -382,24 +324,18 @@ class TestTaxReturnServiceRecordPayment:
             organization_id=org_id, status=TaxReturnStatus.PREPARED
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="must be filed"):
             TaxReturnService.record_payment(
                 mock_db, org_id, uuid4(), payment_date=date.today()
             )
-
-        assert exc.value.status_code == 400
-        assert "must be filed" in exc.value.detail
 
 
 class TestTaxReturnServiceCreateAmendment:
     """Tests for create_amendment method."""
 
-    def test_create_amendment_success(self, mock_db):
+    def test_create_amendment_success(self, mock_db: MagicMock) -> None:
         """Test successful amendment creation."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -413,11 +349,7 @@ class TestTaxReturnServiceCreateAmendment:
             status=TaxReturnStatus.FILED,
         )
 
-        mock_db.get.return_value = mock_original
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_original
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_original
 
         TaxReturnService.create_amendment(
             mock_db,
@@ -431,7 +363,7 @@ class TestTaxReturnServiceCreateAmendment:
         assert mock_original.status == TaxReturnStatus.AMENDED
         mock_db.add.assert_called_once()
 
-    def test_create_amendment_not_filed(self, mock_db):
+    def test_create_amendment_not_filed(self, mock_db: MagicMock) -> None:
         """Test amendment of unfiled return."""
         from app.models.finance.tax.tax_return import TaxReturnStatus
 
@@ -440,13 +372,9 @@ class TestTaxReturnServiceCreateAmendment:
             organization_id=org_id, status=TaxReturnStatus.PREPARED
         )
 
-        mock_db.get.return_value = mock_original
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_original
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_original
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="only amend filed returns"):
             TaxReturnService.create_amendment(
                 mock_db,
                 org_id,
@@ -456,14 +384,11 @@ class TestTaxReturnServiceCreateAmendment:
                 prepared_by_user_id=uuid4(),
             )
 
-        assert exc.value.status_code == 400
-        assert "only amend filed returns" in exc.value.detail.lower()
-
 
 class TestTaxReturnServiceGetBoxValues:
     """Tests for get_box_values method."""
 
-    def test_get_box_values_success(self, mock_db):
+    def test_get_box_values_success(self, mock_db: MagicMock) -> None:
         """Test getting box values."""
         org_id = uuid4()
         return_id = uuid4()
@@ -477,25 +402,19 @@ class TestTaxReturnServiceGetBoxValues:
             },
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
         result = TaxReturnService.get_box_values(mock_db, org_id, return_id)
 
         assert len(result) == 2
         assert isinstance(result[0], TaxReturnBoxValue)
 
-    def test_get_box_values_empty(self, mock_db):
+    def test_get_box_values_empty(self, mock_db: MagicMock) -> None:
         """Test getting box values when none exist."""
         org_id = uuid4()
         mock_return = MockTaxReturn(organization_id=org_id, box_values=None)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = mock_return
 
         result = TaxReturnService.get_box_values(mock_db, org_id, uuid4())
 
@@ -505,33 +424,27 @@ class TestTaxReturnServiceGetBoxValues:
 class TestTaxReturnServiceQueries:
     """Tests for query methods."""
 
-    def test_get_return_by_id(self, mock_db):
+    def test_get_return_by_id(self, mock_db: MagicMock) -> None:
         """Test getting return by ID."""
         return_id = uuid4()
         mock_return = MockTaxReturn(return_id=return_id)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_return
-        mock_db.query.return_value = mock_query
+        mock_db.get.return_value = mock_return
 
         result = TaxReturnService.get(mock_db, str(return_id))
 
         assert result is not None
+        mock_db.get.assert_called_once()
 
-    def test_list_returns_with_filters(self, mock_db):
+    def test_list_returns_with_filters(self, mock_db: MagicMock) -> None:
         """Test listing returns with filters."""
         from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 
         returns = [MockTaxReturn(), MockTaxReturn()]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = returns
-        mock_db.query.return_value = mock_query
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = returns
+        mock_db.scalars.return_value = mock_scalars
 
         result = TaxReturnService.list(
             mock_db,
@@ -547,7 +460,7 @@ class TestTaxReturnServiceQueries:
 class TestTaxReturnBoxValue:
     """Tests for TaxReturnBoxValue dataclass."""
 
-    def test_create_box_value(self):
+    def test_create_box_value(self) -> None:
         """Test creating box value."""
         box = TaxReturnBoxValue(
             box_number="1",
@@ -560,3 +473,177 @@ class TestTaxReturnBoxValue:
         assert box.description == "Output Tax"
         assert box.amount == Decimal("5000.00")
         assert box.transaction_count == 10
+
+
+class TestAutoRefreshReturn:
+    """Tests for auto_refresh_return method."""
+
+    def test_auto_refresh_creates_draft_return(self, mock_db: MagicMock) -> None:
+        """Happy path: creates a new DRAFT tax return."""
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
+
+        org_id = uuid4()
+        fp_id = uuid4()
+        jur_id = uuid4()
+        user_id = uuid4()
+        period_id = uuid4()
+
+        mock_period = MockTaxPeriod(
+            period_id=period_id,
+            organization_id=org_id,
+            fiscal_period_id=fp_id,
+            jurisdiction_id=jur_id,
+            status=TaxPeriodStatus.OPEN,
+        )
+
+        # db.scalar calls:
+        # 1. TaxPeriod lookup -> found
+        # 2. Existing TaxReturn check -> None
+        # 3. Output tax sum -> 5000
+        # 4. Input tax sum -> 2000
+        mock_db.scalar.side_effect = [
+            mock_period,
+            None,
+            Decimal("5000"),
+            Decimal("2000"),
+        ]
+
+        # _calculate_box_values uses db.execute().all()
+        mock_execute_result = MagicMock()
+        mock_execute_result.all.return_value = []
+        mock_db.execute.return_value = mock_execute_result
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, org_id, fp_id, jur_id, user_id
+        )
+
+        assert result is not None
+        mock_db.add.assert_called_once()
+        mock_db.flush.assert_called_once()
+
+    def test_auto_refresh_no_period_returns_none(self, mock_db: MagicMock) -> None:
+        """Returns None when no TaxPeriod found."""
+        mock_db.scalar.return_value = None
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, uuid4(), uuid4(), uuid4(), uuid4()
+        )
+
+        assert result is None
+        mock_db.add.assert_not_called()
+
+    def test_auto_refresh_closed_period_returns_none(self, mock_db: MagicMock) -> None:
+        """Returns None when period is CLOSED (finalized)."""
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
+
+        mock_period = MockTaxPeriod(status=TaxPeriodStatus.CLOSED)
+        mock_db.scalar.return_value = mock_period
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, uuid4(), uuid4(), uuid4(), uuid4()
+        )
+
+        assert result is None
+
+    def test_auto_refresh_filed_period_returns_none(self, mock_db: MagicMock) -> None:
+        """Returns None when period is FILED."""
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
+
+        mock_period = MockTaxPeriod(status=TaxPeriodStatus.FILED)
+        mock_db.scalar.return_value = mock_period
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, uuid4(), uuid4(), uuid4(), uuid4()
+        )
+
+        assert result is None
+
+    def test_auto_refresh_existing_filed_return_returns_none(
+        self, mock_db: MagicMock
+    ) -> None:
+        """Returns None when existing return is beyond DRAFT (user-finalized)."""
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
+
+        mock_period = MockTaxPeriod(status=TaxPeriodStatus.OPEN)
+        existing_return = MockTaxReturn(status=TaxReturnStatus.FILED)
+
+        mock_db.scalar.side_effect = [mock_period, existing_return]
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, uuid4(), uuid4(), uuid4(), uuid4()
+        )
+
+        assert result is None
+
+    def test_auto_refresh_no_transactions_returns_none(
+        self, mock_db: MagicMock
+    ) -> None:
+        """Returns None when no tax transactions exist (both totals = 0)."""
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
+
+        mock_period = MockTaxPeriod(status=TaxPeriodStatus.OPEN)
+
+        # Period found, no existing return, zero output, zero input
+        mock_db.scalar.side_effect = [
+            mock_period,
+            None,
+            Decimal("0"),
+            Decimal("0"),
+        ]
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, uuid4(), uuid4(), uuid4(), uuid4()
+        )
+
+        assert result is None
+        mock_db.add.assert_not_called()
+
+    def test_auto_refresh_updates_existing_draft(self, mock_db: MagicMock) -> None:
+        """Idempotent: updates an existing DRAFT return instead of creating new."""
+        from app.models.finance.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus
+
+        org_id = uuid4()
+        fp_id = uuid4()
+        jur_id = uuid4()
+        user_id = uuid4()
+
+        mock_period = MockTaxPeriod(
+            organization_id=org_id,
+            fiscal_period_id=fp_id,
+            status=TaxPeriodStatus.OPEN,
+        )
+        existing_return = MockTaxReturn(
+            organization_id=org_id,
+            status=TaxReturnStatus.DRAFT,
+            total_output_tax=Decimal("1000"),
+            total_input_tax=Decimal("500"),
+            adjustments=Decimal("100"),
+        )
+
+        # Period found, existing DRAFT return, new output tax, new input tax
+        mock_db.scalar.side_effect = [
+            mock_period,
+            existing_return,
+            Decimal("8000"),
+            Decimal("3000"),
+        ]
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.all.return_value = []
+        mock_db.execute.return_value = mock_execute_result
+
+        result = TaxReturnService.auto_refresh_return(
+            mock_db, org_id, fp_id, jur_id, user_id
+        )
+
+        assert result is existing_return
+        assert existing_return.total_output_tax == Decimal("8000")
+        assert existing_return.total_input_tax == Decimal("3000")
+        assert existing_return.net_tax_payable == Decimal("5000")
+        # Preserves existing adjustments
+        assert existing_return.final_amount == Decimal("5100")
+        # Does NOT call db.add (updates in place)
+        mock_db.add.assert_not_called()
+        mock_db.flush.assert_called_once()

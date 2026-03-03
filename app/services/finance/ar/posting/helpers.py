@@ -106,4 +106,25 @@ def create_tax_transactions(
                 invoice.invoice_number,
             )
 
+    # Auto-refresh tax return for this period
+    if tax_transaction_ids and fiscal_period:
+        try:
+            from app.models.finance.tax.tax_transaction import TaxTransaction as TaxTxn
+            from app.services.finance.tax.tax_return import TaxReturnService
+
+            first_txn = db.get(TaxTxn, tax_transaction_ids[0])
+            if first_txn:
+                TaxReturnService.auto_refresh_return(
+                    db,
+                    organization_id,
+                    fiscal_period.fiscal_period_id,
+                    first_txn.jurisdiction_id,
+                    organization_id,  # system user fallback
+                )
+        except Exception:
+            logger.exception(
+                "Failed to auto-refresh tax return for AR invoice %s (non-blocking)",
+                invoice.invoice_number,
+            )
+
     return tax_transaction_ids

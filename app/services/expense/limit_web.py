@@ -1109,8 +1109,6 @@ class ExpenseLimitWebService:
         auth: WebAuthContext,
         db: Session,
         q: str | None = None,
-        from_date: str | None = None,
-        to_date: str | None = None,
     ) -> HTMLResponse:
         """List approvers by actual approval activity for reviewer workflow."""
         from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -1119,16 +1117,6 @@ class ExpenseLimitWebService:
         org_id = coerce_uuid(auth.organization_id)
         search = (q or "").strip()
         service = ExpenseLimitService(db)
-        today = date.today()
-        default_from = service._start_of_week_utc(datetime.now(UTC)).date()
-        try:
-            parsed_from = date.fromisoformat(from_date) if from_date else default_from
-        except ValueError:
-            parsed_from = default_from
-        try:
-            parsed_to = date.fromisoformat(to_date) if to_date else today
-        except ValueError:
-            parsed_to = today
 
         activity_rows = db.execute(
             select(
@@ -1178,8 +1166,6 @@ class ExpenseLimitWebService:
                     [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
                 ),
                 ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
-                func.date(ExpenseClaimAction.created_at) >= parsed_from,
-                func.date(ExpenseClaimAction.created_at) <= parsed_to,
             )
             .group_by(ExpenseClaim.approver_id)
             .order_by(func.max(ExpenseClaimAction.created_at).desc())
@@ -1193,8 +1179,6 @@ class ExpenseLimitWebService:
                     "approvers": [],
                     "filters": {
                         "q": search,
-                        "from_date": parsed_from.isoformat(),
-                        "to_date": parsed_to.isoformat(),
                     },
                 }
             )
@@ -1290,8 +1274,6 @@ class ExpenseLimitWebService:
                 "approvers": approver_rows,
                 "filters": {
                     "q": search,
-                    "from_date": parsed_from.isoformat(),
-                    "to_date": parsed_to.isoformat(),
                 },
             }
         )

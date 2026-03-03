@@ -174,15 +174,15 @@ class PurchaseOrderWebService:
                 }
             )
 
-        suppliers_list = [
-            supplier_option_view(supplier)
-            for supplier in supplier_service.list(
+        suppliers = list(
+            supplier_service.list(
                 db,
                 organization_id=org_id,
                 is_active=True,
                 limit=200,
             )
-        ]
+        )
+        suppliers_list = [supplier_option_view(supplier) for supplier in suppliers]
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
@@ -351,15 +351,14 @@ class PurchaseOrderWebService:
         )
         org_id = coerce_uuid(organization_id)
 
-        suppliers_list = [
-            supplier_option_view(supplier)
-            for supplier in supplier_service.list(
+        suppliers = list(
+            supplier_service.list(
                 db,
                 organization_id=org_id,
                 is_active=True,
                 limit=200,
             )
-        ]
+        )
 
         expense_accounts = get_accounts(db, org_id, IFRSCategory.EXPENSES)
 
@@ -395,13 +394,26 @@ class PurchaseOrderWebService:
             po_uuid = coerce_uuid(po_id)
             po = db.get(PurchaseOrder, po_uuid)
             if po and po.organization_id == org_id:
+                supplier = db.get(Supplier, po.supplier_id)
+                if supplier and supplier.organization_id == org_id:
+                    if all(
+                        existing.supplier_id != supplier.supplier_id
+                        for existing in suppliers
+                    ):
+                        suppliers.append(supplier)
                 order = {
-                    "po_id": po.po_id,
+                    "po_id": str(po.po_id),
                     "po_number": po.po_number,
                     "supplier_id": str(po.supplier_id),
+                    "supplier_name": supplier_display_name(supplier)
+                    if supplier
+                    else "",
                     "po_date": format_date(po.po_date),
                     "expected_delivery_date": format_date(po.expected_delivery_date),
                     "currency_code": po.currency_code,
+                    "exchange_rate": float(po.exchange_rate)
+                    if po.exchange_rate is not None
+                    else None,
                     "terms_and_conditions": po.terms_and_conditions,
                     "status": po.status.value,
                 }
@@ -426,6 +438,8 @@ class PurchaseOrderWebService:
                             else "",
                         }
                     )
+
+        suppliers_list = [supplier_option_view(supplier) for supplier in suppliers]
 
         context = {
             "order": order,
@@ -591,6 +605,116 @@ class PurchaseOrderWebService:
             return templates.TemplateResponse(
                 request, "finance/ap/purchase_order_form.html", context
             )
+
+    async def update_purchase_order_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        po_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
+        """Handle purchase order edit form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            org_id = auth.organization_id
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+
+            payload = dict(data)
+            input_data = purchase_order_service.build_input_from_payload(
+                db=db,
+                organization_id=org_id,
+                payload=payload,
+            )
+            po = purchase_order_service.update_po(
+                db=db,
+                organization_id=org_id,
+                po_id=UUID(po_id),
+                input=input_data,
+            )
+
+            if "application/json" in content_type:
+                return {"success": True, "po_id": str(po.po_id)}
+
+            return RedirectResponse(
+                url=f"/finance/ap/purchase-orders/{po.po_id}?saved=1",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("update_purchase_order_response: failed for %s", po_id)
+            if "application/json" in content_type:
+                return JSONResponse(status_code=400, content={"detail": str(e)})
+
+            context = base_context(request, auth, "Edit Purchase Order", "ap")
+            context.update(
+                self.purchase_order_form_context(db, str(auth.organization_id), po_id)
+            )
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_form.html", context
+            )
+
+    @staticmethod
+    def delete_purchase_order(
+        db: Session,
+        organization_id: str,
+        po_id: str,
+    ) -> str | None:
+        """Delete a purchase order. Returns error message or None on success."""
+        logger.debug("delete_purchase_order: org=%s po_id=%s", organization_id, po_id)
+        org_id = coerce_uuid(organization_id)
+        po_uuid = coerce_uuid(po_id)
+
+        try:
+            purchase_order_service.delete_po(db, org_id, po_uuid)
+            logger.info(
+                "delete_purchase_order: deleted purchase order %s for org %s",
+                po_uuid,
+                org_id,
+            )
+            return None
+        except HTTPException as exc:
+            return exc.detail
+        except Exception as e:
+            logger.exception("delete_purchase_order: failed for org %s", org_id)
+            return f"Failed to delete purchase order: {str(e)}"
+
+    def delete_purchase_order_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        po_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle purchase order deletion."""
+        error = self.delete_purchase_order(db, str(auth.organization_id), po_id)
+
+        if error:
+            context = base_context(request, auth, "Purchase Order Details", "ap")
+            context.update(
+                self.purchase_order_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    po_id,
+                )
+            )
+            context["error"] = error
+            return templates.TemplateResponse(
+                request, "finance/ap/purchase_order_detail.html", context
+            )
+
+        return RedirectResponse(
+            url="/finance/ap/purchase-orders?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def submit_purchase_order_response(
         self,

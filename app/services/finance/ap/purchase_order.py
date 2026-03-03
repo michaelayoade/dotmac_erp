@@ -262,6 +262,162 @@ class PurchaseOrderService(ListResponseMixin):
         return po
 
     @staticmethod
+    def update_po(
+        db: Session,
+        organization_id: UUID,
+        po_id: UUID,
+        input: PurchaseOrderInput,
+    ) -> PurchaseOrder:
+        """
+        Update an existing draft purchase order.
+
+        Replaces all draft lines with the submitted set and recalculates totals.
+        """
+        org_id = coerce_uuid(organization_id)
+        po_uuid = coerce_uuid(po_id)
+        supplier_id = coerce_uuid(input.supplier_id)
+
+        po = db.scalars(
+            select(PurchaseOrder).where(
+                PurchaseOrder.po_id == po_uuid,
+                PurchaseOrder.organization_id == org_id,
+            )
+        ).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+
+        if po.status != POStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot edit PO in {po.status.value} status",
+            )
+
+        supplier = db.scalars(
+            select(Supplier).where(
+                Supplier.supplier_id == supplier_id,
+                Supplier.organization_id == org_id,
+            )
+        ).first()
+        if not supplier:
+            raise HTTPException(status_code=404, detail="Supplier not found")
+
+        if not input.lines:
+            raise HTTPException(
+                status_code=400, detail="Purchase order must have at least one line"
+            )
+
+        existing_lines = list(
+            db.scalars(
+                select(PurchaseOrderLine)
+                .where(PurchaseOrderLine.po_id == po_uuid)
+                .order_by(PurchaseOrderLine.line_number)
+            ).all()
+        )
+        if any(
+            line.quantity_received > 0 or line.quantity_invoiced > 0
+            for line in existing_lines
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot edit PO with received or invoiced quantities",
+            )
+
+        subtotal = Decimal("0")
+        tax_total = Decimal("0")
+        for line_input in input.lines:
+            line_amount = line_input.quantity_ordered * line_input.unit_price
+            subtotal += line_amount
+            tax_total += line_input.tax_amount
+        total_amount = subtotal + tax_total
+
+        po.supplier_id = supplier_id
+        po.po_date = input.po_date
+        po.expected_delivery_date = input.expected_delivery_date
+        po.currency_code = input.currency_code
+        po.exchange_rate = input.exchange_rate
+        po.subtotal = subtotal
+        po.tax_amount = tax_total
+        po.total_amount = total_amount
+        po.shipping_address = input.shipping_address
+        po.terms_and_conditions = input.terms_and_conditions
+        po.budget_id = input.budget_id
+        po.correlation_id = input.correlation_id
+
+        for line in existing_lines:
+            db.delete(line)
+        db.flush()
+
+        for idx, line_input in enumerate(input.lines, start=1):
+            line_amount = line_input.quantity_ordered * line_input.unit_price
+            db.add(
+                PurchaseOrderLine(
+                    po_id=po.po_id,
+                    line_number=idx,
+                    item_id=line_input.item_id,
+                    description=line_input.description,
+                    quantity_ordered=line_input.quantity_ordered,
+                    unit_price=line_input.unit_price,
+                    line_amount=line_amount,
+                    tax_code_id=line_input.tax_code_id,
+                    tax_amount=line_input.tax_amount,
+                    expense_account_id=line_input.expense_account_id,
+                    asset_account_id=line_input.asset_account_id,
+                    cost_center_id=line_input.cost_center_id,
+                    project_id=line_input.project_id,
+                    segment_id=line_input.segment_id,
+                    delivery_date=line_input.delivery_date,
+                )
+            )
+
+        db.commit()
+        db.refresh(po)
+        return po
+
+    @staticmethod
+    def delete_po(
+        db: Session,
+        organization_id: UUID,
+        po_id: UUID,
+    ) -> None:
+        """Delete a draft purchase order."""
+        org_id = coerce_uuid(organization_id)
+        po_uuid = coerce_uuid(po_id)
+
+        po = db.scalars(
+            select(PurchaseOrder).where(
+                PurchaseOrder.po_id == po_uuid,
+                PurchaseOrder.organization_id == org_id,
+            )
+        ).first()
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+
+        if po.status != POStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete PO in {po.status.value} status",
+            )
+
+        existing_lines = list(
+            db.scalars(
+                select(PurchaseOrderLine)
+                .where(PurchaseOrderLine.po_id == po_uuid)
+                .order_by(PurchaseOrderLine.line_number)
+            ).all()
+        )
+        if any(
+            line.quantity_received > 0 or line.quantity_invoiced > 0
+            for line in existing_lines
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete PO with received or invoiced quantities",
+            )
+
+        db.delete(po)
+        db.commit()
+
+    @staticmethod
     def submit_for_approval(
         db: Session,
         organization_id: UUID,

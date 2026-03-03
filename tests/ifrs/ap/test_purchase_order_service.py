@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from app.services.finance.ap.purchase_order import (
     POLineInput,
+    POStatus,
     PurchaseOrderInput,
     PurchaseOrderService,
 )
@@ -245,6 +246,188 @@ class TestCreatePO:
 
         assert exc_info.value.status_code == 400
         assert "at least one line" in str(exc_info.value.detail).lower()
+
+
+class TestUpdatePO:
+    """Tests for purchase order updates."""
+
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
+    def test_update_po_success_replaces_lines(self, mock_line_class):
+        """Draft purchase orders can be updated and lines replaced."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        po_id = uuid4()
+
+        mock_supplier = MockSupplier(supplier_id=supplier_id, organization_id=org_id)
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            status=MockPOStatus(),
+        )
+        mock_po.status = POStatus.DRAFT
+        existing_line = MockPurchaseOrderLine(po_id=po_id)
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        lines_result = MagicMock()
+        lines_result.all.return_value = [existing_line]
+        db.scalars.side_effect = [po_result, supplier_result, lines_result]
+
+        input_data = PurchaseOrderInput(
+            supplier_id=supplier_id,
+            po_date=date.today(),
+            currency_code="USD",
+            exchange_rate=Decimal("1.25"),
+            terms_and_conditions="Net 30",
+            lines=[
+                POLineInput(
+                    description="Updated line",
+                    quantity_ordered=Decimal("2"),
+                    unit_price=Decimal("50.00"),
+                    tax_amount=Decimal("5.00"),
+                )
+            ],
+        )
+
+        result = PurchaseOrderService.update_po(db, org_id, po_id, input_data)
+
+        assert result is mock_po
+        assert mock_po.supplier_id == supplier_id
+        assert mock_po.currency_code == "USD"
+        assert mock_po.subtotal == Decimal("100.00")
+        assert mock_po.tax_amount == Decimal("5.00")
+        assert mock_po.total_amount == Decimal("105.00")
+        db.delete.assert_called_once_with(existing_line)
+        db.flush.assert_called_once()
+        db.commit.assert_called_once()
+        db.refresh.assert_called_once_with(mock_po)
+        mock_line_class.assert_called_once()
+
+    def test_update_po_rejects_non_draft(self):
+        """Non-draft purchase orders cannot be edited."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        po_id = uuid4()
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            status=POStatus.APPROVED,
+        )
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        db.scalars.return_value = po_result
+
+        input_data = PurchaseOrderInput(
+            supplier_id=supplier_id,
+            po_date=date.today(),
+            currency_code="USD",
+            lines=[
+                POLineInput(
+                    description="Updated line",
+                    quantity_ordered=Decimal("1"),
+                    unit_price=Decimal("10.00"),
+                )
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.update_po(db, org_id, po_id, input_data)
+
+        assert exc_info.value.status_code == 400
+        assert "Cannot edit PO in APPROVED status" in str(exc_info.value.detail)
+
+
+class TestDeletePO:
+    """Tests for purchase order deletion."""
+
+    def test_delete_po_success_for_draft(self):
+        """Draft purchase orders can be deleted."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        po_id = uuid4()
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            status=POStatus.DRAFT,
+        )
+        existing_line = MockPurchaseOrderLine(po_id=po_id)
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        lines_result = MagicMock()
+        lines_result.all.return_value = [existing_line]
+        db.scalars.side_effect = [po_result, lines_result]
+
+        PurchaseOrderService.delete_po(db, org_id, po_id)
+
+        db.delete.assert_called_once_with(mock_po)
+        db.commit.assert_called_once()
+
+    def test_delete_po_rejects_non_draft(self):
+        """Non-draft purchase orders cannot be deleted."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        po_id = uuid4()
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            status=POStatus.APPROVED,
+        )
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        db.scalars.return_value = po_result
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.delete_po(db, org_id, po_id)
+
+        assert exc_info.value.status_code == 400
+        assert "Cannot delete PO in APPROVED status" in str(exc_info.value.detail)
+
+    def test_delete_po_rejects_received_or_invoiced_lines(self):
+        """Purchase orders with line activity cannot be deleted."""
+        db = MagicMock()
+        org_id = uuid4()
+        supplier_id = uuid4()
+        po_id = uuid4()
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            status=POStatus.DRAFT,
+        )
+        existing_line = MockPurchaseOrderLine(
+            po_id=po_id,
+            quantity_received=Decimal("1"),
+        )
+        existing_line.quantity_invoiced = Decimal("0")
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        lines_result = MagicMock()
+        lines_result.all.return_value = [existing_line]
+        db.scalars.side_effect = [po_result, lines_result]
+
+        with pytest.raises(HTTPException) as exc_info:
+            PurchaseOrderService.delete_po(db, org_id, po_id)
+
+        assert exc_info.value.status_code == 400
+        assert "received or invoiced quantities" in str(exc_info.value.detail)
 
     @patch("app.services.finance.ap.purchase_order.SequenceService")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")

@@ -548,7 +548,7 @@ function customerSearch() {
             return _customerList.filter(c =>
                 (c.customer_code && c.customer_code.toLowerCase().includes(q)) ||
                 (c.customer_name && c.customer_name.toLowerCase().includes(q))
-            ).slice(0, 50);
+            );
         },
         selectCustomer(c) {
             if (this.form) {

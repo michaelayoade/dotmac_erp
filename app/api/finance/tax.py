@@ -1180,9 +1180,12 @@ def prepare_tax_return(
         return_type=return_type_value,
         adjustments=payload.adjustments,
     )
-    return tax_return_service.prepare_return(
-        db, organization_id, input_data, prepared_by_user_id
-    )
+    try:
+        return tax_return_service.prepare_return(
+            db, organization_id, input_data, prepared_by_user_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/returns/{return_id}", response_model=TaxReturnRead)
@@ -1231,9 +1234,12 @@ def review_tax_return(
     db: Session = Depends(get_db),
 ):
     """Review and approve a tax return."""
-    return tax_return_service.review_return(
-        db, organization_id, return_id, reviewed_by_user_id
-    )
+    try:
+        return tax_return_service.review_return(
+            db, organization_id, return_id, reviewed_by_user_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/returns/{return_id}/file", response_model=TaxReturnRead)
@@ -1246,9 +1252,12 @@ def file_tax_return(
     db: Session = Depends(get_db),
 ):
     """File a tax return with the authority."""
-    return tax_return_service.file_return(
-        db, organization_id, return_id, filed_by_user_id, filing_reference
-    )
+    try:
+        return tax_return_service.file_return(
+            db, organization_id, return_id, filed_by_user_id, filing_reference
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/returns/{return_id}/record-payment", response_model=TaxReturnRead)
@@ -1262,14 +1271,17 @@ def record_return_payment(
     db: Session = Depends(get_db),
 ):
     """Record a tax payment for a return."""
-    return tax_return_service.record_payment(
-        db,
-        organization_id,
-        return_id,
-        payment_date,
-        payment_reference,
-        journal_entry_id,
-    )
+    try:
+        return tax_return_service.record_payment(
+            db,
+            organization_id,
+            return_id,
+            payment_date,
+            payment_reference,
+            journal_entry_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/returns/{return_id}/amend", response_model=TaxReturnRead)
@@ -1283,11 +1295,14 @@ def amend_tax_return(
     db: Session = Depends(get_db),
 ):
     """Create an amended tax return."""
-    return tax_return_service.create_amendment(
-        db,
-        organization_id,
-        return_id,
-        amendment_reason,
-        adjustments,
-        prepared_by_user_id,
-    )
+    try:
+        return tax_return_service.create_amendment(
+            db,
+            organization_id,
+            return_id,
+            amendment_reason,
+            adjustments,
+            prepared_by_user_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

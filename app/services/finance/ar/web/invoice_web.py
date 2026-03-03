@@ -254,15 +254,29 @@ class InvoiceWebService:
             customer_id,
         )
         org_id = coerce_uuid(organization_id)
-        customers_list = [
-            customer_option_view(customer)
-            for customer in customer_service.list(
+        customers = list(
+            customer_service.list(
                 db,
                 organization_id=org_id,
                 is_active=True,
-                limit=200,
+                limit=10000,
             )
-        ]
+        )
+
+        selected_customer = None
+        if customer_id:
+            try:
+                selected_customer = customer_service.get(db, org_id, customer_id)
+            except Exception:
+                selected_customer = None
+
+        if selected_customer and all(
+            existing.customer_id != selected_customer.customer_id
+            for existing in customers
+        ):
+            customers.append(selected_customer)
+
+        customers_list = [customer_option_view(customer) for customer in customers]
 
         revenue_accounts = get_accounts(db, org_id, IFRSCategory.REVENUE)
 
@@ -907,7 +921,13 @@ class InvoiceWebService:
             )
 
         context = base_context(request, auth, "Edit AR Invoice", "ar")
-        context.update(self.invoice_form_context(db, str(auth.organization_id)))
+        context.update(
+            self.invoice_form_context(
+                db,
+                str(auth.organization_id),
+                customer_id=str(invoice.customer_id),
+            )
+        )
 
         lines = db.scalars(
             select(InvoiceLine)

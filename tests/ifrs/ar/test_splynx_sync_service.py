@@ -101,7 +101,7 @@ def _make_service(db: MagicMock) -> SplynxSyncService:
 def _make_splynx_invoice(
     *,
     id: int = 1001,
-    number: str = "INV-2024-001",
+    number: str = "INV-2026-0101",
     customer_id: int = 500,
     total: Decimal = Decimal("50000.00"),
     total_due: Decimal = Decimal("50000.00"),
@@ -111,8 +111,8 @@ def _make_splynx_invoice(
         id=id,
         number=number,
         customer_id=customer_id,
-        date_created="2024-06-01",
-        date_till="2024-07-01",
+        date_created="2026-01-15",
+        date_till="2026-02-15",
         status=status,
         total=total,
         total_due=total_due,
@@ -133,7 +133,7 @@ def _make_splynx_payment(
         customer_id=customer_id,
         customer_name="Test Customer",
         invoice_id=invoice_id,
-        date="2024-06-15",
+        date="2026-01-20",
         amount=amount,
         payment_type=payment_type,
         receipt_number="RCP-001",
@@ -144,7 +144,7 @@ def _make_splynx_payment(
 def _make_splynx_credit_note(
     *,
     id: int = 3001,
-    number: str = "CN-2024-001",
+    number: str = "CN-2026-0101",
     customer_id: int = 500,
     total: Decimal = Decimal("5000.00"),
 ) -> SplynxCreditNote:
@@ -153,7 +153,7 @@ def _make_splynx_credit_note(
         number=number,
         customer_id=customer_id,
         customer_name="Test Customer",
-        date_created="2024-06-10",
+        date_created="2026-01-10",
         total=total,
         status="applied",
     )
@@ -186,8 +186,8 @@ class FakeInvoice:
         self.status = status
         self.currency_code = currency_code
         self.correlation_id = correlation_id
-        self.due_date = date(2024, 7, 1)
-        self.invoice_date = date(2024, 6, 1)
+        self.due_date = date(2026, 2, 15)
+        self.invoice_date = date(2026, 1, 15)
         self.notes = None
         self.journal_entry_id = None
         self.posting_batch_id = None

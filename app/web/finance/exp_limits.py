@@ -317,8 +317,6 @@ async def delete_approver_limit(
 def reviewer_approvers(
     request: Request,
     q: str | None = None,
-    from_date: str | None = None,
-    to_date: str | None = None,
     auth: WebAuthContext = Depends(_require_limits_review),
     db: Session = Depends(get_db),
 ):
@@ -328,8 +326,6 @@ def reviewer_approvers(
         auth=auth,
         db=db,
         q=q,
-        from_date=from_date,
-        to_date=to_date,
     )
 
 

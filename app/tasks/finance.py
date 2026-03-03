@@ -784,3 +784,112 @@ def refresh_analysis_cubes() -> dict[str, Any]:
             results["errors"],
         )
     return results
+
+
+@shared_task
+def auto_generate_aging_snapshots(
+    organization_id: str, fiscal_period_id: str, user_id: str
+) -> dict[str, Any]:
+    """
+    Auto-generate AR + AP aging snapshots when a period is soft-closed.
+
+    Deletes existing snapshots for the period first (unique constraint),
+    then creates fresh snapshots from current outstanding balances.
+
+    Args:
+        organization_id: Organization UUID as string
+        fiscal_period_id: Fiscal period UUID as string
+        user_id: User who triggered the close
+
+    Returns:
+        Dict with snapshot generation statistics
+    """
+    from uuid import UUID as UUIDType
+
+    logger.info(
+        "Generating aging snapshots for period %s (org %s)",
+        fiscal_period_id,
+        organization_id,
+    )
+
+    results: dict[str, Any] = {
+        "ar_snapshots": 0,
+        "ap_snapshots": 0,
+        "errors": [],
+    }
+
+    org_id = UUIDType(organization_id)
+    period_id = UUIDType(fiscal_period_id)
+    uid = UUIDType(user_id)
+
+    with SessionLocal() as db:
+        from sqlalchemy import delete as sa_delete
+
+        # AR aging snapshots
+        try:
+            from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
+            from app.services.finance.ar.ar_aging import ARAgingService
+
+            # Delete existing snapshots for this period (unique constraint)
+            db.execute(
+                sa_delete(ARAgingSnapshot).where(
+                    ARAgingSnapshot.organization_id == org_id,
+                    ARAgingSnapshot.fiscal_period_id == period_id,
+                )
+            )
+            db.flush()
+
+            ar_snaps = ARAgingService.create_aging_snapshot(
+                db,
+                organization_id=org_id,
+                fiscal_period_id=period_id,
+                created_by_user_id=uid,
+            )
+            results["ar_snapshots"] = len(ar_snaps)
+        except Exception as e:
+            logger.exception(
+                "Failed to generate AR aging snapshots for period %s", period_id
+            )
+            results["errors"].append(f"AR: {e}")
+            db.rollback()
+
+        # AP aging snapshots
+        try:
+            from app.models.finance.ap.ap_aging_snapshot import (
+                APAgingSnapshot,  # pragma: allowlist secret
+            )
+            from app.services.finance.ap.ap_aging import (
+                APAgingService,  # pragma: allowlist secret
+            )
+
+            db.execute(
+                sa_delete(APAgingSnapshot).where(
+                    APAgingSnapshot.organization_id == org_id,
+                    APAgingSnapshot.fiscal_period_id == period_id,
+                )
+            )
+            db.flush()
+
+            ap_snaps = APAgingService.create_aging_snapshot(
+                db,
+                organization_id=org_id,
+                fiscal_period_id=period_id,
+                created_by_user_id=uid,
+            )
+            results["ap_snapshots"] = len(ap_snaps)
+        except Exception as e:
+            logger.exception(
+                "Failed to generate AP aging snapshots for period %s", period_id
+            )
+            results["errors"].append(f"AP: {e}")
+            db.rollback()
+
+        db.commit()
+
+    logger.info(
+        "Aging snapshots complete: AR=%d, AP=%d, errors=%d",
+        results["ar_snapshots"],
+        results["ap_snapshots"],
+        len(results["errors"]),
+    )
+    return results

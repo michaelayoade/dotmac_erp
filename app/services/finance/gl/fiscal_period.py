@@ -240,6 +240,19 @@ class FiscalPeriodService(ListResponseMixin):
         db.commit()
         db.refresh(period)
 
+        # Trigger aging snapshot generation (non-blocking, via Celery)
+        try:
+            from app.tasks.finance import auto_generate_aging_snapshots
+
+            auto_generate_aging_snapshots.delay(
+                str(org_id), str(period_id), str(user_id)
+            )
+        except Exception:
+            logger.exception(
+                "Failed to queue aging snapshot generation for period %s",
+                period_id,
+            )
+
         return period
 
     @staticmethod
