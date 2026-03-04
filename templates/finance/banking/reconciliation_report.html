@@ -135,7 +135,7 @@
                     {% for item in report.matched_items.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.statement_amount | default("-") }}</td>
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.gl_amount | default("-") }}</td>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.match_type | title }}</td>
@@ -172,8 +172,8 @@
                     {% for item in report.outstanding_deposits.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference | default("-") }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference if item.reference else '-' }}</td>
                         <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">+{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% else %}
@@ -208,8 +208,8 @@
                     {% for item in report.outstanding_payments.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference | default("-") }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference if item.reference else '-' }}</td>
                         <td class="table-cell-amount text-rose-600 dark:text-rose-400">-{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% else %}
@@ -245,7 +245,7 @@
                     {% for item in report.adjustments.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.adjustment_type | default("-") }}</td>
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>

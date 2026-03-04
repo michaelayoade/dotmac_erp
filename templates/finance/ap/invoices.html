@@ -88,14 +88,14 @@
                         <td class="hidden sm:table-cell">
                             {% if invoice.is_overdue %}
                             <span class="text-rose-600 dark:text-rose-400 font-medium">{{ invoice.due_date }}</span>
-                            <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">Overdue</span>
+                            {{ status_badge('OVERDUE', 'sm') }}
                             {% else %}
                             <span class="text-slate-600 dark:text-slate-400">{{ invoice.due_date }}</span>
                             {% endif %}
                         </td>
-                        <td class="text-right font-mono text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount | default(zero_amount) }}</td>
+                        <td class="text-right font-mono tabular-nums text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount if invoice.total_amount else zero_amount }}</td>
                         <td class="text-right font-mono tabular-nums text-sm text-slate-500 dark:text-slate-400 hidden md:table-cell">{{ invoice.tax_amount if invoice.tax_amount else '—' }}</td>
-                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ invoice.balance | default(zero_amount) }}</td>
+                        <td class="text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ invoice.balance if invoice.balance else zero_amount }}</td>
                         <td class="text-center">
                             {{ status_badge(invoice.status | default('draft'), 'sm') }}
                         </td>

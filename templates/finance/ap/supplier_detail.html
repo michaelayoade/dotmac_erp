@@ -88,11 +88,11 @@
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Phone</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ supplier.phone | default("-") }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ supplier.phone if supplier.phone else '-' }}</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Address</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ supplier.address | default("-") }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ supplier.address if supplier.address else '-' }}</dd>
                 </div>
             </dl>
         </div>

@@ -341,7 +341,7 @@
         createJournalDesc: "",
         createJournalLoading: false,
         glAccounts: {{ gl_accounts | default([]) | tojson }},
-        bankGlAccountId: {{ bank_gl_account_id | default("") | tojson }},
+        bankGlAccountId: {{ (bank_gl_account_id if bank_gl_account_id else '') | tojson }},
         get filteredGlAccounts() {
             /* Exclude the bank account own GL entry */
             return this.glAccounts.filter(a => a.id !== this.bankGlAccountId);

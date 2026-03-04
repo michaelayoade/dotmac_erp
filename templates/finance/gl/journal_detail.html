@@ -238,7 +238,7 @@
                                     <div class="text-xs text-slate-500">{{ line.account_name }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                                    {{ line.description | default("-") }}
+                                    {{ line.description if line.description else '-' }}
                                     {% if line.reference %}
                                     <div class="text-xs text-slate-400">Ref: {{ line.reference }}</div>
                                     {% endif %}

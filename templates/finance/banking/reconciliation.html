@@ -255,8 +255,8 @@
                             @click="toggleStatement('{{ line.line_id }}')">
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td>
-                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default(line.payee_payer) | default("-") }}</p>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description if line.description else (line.payee_payer if line.payee_payer else '-') }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference if line.reference else '' }}</p>
                                 {# Suggestion badge #}
                                 {% if match_suggestions and match_suggestions[line.line_id | string] %}
                                 {% set sug = match_suggestions[line.line_id | string] %}
@@ -328,8 +328,8 @@
                             @click="toggleGL('{{ line.line_id }}')">
                             <td class="text-slate-600 dark:text-slate-400">{{ line.entry_date }}</td>
                             <td>
-                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default("-") }}</p>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description if line.description else '-' }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference if line.reference else '' }}</p>
                                 {# Payment metadata #}
                                 {% if line.counterparty_name %}
                                 <div class="flex flex-wrap items-center gap-1 mt-1">
