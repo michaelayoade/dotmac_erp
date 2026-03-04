@@ -173,6 +173,43 @@ class ARInvoiceService(ListResponseMixin):
     """
 
     @staticmethod
+    def _effective_tax_codes_for_line(line: ARInvoiceLineInput) -> list[UUID]:
+        """Return de-duplicated tax code IDs for a line (multi-tax + legacy)."""
+        effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
+        if line.tax_code_id and line.tax_code_id not in effective_tax_codes:
+            effective_tax_codes.append(line.tax_code_id)
+        return effective_tax_codes
+
+    @staticmethod
+    def _validate_single_tax_treatment(
+        db: Session,
+        organization_id: UUID,
+        tax_code_ids: set[UUID],
+    ) -> None:
+        """Reject invoices that mix inclusive and exclusive tax treatments."""
+        if not tax_code_ids:
+            return
+
+        org_id = coerce_uuid(organization_id)
+        tax_codes = list(
+            db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == org_id,
+                    TaxCode.tax_code_id.in_(tax_code_ids),
+                )
+            ).all()
+        )
+        if not tax_codes:
+            return
+
+        has_inclusive = any(tax_code.is_inclusive for tax_code in tax_codes)
+        has_exclusive = any(not tax_code.is_inclusive for tax_code in tax_codes)
+        if has_inclusive and has_exclusive:
+            raise ValidationError(
+                "Mixed tax treatment is not allowed. All invoice lines must use either inclusive or exclusive tax treatment."
+            )
+
+    @staticmethod
     def create_invoice(
         db: Session,
         organization_id: UUID,
@@ -266,9 +303,7 @@ class ARInvoiceService(ListResponseMixin):
             if line.performance_obligation_id:
                 obligation_ids.add(line.performance_obligation_id)
             # Collect tax codes
-            tax_code_ids.update(line.tax_code_ids)
-            if line.tax_code_id and not line.tax_code_ids:
-                tax_code_ids.add(line.tax_code_id)
+            tax_code_ids.update(ARInvoiceService._effective_tax_codes_for_line(line))
 
         # Batch validate all references (one query per model type instead of N queries)
         _batch_validate_org_refs(
@@ -286,6 +321,7 @@ class ARInvoiceService(ListResponseMixin):
                 (TaxCode, tax_code_ids, "Tax code"),
             ],
         )
+        ARInvoiceService._validate_single_tax_treatment(db, org_id, tax_code_ids)
 
         # Calculate totals with auto tax calculation
         subtotal = Decimal("0")
@@ -298,9 +334,7 @@ class ARInvoiceService(ListResponseMixin):
             gross_line_amount = line.quantity * line.unit_price - line.discount_amount
 
             # Build list of tax codes (support both new and legacy format)
-            effective_tax_codes = list(line.tax_code_ids) if line.tax_code_ids else []
-            if line.tax_code_id and line.tax_code_id not in effective_tax_codes:
-                effective_tax_codes.append(line.tax_code_id)
+            effective_tax_codes = ARInvoiceService._effective_tax_codes_for_line(line)
 
             # Calculate taxes using centralized service
             if effective_tax_codes:
@@ -386,14 +420,9 @@ class ARInvoiceService(ListResponseMixin):
                     line_tax_total = -abs(line_tax_total)
 
             # Get primary tax code ID for legacy compatibility (first tax code)
-            effective_tax_codes = (
-                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            effective_tax_codes = ARInvoiceService._effective_tax_codes_for_line(
+                line_input
             )
-            if (
-                line_input.tax_code_id
-                and line_input.tax_code_id not in effective_tax_codes
-            ):
-                effective_tax_codes.append(line_input.tax_code_id)
             primary_tax_code_id = (
                 effective_tax_codes[0] if effective_tax_codes else None
             )
@@ -535,6 +564,13 @@ class ARInvoiceService(ListResponseMixin):
         if not input.lines:
             raise ValidationError("Invoice must have at least one line")
 
+        tax_code_ids: set[UUID] = set()
+        for line_input in input.lines:
+            tax_code_ids.update(
+                ARInvoiceService._effective_tax_codes_for_line(line_input)
+            )
+        ARInvoiceService._validate_single_tax_treatment(db, org_id, tax_code_ids)
+
         # Delete existing lines and their tax records
         existing_lines = db.scalars(
             select(InvoiceLine).where(InvoiceLine.invoice_id == inv_id)
@@ -556,14 +592,9 @@ class ARInvoiceService(ListResponseMixin):
             )
 
             # Determine tax codes: prefer new multi-tax field, fall back to legacy single field
-            effective_tax_codes = (
-                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            effective_tax_codes = ARInvoiceService._effective_tax_codes_for_line(
+                line_input
             )
-            if (
-                line_input.tax_code_id
-                and line_input.tax_code_id not in effective_tax_codes
-            ):
-                effective_tax_codes.append(line_input.tax_code_id)
 
             if effective_tax_codes:
                 line_tax_result = TaxCalculationService.calculate_line_taxes(
@@ -633,14 +664,9 @@ class ARInvoiceService(ListResponseMixin):
                 if tax_result:
                     line_tax_total = -abs(line_tax_total)
 
-            effective_tax_codes = (
-                list(line_input.tax_code_ids) if line_input.tax_code_ids else []
+            effective_tax_codes = ARInvoiceService._effective_tax_codes_for_line(
+                line_input
             )
-            if (
-                line_input.tax_code_id
-                and line_input.tax_code_id not in effective_tax_codes
-            ):
-                effective_tax_codes.append(line_input.tax_code_id)
             primary_tax_code_id = (
                 effective_tax_codes[0] if effective_tax_codes else None
             )

@@ -33,6 +33,43 @@ def _make_customer(org_id, active=True):
     )
 
 
+def test_validate_single_tax_treatment_all_exclusive_allowed():
+    db = MagicMock()
+    org_id = uuid4()
+    db.scalars.return_value.all.return_value = [
+        SimpleNamespace(is_inclusive=False),
+        SimpleNamespace(is_inclusive=False),
+    ]
+
+    ARInvoiceService._validate_single_tax_treatment(db, org_id, {uuid4(), uuid4()})
+
+
+def test_validate_single_tax_treatment_all_inclusive_allowed():
+    db = MagicMock()
+    org_id = uuid4()
+    db.scalars.return_value.all.return_value = [
+        SimpleNamespace(is_inclusive=True),
+        SimpleNamespace(is_inclusive=True),
+    ]
+
+    ARInvoiceService._validate_single_tax_treatment(db, org_id, {uuid4(), uuid4()})
+
+
+def test_validate_single_tax_treatment_mixed_rejected():
+    db = MagicMock()
+    org_id = uuid4()
+    db.scalars.return_value.all.return_value = [
+        SimpleNamespace(is_inclusive=True),
+        SimpleNamespace(is_inclusive=False),
+    ]
+
+    with pytest.raises(HTTPException) as excinfo:
+        ARInvoiceService._validate_single_tax_treatment(db, org_id, {uuid4(), uuid4()})
+
+    assert excinfo.value.status_code == 400
+    assert "Mixed tax treatment is not allowed" in str(excinfo.value.detail)
+
+
 def test_create_invoice_customer_missing():
     db = MagicMock()
     svc = ARInvoiceService()
