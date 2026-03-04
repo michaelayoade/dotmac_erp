@@ -213,6 +213,111 @@ class ExpenseService:
             record.status = status
             self.db.flush()
 
+    def _has_blocking_payment_activity(self, org_id: UUID, claim_id: UUID) -> bool:
+        """Return True when claim has active or completed payout activity."""
+        from app.models.finance.payments.payment_intent import (
+            PaymentIntent,
+            PaymentIntentStatus,
+        )
+
+        blocking_statuses = (
+            PaymentIntentStatus.PENDING,
+            PaymentIntentStatus.PROCESSING,
+            PaymentIntentStatus.COMPLETED,
+        )
+        return (
+            self.db.scalar(
+                select(PaymentIntent.intent_id).where(
+                    PaymentIntent.organization_id == org_id,
+                    PaymentIntent.source_type == "EXPENSE_CLAIM",
+                    PaymentIntent.source_id == claim_id,
+                    PaymentIntent.status.in_(blocking_statuses),
+                )
+            )
+            is not None
+        )
+
+    def _ensure_editable_in_place(self, claim: ExpenseClaim) -> None:
+        """Validate claim can be edited without reopening."""
+        if claim.status == ExpenseClaimStatus.PAID:
+            raise ExpenseClaimStatusError(claim.status.value, "update")
+        if claim.status not in {ExpenseClaimStatus.DRAFT, ExpenseClaimStatus.APPROVED}:
+            raise ExpenseClaimStatusError(claim.status.value, "update")
+        if claim.status == ExpenseClaimStatus.APPROVED:
+            # Approved claims linked to accounting/payment artifacts must not be edited
+            # in place to avoid ledger/payout inconsistencies.
+            if (
+                getattr(claim, "journal_entry_id", None)
+                or getattr(claim, "reimbursement_journal_id", None)
+                or claim.supplier_invoice_id
+                or claim.paid_on
+                or claim.payment_reference
+            ):
+                raise ExpenseServiceError(
+                    "Approved claim has accounting/payment records and cannot be edited"
+                )
+            if self._has_blocking_payment_activity(claim.organization_id, claim.claim_id):
+                raise ExpenseServiceError(
+                    "Approved claim has payout activity and cannot be edited"
+                )
+
+    @staticmethod
+    def _recalculate_claim_totals(claim: ExpenseClaim) -> None:
+        """Recalculate claim totals from item data."""
+        claimed_total: Decimal = sum(
+            ((item.claimed_amount or Decimal("0.00")) for item in claim.items),
+            Decimal("0.00"),
+        )
+        claim.total_claimed_amount = claimed_total
+        if claim.status == ExpenseClaimStatus.APPROVED:
+            approved_total: Decimal = sum(
+                (
+                    (
+                        item.approved_amount
+                        if item.approved_amount is not None
+                        else (item.claimed_amount or Decimal("0.00"))
+                    )
+                    for item in claim.items
+                ),
+                Decimal("0.00"),
+            )
+            claim.total_approved_amount = approved_total
+            claim.net_payable_amount = approved_total - (
+                claim.advance_adjusted or Decimal("0.00")
+            )
+
+    def reopen_claim_for_edit(self, org_id: UUID, claim_id: UUID) -> ExpenseClaim:
+        """Reopen submitted/pending/rejected claim back to draft for editing."""
+        claim = self.get_claim(org_id, claim_id)
+        reopenable_statuses = {
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+            ExpenseClaimStatus.REJECTED,
+        }
+        if claim.status not in reopenable_statuses:
+            raise ExpenseClaimStatusError(claim.status.value, ExpenseClaimStatus.DRAFT.value)
+
+        claim.status = ExpenseClaimStatus.DRAFT
+        claim.rejection_reason = None
+        claim.approver_id = None
+        claim.approved_on = None
+        claim.total_approved_amount = None
+        claim.net_payable_amount = None
+        for item in claim.items:
+            item.approved_amount = None
+
+        # Clear stale action records so new submit/approve cycle can run.
+        from sqlalchemy import delete
+
+        self.db.execute(
+            delete(ExpenseClaimAction).where(
+                ExpenseClaimAction.organization_id == org_id,
+                ExpenseClaimAction.claim_id == claim_id,
+            )
+        )
+        self.db.flush()
+        return claim
+
     def _next_claim_number(self, org_id: UUID) -> str:
         """Generate next expense claim number.
 
@@ -742,11 +847,9 @@ class ExpenseService:
         claim_id: UUID,
         **kwargs,
     ) -> ExpenseClaim:
-        """Update an expense claim (only allowed in DRAFT status)."""
+        """Update an expense claim (allowed in DRAFT and APPROVED statuses)."""
         claim = self.get_claim(org_id, claim_id)
-
-        if claim.status != ExpenseClaimStatus.DRAFT:
-            raise ExpenseClaimStatusError(claim.status.value, "update")
+        self._ensure_editable_in_place(claim)
 
         for key, value in kwargs.items():
             if value is not None and hasattr(claim, key):
@@ -765,11 +868,9 @@ class ExpenseService:
         item_id: UUID,
         **item_data,
     ) -> ExpenseClaimItem:
-        """Update an item on a draft expense claim."""
+        """Update an item on an in-place editable expense claim."""
         claim = self.get_claim(org_id, claim_id)
-
-        if claim.status != ExpenseClaimStatus.DRAFT:
-            raise ExpenseClaimStatusError(claim.status.value, "update item")
+        self._ensure_editable_in_place(claim)
 
         item = self.db.scalar(
             select(ExpenseClaimItem).where(
@@ -807,6 +908,11 @@ class ExpenseService:
 
         if claimed_amount is not None:
             claim.total_claimed_amount += item.claimed_amount - old_amount
+            if claim.status == ExpenseClaimStatus.APPROVED:
+                item.approved_amount = item.claimed_amount
+
+        if claim.status == ExpenseClaimStatus.APPROVED:
+            self._recalculate_claim_totals(claim)
 
         self.db.flush()
         return item
@@ -836,9 +942,7 @@ class ExpenseService:
     ) -> None:
         """Remove an item from an expense claim."""
         claim = self.get_claim(org_id, claim_id)
-
-        if claim.status != ExpenseClaimStatus.DRAFT:
-            raise ExpenseClaimStatusError(claim.status.value, "remove item")
+        self._ensure_editable_in_place(claim)
 
         item = self.db.scalar(
             select(ExpenseClaimItem).where(
@@ -853,6 +957,8 @@ class ExpenseService:
         claim.total_claimed_amount -= item.claimed_amount
 
         self.db.delete(item)
+        if claim.status == ExpenseClaimStatus.APPROVED:
+            self._recalculate_claim_totals(claim)
         self.db.flush()
 
     def mark_paid(

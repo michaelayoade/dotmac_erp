@@ -1407,18 +1407,19 @@ class SelfServiceWebService:
         claim_date: date,
         purpose: str,
         expense_date: date,
-        category_id: str,
-        description: str,
-        claimed_amount: str,
+        items: list[dict[str, object | None]] | None = None,
+        category_id: str | None = None,
+        description: str | None = None,
+        claimed_amount: str | Decimal | None = None,
+        receipt_number: str | None = None,
+        receipt_url: str | None = None,
+        receipt_file: UploadFile | None = None,
+        receipt_files: list[UploadFile] | None = None,
         recipient_bank_code: str | None = None,
         recipient_bank_name: str | None = None,
         recipient_account_number: str | None = None,
         recipient_name: str | None = None,
         requested_approver_id: str | None = None,
-        receipt_url: str | None = None,
-        receipt_number: str | None = None,
-        receipt_files: list[UploadFile] | None = None,
-        receipt_file: UploadFile | None = None,
         submit_now: str | None = None,
         project_id: str | None = None,
         ticket_id: str | None = None,
@@ -1428,80 +1429,138 @@ class SelfServiceWebService:
         person_id = coerce_uuid(auth.person_id)
         employee_id = self._get_employee_id(db, org_id, person_id)
 
-        try:
-            amount = Decimal(claimed_amount)
-        except (InvalidOperation, TypeError) as exc:
-            raise HTTPException(
-                status_code=400, detail="Invalid claimed amount"
-            ) from exc
+        if items is None:
+            legacy_files: list[UploadFile] = []
+            if receipt_file and getattr(receipt_file, "filename", None):
+                legacy_files.append(receipt_file)
+            if receipt_files:
+                legacy_files.extend(
+                    f for f in receipt_files if getattr(f, "filename", None)
+                )
+            items = [
+                {
+                    "category_id": category_id,
+                    "description": description,
+                    "claimed_amount": claimed_amount,
+                    "receipt_number": receipt_number,
+                    "receipt_url": receipt_url,
+                    "receipt_files": legacy_files or None,
+                }
+            ]
 
-        resolved_receipt_urls: list[str] = []
-        if receipt_url and receipt_url.strip():
-            resolved_receipt_urls.append(receipt_url.strip())
-
-        upload_files: list[UploadFile] = []
-        if receipt_files:
-            upload_files.extend(
-                f
-                for f in receipt_files
-                if isinstance(f, UploadFile) and getattr(f, "filename", None)
-            )
-        if (
-            receipt_file
-            and isinstance(receipt_file, UploadFile)
-            and getattr(receipt_file, "filename", None)
-            and receipt_file not in upload_files
-        ):
-            upload_files.append(receipt_file)
-
-        if upload_files:
-            # File uploads can fail validation (e.g. unsupported MIME type).
-            # For self-service web flows, redirect back with a user-visible error
-            # toast instead of raising an unhandled exception (500).
-            from app.services.file_upload import (
-                FileUploadError,
-                get_expense_receipt_upload,
-            )
-
-            upload_svc = get_expense_receipt_upload()
-            uploaded_paths: list[str] = []
+        normalized_items: list[dict[str, object | None]] = []
+        for idx, raw_item in enumerate(items, start=1):
+            category_id = str(raw_item.get("category_id") or "").strip()
+            description = str(raw_item.get("description") or "").strip()
+            amount_raw = raw_item.get("claimed_amount")
+            receipt_url = str(raw_item.get("receipt_url") or "").strip() or None
+            receipt_number = str(raw_item.get("receipt_number") or "").strip() or None
+            upload_file = raw_item.get("receipt_file")
+            upload_files = raw_item.get("receipt_files")
+            if not category_id or not description or amount_raw in (None, ""):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {idx}: category, description, and amount are required",
+                )
             try:
-                for upload in upload_files:
-                    # Note: UploadFile.file is a SpooledTemporaryFile; reading consumes it.
-                    file_data = upload.file.read()
-                    result = upload_svc.save(
-                        file_data=file_data,
-                        content_type=upload.content_type,
-                        subdirs=(str(org_id),),
-                        original_filename=upload.filename,
-                    )
-                    uploaded_paths.append(str(result.file_path))
-                    resolved_receipt_urls.append(str(result.file_path))
-            except FileUploadError as exc:
-                # Best-effort cleanup of any earlier uploads in this request.
-                for path in uploaded_paths:
-                    try:
-                        upload_svc.delete(path)
-                    except Exception:
-                        logger.exception(
-                            "Failed to cleanup orphaned receipt upload",
-                            extra={
-                                "organization_id": str(org_id),
-                                "path": path,
-                            },
-                        )
-                return RedirectResponse(
-                    url=f"/people/self/expenses?error={quote(str(exc))}",
-                    status_code=303,
+                amount = Decimal(str(amount_raw))
+            except (InvalidOperation, TypeError) as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"Line {idx}: invalid claimed amount"
+                ) from exc
+
+            resolved_receipt_urls: list[str] = []
+            if receipt_url:
+                resolved_receipt_urls.append(receipt_url)
+
+            has_single_upload = (
+                upload_file
+                and isinstance(upload_file, UploadFile)
+                and getattr(upload_file, "filename", None)
+            )
+            has_multi_uploads = (
+                isinstance(upload_files, list)
+                and any(
+                    isinstance(f, UploadFile) and getattr(f, "filename", None)
+                    for f in upload_files
+                )
+            )
+            if has_single_upload or has_multi_uploads:
+                from app.services.file_upload import (
+                    FileUploadError,
+                    get_expense_receipt_upload,
                 )
 
-        resolved_receipt_url: str | None
-        if not resolved_receipt_urls:
-            resolved_receipt_url = None
-        elif len(resolved_receipt_urls) == 1:
-            resolved_receipt_url = resolved_receipt_urls[0]
-        else:
-            resolved_receipt_url = json.dumps(resolved_receipt_urls)
+                upload_svc = get_expense_receipt_upload()
+                uploaded_paths: list[str] = []
+                try:
+                    single_upload = (
+                        upload_file if isinstance(upload_file, UploadFile) else None
+                    )
+                    if single_upload:
+                        file_data = single_upload.file.read()
+                        result = upload_svc.save(
+                            file_data=file_data,
+                            content_type=single_upload.content_type,
+                            subdirs=(str(org_id),),
+                            original_filename=single_upload.filename,
+                        )
+                        uploaded_paths.append(str(result.file_path))
+                        resolved_receipt_urls.append(str(result.file_path))
+                    if isinstance(upload_files, list):
+                        for multi_upload_file in upload_files:
+                            if not isinstance(multi_upload_file, UploadFile):
+                                continue
+                            if not getattr(multi_upload_file, "filename", None):
+                                continue
+                            file_data = multi_upload_file.file.read()
+                            result = upload_svc.save(
+                                file_data=file_data,
+                                content_type=multi_upload_file.content_type,
+                                subdirs=(str(org_id),),
+                                original_filename=multi_upload_file.filename,
+                            )
+                            uploaded_paths.append(str(result.file_path))
+                            resolved_receipt_urls.append(str(result.file_path))
+                except FileUploadError as exc:
+                    for path in uploaded_paths:
+                        try:
+                            upload_svc.delete(path)
+                        except Exception:
+                            logger.exception(
+                                "Failed to cleanup orphaned receipt upload",
+                                extra={
+                                    "organization_id": str(org_id),
+                                    "path": path,
+                                },
+                            )
+                    return RedirectResponse(
+                        url=f"/people/self/expenses?error={quote(str(exc))}",
+                        status_code=303,
+                    )
+
+            if not resolved_receipt_urls:
+                resolved_receipt_url = None
+            elif len(resolved_receipt_urls) == 1:
+                resolved_receipt_url = resolved_receipt_urls[0]
+            else:
+                resolved_receipt_url = json.dumps(resolved_receipt_urls)
+
+            normalized_items.append(
+                {
+                    "expense_date": expense_date,
+                    "category_id": coerce_uuid(category_id),
+                    "description": description,
+                    "claimed_amount": amount,
+                    "receipt_url": resolved_receipt_url,
+                    "receipt_number": receipt_number,
+                }
+            )
+
+        if not normalized_items:
+            raise HTTPException(
+                status_code=400, detail="At least one expense line item is required"
+            )
 
         svc = ExpenseService(db, auth)
         claim = svc.create_claim(
@@ -1519,18 +1578,7 @@ class SelfServiceWebService:
             requested_approver_id=coerce_uuid(requested_approver_id)
             if requested_approver_id
             else None,
-            items=[
-                {
-                    "expense_date": expense_date,
-                    "category_id": coerce_uuid(category_id),
-                    "description": description.strip(),
-                    "claimed_amount": amount,
-                    "receipt_url": resolved_receipt_url,
-                    "receipt_number": receipt_number.strip()
-                    if receipt_number
-                    else None,
-                }
-            ],
+            items=normalized_items,
         )
         if submit_now:
             svc.submit_claim(org_id, claim.claim_id, skip_receipt_validation=True)
@@ -1553,7 +1601,15 @@ class SelfServiceWebService:
         claim = svc.get_claim(org_id, claim_id)
         if claim.employee_id != employee_id:
             raise HTTPException(status_code=403, detail="Forbidden")
-        can_edit = claim.status == ExpenseClaimStatus.DRAFT
+        can_edit = claim.status in {
+            ExpenseClaimStatus.DRAFT,
+            ExpenseClaimStatus.APPROVED,
+        }
+        can_reopen = claim.status in {
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+            ExpenseClaimStatus.REJECTED,
+        }
         can_submit = claim.status == ExpenseClaimStatus.DRAFT
         categories = svc.list_categories(org_id, is_active=True, pagination=None).items
 
@@ -1574,6 +1630,7 @@ class SelfServiceWebService:
                 "claim": claim,
                 "categories": categories,
                 "can_edit": can_edit,
+                "can_reopen": can_reopen,
                 "can_submit": can_submit,
                 "projects": projects,
                 "tickets": tickets,
@@ -1644,6 +1701,40 @@ class SelfServiceWebService:
         db.commit()
         return RedirectResponse(url="/people/self/expenses", status_code=302)
 
+    def expense_claim_reopen_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        claim_id: UUID,
+    ) -> RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        svc = ExpenseService(db, auth)
+        claim = svc.get_claim(org_id, claim_id)
+        if claim.employee_id != employee_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        reopenable_statuses = {
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+            ExpenseClaimStatus.REJECTED,
+        }
+        if claim.status not in reopenable_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail="Only submitted, pending approval, or rejected claims can be reopened",
+            )
+
+        svc.reopen_claim_for_edit(org_id, claim_id)
+        db.commit()
+        return RedirectResponse(
+            url=f"/people/self/expenses/claims/{claim_id}/edit",
+            status_code=302,
+        )
+
     def expense_claim_update_response(
         self,
         auth: WebAuthContext,
@@ -1668,9 +1759,17 @@ class SelfServiceWebService:
         claim = svc.get_claim(org_id, claim_id)
         if claim.employee_id != employee_id:
             raise HTTPException(status_code=403, detail="Forbidden")
-        if claim.status != ExpenseClaimStatus.DRAFT:
+        if claim.status == ExpenseClaimStatus.PAID:
             raise HTTPException(
-                status_code=400, detail="Only draft claims can be edited"
+                status_code=400, detail="Paid claims cannot be edited"
+            )
+        if claim.status not in {
+            ExpenseClaimStatus.DRAFT,
+            ExpenseClaimStatus.APPROVED,
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail="Only draft or approved claims can be edited directly",
             )
 
         svc.update_claim(
