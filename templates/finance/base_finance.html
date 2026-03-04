@@ -103,7 +103,7 @@
         <nav class="flex-1 overflow-y-auto sidebar-scroll py-4 px-3" aria-label="Finance navigation">
             <!-- Dashboard -->
             <a href="/finance/dashboard"
-               :aria-current="activeModule === 'dashboard' ? 'page' : false"
+               :aria-current="activeModule === 'dashboard' ? 'page' : null"
                :class="activeModule === 'dashboard' ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white'"
                class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all">
                 {{ icon_svg("home", "h-5 w-5 flex-shrink-0") }}

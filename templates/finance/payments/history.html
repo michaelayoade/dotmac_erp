@@ -6,7 +6,7 @@
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex">
-        <li><a href="/finance/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400">Dashboard</a></li>
+        <li><a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Payment History</span></li>
     </ol>
 </nav>
@@ -20,7 +20,7 @@
             <form method="GET" class="flex items-center gap-2">
                 <select name="status"
                         onchange="this.form.submit()"
-                        class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800">
+                        class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800">
                     <option value="">All Statuses</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s }}</option>
@@ -37,6 +37,7 @@
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <caption class="sr-only">Payment intents history</caption>
                 <thead class="bg-slate-50 dark:bg-slate-800">
                     <tr>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
@@ -56,7 +57,7 @@
                         <td class="whitespace-nowrap px-4 py-3">
                             {% if intent.intent_metadata and intent.intent_metadata.invoice_number %}
                             <a href="/finance/ar/invoices/{{ intent.source_id }}"
-                               class="font-mono text-sm text-primary-600 hover:underline dark:text-primary-400">
+                               class="font-mono text-sm text-teal-600 hover:underline dark:text-teal-400">
                                 {{ intent.intent_metadata.invoice_number }}
                             </a>
                             {% else %}
@@ -69,14 +70,6 @@
                             </span>
                         </td>
                         <td class="whitespace-nowrap px-4 py-3">
-                            {% set status_colors = {
-                                'PENDING': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                                'PROCESSING': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                                'COMPLETED': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                                'FAILED': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
-                                'ABANDONED': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400',
-                                'EXPIRED': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
-                            } %}
                             {{ status_badge(intent.status.value, size="sm") }}
                         </td>
                         <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">

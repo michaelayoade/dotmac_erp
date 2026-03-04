@@ -108,15 +108,15 @@
                         <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ so.total_amount }}</td>
                         <td>
                             {% if so.is_fully_invoiced %}
-                            <span class="badge badge-success">Invoiced</span>
+                            {{ status_badge("COMPLETED", "sm") }}
                             {% elif so.is_fully_shipped %}
-                            <span class="badge badge-info">Shipped</span>
+                            {{ status_badge("SHIPPED", "sm") }}
                             {% else %}
-                            <span class="badge badge-neutral">Pending</span>
+                            {{ status_badge("PENDING", "sm") }}
                             {% endif %}
                         </td>
-                        <td>
-                            {{ status_badge(so.status) }}
+                        <td class="text-center">
+                            {{ status_badge(so.status, "sm") }}
                         </td>
                         <td>
                             <div class="table-actions">

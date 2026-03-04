@@ -40,52 +40,49 @@
 
     {% if aging_summary %}
     <!-- Summary Cards -->
+    <div id="results-container">
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <!-- Total Payable -->
-        <div id="results-container">
-
         <div class="card p-5 bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-900/20 dark:to-orange-900/20 border-rose-200/80 dark:border-rose-800/50">
             <p class="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">Total Payable</p>
-            <p class="text-2xl font-bold text-rose-700 dark:text-rose-300 font-mono mt-2">{{ aging_summary.total }}</p>
+            <p class="text-2xl font-bold text-rose-700 dark:text-rose-300 tabular-nums mt-2">{{ aging_summary.total }}</p>
             <p class="text-xs text-rose-500/80 dark:text-rose-400/60 mt-1">{{ aging_summary.invoice_count }} bills</p>
         </div>
-        </div>
-
 
         <!-- Current -->
         <div class="card p-5 border-l-4 border-l-emerald-500">
             <div class="flex items-center justify-between">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Current</p>
-                <span class="text-xs font-mono text-emerald-600 dark:text-emerald-400">{{ aging_summary.current_pct }}%</span>
+                <span class="text-xs tabular-nums text-emerald-600 dark:text-emerald-400">{{ aging_summary.current_pct }}%</span>
             </div>
-            <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-2">{{ aging_summary.current }}</p>
+            <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums mt-2">{{ aging_summary.current }}</p>
         </div>
 
         <!-- 1-30 Days -->
         <div class="card p-5 border-l-4 border-l-amber-500">
             <div class="flex items-center justify-between">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">1-30 Days</p>
-                <span class="text-xs font-mono text-amber-600 dark:text-amber-400">{{ aging_summary.days_30_pct }}%</span>
+                <span class="text-xs tabular-nums text-amber-600 dark:text-amber-400">{{ aging_summary.days_30_pct }}%</span>
             </div>
-            <p class="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono mt-2">{{ aging_summary.days_30 }}</p>
+            <p class="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums mt-2">{{ aging_summary.days_30 }}</p>
         </div>
 
         <!-- 31-60 Days -->
         <div class="card p-5 border-l-4 border-l-orange-500">
             <div class="flex items-center justify-between">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">31-60 Days</p>
-                <span class="text-xs font-mono text-orange-600 dark:text-orange-400">{{ aging_summary.days_60_pct }}%</span>
+                <span class="text-xs tabular-nums text-orange-600 dark:text-orange-400">{{ aging_summary.days_60_pct }}%</span>
             </div>
-            <p class="text-xl font-bold text-orange-600 dark:text-orange-400 font-mono mt-2">{{ aging_summary.days_60 }}</p>
+            <p class="text-xl font-bold text-orange-600 dark:text-orange-400 tabular-nums mt-2">{{ aging_summary.days_60 }}</p>
         </div>
 
         <!-- 60+ Days -->
         <div class="card p-5 border-l-4 border-l-rose-500">
             <div class="flex items-center justify-between">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">60+ Days</p>
-                <span class="text-xs font-mono text-rose-600 dark:text-rose-400">{{ aging_summary.days_90_pct }}%</span>
+                <span class="text-xs tabular-nums text-rose-600 dark:text-rose-400">{{ aging_summary.days_90_pct }}%</span>
             </div>
-            <p class="text-xl font-bold text-rose-600 dark:text-rose-400 font-mono mt-2">{{ aging_summary.days_90 }}</p>
+            <p class="text-xl font-bold text-rose-600 dark:text-rose-400 tabular-nums mt-2">{{ aging_summary.days_90 }}</p>
         </div>
     </div>
 
@@ -137,7 +134,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Days Payable Outstanding</p>
-                        <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono mt-1">{{ aging_summary.dpo | default(0) }}</p>
+                        <p class="text-2xl font-bold text-amber-600 dark:text-amber-400 tabular-nums mt-1">{{ aging_summary.dpo | default(0) }}</p>
                     </div>
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
                         {{ icon_svg("clock", "h-6 w-6 text-amber-600 dark:text-amber-400") }}
@@ -193,19 +190,19 @@
                             </a>
                             <p class="text-xs text-slate-500 dark:text-slate-400">{{ row.supplier_code }}</p>
                         </td>
-                        <td class="text-right font-mono text-sm {% if row.current_raw > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-400{% endif %}">
+                        <td class="text-right tabular-nums text-sm {% if row.current_raw > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-400{% endif %}">
                             {{ row.current }}
                         </td>
-                        <td class="text-right font-mono text-sm {% if row.days_30_raw > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">
+                        <td class="text-right tabular-nums text-sm {% if row.days_30_raw > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-400{% endif %}">
                             {{ row.days_30 }}
                         </td>
-                        <td class="text-right font-mono text-sm {% if row.days_60_raw > 0 %}text-orange-600 dark:text-orange-400{% else %}text-slate-400{% endif %}">
+                        <td class="text-right tabular-nums text-sm {% if row.days_60_raw > 0 %}text-orange-600 dark:text-orange-400{% else %}text-slate-400{% endif %}">
                             {{ row.days_60 }}
                         </td>
-                        <td class="text-right font-mono text-sm {% if row.days_90_raw > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">
+                        <td class="text-right tabular-nums text-sm {% if row.days_90_raw > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-400{% endif %}">
                             {{ row.days_90 }}
                         </td>
-                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">
+                        <td class="text-right tabular-nums font-semibold text-slate-900 dark:text-white">
                             {{ row.total }}
                         </td>
                         <td>
@@ -238,11 +235,11 @@
                 <tfoot>
                     <tr class="bg-slate-50 dark:bg-slate-800/50 font-semibold">
                         <td class="text-slate-900 dark:text-white">Total</td>
-                        <td class="text-right font-mono text-emerald-600 dark:text-emerald-400">{{ aging_summary.current }}</td>
-                        <td class="text-right font-mono text-amber-600 dark:text-amber-400">{{ aging_summary.days_30 }}</td>
-                        <td class="text-right font-mono text-orange-600 dark:text-orange-400">{{ aging_summary.days_60 }}</td>
-                        <td class="text-right font-mono text-rose-600 dark:text-rose-400">{{ aging_summary.days_90 }}</td>
-                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ aging_summary.total }}</td>
+                        <td class="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{{ aging_summary.current }}</td>
+                        <td class="text-right tabular-nums text-amber-600 dark:text-amber-400">{{ aging_summary.days_30 }}</td>
+                        <td class="text-right tabular-nums text-orange-600 dark:text-orange-400">{{ aging_summary.days_60 }}</td>
+                        <td class="text-right tabular-nums text-rose-600 dark:text-rose-400">{{ aging_summary.days_90 }}</td>
+                        <td class="text-right tabular-nums text-slate-900 dark:text-white">{{ aging_summary.total }}</td>
                         <td></td>
                     </tr>
                 </tfoot>
@@ -251,6 +248,7 @@
         </div>
     </div>
 
+    </div>{# /results-container #}
     {% else %}
     <!-- Empty State -->
     <div class="card p-12 text-center">

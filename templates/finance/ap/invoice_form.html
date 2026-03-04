@@ -511,10 +511,10 @@
 <nav class="breadcrumb" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/dashboard" class="hover:text-teal-600">Dashboard</a></li>
-        <li class="flex items-center gap-2">None <span>/</span></li>
-        <li class="flex items-center gap-2">None <a href="/finance/ap/invoices" class="hover:text-teal-600">AP Invoices</a></li>
-        <li class="flex items-center gap-2">None <span>/</span></li>
-        <li class="flex items-center gap-2">None <span class="current" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
+        <li class="flex items-center gap-2"><span>/</span></li>
+        <li class="flex items-center gap-2"><a href="/finance/ap/invoices" class="hover:text-teal-600">AP Invoices</a></li>
+        <li class="flex items-center gap-2"><span>/</span></li>
+        <li class="flex items-center gap-2"><span class="current" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
     </ol>
 </nav>
 {% endblock %}

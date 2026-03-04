@@ -370,10 +370,10 @@
 <nav class="breadcrumb" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/dashboard" class="hover:text-emerald-600">Dashboard</a></li>
-        <li class="flex items-center gap-2">None <span>/</span></li>
-        <li class="flex items-center gap-2">None <a href="/finance/ar/customers" class="hover:text-emerald-600">Customers</a></li>
-        <li class="flex items-center gap-2">None <span>/</span></li>
-        <li class="flex items-center gap-2">None <span class="current" aria-current="page">{{ "Edit" if customer else "New Customer" }}</span></li>
+        <li class="flex items-center gap-2"><span>/</span></li>
+        <li class="flex items-center gap-2"><a href="/finance/ar/customers" class="hover:text-emerald-600">Customers</a></li>
+        <li class="flex items-center gap-2"><span>/</span></li>
+        <li class="flex items-center gap-2"><span class="current" aria-current="page">{{ "Edit" if customer else "New Customer" }}</span></li>
     </ol>
 </nav>
 {% endblock %}
