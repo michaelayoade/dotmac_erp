@@ -1,0 +1,14 @@
+Hello {{ supplier_name }},
+
+Your purchase order has been approved.
+
+PO Number: {{ po_number }}
+PO Date: {{ po_date }}
+Total Amount: {{ currency_code }} {{ total_amount }}
+{% if expected_delivery_date %}Expected Delivery: {{ expected_delivery_date }}
+{% endif %}
+{% if po_url %}
+View Purchase Order: {{ po_url }}
+{% endif %}
+
+Please contact us if you need any clarification before delivery.

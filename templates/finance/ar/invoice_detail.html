@@ -280,7 +280,23 @@
                     <span class="document-row-value">{% if raw_addr is mapping %}{{ [raw_addr.street_1, raw_addr.street_2, raw_addr.city, raw_addr.zip_code] | select | join(', ') }}{% else %}{{ raw_addr }}{% endif %}</span>
                 </div>
                 {% endif %}
+                {% if invoice.customer_tin %}
+                <div class="document-row">
+                    <span class="document-row-label">TIN</span>
+                    <span class="document-row-value font-mono">{{ invoice.customer_tin }}</span>
+                </div>
+                {% endif %}
             </div>
+
+            {% if org_tin %}
+            <div class="document-section">
+                <div class="document-section-title">Tax Information</div>
+                <div class="document-row">
+                    <span class="document-row-label">Our TIN</span>
+                    <span class="document-row-value font-mono">{{ org_tin }}</span>
+                </div>
+            </div>
+            {% endif %}
 
             {# Invoice Lines Section #}
             <div class="document-section">
@@ -319,7 +335,7 @@
                                     <div class="text-xs text-slate-500">{{ line.tax_code or line.tax_name }}</div>
                                     {% endif %}
                                     {% else %}
-                                    -
+                                    <span class="text-xs text-slate-400 dark:text-slate-500">No Tax</span>
                                     {% endif %}
                                 </td>
                                 <td class="px-4 py-3 text-right text-sm font-mono font-medium text-slate-900 dark:text-white sm:pr-0">{{ line.line_amount }}</td>
@@ -358,10 +374,10 @@
                         <span class="document-total-label">Total Amount</span>
                         <span class="document-total-value font-mono">{{ invoice.total_amount | default("0.00") }}</span>
                     </div>
-                    {% if invoice.amount_paid and invoice.amount_paid != 0 %}
+                    {% if invoice.amount_paid_raw and invoice.amount_paid_raw > 0 %}
                     <div class="document-row">
                         <span class="document-row-label text-emerald-600 dark:text-emerald-400">Amount Paid</span>
-                        <span class="document-row-value font-mono text-emerald-600 dark:text-emerald-400">-{{ invoice.amount_paid }}</span>
+                        <span class="document-row-value font-mono text-emerald-600 dark:text-emerald-400">({{ invoice.amount_paid }})</span>
                     </div>
                     {% endif %}
                 </div>

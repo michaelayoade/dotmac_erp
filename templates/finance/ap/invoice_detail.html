@@ -262,10 +262,11 @@
                     <span class="document-row-value">{{ supplier.supplier_code }}</span>
                 </div>
                 {% endif %}
-                {% if supplier.tax_id %}
+                {% set tin = supplier.tax_id if supplier.tax_id else invoice.supplier_tin %}
+                {% if tin %}
                 <div class="document-row">
-                    <span class="document-row-label">Tax ID</span>
-                    <span class="document-row-value">{{ supplier.tax_id }}</span>
+                    <span class="document-row-label">TIN</span>
+                    <span class="document-row-value font-mono">{{ tin }}</span>
                 </div>
                 {% endif %}
                 {% if supplier.email %}
@@ -287,6 +288,16 @@
                 </div>
                 {% endif %}
             </div>
+
+            {% if org_tin %}
+            <div class="document-section">
+                <div class="document-section-title">Tax Information</div>
+                <div class="document-row">
+                    <span class="document-row-label">Our TIN</span>
+                    <span class="document-row-value font-mono">{{ org_tin }}</span>
+                </div>
+            </div>
+            {% endif %}
 
             {# Invoice Lines Section #}
             <div class="document-section">
@@ -325,7 +336,7 @@
                                     <div class="text-xs text-slate-500">{{ line.tax_code or line.tax_name }}</div>
                                     {% endif %}
                                     {% else %}
-                                    -
+                                    <span class="text-xs text-slate-400 dark:text-slate-500">No Tax</span>
                                     {% endif %}
                                 </td>
                                 <td class="table-cell-amount font-medium text-slate-900 dark:text-white">{{ line.display_line_amount or line.line_amount }}</td>

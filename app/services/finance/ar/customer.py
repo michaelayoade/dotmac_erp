@@ -75,6 +75,8 @@ class CustomerInput:
     primary_contact: dict[str, Any] | None = None
     bank_details: dict[str, Any] | None = None
     is_active: bool = True
+    # Parent-child hierarchy
+    parent_customer_id: UUID | None = None
     # Additional template fields (optional - for richer UI forms)
     email: str | None = None
     phone: str | None = None
@@ -113,6 +115,12 @@ class CustomerService(ListResponseMixin):
             raise ValueError("Invalid payment terms days") from exc
 
         currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+
+        parent_customer_id = (
+            coerce_uuid(payload["parent_customer_id"])
+            if payload.get("parent_customer_id")
+            else None
+        )
 
         return CustomerInput(
             customer_code=payload.get("customer_code", ""),
@@ -160,6 +168,7 @@ class CustomerService(ListResponseMixin):
             if payload.get("email") or payload.get("phone")
             else None,
             is_active=payload.get("is_active") is not None,
+            parent_customer_id=parent_customer_id,
         )
 
     @staticmethod
@@ -198,6 +207,20 @@ class CustomerService(ListResponseMixin):
             entity_name="Customer",
         )
 
+        # Validate parent customer if set
+        if input.parent_customer_id:
+            parent = get_org_scoped_entity(
+                db=db,
+                model_class=Customer,
+                entity_id=input.parent_customer_id,
+                org_id=org_id,
+                entity_name="Parent customer",
+            )
+            if not parent:
+                raise ValueError(
+                    "Parent customer not found or belongs to a different organization"
+                )
+
         # Map template-friendly names to model field names
         customer = Customer(
             organization_id=org_id,
@@ -228,6 +251,7 @@ class CustomerService(ListResponseMixin):
             primary_contact=input.primary_contact,
             bank_details=input.bank_details,
             is_active=input.is_active,
+            parent_customer_id=input.parent_customer_id,
         )
 
         db.add(customer)
@@ -324,6 +348,23 @@ class CustomerService(ListResponseMixin):
         customer.primary_contact = input.primary_contact
         customer.bank_details = input.bank_details
         customer.is_active = input.is_active
+
+        # Validate and update parent customer
+        if input.parent_customer_id and input.parent_customer_id == cust_id:
+            raise ValueError("A customer cannot be its own parent")
+        if input.parent_customer_id:
+            parent = get_org_scoped_entity(
+                db=db,
+                model_class=Customer,
+                entity_id=input.parent_customer_id,
+                org_id=org_id,
+                entity_name="Parent customer",
+            )
+            if not parent:
+                raise ValueError(
+                    "Parent customer not found or belongs to a different organization"
+                )
+        customer.parent_customer_id = input.parent_customer_id
 
         db.commit()
         db.refresh(customer)
@@ -690,6 +731,27 @@ class CustomerService(ListResponseMixin):
 
         stmt = stmt.order_by(Customer.legal_name).limit(limit).offset(offset)
         return stmt.all()
+
+    @staticmethod
+    def list_children(
+        db: Session,
+        organization_id: UUID,
+        parent_customer_id: UUID,
+    ) -> builtins.list[Customer]:
+        """List child (sub-account) customers for a given parent."""
+        from sqlalchemy import select
+
+        org_id = coerce_uuid(organization_id)
+        parent_id = coerce_uuid(parent_customer_id)
+        stmt = (
+            select(Customer)
+            .where(
+                Customer.organization_id == org_id,
+                Customer.parent_customer_id == parent_id,
+            )
+            .order_by(Customer.legal_name)
+        )
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def get_customer_summary(

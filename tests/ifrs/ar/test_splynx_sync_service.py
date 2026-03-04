@@ -1812,3 +1812,151 @@ class TestInvoiceSyncWithTax:
         assert invoice_obj.subtotal == Decimal("50000.00")
         assert invoice_obj.tax_amount == Decimal("0")
         assert invoice_obj.total_amount == Decimal("50000.00")
+
+
+# ===========================================================================
+# Comma-separated splynx_id dedup matching
+# ===========================================================================
+
+
+class TestGetCustomerBySplynxIdComma:
+    """Test _get_customer_by_splynx_id handles comma-separated IDs."""
+
+    def test_exact_match_single_id(self) -> None:
+        """Exact match on a single splynx_id value."""
+        db = MagicMock()
+        svc = _make_service(db)
+        customer = MagicMock()
+        customer.customer_id = uuid.uuid4()
+        db.scalar.return_value = customer
+
+        result = svc._get_customer_by_splynx_id(328)
+
+        assert result is customer
+        db.scalar.assert_called_once()
+
+    def test_match_start_of_comma_list(self) -> None:
+        """Match ID at start of comma-separated list like '328,10015'."""
+        db = MagicMock()
+        svc = _make_service(db)
+        customer = MagicMock()
+        customer.customer_id = uuid.uuid4()
+        db.scalar.return_value = customer
+
+        result = svc._get_customer_by_splynx_id(328)
+
+        assert result is customer
+
+    def test_match_end_of_comma_list(self) -> None:
+        """Match ID at end of comma-separated list like '328,10015'."""
+        db = MagicMock()
+        svc = _make_service(db)
+        customer = MagicMock()
+        customer.customer_id = uuid.uuid4()
+        db.scalar.return_value = customer
+
+        result = svc._get_customer_by_splynx_id(10015)
+
+        assert result is customer
+
+    def test_match_middle_of_comma_list(self) -> None:
+        """Match ID in middle of comma-separated list like '100,328,10015'."""
+        db = MagicMock()
+        svc = _make_service(db)
+        customer = MagicMock()
+        customer.customer_id = uuid.uuid4()
+        db.scalar.return_value = customer
+
+        result = svc._get_customer_by_splynx_id(328)
+
+        assert result is customer
+
+    def test_no_match_returns_none(self) -> None:
+        """No match returns None."""
+        db = MagicMock()
+        svc = _make_service(db)
+        db.scalar.return_value = None
+
+        result = svc._get_customer_by_splynx_id(999)
+
+        assert result is None
+
+    def test_no_false_match_partial_number(self) -> None:
+        """Searching for '32' must not false-match '328'.
+
+        The LIKE patterns use comma delimiters so partial numbers
+        are excluded — '32' only matches exact '32' or '...,32,...'.
+        """
+        db = MagicMock()
+        svc = _make_service(db)
+        # DB returns None because LIKE '32,%' does not match '328,...'
+        db.scalar.return_value = None
+
+        result = svc._get_customer_by_splynx_id(32)
+
+        assert result is None
+
+
+class TestResolvePartnerParent:
+    """Tests for _resolve_partner_parent() — resolves Splynx partner_id to parent customer."""
+
+    def test_partner_id_zero_returns_none(self) -> None:
+        """partner_id 0 means direct customer — no parent."""
+        db = MagicMock()
+        svc = _make_service(db)
+
+        result = svc._resolve_partner_parent(0)
+
+        assert result is None
+        db.scalar.assert_not_called()
+
+    def test_partner_id_one_returns_none(self) -> None:
+        """partner_id 1 is the default/direct partner — no parent."""
+        db = MagicMock()
+        svc = _make_service(db)
+
+        result = svc._resolve_partner_parent(1)
+
+        assert result is None
+        db.scalar.assert_not_called()
+
+    def test_resolves_partner_to_parent(self) -> None:
+        """Valid partner_id resolves to the parent customer_id."""
+        db = MagicMock()
+        svc = _make_service(db)
+        parent_id = uuid.uuid4()
+        parent_customer = MagicMock()
+        parent_customer.customer_id = parent_id
+        db.scalar.return_value = parent_customer
+
+        result = svc._resolve_partner_parent(51)
+
+        assert result == parent_id
+
+    def test_caches_resolved_partner(self) -> None:
+        """Second call for same partner_id uses cache, not DB."""
+        db = MagicMock()
+        svc = _make_service(db)
+        parent_id = uuid.uuid4()
+        parent_customer = MagicMock()
+        parent_customer.customer_id = parent_id
+        db.scalar.return_value = parent_customer
+
+        # First call — hits DB
+        result1 = svc._resolve_partner_parent(51)
+        # Second call — should use cache
+        result2 = svc._resolve_partner_parent(51)
+
+        assert result1 == parent_id
+        assert result2 == parent_id
+        assert db.scalar.call_count == 1  # Only one DB call
+
+    def test_unknown_partner_returns_none(self) -> None:
+        """Partner not found in DB returns None."""
+        db = MagicMock()
+        svc = _make_service(db)
+        db.scalar.return_value = None
+
+        result = svc._resolve_partner_parent(999)
+
+        assert result is None

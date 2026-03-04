@@ -68,6 +68,12 @@ FILTER_SCHEMA: dict[str, FilterFieldSpec] = {
         value_type="uuid",
         operators={"=", "!=", "in", "not in", "is", "is not"},
     ),
+    "assigned_location_id": FilterFieldSpec(
+        model="employee",
+        column="assigned_location_id",
+        value_type="uuid",
+        operators={"=", "!=", "in", "not in", "is", "is not"},
+    ),
     "employment_type_id": FilterFieldSpec(
         model="employee",
         column="employment_type_id",

@@ -135,6 +135,18 @@ class HRWebService:
         )
         designations = desig_result.items
 
+        employment_type_result = org_svc.list_employment_types(
+            EmploymentTypeFilters(is_active=True),
+            PaginationParams(limit=DROPDOWN_LIMIT),
+        )
+        employment_types = employment_type_result.items
+
+        location_result = org_svc.list_locations(
+            is_active=True,
+            pagination=PaginationParams(limit=DROPDOWN_LIMIT),
+        )
+        locations = location_result.items
+
         manager_result = svc.list_employees(
             EmployeeFilters(include_deleted=False),
             PaginationParams(limit=DROPDOWN_LIMIT),
@@ -185,6 +197,12 @@ class HRWebService:
         desig_options = {
             str(d.designation_id): d.designation_name for d in designations
         }
+        employment_type_options = {
+            str(item.employment_type_id): item.type_name for item in employment_types
+        }
+        location_options = {
+            str(item.location_id): item.location_name for item in locations
+        }
         active_filters = build_active_filters(
             params={
                 "status": status,
@@ -207,6 +225,8 @@ class HRWebService:
             options={
                 "department_id": dept_options,
                 "designation_id": desig_options,
+                "employment_type_id": employment_type_options,
+                "assigned_location_id": location_options,
             },
         )
         if filters_json:
@@ -223,6 +243,8 @@ class HRWebService:
             "stats": stats,
             "departments": departments,
             "designations": designations,
+            "employment_types": employment_types,
+            "locations": locations,
             "managers": managers,
             "search": search or "",
             "status": status or "",

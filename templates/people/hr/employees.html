@@ -170,6 +170,8 @@
                                 <option value="email">Email</option>
                                 <option value="department_id">Department</option>
                                 <option value="designation_id">Designation</option>
+                                <option value="assigned_location_id">Branch</option>
+                                <option value="employment_type_id">Employment Type</option>
                                 <option value="date_of_joining">Date Of Joining</option>
                                 <option value="date_of_leaving">Date Of Leaving</option>
                             </select>
@@ -494,6 +496,8 @@ function employeeBulkActions() {
         status: { kind: 'status', operators: ALL_OPERATORS },
         department_id: { kind: 'department', operators: ALL_OPERATORS },
         designation_id: { kind: 'designation', operators: ALL_OPERATORS },
+        assigned_location_id: { kind: 'location', operators: ALL_OPERATORS },
+        employment_type_id: { kind: 'employmentType', operators: ALL_OPERATORS },
         date_of_joining: { kind: 'date', operators: ALL_OPERATORS },
         date_of_leaving: { kind: 'date', operators: ALL_OPERATORS }
     };
@@ -522,6 +526,16 @@ function employeeBulkActions() {
     const DESIGNATION_OPTIONS = [
         {% for desig in designations %}
         { value: '{{ desig.designation_id }}', label: '{{ (desig.designation_name or "")|replace("'", "\\'") }}' },
+        {% endfor %}
+    ];
+    const LOCATION_OPTIONS = [
+        {% for loc in locations %}
+        { value: '{{ loc.location_id }}', label: '{{ (loc.location_name or "")|replace("'", "\\'") }}' },
+        {% endfor %}
+    ];
+    const EMPLOYMENT_TYPE_OPTIONS = [
+        {% for item in employment_types %}
+        { value: '{{ item.employment_type_id }}', label: '{{ (item.type_name or "")|replace("'", "\\'") }}' },
         {% endfor %}
     ];
 
@@ -647,6 +661,60 @@ function employeeBulkActions() {
             if (operator === '=' || operator === '!=') {
                 const select = createSelect(
                     [{ value: '', label: 'Select designation' }, ...DESIGNATION_OPTIONS],
+                    preferredValue || ''
+                );
+                host.appendChild(select);
+                return;
+            }
+            const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+            input.placeholder = 'value';
+            host.appendChild(input);
+            return;
+        }
+
+        if (meta.kind === 'location') {
+            if (operator === 'is' || operator === 'is not') {
+                const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+                host.appendChild(select);
+                return;
+            }
+            const isList = operator === 'in' || operator === 'not in';
+            if (isList) {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'location-id-1,location-id-2';
+                host.appendChild(input);
+                return;
+            }
+            if (operator === '=' || operator === '!=') {
+                const select = createSelect(
+                    [{ value: '', label: 'Select branch' }, ...LOCATION_OPTIONS],
+                    preferredValue || ''
+                );
+                host.appendChild(select);
+                return;
+            }
+            const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+            input.placeholder = 'value';
+            host.appendChild(input);
+            return;
+        }
+
+        if (meta.kind === 'employmentType') {
+            if (operator === 'is' || operator === 'is not') {
+                const select = createSelect([{ value: 'null', label: 'NULL' }], 'null');
+                host.appendChild(select);
+                return;
+            }
+            const isList = operator === 'in' || operator === 'not in';
+            if (isList) {
+                const input = createInput('text', Array.isArray(preferredValue) ? preferredValue.join(',') : (preferredValue || ''));
+                input.placeholder = 'employment-type-id-1,employment-type-id-2';
+                host.appendChild(input);
+                return;
+            }
+            if (operator === '=' || operator === '!=') {
+                const select = createSelect(
+                    [{ value: '', label: 'Select employment type' }, ...EMPLOYMENT_TYPE_OPTIONS],
                     preferredValue || ''
                 );
                 host.appendChild(select);

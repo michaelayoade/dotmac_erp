@@ -138,6 +138,7 @@ def customer_option_view(customer: Customer) -> dict:
         "default_tax_code_id": str(customer.default_tax_code_id)
         if customer.default_tax_code_id
         else None,
+        "is_vat_exempt": customer.is_vat_exempt,
     }
 
 
@@ -161,6 +162,10 @@ def customer_form_view(customer: Customer) -> dict:
         "billing_address": (customer.billing_address or {}).get("address", ""),
         "shipping_address": (customer.shipping_address or {}).get("address", ""),
         "is_active": customer.is_active,
+        "is_vat_exempt": customer.is_vat_exempt,
+        "parent_customer_id": str(customer.parent_customer_id)
+        if customer.parent_customer_id
+        else None,
     }
 
 
@@ -169,8 +174,19 @@ def customer_list_view(
     balance: Decimal,
     created_by_name: str | None = None,
     balance_trend: list[float] | None = None,
+    child_count: int = 0,
 ) -> dict:
     """Transform customer to list view."""
+    # Resolve parent name safely (parent may be eagerly loaded or None)
+    parent_name: str | None = None
+    parent_id = customer.parent_customer_id
+    try:
+        parent = customer.parent_customer
+        if parent:
+            parent_name = customer_display_name(parent)
+    except Exception:
+        parent_name = None
+
     return {
         "customer_id": customer.customer_id,
         "customer_code": customer.customer_code,
@@ -188,6 +204,9 @@ def customer_list_view(
         if balance_trend and any(v > 0 for v in balance_trend)
         else None,
         "is_active": customer.is_active,
+        "parent_customer_id": str(parent_id) if parent_id else None,
+        "parent_customer_name": parent_name,
+        "child_count": child_count,
         "created_at": customer.created_at,
         "created_by_user_id": customer.created_by_user_id,
         "created_by_name": created_by_name,
@@ -198,6 +217,19 @@ def customer_list_view(
 def customer_detail_view(customer: Customer, balance: Decimal) -> dict:
     """Transform customer to detail view."""
     contact = customer.primary_contact or {}
+
+    parent_name: str | None = None
+    parent_code: str | None = None
+    parent_id = customer.parent_customer_id
+    try:
+        parent = customer.parent_customer
+        if parent:
+            parent_name = customer_display_name(parent)
+            parent_code = parent.customer_code
+    except Exception:
+        parent_name = None
+        parent_code = None
+
     return {
         "customer_id": customer.customer_id,
         "customer_code": customer.customer_code,
@@ -218,6 +250,9 @@ def customer_detail_view(customer: Customer, balance: Decimal) -> dict:
         "billing_address": (customer.billing_address or {}).get("address", ""),
         "shipping_address": (customer.shipping_address or {}).get("address", ""),
         "is_active": customer.is_active,
+        "parent_customer_id": str(parent_id) if parent_id else None,
+        "parent_customer_name": parent_name,
+        "parent_customer_code": parent_code,
     }
 
 
@@ -264,12 +299,13 @@ def invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
         "invoice_type": invoice.invoice_type.value,
         "customer_id": invoice.customer_id,
         "customer_name": customer_display_name(customer) if customer else "",
-        "invoice_date": format_date(invoice.invoice_date),
-        "due_date": format_date(invoice.due_date),
+        "invoice_date": format_date(invoice.invoice_date, format="%d %b %Y"),
+        "due_date": format_date(invoice.due_date, format="%d %b %Y"),
         "currency_code": invoice.currency_code,
         "currency": invoice.currency_code,
         "payment_terms": None,  # Set by invoice_detail_context if available
         "billing_address": getattr(invoice, "billing_address", None),
+        "customer_tin": customer.tax_identification_number if customer else None,
         "subtotal": format_currency(invoice.subtotal, invoice.currency_code),
         "discount_amount": format_currency(discount_amount, invoice.currency_code)
         if discount_amount is not None
@@ -277,6 +313,7 @@ def invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
         "tax_amount": format_currency(invoice.tax_amount, invoice.currency_code),
         "total_amount": format_currency(invoice.total_amount, invoice.currency_code),
         "amount_paid": format_currency(invoice.amount_paid, invoice.currency_code),
+        "amount_paid_raw": float(invoice.amount_paid),
         "balance": format_currency(balance, invoice.currency_code),
         "balance_due": balance,
         "status": invoice_status_label(invoice.status),

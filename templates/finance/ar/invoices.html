@@ -66,6 +66,7 @@
                             {{ sortable_th("Customer", "customer_name", sort, sort_dir) }}
                             {{ sortable_th("Due Date", "due_date", sort, sort_dir, class="hidden sm:table-cell") }}
                             {{ sortable_th("Amount", "total_amount", sort, sort_dir, class="text-right") }}
+                            <th scope="col" class="text-right hidden md:table-cell">Tax</th>
                             <th scope="col" class="text-right">Balance</th>
                             {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                             <th scope="col" class="text-right">Actions</th>
@@ -94,6 +95,7 @@
                             {% endif %}
                         </td>
                         <td class="text-right font-mono tabular-nums text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount | default(zero_amount) }}</td>
+                        <td class="text-right font-mono tabular-nums text-sm text-slate-500 dark:text-slate-400 hidden md:table-cell">{{ invoice.tax_amount if invoice.tax_amount else '—' }}</td>
                         <td class="text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ invoice.balance | default(zero_amount) }}</td>
                         <td class="text-center">
                             {{ status_badge(invoice.status, 'sm') }}
@@ -115,7 +117,7 @@
                     </tr>
                         {% else %}
                         <tr>
-                            <td colspan="9" class="py-12">
+                            <td colspan="10" class="py-12">
                                 {{ empty_state('No invoices found', 'Create your first invoice to get started', 'document', 'New Invoice', '/finance/ar/invoices/new') }}
                             </td>
                         </tr>

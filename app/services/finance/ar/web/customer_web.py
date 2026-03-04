@@ -29,6 +29,7 @@ from app.services.finance.ar.customer import CustomerInput, customer_service
 from app.services.finance.ar.web.base import (
     calculate_customer_balance_trends,
     customer_detail_view,
+    customer_display_name,
     customer_form_view,
     customer_list_view,
     format_currency,
@@ -71,6 +72,7 @@ class CustomerWebService:
         sort: str | None = None,
         sort_dir: str | None = None,
         limit: int = 50,
+        parent_customer_id: str | None = None,
     ) -> dict:
         """Get context for customer listing page."""
         logger.debug(
@@ -93,6 +95,7 @@ class CustomerWebService:
             organization_id=organization_id,
             search=search,
             status=status,
+            parent_customer_id=parent_customer_id,
         )
 
         total_count = (
@@ -148,6 +151,22 @@ class CustomerWebService:
         customer_ids = [c.customer_id for c in customers]
         balance_trends = calculate_customer_balance_trends(db, org_id, customer_ids)
 
+        # Count child customers per parent for sub-account badges
+        child_count_map: dict[UUID, int] = {}
+        if customer_ids:
+            child_counts = db.execute(
+                select(
+                    Customer.parent_customer_id,
+                    func.count(Customer.customer_id).label("cnt"),
+                )
+                .where(
+                    Customer.organization_id == org_id,
+                    Customer.parent_customer_id.in_(customer_ids),
+                )
+                .group_by(Customer.parent_customer_id)
+            ).all()
+            child_count_map = {row.parent_customer_id: row.cnt for row in child_counts}
+
         customers_view = [
             customer_list_view(
                 customer,
@@ -156,6 +175,7 @@ class CustomerWebService:
                 if customer.created_by_user_id
                 else None,
                 balance_trends.get(customer.customer_id),
+                child_count=child_count_map.get(customer.customer_id, 0),
             )
             for customer in customers
         ]
@@ -217,11 +237,35 @@ class CustomerWebService:
             )
         ]
 
+        # Parent customer candidates (exclude self if editing)
+        parent_query = (
+            select(Customer)
+            .where(
+                Customer.organization_id == org_id,
+                Customer.is_active.is_(True),
+            )
+            .order_by(Customer.legal_name)
+            .limit(500)
+        )
+        if customer:
+            parent_query = parent_query.where(
+                Customer.customer_id != customer.customer_id,
+            )
+        parent_customers = [
+            {
+                "customer_id": str(c.customer_id),
+                "display_name": customer_display_name(c),
+                "customer_code": c.customer_code,
+            }
+            for c in db.scalars(parent_query).all()
+        ]
+
         context = {
             "customer": customer_view,
             "revenue_accounts": revenue_accounts,
             "receivable_accounts": receivable_accounts,
             "tax_codes": tax_codes,
+            "parent_customers": parent_customers,
         }
         context.update(get_currency_context(db, organization_id))
 
@@ -441,6 +485,27 @@ class CustomerWebService:
             str(customer.default_tax_code_id) if customer.default_tax_code_id else None
         )
 
+        # Load child (sub-account) customers
+        child_customers_view: list[dict] = []
+        children = db.scalars(
+            select(Customer)
+            .where(
+                Customer.organization_id == org_id,
+                Customer.parent_customer_id == customer.customer_id,
+            )
+            .order_by(Customer.legal_name)
+            .limit(100)
+        ).all()
+        for child in children:
+            child_customers_view.append(
+                {
+                    "customer_id": child.customer_id,
+                    "customer_code": child.customer_code,
+                    "customer_name": customer_display_name(child),
+                    "is_active": child.is_active,
+                }
+            )
+
         return {
             "customer": customer_view,
             "invoices": invoices_view,
@@ -448,6 +513,7 @@ class CustomerWebService:
             "quotes": quotes_view,
             "sales_orders": sales_orders_view,
             "attachments": attachments_view,
+            "child_customers": child_customers_view,
         }
 
     @staticmethod
@@ -489,6 +555,7 @@ class CustomerWebService:
         page: int,
         sort: str | None = None,
         sort_dir: str | None = None,
+        parent_customer_id: str | None = None,
     ) -> HTMLResponse:
         """Render customer list page."""
         context = base_context(request, auth, "Customers", "ar")
@@ -501,6 +568,7 @@ class CustomerWebService:
                 page=page,
                 sort=sort,
                 sort_dir=sort_dir,
+                parent_customer_id=parent_customer_id,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/customers.html", context)

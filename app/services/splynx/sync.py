@@ -199,6 +199,9 @@ class SplynxSyncService:
         # Cache for customer ID mapping (splynx_id -> erp_customer_id)
         self._customer_cache: dict[int, UUID] = {}
 
+        # Cache for partner resolution (splynx_partner_id -> erp_parent_customer_id)
+        self._partner_cache: dict[int, UUID] = {}
+
         # Payment method -> ERP bank account mapping
         self._payment_method_cache: dict[int, SplynxPaymentMethod] = {}
         self._bank_account_mapping: dict[
@@ -537,15 +540,47 @@ class SplynxSyncService:
         return self.db.scalar(stmt)
 
     def _get_customer_by_splynx_id(self, splynx_id: int) -> Customer | None:
-        """Get existing customer by splynx_id column (set by dedup migration)."""
-        # Match exact ID or comma-separated list containing this ID
+        """Get existing customer by splynx_id column (set by dedup migration).
+
+        Handles comma-separated IDs like "328,10015" by matching:
+        - exact: "328"
+        - starts with: "328,..."
+        - contains: "...,328,..."
+        - ends with: "...,328"
+        """
         sid = str(splynx_id)
         stmt = select(Customer).where(
             Customer.organization_id == self.organization_id,
             Customer.splynx_id.is_not(None),
-            Customer.splynx_id == sid,
+            or_(
+                Customer.splynx_id == sid,
+                Customer.splynx_id.like(f"{sid},%"),
+                Customer.splynx_id.like(f"%,{sid},%"),
+                Customer.splynx_id.like(f"%,{sid}"),
+            ),
         )
         return self.db.scalar(stmt)
+
+    def _resolve_partner_parent(self, partner_id: int) -> UUID | None:
+        """Resolve Splynx partner_id to ERP parent customer_id.
+
+        Returns None for direct customers (partner_id <= 1) or when
+        no matching reseller is found in the ERP.
+        """
+        if partner_id <= 1:
+            return None  # Direct customer, no parent
+        if partner_id in self._partner_cache:
+            return self._partner_cache[partner_id]
+        # Find customer whose splynx_partner_id matches
+        stmt = select(Customer).where(
+            Customer.organization_id == self.organization_id,
+            Customer.splynx_partner_id == str(partner_id),
+        )
+        parent = self.db.scalar(stmt)
+        if parent:
+            self._partner_cache[partner_id] = parent.customer_id
+            return parent.customer_id
+        return None
 
     def _find_existing_customer(
         self, splynx_customer: SplynxCustomer
@@ -969,6 +1004,14 @@ class SplynxSyncService:
             self._record_sync(
                 EntityType.CUSTOMER, external_id, customer.customer_id, data_hash
             )
+
+        # Resolve parent from Splynx partner_id (applies to both create & update)
+        target = existing if existing else customer
+        partner_id = getattr(splynx_customer, "partner_id", 0)
+        if partner_id:
+            parent_customer_id = self._resolve_partner_parent(partner_id)
+            if parent_customer_id and target.parent_customer_id != parent_customer_id:
+                target.parent_customer_id = parent_customer_id
 
     # =========================================================================
     # Invoice Sync

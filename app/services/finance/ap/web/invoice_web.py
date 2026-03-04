@@ -198,6 +198,9 @@ class InvoiceWebService:
                     "total_amount": format_currency(
                         invoice.total_amount, invoice.currency_code
                     ),
+                    "tax_amount": format_currency(
+                        invoice.tax_amount, invoice.currency_code
+                    ),
                     "balance": format_currency(balance, invoice.currency_code),
                     "status": invoice_status_label(invoice.status),
                     "is_overdue": (
@@ -613,11 +616,23 @@ class InvoiceWebService:
                 inclusive_vat_total, invoice.currency_code
             )
 
+        # Fetch org TIN for display on invoice document
+        org_tin: str | None = None
+        try:
+            from app.models.finance.core_org.organization import Organization
+
+            org = db.get(Organization, org_id)
+            if org:
+                org_tin = org.tax_identification_number
+        except (AttributeError, TypeError):
+            pass  # org TIN lookup is best-effort
+
         return {
             "invoice": invoice_view,
             "supplier": supplier_form_view(supplier) if supplier else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "org_tin": org_tin,
             "recent_activity": recent_activity,
         }
 

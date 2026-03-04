@@ -77,6 +77,16 @@
                                 {% if customer.trading_name and customer.legal_name and customer.trading_name != customer.legal_name %}
                                 <div class="text-xs text-slate-500 dark:text-slate-400">{{ customer.legal_name }}</div>
                                 {% endif %}
+                                {% if customer.parent_customer_name %}
+                                <div class="text-xs text-slate-400 dark:text-slate-500">
+                                    <span class="mr-0.5">&crarr;</span> Sub-account of {{ customer.parent_customer_name }}
+                                </div>
+                                {% endif %}
+                                {% if customer.child_count %}
+                                <span class="ml-1 inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
+                                    {{ customer.child_count }} sub-account{{ 's' if customer.child_count != 1 else '' }}
+                                </span>
+                                {% endif %}
                             </td>
                             <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ customer.tax_id | default("—") }}</td>
                             <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">Net {{ customer.payment_terms_days | default(30) }}</td>

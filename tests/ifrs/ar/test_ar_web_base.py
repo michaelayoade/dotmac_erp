@@ -107,7 +107,9 @@ def test_invoice_line_view_includes_tax_metadata_fields(monkeypatch):
 
 
 def test_invoice_detail_view_overdue_flag(monkeypatch):
-    monkeypatch.setattr(ar_base, "format_date", lambda d: d.isoformat() if d else None)
+    monkeypatch.setattr(
+        ar_base, "format_date", lambda d, **kw: d.isoformat() if d else None
+    )
     monkeypatch.setattr(
         ar_base,
         "format_currency",
@@ -144,7 +146,9 @@ def test_invoice_detail_view_overdue_flag(monkeypatch):
 
 
 def test_receipt_detail_view_has_wht_flag(monkeypatch):
-    monkeypatch.setattr(ar_base, "format_date", lambda d: d.isoformat() if d else None)
+    monkeypatch.setattr(
+        ar_base, "format_date", lambda d, **kw: d.isoformat() if d else None
+    )
     monkeypatch.setattr(
         ar_base,
         "format_currency",
@@ -175,7 +179,9 @@ def test_receipt_detail_view_has_wht_flag(monkeypatch):
 
 
 def test_allocation_view_formats_values(monkeypatch):
-    monkeypatch.setattr(ar_base, "format_date", lambda d: d.isoformat() if d else None)
+    monkeypatch.setattr(
+        ar_base, "format_date", lambda d, **kw: d.isoformat() if d else None
+    )
     monkeypatch.setattr(
         ar_base,
         "format_currency",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import builtins
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -18,11 +19,13 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.email_profile import EmailModule
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
+from app.services.email_branding import render_branded_email
 from app.services.finance.ap.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -30,8 +33,10 @@ from app.services.finance.ap.input_utils import (
     require_uuid,
     resolve_currency_code,
 )
+from app.services.finance.ap.purchase_order_pdf import PurchaseOrderPDFService
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
+from app.tasks.email import queue_email
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +79,120 @@ class PurchaseOrderService(ListResponseMixin):
     """
     Service for purchase order lifecycle management.
     """
+
+    @staticmethod
+    def _get_supplier_contact_email(supplier: Supplier) -> str | None:
+        """Return the supplier primary contact email when present."""
+        contact = supplier.primary_contact
+        if not isinstance(contact, dict):
+            return None
+
+        email = contact.get("email")
+        if not isinstance(email, str):
+            return None
+
+        normalized = email.strip()
+        return normalized or None
+
+    @staticmethod
+    def _supplier_display_name(supplier: Supplier) -> str:
+        """Return the best available supplier display name."""
+        trading_name = getattr(supplier, "trading_name", None)
+        if isinstance(trading_name, str) and trading_name.strip():
+            return trading_name.strip()
+
+        legal_name = getattr(supplier, "legal_name", None)
+        if isinstance(legal_name, str) and legal_name.strip():
+            return legal_name.strip()
+
+        return "Supplier"
+
+    @staticmethod
+    def _purchase_order_url(po_id: UUID) -> str:
+        """Build an absolute URL for a purchase order when APP_URL is set."""
+        app_url = os.getenv("APP_URL", "").rstrip("/")
+        if not app_url:
+            return ""
+        return f"{app_url}/finance/ap/purchase-orders/{po_id}"
+
+    @staticmethod
+    def _purchase_order_attachment_name(po_number: str) -> str:
+        """Return a safe attachment filename for the purchase order PDF."""
+        sanitized = po_number.replace("/", "-").replace("\\", "-").strip()
+        return f"{sanitized or 'purchase-order'}.pdf"
+
+    @classmethod
+    def _notify_supplier_po_approved(
+        cls,
+        db: Session,
+        po: PurchaseOrder,
+    ) -> None:
+        """Queue a supplier email when a purchase order is approved."""
+        supplier = db.scalars(
+            select(Supplier).where(
+                Supplier.supplier_id == po.supplier_id,
+                Supplier.organization_id == po.organization_id,
+            )
+        ).first()
+        if not supplier:
+            logger.warning(
+                "Skipping PO approval supplier notification for %s: supplier %s not found",
+                po.po_id,
+                po.supplier_id,
+            )
+            return
+
+        supplier_email = cls._get_supplier_contact_email(supplier)
+        if not supplier_email:
+            logger.info(
+                "Skipping PO approval supplier notification for %s: supplier has no email",
+                po.po_id,
+            )
+            return
+
+        supplier_name = cls._supplier_display_name(supplier)
+        po_url = cls._purchase_order_url(po.po_id)
+        context = {
+            "supplier_name": supplier_name,
+            "po_number": po.po_number,
+            "po_date": po.po_date.strftime("%d %b %Y"),
+            "expected_delivery_date": po.expected_delivery_date.strftime("%d %b %Y")
+            if po.expected_delivery_date
+            else None,
+            "currency_code": po.currency_code,
+            "total_amount": f"{po.total_amount:,.2f}",
+            "po_url": po_url,
+        }
+        body_html, body_text = render_branded_email(
+            "emails/finance/purchase_order_approved.html",
+            context,
+            db,
+            po.organization_id,
+        )
+        attachments = None
+        try:
+            pdf_bytes = PurchaseOrderPDFService(db).generate_pdf(po, supplier)
+            attachments = [
+                (
+                    cls._purchase_order_attachment_name(po.po_number),
+                    pdf_bytes,
+                    "application/pdf",
+                )
+            ]
+        except Exception as e:
+            logger.exception(
+                "Failed to generate PO PDF attachment for %s: %s", po.po_id, e
+            )
+
+        queue_email(
+            to_email=supplier_email,
+            subject=f"Purchase Order Approved: {po.po_number}",
+            body_html=body_html,
+            body_text=body_text,
+            attachments=attachments,
+            module=EmailModule.FINANCE.value,
+            organization_id=str(po.organization_id),
+        )
 
     @staticmethod
     def build_input_from_payload(
@@ -552,6 +671,13 @@ class PurchaseOrderService(ListResponseMixin):
             )
         except Exception as e:
             logger.exception("Workflow event failed for PO %s approval: %s", po_id, e)
+
+        try:
+            PurchaseOrderService._notify_supplier_po_approved(db, po)
+        except Exception as e:
+            logger.exception(
+                "Supplier notification failed for PO %s approval: %s", po_id, e
+            )
 
         db.commit()
         db.refresh(po)

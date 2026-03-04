@@ -24,7 +24,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import settings
 from app.db import Base
@@ -54,6 +54,7 @@ class Customer(Base):
         UniqueConstraint("organization_id", "customer_code", name="uq_customer_code"),
         Index("idx_customer_org", "organization_id", "is_active"),
         Index("idx_customer_risk", "organization_id", "risk_category"),
+        Index("idx_customer_parent", "organization_id", "parent_customer_id"),
         {"schema": "ar"},
     )
 
@@ -169,6 +170,15 @@ class Customer(Base):
         comment="When WHT exemption expires",
     )
 
+    # VAT Exemption
+    is_vat_exempt: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Customer is exempt from VAT — invoice lines default to No Tax",
+    )
+
     # Contact & Address (JSONB for flexibility)
     billing_address: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     shipping_address: Mapped[dict[str, Any] | None] = mapped_column(
@@ -203,6 +213,21 @@ class Customer(Base):
         comment="DotMac CRM customer/company ID (for sync lookup)",
     )
 
+    # Parent-child hierarchy (ISP reseller → sub-accounts)
+    parent_customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ar.customer.customer_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Splynx partner ID (for resolving parent during sync)
+    splynx_partner_id: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="Splynx partner ID — reseller customers have this set",
+    )
+
     # Audit fields
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -223,4 +248,17 @@ class Customer(Base):
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
+    )
+
+    # Relationships
+    parent_customer: Mapped["Customer | None"] = relationship(
+        "Customer",
+        remote_side="Customer.customer_id",
+        foreign_keys=[parent_customer_id],
+        back_populates="child_customers",
+    )
+    child_customers: Mapped[list["Customer"]] = relationship(
+        "Customer",
+        back_populates="parent_customer",
+        foreign_keys=[parent_customer_id],
     )

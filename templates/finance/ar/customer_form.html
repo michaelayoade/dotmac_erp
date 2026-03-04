@@ -484,6 +484,23 @@
                     <p class="form-help">Default sales tax code to apply on new invoices, quotes, and orders</p>
                 </div>
 
+                <!-- Parent Account -->
+                <div>
+                    <label for="parent_customer_id" class="form-label">
+                        Parent Account
+                    </label>
+                    {% set selected_parent = customer.parent_customer_id if customer and customer.parent_customer_id else '' %}
+                    <select id="parent_customer_id" name="parent_customer_id" class="form-input form-select">
+                        <option value="">None (top-level customer)</option>
+                        {% for pc in parent_customers %}
+                        <option value="{{ pc.customer_id }}" {{ 'selected' if selected_parent and pc.customer_id == selected_parent else '' }}>
+                            {{ pc.customer_code }} — {{ pc.display_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="form-help">Link this customer as a sub-account of a reseller/parent</p>
+                </div>
+
                 <!-- Currency -->
                 <div>
                     <label for="currency_code" class="form-label">

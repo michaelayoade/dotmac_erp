@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ po.po_number }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 14mm;
+    }
+    body {
+      font-family: "DejaVu Sans", Arial, sans-serif;
+      color: #0f172a;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .header {
+      border-bottom: 2px solid {{ primary_color }};
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    .brand {
+      display: inline-block;
+      width: 60%;
+      vertical-align: top;
+    }
+    .brand-logo {
+      display: block;
+      max-width: 180px;
+      max-height: 56px;
+      margin-bottom: 10px;
+      object-fit: contain;
+    }
+    .meta {
+      display: inline-block;
+      width: 38%;
+      vertical-align: top;
+      text-align: right;
+    }
+    .title {
+      color: {{ primary_color }};
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+    }
+    .muted {
+      color: #475569;
+    }
+    .section {
+      margin-bottom: 18px;
+    }
+    .section-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: {{ accent_color }};
+      margin: 0 0 6px 0;
+      font-weight: 700;
+    }
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-height: 74px;
+    }
+    .grid {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 10px;
+    }
+    .grid td {
+      vertical-align: top;
+      width: 50%;
+    }
+    .grid td:first-child {
+      padding-right: 8px;
+    }
+    .grid td:last-child {
+      padding-left: 8px;
+    }
+    table.lines {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table.lines th {
+      background: #e2e8f0;
+      color: #0f172a;
+      text-align: left;
+      font-size: 10px;
+      padding: 8px;
+    }
+    table.lines td {
+      border-bottom: 1px solid #e2e8f0;
+      padding: 8px;
+      vertical-align: top;
+    }
+    .num {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .totals {
+      width: 40%;
+      margin-left: auto;
+      margin-top: 14px;
+      border-collapse: collapse;
+    }
+    .totals td {
+      padding: 6px 0;
+    }
+    .totals tr.total td {
+      border-top: 2px solid #cbd5e1;
+      font-weight: 700;
+      color: #0f172a;
+      padding-top: 8px;
+    }
+    .footer {
+      margin-top: 24px;
+      padding-top: 12px;
+      border-top: 1px solid #cbd5e1;
+      color: #64748b;
+      font-size: 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      {% if logo_url %}
+      <img src="{{ logo_url }}" alt="{{ organization_name }} logo" class="brand-logo">
+      {% endif %}
+      <p class="title">Purchase Order</p>
+      <p style="margin: 0; font-size: 16px; font-weight: 700;">{{ organization_name }}</p>
+      {% if organization_address %}<p class="muted" style="margin: 4px 0 0 0;">{{ organization_address }}</p>{% endif %}
+      {% if organization_email or organization_phone %}
+      <p class="muted" style="margin: 4px 0 0 0;">
+        {% if organization_email %}{{ organization_email }}{% endif %}
+        {% if organization_email and organization_phone %} | {% endif %}
+        {% if organization_phone %}{{ organization_phone }}{% endif %}
+      </p>
+      {% endif %}
+    </div>
+    <div class="meta">
+      <p style="margin: 0; font-size: 16px; font-weight: 700;">{{ po.po_number }}</p>
+      <p class="muted" style="margin: 4px 0 0 0;">PO Date: {{ po.po_date.strftime("%d %b %Y") }}</p>
+      {% if po.expected_delivery_date %}
+      <p class="muted" style="margin: 4px 0 0 0;">Expected Delivery: {{ po.expected_delivery_date.strftime("%d %b %Y") }}</p>
+      {% endif %}
+      <p class="muted" style="margin: 4px 0 0 0;">Currency: {{ po.currency_code }}</p>
+      <p class="muted" style="margin: 4px 0 0 0;">Status: {{ po.status.value }}</p>
+    </div>
+  </div>
+
+  <table class="grid">
+    <tr>
+      <td>
+        <div class="section">
+          <p class="section-title">Supplier</p>
+          <div class="card">
+            <p style="margin: 0; font-weight: 700;">{{ supplier_name }}</p>
+            {% if supplier_address %}<p style="margin: 4px 0 0 0;">{{ supplier_address }}</p>{% endif %}
+            {% if supplier_email %}<p style="margin: 4px 0 0 0;">{{ supplier_email }}</p>{% endif %}
+            {% if supplier_phone %}<p style="margin: 4px 0 0 0;">{{ supplier_phone }}</p>{% endif %}
+          </div>
+        </div>
+      </td>
+      <td>
+        <div class="section">
+          <p class="section-title">Ship To</p>
+          <div class="card">
+            {% if shipping_address %}
+            <p style="margin: 0;">{{ shipping_address }}</p>
+            {% else %}
+            <p style="margin: 0;" class="muted">No shipping address specified.</p>
+            {% endif %}
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="section">
+    <p class="section-title">Order Lines</p>
+    <table class="lines">
+      <thead>
+        <tr>
+          <th style="width: 6%;">#</th>
+          <th>Description</th>
+          <th class="num" style="width: 10%;">Qty</th>
+          <th class="num" style="width: 16%;">Unit Price</th>
+          <th class="num" style="width: 12%;">Tax</th>
+          <th class="num" style="width: 16%;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in lines %}
+        <tr>
+          <td>{{ line.line_number }}</td>
+          <td>
+            <div>{{ line.description }}</div>
+            {% if line.delivery_date %}<div class="muted" style="margin-top: 4px;">Delivery: {{ line.delivery_date }}</div>{% endif %}
+          </td>
+          <td class="num">{{ line.quantity_ordered }}</td>
+          <td class="num">{{ po.currency_code }} {{ line.unit_price }}</td>
+          <td class="num">{{ po.currency_code }} {{ line.tax_amount }}</td>
+          <td class="num">{{ po.currency_code }} {{ line.line_amount }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <table class="totals">
+    <tr>
+      <td class="muted">Subtotal</td>
+      <td class="num">{{ po.currency_code }} {{ subtotal }}</td>
+    </tr>
+    <tr>
+      <td class="muted">Tax</td>
+      <td class="num">{{ po.currency_code }} {{ tax_amount }}</td>
+    </tr>
+    <tr class="total">
+      <td>Total</td>
+      <td class="num">{{ po.currency_code }} {{ total_amount }}</td>
+    </tr>
+  </table>
+
+  {% if po.terms_and_conditions %}
+  <div class="section">
+    <p class="section-title">Terms and Conditions</p>
+    <div class="card">
+      <p style="margin: 0; white-space: pre-wrap;">{{ po.terms_and_conditions }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    Generated {{ generated_at }}
+  </div>
+</body>
+</html>

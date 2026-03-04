@@ -61,6 +61,15 @@
             <div>
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ customer.customer_name }}</h2>
                 <p class="text-sm text-slate-500">Customer Code: <span class="font-mono text-slate-900 dark:text-white">{{ customer.customer_code }}</span></p>
+                {% if customer.parent_customer_id %}
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    <span class="mr-0.5">&crarr;</span> Sub-account of
+                    <a href="/finance/ar/customers/{{ customer.parent_customer_id }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-400 font-medium">
+                        {{ customer.parent_customer_name if customer.parent_customer_name else 'Parent' }}
+                        {% if customer.parent_customer_code %}<span class="font-mono text-xs">({{ customer.parent_customer_code }})</span>{% endif %}
+                    </a>
+                </p>
+                {% endif %}
             </div>
             <div class="flex items-center gap-3">
                 {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
@@ -152,6 +161,14 @@
                     Sales Orders
                     {% if sales_orders %}<span class="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs">{{ sales_orders | length }}</span>{% endif %}
                 </button>
+                {% if child_customers %}
+                <button @click="activeTab = 'sub_accounts'"
+                        :class="activeTab === 'sub_accounts' ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300'"
+                        class="whitespace-nowrap border-b-2 px-6 py-3 text-sm font-medium transition-colors">
+                    Sub-Accounts
+                    <span class="ml-1.5 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs">{{ child_customers | length }}</span>
+                </button>
+                {% endif %}
             </nav>
         </div>
 
@@ -300,6 +317,34 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Sub-Accounts Tab -->
+        {% if child_customers %}
+        <div x-show="activeTab === 'sub_accounts'" x-cloak class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Code</th>
+                        <th scope="col">Customer Name</th>
+                        <th scope="col" class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for child in child_customers %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td><span class="font-mono text-sm">{{ child.customer_code }}</span></td>
+                        <td>
+                            <a href="/finance/ar/customers/{{ child.customer_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                {{ child.customer_name }}
+                            </a>
+                        </td>
+                        <td class="text-center">{{ status_badge('active' if child.is_active else 'inactive', 'sm') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Attachments -->

@@ -15,9 +15,15 @@ def build_customer_query(
     organization_id: str,
     search: str | None = None,
     status: str | None = None,
+    parent_customer_id: str | None = None,
+    top_level_only: bool = False,
 ) -> Query:
     """
     Build the base AR customer query with filters applied.
+
+    Args:
+        parent_customer_id: Filter children of a specific parent.
+        top_level_only: If True, only return customers with no parent.
     """
     org_id = coerce_uuid(organization_id)
 
@@ -41,5 +47,10 @@ def build_customer_query(
             | (Customer.trading_name.ilike(search_pattern))
             | (Customer.tax_identification_number.ilike(search_pattern))
         )
+    if parent_customer_id:
+        parent_id = coerce_uuid(parent_customer_id)
+        query = query.filter(Customer.parent_customer_id == parent_id)
+    elif top_level_only:
+        query = query.filter(Customer.parent_customer_id.is_(None))
 
     return query

@@ -133,6 +133,9 @@ def supplier_option_view(supplier: Supplier) -> dict:
         "withholding_tax_code_id": str(supplier.withholding_tax_code_id)
         if getattr(supplier, "withholding_tax_code_id", None)
         else "",
+        "default_tax_code_id": str(supplier.default_tax_code_id)
+        if getattr(supplier, "default_tax_code_id", None)
+        else "",
     }
 
 
@@ -149,6 +152,9 @@ def supplier_form_view(supplier: Supplier) -> dict:
         "payment_method": None,
         "default_expense_account_id": supplier.default_expense_account_id,
         "default_payable_account_id": supplier.ap_control_account_id,
+        "default_tax_code_id": str(supplier.default_tax_code_id)
+        if supplier.default_tax_code_id
+        else None,
         "email": contact.get("email"),
         "phone": contact.get("phone"),
         "address": (supplier.billing_address or {}).get("address", ""),
@@ -242,10 +248,11 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> 
         "invoice_type": invoice.invoice_type.value,
         "supplier_id": invoice.supplier_id,
         "supplier_name": supplier_display_name(supplier) if supplier else "",
-        "invoice_date": format_date(invoice.invoice_date),
-        "received_date": format_date(invoice.received_date),
-        "due_date": format_date(invoice.due_date),
+        "invoice_date": format_date(invoice.invoice_date, format="%d %b %Y"),
+        "received_date": format_date(invoice.received_date, format="%d %b %Y"),
+        "due_date": format_date(invoice.due_date, format="%d %b %Y"),
         "currency_code": invoice.currency_code,
+        "supplier_tin": supplier.tax_identification_number if supplier else None,
         "subtotal": format_currency(invoice.subtotal, invoice.currency_code),
         "display_subtotal": format_currency(invoice.subtotal, invoice.currency_code),
         "display_subtotal_raw": float(invoice.subtotal),

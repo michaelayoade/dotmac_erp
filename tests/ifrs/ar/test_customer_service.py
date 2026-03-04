@@ -503,3 +503,159 @@ class TestGetCustomerSummary:
                 CustomerService.get_customer_summary(mock_db, org_id, uuid4())
 
         assert exc.value.status_code == 404
+
+
+# ===========================================================================
+# Parent-Child Customer Hierarchy
+# ===========================================================================
+
+
+class TestParentChildCustomer:
+    """Tests for parent-child customer hierarchy (ISP reseller model)."""
+
+    def test_create_child_with_valid_parent(self, mock_db, org_id):
+        """Creating a child customer with a valid parent succeeds."""
+        parent = MockCustomer(organization_id=org_id, customer_code="PARENT-001")
+        parent_id = parent.customer_id
+
+        with (
+            patch(
+                "app.services.finance.ar.customer.get_org_scoped_entity",
+                return_value=parent,
+            ),
+            patch(
+                "app.services.finance.ar.customer.validate_unique_code",
+            ),
+            patch.object(
+                CustomerService, "_generate_customer_code", return_value="CUST-99999"
+            ),
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Child Customer",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=parent_id,
+            )
+            result = CustomerService.create_customer(mock_db, org_id, inp)
+
+        assert result.parent_customer_id == parent_id
+
+    def test_create_child_with_nonexistent_parent(self, mock_db, org_id):
+        """Creating a child with a non-existent parent raises ValueError."""
+        with (
+            patch(
+                "app.services.finance.ar.customer.get_org_scoped_entity",
+                return_value=None,
+            ),
+            patch(
+                "app.services.finance.ar.customer.validate_unique_code",
+            ),
+            patch.object(
+                CustomerService, "_generate_customer_code", return_value="CUST-99999"
+            ),
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Orphan Customer",
+                default_receivable_account_id=uuid4(),
+                parent_customer_id=uuid4(),
+            )
+            with pytest.raises(ValueError, match="Parent customer not found"):
+                CustomerService.create_customer(mock_db, org_id, inp)
+
+    def test_update_self_reference_raises_error(self, mock_db, org_id):
+        """Setting parent_customer_id to self raises ValueError."""
+        customer = MockCustomer(organization_id=org_id)
+        cust_id = customer.customer_id
+
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
+            inp = CustomerInput(
+                customer_type=customer.customer_type,
+                customer_name=customer.legal_name,
+                customer_code=customer.customer_code,
+                default_receivable_account_id=customer.ar_control_account_id,
+                parent_customer_id=cust_id,  # Self-reference
+            )
+            with pytest.raises(ValueError, match="cannot be its own parent"):
+                CustomerService.update_customer(mock_db, org_id, cust_id, inp)
+
+    def test_update_set_parent(self, mock_db, org_id):
+        """Updating a customer to set a valid parent works."""
+        parent = MockCustomer(organization_id=org_id, customer_code="PARENT-002")
+        child = MockCustomer(organization_id=org_id, customer_code="CHILD-001")
+
+        # First call returns child (for the update target), second returns parent (for validation)
+        def side_effect(**kwargs):
+            entity_id = kwargs.get("entity_id")
+            if str(entity_id) == str(child.customer_id):
+                return child
+            if str(entity_id) == str(parent.customer_id):
+                return parent
+            return None
+
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            side_effect=side_effect,
+        ):
+            inp = CustomerInput(
+                customer_type=child.customer_type,
+                customer_name=child.legal_name,
+                customer_code=child.customer_code,
+                default_receivable_account_id=child.ar_control_account_id,
+                parent_customer_id=parent.customer_id,
+            )
+            result = CustomerService.update_customer(
+                mock_db, org_id, child.customer_id, inp
+            )
+
+        assert result.parent_customer_id == parent.customer_id
+
+    def test_list_children(self, mock_db, org_id):
+        """list_children returns children for a given parent."""
+        parent_id = uuid4()
+        child1 = MockCustomer(
+            organization_id=org_id,
+            parent_customer_id=parent_id,
+            customer_code="CHILD-1",
+        )
+        child2 = MockCustomer(
+            organization_id=org_id,
+            parent_customer_id=parent_id,
+            customer_code="CHILD-2",
+        )
+
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [child1, child2]
+        mock_db.scalars.return_value = mock_scalars
+
+        result = CustomerService.list_children(mock_db, org_id, parent_id)
+
+        assert len(result) == 2
+        assert result[0].customer_code == "CHILD-1"
+        assert result[1].customer_code == "CHILD-2"
+
+    def test_create_without_parent(self, mock_db, org_id):
+        """Creating a customer without parent_customer_id works (default case)."""
+        with (
+            patch(
+                "app.services.finance.ar.customer.get_org_scoped_entity",
+            ),
+            patch(
+                "app.services.finance.ar.customer.validate_unique_code",
+            ),
+            patch.object(
+                CustomerService, "_generate_customer_code", return_value="CUST-99999"
+            ),
+        ):
+            inp = CustomerInput(
+                customer_type=MockCustomer().customer_type,
+                customer_name="Standalone Customer",
+                default_receivable_account_id=uuid4(),
+                # parent_customer_id defaults to None
+            )
+            result = CustomerService.create_customer(mock_db, org_id, inp)
+
+        assert result.parent_customer_id is None

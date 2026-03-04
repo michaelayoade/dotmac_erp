@@ -25,6 +25,16 @@ def test_purchase_order_form_context_serializes_edit_order_fields() -> None:
         terms_and_conditions="Net 30",
         status=SimpleNamespace(value="DRAFT"),
     )
+    supplier = SimpleNamespace(
+        supplier_id=supplier_id,
+        organization_id=org_id,
+        supplier_code="SUP-001",
+        legal_name="Paper Supplier Ltd",
+        trading_name=None,
+        currency_code="USD",
+        payment_terms_days=30,
+        withholding_tax_code_id=None,
+    )
 
     item = SimpleNamespace(
         item_id=uuid4(),
@@ -49,7 +59,7 @@ def test_purchase_order_form_context_serializes_edit_order_fields() -> None:
     lines_result = MagicMock()
     lines_result.all.return_value = [line]
     db.scalars.side_effect = [items_result, lines_result]
-    db.get.return_value = po
+    db.get.side_effect = [po, supplier]
 
     with (
         patch(

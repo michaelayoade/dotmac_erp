@@ -486,35 +486,15 @@
     .delay-3 { animation-delay: 0.3s; }
     .delay-4 { animation-delay: 0.4s; }
 
-    /* Breadcrumb styling */
-    .breadcrumb {
-        font-size: 0.8125rem;
-        color: var(--ink-muted);
-    }
-
-    .breadcrumb a {
-        color: var(--ink-muted);
-        transition: color 0.15s ease;
-    }
-
-    .breadcrumb a:hover { color: var(--teal); }
-    .breadcrumb .current { color: var(--ink); font-weight: 500; }
-
-    .dark .breadcrumb { color: rgba(255, 255, 255, 0.5); }
-    .dark .breadcrumb a { color: rgba(255, 255, 255, 0.5); }
-    .dark .breadcrumb a:hover { color: var(--teal-light); }
-    .dark .breadcrumb .current { color: white; }
 </style>
 {% endblock %}
 
 {% block breadcrumbs %}
-<nav class="breadcrumb" aria-label="Breadcrumb">
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
-        <li><a href="/dashboard" class="hover:text-teal-600">Dashboard</a></li>
-        <li class="flex items-center gap-2"><span>/</span></li>
-        <li class="flex items-center gap-2"><a href="/finance/ap/invoices" class="hover:text-teal-600">AP Invoices</a></li>
-        <li class="flex items-center gap-2"><span>/</span></li>
-        <li class="flex items-center gap-2"><span class="current" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AP Invoices</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if invoice else "New Invoice" }}</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -708,7 +688,19 @@
                 </button>
             </div>
 
-            <div class="line-table-wrap mt-8 -mx-2 px-2">
+            {# Bulk apply tax to all lines #}
+            <div class="mt-4 flex items-center gap-3">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Apply tax to all lines:</label>
+                <select @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[200px]">
+                    <option value="">Select tax code...</option>
+                    {% for tax in tax_codes %}
+                    <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%)</option>
+                    {% endfor %}
+                    <option value="__none__">No Tax</option>
+                </select>
+            </div>
+
+            <div class="line-table-wrap mt-4 -mx-2 px-2">
                 <table class="lines-table min-w-[1100px]">
                     <thead>
                         <tr>
@@ -717,7 +709,7 @@
                             <th scope="col" style="width: 18%">Description</th>
                             <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 8%">Qty</th>
                             <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 12%">Unit Price</th>
-                            <th scope="col" style="width: 15%">Tax Code</th>
+                            <th scope="col" class="min-w-[120px]" style="width: 15%">Tax Code</th>
                             <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 12%">Amount</th>
                             <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 5%"></th>
                         </tr>
@@ -1065,6 +1057,17 @@ function invoiceForm() {
             if (currency) this.form.currency_code = currency;
             this.paymentTermsDays = terms;
             this.calculateDueDate();
+
+            // Apply supplier's default tax code to lines without one
+            const defaultTax = item.default_tax_code_id;
+            if (defaultTax) {
+                this.form.lines.forEach((line, idx) => {
+                    if (!line.tax_code_id) {
+                        line.tax_code_id = defaultTax;
+                        this.calculateLineAmount(idx);
+                    }
+                });
+            }
         },
 
         calculateDueDate() {
@@ -1087,6 +1090,15 @@ function invoiceForm() {
                 amount: 0,
                 tax_code_id: '',
                 tax_amount: 0
+            });
+        },
+
+        applyTaxToAllLines(taxCodeId) {
+            if (!taxCodeId) return;
+            const isNone = taxCodeId === '__none__';
+            this.form.lines.forEach((line, index) => {
+                line.tax_code_id = isNone ? '' : taxCodeId;
+                this.calculateLineAmount(index);
             });
         },
 

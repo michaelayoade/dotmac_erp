@@ -19,6 +19,7 @@ def list_customers(
     request: Request,
     search: str | None = None,
     status: str | None = None,
+    parent_customer_id: str | None = None,
     page: int = Query(default=1, ge=1),
     sort: str | None = None,
     sort_dir: str | None = None,
@@ -27,7 +28,15 @@ def list_customers(
 ):
     """Customers list page."""
     return ar_web_service.list_customers_response(
-        request, auth, db, search, status, page, sort, sort_dir
+        request,
+        auth,
+        db,
+        search,
+        status,
+        page,
+        sort,
+        sort_dir,
+        parent_customer_id=parent_customer_id,
     )
 
 

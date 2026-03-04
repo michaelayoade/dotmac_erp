@@ -114,6 +114,14 @@ class Supplier(Base, ERPNextSyncMixin):
         nullable=True,
     )
 
+    # Default purchase tax code
+    default_tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tax.tax_code.tax_code_id"),
+        nullable=True,
+        comment="Default purchase tax code for this supplier",
+    )
+
     # Contact & Address
     billing_address: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     remittance_address: Mapped[dict[str, Any] | None] = mapped_column(

@@ -71,3 +71,20 @@ def test_apply_employee_filter_expression_builds_in_predicate() -> None:
 
     sql = str(stmt)
     assert " IN " in sql
+
+
+def test_apply_employee_filter_expression_supports_branch_and_employment_type() -> None:
+    branch_id = str(uuid.uuid4())
+    employment_type_id = str(uuid.uuid4())
+    expression = FilterExpression.parse_payload(
+        [
+            ["Employee", "assigned_location_id", "=", branch_id],
+            ["Employee", "employment_type_id", "=", employment_type_id],
+        ]
+    )
+
+    stmt, _ = apply_employee_filter_expression(select(Employee), expression)
+
+    sql = str(stmt)
+    assert "assigned_location_id" in sql
+    assert "employment_type_id" in sql

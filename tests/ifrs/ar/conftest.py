@@ -59,6 +59,8 @@ class MockCustomer:
         primary_contact: dict | None = None,
         bank_details: dict | None = None,
         is_active: bool = True,
+        parent_customer_id: uuid.UUID | None = None,
+        splynx_partner_id: str | None = None,
         created_at: datetime = None,
         updated_at: datetime = None,
     ):
@@ -88,6 +90,8 @@ class MockCustomer:
         self.primary_contact = primary_contact
         self.bank_details = bank_details
         self.is_active = is_active
+        self.parent_customer_id = parent_customer_id
+        self.splynx_partner_id = splynx_partner_id
         self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 

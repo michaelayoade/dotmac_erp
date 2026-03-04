@@ -48,10 +48,14 @@ class MockSupplier:
         supplier_id=None,
         organization_id=None,
         name="Test Supplier",
+        primary_contact=None,
     ):
         self.supplier_id = supplier_id or uuid4()
         self.organization_id = organization_id or uuid4()
         self.name = name
+        self.legal_name = name
+        self.trading_name = None
+        self.primary_contact = primary_contact
 
 
 class MockPurchaseOrder:
@@ -114,6 +118,7 @@ class MockPurchaseOrderLine:
         description="Test Item",
         quantity_ordered=Decimal("10.00"),
         quantity_received=Decimal("0"),
+        quantity_invoiced=Decimal("0"),
         unit_price=Decimal("100.00"),
         line_amount=Decimal("1000.00"),
         tax_code_id=None,
@@ -132,6 +137,7 @@ class MockPurchaseOrderLine:
         self.description = description
         self.quantity_ordered = quantity_ordered
         self.quantity_received = quantity_received
+        self.quantity_invoiced = quantity_invoiced
         self.unit_price = unit_price
         self.line_amount = line_amount
         self.tax_code_id = tax_code_id
@@ -251,8 +257,7 @@ class TestCreatePO:
 class TestUpdatePO:
     """Tests for purchase order updates."""
 
-    @patch("app.services.finance.ap.purchase_order.PurchaseOrderLine")
-    def test_update_po_success_replaces_lines(self, mock_line_class):
+    def test_update_po_success_replaces_lines(self):
         """Draft purchase orders can be updated and lines replaced."""
         db = MagicMock()
         org_id = uuid4()
@@ -305,7 +310,7 @@ class TestUpdatePO:
         db.flush.assert_called_once()
         db.commit.assert_called_once()
         db.refresh.assert_called_once_with(mock_po)
-        mock_line_class.assert_called_once()
+        assert db.add.call_count == 1
 
     def test_update_po_rejects_non_draft(self):
         """Non-draft purchase orders cannot be edited."""
@@ -614,12 +619,22 @@ class TestSubmitForApproval:
 class TestApprovePO:
     """Tests for PO approval."""
 
+    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
+    @patch("app.services.finance.ap.purchase_order.render_branded_email")
     @patch("app.services.finance.ap.purchase_order.POStatus")
-    def test_approve_po_success(self, mock_status_class):
+    def test_approve_po_success(
+        self,
+        mock_status_class,
+        mock_render_branded_email,
+        mock_pdf_service,
+        mock_queue_email,
+    ):
         """Test successful PO approval."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
+        supplier_id = uuid4()
         creator_id = uuid4()
         approver_id = uuid4()  # Different from creator
 
@@ -632,11 +647,23 @@ class TestApprovePO:
         mock_po = MockPurchaseOrder(
             po_id=po_id,
             organization_id=org_id,
+            supplier_id=supplier_id,
             created_by_user_id=creator_id,
         )
         mock_po.status = mock_pending
+        mock_supplier = MockSupplier(
+            supplier_id=supplier_id,
+            organization_id=org_id,
+            primary_contact={"email": "supplier@example.com"},
+        )
 
-        db.scalars.return_value.first.return_value = mock_po
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        db.scalars.side_effect = [po_result, supplier_result]
+        mock_render_branded_email.return_value = ("<p>approved</p>", "approved")
+        mock_pdf_service.return_value.generate_pdf.return_value = b"%PDF-1.4"
 
         result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
 
@@ -644,6 +671,182 @@ class TestApprovePO:
         assert mock_po.status == mock_approved
         assert mock_po.approved_by_user_id == approver_id
         assert mock_po.approved_at is not None
+        mock_render_branded_email.assert_called_once()
+        mock_queue_email.assert_called_once_with(
+            to_email="supplier@example.com",
+            subject=f"Purchase Order Approved: {mock_po.po_number}",
+            body_html="<p>approved</p>",
+            body_text="approved",
+            attachments=[(f"{mock_po.po_number}.pdf", b"%PDF-1.4", "application/pdf")],
+            module="FINANCE",
+            organization_id=str(org_id),
+        )
+        db.commit.assert_called_once()
+
+    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
+    @patch("app.services.finance.ap.purchase_order.render_branded_email")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    def test_approve_po_skips_supplier_notification_without_email(
+        self,
+        mock_status_class,
+        mock_render_branded_email,
+        mock_pdf_service,
+        mock_queue_email,
+    ):
+        """Approval should still succeed when supplier has no email."""
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+        supplier_id = uuid4()
+        creator_id = uuid4()
+        approver_id = uuid4()
+
+        mock_pending = MagicMock()
+        mock_pending.value = "PENDING_APPROVAL"
+        mock_approved = MagicMock()
+        mock_status_class.PENDING_APPROVAL = mock_pending
+        mock_status_class.APPROVED = mock_approved
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            created_by_user_id=creator_id,
+        )
+        mock_po.status = mock_pending
+        mock_supplier = MockSupplier(
+            supplier_id=supplier_id,
+            organization_id=org_id,
+            primary_contact={},
+        )
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        db.scalars.side_effect = [po_result, supplier_result]
+
+        result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
+
+        assert result is mock_po
+        mock_render_branded_email.assert_not_called()
+        mock_pdf_service.assert_not_called()
+        mock_queue_email.assert_not_called()
+        db.commit.assert_called_once()
+
+    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
+    @patch("app.services.finance.ap.purchase_order.render_branded_email")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    def test_approve_po_queues_email_without_attachment_when_pdf_generation_fails(
+        self,
+        mock_status_class,
+        mock_render_branded_email,
+        mock_pdf_service,
+        mock_queue_email,
+    ):
+        """Approval should still queue email when PDF generation fails."""
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+        supplier_id = uuid4()
+        creator_id = uuid4()
+        approver_id = uuid4()
+
+        mock_pending = MagicMock()
+        mock_pending.value = "PENDING_APPROVAL"
+        mock_approved = MagicMock()
+        mock_status_class.PENDING_APPROVAL = mock_pending
+        mock_status_class.APPROVED = mock_approved
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            created_by_user_id=creator_id,
+        )
+        mock_po.status = mock_pending
+        mock_supplier = MockSupplier(
+            supplier_id=supplier_id,
+            organization_id=org_id,
+            primary_contact={"email": "supplier@example.com"},
+        )
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        db.scalars.side_effect = [po_result, supplier_result]
+        mock_render_branded_email.return_value = ("<p>approved</p>", "approved")
+        mock_pdf_service.return_value.generate_pdf.side_effect = RuntimeError(
+            "pdf unavailable"
+        )
+
+        result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
+
+        assert result is mock_po
+        mock_queue_email.assert_called_once_with(
+            to_email="supplier@example.com",
+            subject=f"Purchase Order Approved: {mock_po.po_number}",
+            body_html="<p>approved</p>",
+            body_text="approved",
+            attachments=None,
+            module="FINANCE",
+            organization_id=str(org_id),
+        )
+        db.commit.assert_called_once()
+
+    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
+    @patch("app.services.finance.ap.purchase_order.render_branded_email")
+    @patch("app.services.finance.ap.purchase_order.POStatus")
+    def test_approve_po_continues_when_supplier_notification_rendering_fails(
+        self,
+        mock_status_class,
+        mock_render_branded_email,
+        mock_pdf_service,
+        mock_queue_email,
+    ):
+        """Approval should not fail if email rendering raises."""
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+        supplier_id = uuid4()
+        creator_id = uuid4()
+        approver_id = uuid4()
+
+        mock_pending = MagicMock()
+        mock_pending.value = "PENDING_APPROVAL"
+        mock_approved = MagicMock()
+        mock_status_class.PENDING_APPROVAL = mock_pending
+        mock_status_class.APPROVED = mock_approved
+
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            created_by_user_id=creator_id,
+        )
+        mock_po.status = mock_pending
+        mock_supplier = MockSupplier(
+            supplier_id=supplier_id,
+            organization_id=org_id,
+            primary_contact={"email": "supplier@example.com"},
+        )
+
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        db.scalars.side_effect = [po_result, supplier_result]
+        mock_render_branded_email.side_effect = RuntimeError("smtp unavailable")
+
+        result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
+
+        assert result is mock_po
+        mock_pdf_service.assert_not_called()
+        mock_queue_email.assert_not_called()
         db.commit.assert_called_once()
 
     def test_approve_po_not_found(self):
