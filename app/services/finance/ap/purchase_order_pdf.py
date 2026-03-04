@@ -10,6 +10,7 @@ import logging
 import os
 from datetime import datetime
 from decimal import Decimal
+from typing import cast
 
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
@@ -158,4 +159,4 @@ class PurchaseOrderPDFService:
         base_url = (
             os.getenv("PDF_ASSET_BASE_URL") or os.getenv("APP_URL") or "http://app:8002"
         ).rstrip("/")
-        return HTML(string=html_content, base_url=base_url).write_pdf()
+        return cast(bytes, HTML(string=html_content, base_url=base_url).write_pdf())

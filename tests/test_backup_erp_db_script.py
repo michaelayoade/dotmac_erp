@@ -5,7 +5,8 @@ import stat
 import subprocess
 from pathlib import Path
 
-SCRIPT_PATH = Path("/root/dotmac/scripts/backup_erp_db.sh")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = REPO_ROOT / "scripts" / "backup_erp_db.sh"
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -97,7 +98,7 @@ raise SystemExit(main())
     subprocess.run(  # noqa: S603
         [str(SCRIPT_PATH)],
         check=True,
-        cwd="/root/dotmac",
+        cwd=str(REPO_ROOT),
         env=env,
     )
 
@@ -181,6 +182,6 @@ raise SystemExit(main())
     subprocess.run(  # noqa: S603
         [str(SCRIPT_PATH)],
         check=True,
-        cwd="/root/dotmac",
+        cwd=str(REPO_ROOT),
         env=env,
     )

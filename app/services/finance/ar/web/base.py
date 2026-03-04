@@ -138,7 +138,7 @@ def customer_option_view(customer: Customer) -> dict:
         "default_tax_code_id": str(customer.default_tax_code_id)
         if customer.default_tax_code_id
         else None,
-        "is_vat_exempt": customer.is_vat_exempt,
+        "is_vat_exempt": bool(getattr(customer, "is_vat_exempt", False)),
     }
 
 
