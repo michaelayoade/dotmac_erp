@@ -1,0 +1,162 @@
+[
+  {
+    "route": "/people/hr/employees",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/people_hr_employees_320.png"
+  },
+  {
+    "route": "/people/hr/employees",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/people_hr_employees_390.png"
+  },
+  {
+    "route": "/support/tickets",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/support_tickets_320.png"
+  },
+  {
+    "route": "/support/tickets",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/support_tickets_390.png"
+  },
+  {
+    "route": "/projects/tasks",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/projects_tasks_320.png"
+  },
+  {
+    "route": "/projects/tasks",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/projects_tasks_390.png"
+  },
+  {
+    "route": "/finance/ar/invoices",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/finance_ar_invoices_320.png"
+  },
+  {
+    "route": "/finance/ar/invoices",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/finance_ar_invoices_390.png"
+  },
+  {
+    "route": "/finance/ap/invoices",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/finance_ap_invoices_320.png"
+  },
+  {
+    "route": "/finance/ap/invoices",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/finance_ap_invoices_390.png"
+  },
+  {
+    "route": "/finance/gl/journals",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/finance_gl_journals_320.png"
+  },
+  {
+    "route": "/finance/gl/journals",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/finance_gl_journals_390.png"
+  },
+  {
+    "route": "/inventory/items",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/inventory_items_320.png"
+  },
+  {
+    "route": "/inventory/items",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/inventory_items_390.png"
+  },
+  {
+    "route": "/procurement/plans",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/procurement_plans_320.png"
+  },
+  {
+    "route": "/procurement/plans",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/procurement_plans_390.png"
+  },
+  {
+    "route": "/procurement/rfqs",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/procurement_rfqs_320.png"
+  },
+  {
+    "route": "/procurement/rfqs",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/procurement_rfqs_390.png"
+  },
+  {
+    "route": "/procurement/contracts",
+    "width": 320,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/procurement_contracts_320.png"
+  },
+  {
+    "route": "/procurement/contracts",
+    "width": 390,
+    "page_overflow": false,
+    "overflow_px": 0,
+    "unlabeled_controls": 0,
+    "screenshot": "docs/mobile-proof/procurement_contracts_390.png"
+  }
+]

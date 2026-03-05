@@ -36,10 +36,10 @@
                 <div class="stat-hero-icon stat-hero-icon-revenue">
                     {{ icon_svg("trending-up", "w-5 h-5", stroke_width="1.5") }}
                 </div>
-                <span class="stat-hero-label">Revenue</span>
-                <span class="stat-hero-value">{{ stats.total_revenue | default(currency_zero) }}</span>
+                <span class="stat-hero-label text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">Revenue</span>
+                <span class="stat-hero-value text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{{ stats.total_revenue | default(currency_zero) }}</span>
                 {% if stats.revenue_trend is not none %}
-                <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.revenue_trend > 0 else 'stat-hero-trend-down' }}">
+                <span class="stat-hero-trend text-xs font-semibold {{ 'stat-hero-trend-up' if stats.revenue_trend > 0 else 'stat-hero-trend-down' }}">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {% if stats.revenue_trend > 0 %}
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
@@ -57,8 +57,8 @@
                 <div class="stat-hero-icon stat-hero-icon-expenses">
                     {{ icon_svg("receipt", "w-5 h-5", stroke_width="1.5") }}
                 </div>
-                <span class="stat-hero-label">{% if is_ipsas %}Cost of Services{% else %}COGS{% endif %}</span>
-                <span class="stat-hero-value">{{ stats.cogs_spend | default(currency_zero) }}</span>
+                <span class="stat-hero-label text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">{% if is_ipsas %}Cost of Services{% else %}COGS{% endif %}</span>
+                <span class="stat-hero-value text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{{ stats.cogs_spend | default(currency_zero) }}</span>
             </a>
 
             <!-- Expenses -->
@@ -66,10 +66,10 @@
                 <div class="stat-hero-icon stat-hero-icon-expenses">
                     {{ icon_svg("cash", "w-5 h-5", stroke_width="1.5") }}
                 </div>
-                <span class="stat-hero-label">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</span>
-                <span class="stat-hero-value">{{ stats.total_expenses | default(currency_zero) }}</span>
+                <span class="stat-hero-label text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">{% if is_ipsas %}Expenditure{% else %}Expenses{% endif %}</span>
+                <span class="stat-hero-value text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{{ stats.total_expenses | default(currency_zero) }}</span>
                 {% if stats.expenses_trend is not none %}
-                <span class="stat-hero-trend {{ 'stat-hero-trend-up' if stats.expenses_trend > 0 else 'stat-hero-trend-down' }}">
+                <span class="stat-hero-trend text-xs font-semibold {{ 'stat-hero-trend-up' if stats.expenses_trend > 0 else 'stat-hero-trend-down' }}">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {% if stats.expenses_trend > 0 %}
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
@@ -87,8 +87,8 @@
                 <div class="stat-hero-icon stat-hero-icon-cashflow">
                     {{ icon_svg("building", "w-5 h-5", stroke_width="1.5") }}
                 </div>
-                <span class="stat-hero-label">Bank Balance</span>
-                <span class="stat-hero-value">{{ stats.bank_balance | default(currency_zero) }}</span>
+                <span class="stat-hero-label text-sm font-semibold tracking-wide text-slate-700 dark:text-slate-200">Bank Balance</span>
+                <span class="stat-hero-value text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white leading-tight">{{ stats.bank_balance | default(currency_zero) }}</span>
             </a>
         </div>
 
@@ -115,19 +115,28 @@
 
     <!-- Reconciliation Alerts -->
     {% if not subledger_reconciliation.ar_ok or not subledger_reconciliation.ap_ok %}
-    <div class="stagger-in bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4" style="animation-delay: 25ms;">
-        <div class="flex items-start gap-3">
-            {{ icon_svg("warning", "w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5") }}
-            <div class="flex-1">
-                <p class="text-sm font-medium text-amber-800 dark:text-amber-200">Subledger Reconciliation Alert</p>
-                <div class="mt-1 text-sm text-amber-700 dark:text-amber-300 space-y-1">
-                    {% if not subledger_reconciliation.ar_ok %}
-                    <p>AR Control variance: {{ subledger_reconciliation.ar_diff }}</p>
-                    {% endif %}
-                    {% if not subledger_reconciliation.ap_ok %}
-                    <p>AP Control variance: {{ subledger_reconciliation.ap_diff }}</p>
-                    {% endif %}
+    <div class="stagger-in rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-700/50 dark:bg-rose-900/20" style="animation-delay: 25ms;">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div class="flex items-start gap-3">
+                {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-rose-600 dark:text-rose-300 mt-0.5") }}
+                <div class="flex-1">
+                    <p class="text-sm font-semibold tracking-wide text-rose-800 dark:text-rose-100">Subledger Reconciliation Alert</p>
+                    <div class="mt-2 space-y-1.5 text-sm text-rose-700 dark:text-rose-200">
+                        {% if not subledger_reconciliation.ar_ok %}
+                        <p><span class="font-semibold">AR Control variance:</span> {{ subledger_reconciliation.ar_diff }}</p>
+                        {% endif %}
+                        {% if not subledger_reconciliation.ap_ok %}
+                        <p><span class="font-semibold">AP Control variance:</span> {{ subledger_reconciliation.ap_diff }}</p>
+                        {% endif %}
+                    </div>
+                    <p class="mt-2 text-xs font-medium text-rose-700/90 dark:text-rose-200/90">Action required: reconcile control accounts to subledger balances.</p>
                 </div>
+            </div>
+            <div class="flex items-center gap-2 sm:pl-3">
+                <a href="/finance/banking/reconciliations" class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500/50">
+                    {{ icon_svg("check-circle", "h-4 w-4", stroke_width="1.75") }}
+                    Reconcile now
+                </a>
             </div>
         </div>
     </div>
@@ -227,10 +236,10 @@
         </div>
     </div>
 
-    <!-- Analytics Row: Customers, Suppliers, Account Distribution, AR/AP Aging -->
-    <div class="grid gap-6 lg:grid-cols-4">
+    <!-- Analytics Row: balanced 2-column desktop layout -->
+    <div class="grid gap-6 lg:grid-cols-2">
         <!-- Top Customers -->
-        <div class="stagger-in card p-6" style="animation-delay: 150ms;">
+        <div class="stagger-in card p-6 lg:min-h-[22rem]" style="animation-delay: 150ms;">
             <div class="mb-4">
                 <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Top Revenue Sources{% else %}Top Customers{% endif %}</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">{% if is_ipsas %}By collections{% else %}By revenue{% endif %}</p>
@@ -249,7 +258,7 @@
         </div>
 
         <!-- Top Suppliers -->
-        <div class="stagger-in card p-6" style="animation-delay: 175ms;">
+        <div class="stagger-in card p-6 lg:min-h-[22rem]" style="animation-delay: 175ms;">
             <div class="mb-4">
                 <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">{% if is_ipsas %}Top Vendors{% else %}Top Suppliers{% endif %}</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">{% if is_ipsas %}By expenditure{% else %}By spend{% endif %}</p>
@@ -263,12 +272,25 @@
                 } | tojson }}'></canvas>
             </div>
             {% else %}
-            {{ empty_state("No supplier data", "Record bills") }}
+            <div class="flex h-52 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300/80 bg-slate-50/70 px-4 text-center dark:border-slate-700 dark:bg-slate-900/30">
+                <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">No supplier spend data yet</p>
+                <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">Start by recording AP activity or importing supplier records.</p>
+                <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <a href="/finance/ap/invoices/new" class="inline-flex items-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">
+                        {{ icon_svg("receipt", "h-3.5 w-3.5") }}
+                        Record bill
+                    </a>
+                    <a href="/finance/ap/vendors" class="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                        {{ icon_svg("upload", "h-3.5 w-3.5") }}
+                        Import suppliers
+                    </a>
+                </div>
+            </div>
             {% endif %}
         </div>
 
         <!-- Account Distribution Donut -->
-        <div class="stagger-in card p-6" style="animation-delay: 200ms;">
+        <div class="stagger-in card p-6 lg:min-h-[22rem]" style="animation-delay: 200ms;">
             <div class="mb-4">
                 <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">Account Mix</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">By category</p>
@@ -286,7 +308,7 @@
         </div>
 
         <!-- AR Aging Visual -->
-        <div class="stagger-in card p-6" style="animation-delay: 225ms;">
+        <div class="stagger-in card p-6 lg:min-h-[22rem]" style="animation-delay: 225ms;">
             <div class="mb-4">
                 <h3 class="text-base font-semibold text-slate-900 dark:text-white font-display">AR Aging</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Receivables breakdown</p>
@@ -398,24 +420,30 @@
                 <span class="section-label-text">Quick Actions</span>
             </div>
             <div class="space-y-2" data-testid="dashboard-quick-actions">
+                <a href="/finance/ar/invoices/new" class="cmd-action border border-teal-200/70 bg-teal-50/80 dark:border-teal-800/50 dark:bg-teal-900/20">
+                    <span class="cmd-action-key bg-teal-600 text-white dark:bg-teal-500">I</span>
+                    <span class="cmd-action-label inline-flex items-center gap-2 font-semibold">
+                        {{ icon_svg("document-plus", "h-4 w-4", stroke_width="1.75") }}
+                        Create Invoice
+                    </span>
+                    <span class="cmd-action-hint">Top action</span>
+                </a>
+                <a href="/finance/ap/invoices/new" class="cmd-action border border-rose-200/70 bg-rose-50/80 dark:border-rose-800/50 dark:bg-rose-900/20">
+                    <span class="cmd-action-key bg-rose-600 text-white dark:bg-rose-500">B</span>
+                    <span class="cmd-action-label inline-flex items-center gap-2 font-semibold">
+                        {{ icon_svg("receipt", "h-4 w-4", stroke_width="1.75") }}
+                        Record Bill
+                    </span>
+                    <span class="cmd-action-hint">Top action</span>
+                </a>
                 <a href="/finance/gl/journals/new" class="cmd-action">
                     <span class="cmd-action-key">J</span>
-                    <span class="cmd-action-label">New Journal Entry</span>
+                    <span class="cmd-action-label inline-flex items-center gap-2">{{ icon_svg("book-open", "h-4 w-4", stroke_width="1.75") }} New Journal Entry</span>
                     <span class="cmd-action-hint">GL</span>
-                </a>
-                <a href="/finance/ar/invoices/new" class="cmd-action">
-                    <span class="cmd-action-key">I</span>
-                    <span class="cmd-action-label">Create Invoice</span>
-                    <span class="cmd-action-hint">AR</span>
-                </a>
-                <a href="/finance/ap/invoices/new" class="cmd-action">
-                    <span class="cmd-action-key">B</span>
-                    <span class="cmd-action-label">Record Bill</span>
-                    <span class="cmd-action-hint">AP</span>
                 </a>
                 <a href="/finance/ar/receipts/new" class="cmd-action">
                     <span class="cmd-action-key">R</span>
-                    <span class="cmd-action-label">Record Receipt</span>
+                    <span class="cmd-action-label inline-flex items-center gap-2">{{ icon_svg("cash", "h-4 w-4", stroke_width="1.75") }} Record Receipt</span>
                     <span class="cmd-action-hint">AR</span>
                 </a>
             </div>
@@ -506,6 +534,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return new Chart(canvas, config);
     }
 
+
+    const nairaFormatter = new Intl.NumberFormat('en-NG', {
+        style: 'currency',
+        currency: 'NGN',
+        maximumFractionDigits: 0,
+    });
+    const formatNaira = (value) => nairaFormatter.format(Number(value || 0)).replace('NGN', '₦').trim();
+    const axisTick = {
+        color: textColor,
+        font: { size: 11, weight: '600' },
+        maxRotation: 0,
+    };
+
     const colors = {
         teal: { solid: '#14b8a6', light: 'rgba(20, 184, 166, 0.15)' },
         rose: { solid: '#f43f5e', light: 'rgba(244, 63, 94, 0.15)' },
@@ -571,7 +612,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     maintainAspectRatio: false,
                     interaction: { intersect: false, mode: 'index' },
                     plugins: {
-                        legend: { display: false },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: textColor, usePointStyle: true, boxWidth: 10, boxHeight: 10, font: { size: 11, weight: '600' } }
+                        },
                         tooltip: {
                             backgroundColor: isDark ? '#1e293b' : '#fff',
                             titleColor: isDark ? '#f1f5f9' : '#0f172a',
@@ -580,11 +625,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             borderWidth: 1,
                             padding: 12,
                             cornerRadius: 8,
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${formatNaira(ctx.parsed.y)}`,
+                            }
                         }
                     },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { color: gridColor }, beginAtZero: true }
+                        x: { grid: { color: 'transparent' }, ticks: axisTick },
+                        y: {
+                            grid: { color: gridColor, drawBorder: false },
+                            ticks: { ...axisTick, callback: (value) => formatNaira(value) },
+                            beginAtZero: true
+                        }
                     }
                 }
             });
@@ -613,10 +665,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: textColor, usePointStyle: true, boxWidth: 10, boxHeight: 10, font: { size: 11, weight: '600' } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${formatNaira(ctx.parsed.y)}`,
+                            }
+                        }
+                    },
                     scales: {
-                        x: { grid: { display: false } },
-                        y: { grid: { color: gridColor }, beginAtZero: true }
+                        x: { grid: { color: 'transparent' }, ticks: axisTick },
+                        y: { grid: { color: gridColor, drawBorder: false }, ticks: { ...axisTick, callback: (value) => formatNaira(value) }, beginAtZero: true }
                     }
                 }
             });
@@ -660,10 +723,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { color: gridColor }, beginAtZero: true, display: false },
-                        y: { grid: { display: false } }
+                        x: {
+                            grid: { color: gridColor, drawBorder: false },
+                            ticks: { ...axisTick, callback: (value) => formatNaira(value) },
+                            beginAtZero: true,
+                            display: true
+                        },
+                        y: { grid: { color: 'transparent' }, ticks: { ...axisTick } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => formatNaira(ctx.parsed.x) } }
                     }
                 }
             });

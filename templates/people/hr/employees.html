@@ -1,14 +1,14 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, filter_entity_select_field, filter_date_field, pagination, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_select_field, filter_entity_select_field, filter_date_field, pagination, icon_svg, status_badge %}
 
 {% block page_title %}Employees{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <ol class="flex">
+    <ol class="flex items-center gap-2">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Employees</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-900 dark:text-white" aria-current="page">Employees</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -18,7 +18,7 @@
     <a href="/people/hr/employees/org-chart" class="btn btn-secondary">Org Chart</a>
     <a href="/people/hr/employees/new" class="btn btn-primary group">
         {{ icon_svg("plus", "h-4 w-4 mr-1.5 transition-transform group-hover:rotate-90") }}
-        New Employee
+        Create Employee
     </a>
 </div>
 {% endblock %}
@@ -113,8 +113,8 @@
         show_apply_button=true
     ) %}
         <div>
-            <label class="form-label text-xs">Search</label>
-            <input
+            <label class="form-label text-xs" for="employee-search">Search</label>
+            <input id="employee-search" aria-label="Search employees"
                 type="text"
                 name="search"
                 value="{{ search or '' }}"
@@ -197,6 +197,27 @@
     <div id="results-container">
     {# Employees Table #}
     <div class="card overflow-hidden">
+        <div class="space-y-3 p-4 md:hidden">
+            {% for emp in employees %}
+            <article class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900/40">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <a href="/people/hr/employees/{{ emp.employee_id }}" class="text-sm font-semibold text-slate-900 dark:text-white truncate block">{{ emp.person_name }}</a>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ emp.employee_code }}</p>
+                    </div>
+                    {{ status_badge(emp.status, 'sm') }}
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div><dt class="text-slate-500 dark:text-slate-400">Department</dt><dd class="text-slate-700 dark:text-slate-200">{{ emp.department_name or '—' }}</dd></div>
+                    <div><dt class="text-slate-500 dark:text-slate-400">Designation</dt><dd class="text-slate-700 dark:text-slate-200">{{ emp.designation_name or '—' }}</dd></div>
+                </dl>
+                <div class="mt-3 flex items-center justify-end gap-2">
+                    <a href="/people/hr/employees/{{ emp.employee_id }}" class="btn btn-secondary btn-sm">View</a>
+                    <a href="/people/hr/employees/{{ emp.employee_id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
         {% if employees %}
         <form method="post" id="bulkForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -219,7 +240,8 @@
                     <div class="flex flex-wrap items-center gap-3">
                         {# Bulk Status Change #}
                         <div class="flex items-center gap-2">
-                            <select name="status" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
+                            <label for="bulk-status" class="sr-only">Bulk status change</label>
+                            <select id="bulk-status" name="status" aria-label="Bulk status change" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
                                 <option value="" class="text-slate-900">Change Status...</option>
                                 <option value="active" class="text-slate-900">Active</option>
                                 <option value="on_leave" class="text-slate-900">On Leave</option>
@@ -228,7 +250,8 @@
                         </div>
                         {# Bulk Department Change #}
                         <div class="flex items-center gap-2">
-                            <select name="department_id" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
+                            <label for="bulk-department" class="sr-only">Bulk department change</label>
+                            <select id="bulk-department" name="department_id" aria-label="Bulk department change" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
                                 <option value="" class="text-slate-900">Change Dept...</option>
                                 {% for dept in departments %}
                                 <option value="{{ dept.department_id }}" class="text-slate-900">{{ dept.department_name }}</option>
@@ -283,7 +306,7 @@
                 </div>
             </div>
 
-        <div class="table-container">
+        <div class="table-container hidden md:block">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
@@ -321,7 +344,7 @@
                                         {{ emp.person_name }}
                                     </a>
                                     <div class="flex items-center gap-2 mt-0.5">
-                                        <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ emp.employee_code }}</span>
+                                        <span class="font-mono text-xs text-slate-500 dark:text-slate-400" data-copy-text="{{ emp.employee_code }}" title="Click to copy employee code">{{ emp.employee_code }}</span>
                                         <span class="text-slate-300 dark:text-slate-600">·</span>
                                         <span class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ emp.email }}</span>
                                     </div>
@@ -349,20 +372,7 @@
                             <span class="text-sm text-slate-400 dark:text-slate-500">—</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-4 text-center">
-                            {% set status_styles = {
-                                'ACTIVE': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
-                                'DRAFT': 'bg-slate-50 text-slate-700 ring-slate-600/20 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-400/20',
-                                'ON_LEAVE': 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
-                                'SUSPENDED': 'bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-900/30 dark:text-orange-400 dark:ring-orange-400/20',
-                                'RESIGNED': 'bg-slate-50 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-500/20',
-                                'TERMINATED': 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20'
-                            } %}
-                            {% set status_class = status_styles.get(emp.status | upper, status_styles.DRAFT) %}
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset {{ status_class }}">
-                                {{ emp.status | replace('_', ' ') | title }}
-                            </span>
-                        </td>
+                        <td class="px-4 py-4 text-center">{{ status_badge(emp.status, 'sm') }}</td>
                         <td class="px-4 py-4 text-right">
                             <div class="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                 <a href="/people/hr/employees/{{ emp.employee_id }}"
@@ -416,7 +426,7 @@
             <div class="flex items-center justify-center gap-3">
                 <a href="/people/hr/employees/new" class="btn btn-primary">
                     {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-                    Add Employee
+                    Create Employee
                 </a>
                 <button type="button" class="btn btn-secondary" disabled>
                     {{ icon_svg("upload", "h-4 w-4 mr-1.5") }}

@@ -4,10 +4,10 @@
 {% block page_title %}Expenses{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+<nav class="text-sm text-slate-500 dark:text-slate-400 mt-1" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
-        <li><a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Expenses</span></li>
+        <li><a href="/expense" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Expense</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-900 dark:text-white" aria-current="page">Expenses</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -15,21 +15,24 @@
 {% block header_actions %}
 <a href="/expense/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-    New Expense
+    Create Expense
 </a>
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
     {% call(search_attrs) live_search(search=search, base_url="/expense/list", placeholder="Search expenses...") %}
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <label for="expense-filter-status" class="sr-only">Filter by status</label>
+        <select id="expense-filter-status" name="status" class="form-select" aria-label="Filter by status" {{ search_attrs }}>
             <option value="">All Status</option>
             {% for s in statuses %}
             <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input" {{ search_attrs }}>
-        <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input" {{ search_attrs }}>
+        <label for="expense-filter-start-date" class="sr-only">Start date</label>
+        <input id="expense-filter-start-date" type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input" aria-label="Start date" {{ search_attrs }}>
+        <label for="expense-filter-end-date" class="sr-only">End date</label>
+        <input id="expense-filter-end-date" type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input" aria-label="End date" {{ search_attrs }}>
     {% endcall %}
 
     <!-- Status Summary -->
@@ -84,7 +87,7 @@
                     <tr>
                         <td class="text-slate-500">{{ exp.expense_date }}</td>
                         <td>
-                            <a href="/expense/{{ exp.expense_id }}" class="font-mono text-amber-600 hover:text-amber-700 dark:text-amber-400">
+                            <a href="/expense/{{ exp.expense_id }}" class="font-mono text-amber-600 hover:text-amber-700 dark:text-amber-400" data-copy-text="{{ exp.expense_number }}" title="Click to copy expense number">
                                 {{ exp.expense_number }}
                             </a>
                         </td>
@@ -128,11 +131,11 @@
             <div class="empty-state-icon">
                 {{ icon_svg("banknotes", "h-8 w-8") }}
             </div>
-            <h3 class="empty-state-title">No Expenses</h3>
-            <p class="empty-state-description">Get started by creating your first expense entry.</p>
+            <h3 class="empty-state-title">No expenses found</h3>
+            <p class="empty-state-description">Create your first expense to start tracking operational spend.</p>
             <a href="/expense/new" class="btn btn-primary mt-4">
                 {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-                New Expense
+                Create Expense
             </a>
         </div>
         {% endif %}

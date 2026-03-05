@@ -42,6 +42,7 @@ from app.services.people.hr import (
     EmployeeCreateData,
     EmployeeFilters,
     EmployeeGradeFilters,
+    EmployeeNotFoundError,
     EmployeeService,
     EmployeeUpdateData,
     EmploymentTypeFilters,
@@ -1099,7 +1100,16 @@ class HRWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = EmployeeService(db, org_id)
 
-        employee = svc.get_employee(coerce_uuid(employee_id))
+        try:
+            parsed_employee_id = coerce_uuid(employee_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Employee not found") from exc
+
+        try:
+            employee = svc.get_employee(parsed_employee_id)
+        except EmployeeNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Employee not found") from exc
+
         context = self._employee_detail_context(request, auth, db, employee)
         context["saved"] = saved
 

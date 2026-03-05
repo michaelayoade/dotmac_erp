@@ -3,6 +3,13 @@
 
 {% block page_title %}Users{% endblock %}
 {% block page_subtitle %}Manage user accounts and permissions{% endblock %}
+{% block admin_breadcrumbs %}
+<ol class="flex items-center gap-2">
+    <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Dashboard</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <a href="/admin" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Admin</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">Users</span></li>
+</ol>
+{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -38,7 +45,7 @@
             <!-- Add User Button -->
             <a href="/admin/users/new" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium shadow-lg shadow-accent-500/25 transition-all">
                 {{ icon_svg("plus", "h-4 w-4") }}
-                Add User
+                Create User
             </a>
         </div>
     </div>
@@ -60,7 +67,38 @@
     <!-- Users Table -->
     <div id="results-container">
     <div id="users-table-container" class="admin-card overflow-hidden">
-        <div class="table-container">
+        <div class="space-y-3 p-4 md:hidden">
+            {% for user in users %}
+            <article class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900/40">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-semibold text-white flex-shrink-0">{{ user.initials }}</div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ user.name }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate" data-copy-text="{{ user.email }}" title="Click to copy email">{{ user.email }}</p>
+                        </div>
+                    </div>
+                    {{ status_badge(user.status, 'sm') }}
+                </div>
+                <dl class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div><dt class="text-slate-500 dark:text-slate-400">Role</dt><dd class="text-slate-700 dark:text-slate-200 truncate">{{ user.roles | join(', ') if user.roles else 'No roles' }}</dd></div>
+                    <div><dt class="text-slate-500 dark:text-slate-400">Last Active</dt><dd class="text-slate-700 dark:text-slate-200">{{ user.last_active or 'Never' }}</dd></div>
+                </dl>
+                <div class="mt-3 flex items-center justify-end gap-2">
+                    <a href="/admin/users/{{ user.id }}" class="btn btn-secondary btn-sm">View</a>
+                    <a href="/admin/users/{{ user.id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+                </div>
+            </article>
+            {% else %}
+            <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center">
+                <p class="text-sm font-medium text-slate-900 dark:text-white">No users found</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Create a user account to grant ERP access.</p>
+                <a href="/admin/users/new" class="btn btn-primary btn-sm mt-3">Create User</a>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="table-container hidden md:block">
             <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                     <tr>
@@ -105,7 +143,7 @@
                         </td>
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
-                                <span class="text-sm text-slate-600 dark:text-slate-300">{{ user.email }}</span>
+                                <span class="text-sm text-slate-600 dark:text-slate-300" data-copy-text="{{ user.email }}" title="Click to copy email">{{ user.email }}</span>
                                 {% if user.email_verified %}
                                 <svg class="h-4 w-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
@@ -183,7 +221,7 @@
                                 {% if not search %}
                                 <a href="/admin/users/new" class="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium shadow-lg shadow-accent-500/25 transition-all">
                                     {{ icon_svg("plus", "h-4 w-4") }}
-                                    Add User
+                                    Create User
                                 </a>
                                 {% endif %}
                             </div>

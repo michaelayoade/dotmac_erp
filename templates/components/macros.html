@@ -73,7 +73,21 @@
   'CREDIT': 'badge-approved'
 } %}
 {% set badge_class = badge_classes.get(status_upper, badge_classes.get(status_clean, 'badge-draft')) %}
-<span class="{{ badge_class }}">{{ status|replace('_', ' ')|title }}</span>
+{% set badge_symbol = {
+  'APPROVED': '+',
+  'PAID': '+',
+  'ACTIVE': '+',
+  'COMPLETED': '+',
+  'PENDING': '!',
+  'PENDING APPROVAL': '!',
+  'DRAFT': '-',
+  'INACTIVE': '-',
+  'CLOSED': '-',
+  'REJECTED': 'x',
+  'OVERDUE': '!',
+  'CANCELLED': 'x'
+}.get(status_upper, '*') %}
+<span class="{{ badge_class }}"><span aria-hidden="true" class="mr-1">{{ badge_symbol }}</span>{{ status|replace('_', ' ')|title }}</span>
 {% endmacro %}
 
 
@@ -157,6 +171,29 @@
     {{ resolved_text }}
   </a>
   {% endif %}
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   DETAIL ERROR STATE
+   Reusable invalid-id/not-found pattern with title, context and recovery CTA.
+   ============================================ #}
+{% macro detail_error_state(title="We couldn't find that record", context=none, recovery_text="Go to Dashboard", recovery_href="/dashboard", secondary_text="Go Back", secondary_href="javascript:history.back()", icon="exclamation-circle") %}
+<div class="min-h-[60vh] flex items-center justify-center px-4">
+  <div class="max-w-xl text-center rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+      {{ icon_svg(icon, "h-7 w-7") }}
+    </div>
+    <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mb-2">{{ title }}</h1>
+    <p class="text-slate-600 dark:text-slate-400 mb-7">
+      {{ context if context else "The record may have been deleted, moved, or the link may be invalid." }}
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="{{ secondary_href }}" class="btn btn-secondary">{{ secondary_text }}</a>
+      <a href="{{ recovery_href }}" class="btn btn-primary">{{ recovery_text }}</a>
+    </div>
+  </div>
 </div>
 {% endmacro %}
 
@@ -642,7 +679,9 @@
 
     {# Filter Dropdowns #}
     {% for filter in filters %}
-    <select name="{{ filter.name }}" class="form-select">
+    {% set filter_id = 'live-filter-' ~ (target_id | replace(' ', '-') | replace('#', '') | replace('_', '-')) ~ '-' ~ filter.name %}
+    <label for="{{ filter_id }}" class="sr-only">{{ filter.label }}</label>
+    <select id="{{ filter_id }}" name="{{ filter.name }}" class="form-select">
       <option value="">{{ filter.label }}</option>
       {% for option in filter.options %}
       <option value="{{ option.value }}" {{ 'selected' if filter.value == option.value else '' }}>
@@ -776,7 +815,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
     {# Filter Dropdowns #}
     {% for filter in filters %}
-    <select name="{{ filter.name }}" class="form-select">
+    {% set filter_id = 'live-filter-' ~ (target_id | replace(' ', '-') | replace('#', '') | replace('_', '-')) ~ '-' ~ filter.name %}
+    <label for="{{ filter_id }}" class="sr-only">{{ filter.label }}</label>
+    <select id="{{ filter_id }}" name="{{ filter.name }}" class="form-select">
       <option value="">{{ filter.label }}</option>
       {% for option in filter.options %}
       <option value="{{ option.value }}" {{ 'selected' if filter.value == option.value else '' }}>
@@ -833,12 +874,13 @@ if (typeof window.searchAutosuggest === 'undefined') {
 {% macro live_search(search="", filters=[], base_url="", target_id="results-container",
                      placeholder="Search...", show_clear=true, debounce_ms=300,
                      entity_type="") %}
+{% set search_id = 'live-search-input-' ~ (target_id | replace(' ', '-') | replace('#', '') | replace('_', '-')) %}
 <div class="card p-4" data-live-search>
   <form method="get" action="{{ base_url }}" class="flex flex-wrap items-center gap-3"
         {% if entity_type %}x-data="liveSearch('{{ entity_type }}')" @submit="showSuggestions = false"{% endif %}>
 
     {# Search Input #}
-    <div class="relative flex-1 min-w-[200px]"
+    <div class="relative w-full min-w-0 sm:flex-1 sm:min-w-[200px]"
          {% if entity_type %}@click.away="showSuggestions = false"{% endif %}>
       <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -919,7 +961,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
     {# Filter Dropdowns (from filters parameter) #}
     {% for filter in filters %}
-    <select name="{{ filter.name }}" class="form-select"
+    {% set filter_id = 'live-filter-' ~ (target_id | replace(' ', '-') | replace('#', '') | replace('_', '-')) ~ '-' ~ filter.name %}
+    <label for="{{ filter_id }}" class="sr-only">{{ filter.label }}</label>
+    <select id="{{ filter_id }}" name="{{ filter.name }}" class="form-select"
             hx-get="{{ base_url }}"
             hx-trigger="change"
             hx-target="#{{ target_id }}"
@@ -1186,8 +1230,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
    ============================================ #}
 {% macro filter_select_field(name, label, value="", options=[], attrs="", placeholder=none, titleize_strings=false) %}
 <div>
-  <label class="form-label text-xs">{{ label }}</label>
-  <select name="{{ name }}" class="form-select w-full" {{ attrs | safe }}>
+  {% set field_id = 'filter-' ~ name %}
+  <label class="form-label text-xs" for="{{ field_id }}">{{ label }}</label>
+  <select id="{{ field_id }}" name="{{ name }}" class="form-select w-full" aria-label="{{ label }}" {{ attrs | safe }}>
     <option value="">{{ placeholder if placeholder is not none else ("All " ~ label) }}</option>
     {% for option in options %}
     {% if option is mapping %}
@@ -1212,8 +1257,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
 {% macro filter_entity_select_field(name, label, value="", items=[], value_key="id", label_key="name", attrs="", placeholder=none) %}
 <div>
-  <label class="form-label text-xs">{{ label }}</label>
-  <select name="{{ name }}" class="form-select w-full" {{ attrs | safe }}>
+  {% set field_id = 'filter-' ~ name %}
+  <label class="form-label text-xs" for="{{ field_id }}">{{ label }}</label>
+  <select id="{{ field_id }}" name="{{ name }}" class="form-select w-full" aria-label="{{ label }}" {{ attrs | safe }}>
     <option value="">{{ placeholder if placeholder is not none else ("All " ~ label) }}</option>
     {% for item in items %}
     {% if item is mapping %}
@@ -1233,8 +1279,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
 {% macro filter_custom_select_field(name, label, attrs="", placeholder=none) %}
 <div>
-  <label class="form-label text-xs">{{ label }}</label>
-  <select name="{{ name }}" class="form-select w-full" {{ attrs | safe }}>
+  {% set field_id = 'filter-' ~ name %}
+  <label class="form-label text-xs" for="{{ field_id }}">{{ label }}</label>
+  <select id="{{ field_id }}" name="{{ name }}" class="form-select w-full" aria-label="{{ label }}" {{ attrs | safe }}>
     <option value="">{{ placeholder if placeholder is not none else ("All " ~ label) }}</option>
     {% if caller %}
     {{ caller() }}
@@ -1416,7 +1463,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
    Standardized Export + New action buttons for list pages
    ============================================ #}
 {% macro list_header_actions(export_url=none, new_url=none, new_label="New", new_icon="plus", export_label="Export") %}
-<div class="flex items-center gap-2">
+<div class="flex flex-wrap items-center justify-end gap-2">
   {% if export_url %}
   <button onclick="exportAll('{{ export_url }}')" class="btn btn-secondary">
     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1640,9 +1687,22 @@ if (typeof window.searchAutosuggest === 'undefined') {
 } %}
 {% set a = accent_map.get(accent, accent_map.teal) %}
 {% set has_back_button = (back_fallback | default('', true) | trim) != '' %}
+<style>
+@media (max-width: 559px) {
+  .topbar-title-responsive {
+    font-size: clamp(14px, 4.2vw, 18px) !important;
+    line-height: 1.15 !important;
+  }
+  .topbar-breadcrumbs-responsive,
+  .topbar-breadcrumbs-responsive * {
+    font-size: clamp(10px, 2.9vw, 13px) !important;
+    line-height: 1.2 !important;
+  }
+}
+</style>
 <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
-  <div class="app-header flex h-16 items-center justify-between">
-    <div class="flex items-center gap-4">
+  <div class="app-header flex min-h-16 flex-wrap items-center justify-between gap-2 py-2 sm:h-16 sm:flex-nowrap sm:py-0">
+    <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
       <button @click="toggleSidebar()"
               x-show="!isDesktop || sidebarCollapsed"
               x-cloak
@@ -1654,6 +1714,8 @@ if (typeof window.searchAutosuggest === 'undefined') {
       </button>
       {% if has_back_button %}
       <button type="button"
+              x-show="viewportWidth >= 560"
+              x-cloak
               @click="
                 if (document.referrer && document.referrer.startsWith(window.location.origin)) {
                   window.history.back();
@@ -1669,14 +1731,18 @@ if (typeof window.searchAutosuggest === 'undefined') {
         <span class="hidden sm:inline">Back</span>
       </button>
       {% endif %}
-      <div>
-        <h1 class="text-xl font-semibold text-slate-900 dark:text-white font-display" data-testid="page-title">
+      <div class="min-w-0">
+        <h1 class="topbar-title-responsive truncate text-xl font-semibold text-slate-900 dark:text-white font-display" data-testid="page-title">
           {{ page_title_html | safe }}
         </h1>
-        {{ breadcrumbs_html | safe }}
+        <div class="topbar-breadcrumbs-responsive">
+          {{ breadcrumbs_html | safe }}
+        </div>
       </div>
       <button @click="window.dispatchEvent(new CustomEvent('open-command-palette'))"
-              class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white/60 px-3 py-2 text-sm text-slate-500 transition-all {{ a.hover }} hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400 {{ a.hover_dark }} dark:hover:bg-slate-800">
+              x-show="viewportWidth >= 640"
+              x-cloak
+              class="hidden items-center gap-3 rounded-lg border border-slate-200 bg-white/60 px-3 py-2 text-sm text-slate-500 transition-all sm:flex {{ a.hover }} hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400 {{ a.hover_dark }} dark:hover:bg-slate-800">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
@@ -1686,7 +1752,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
         </kbd>
       </button>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
       {{ header_actions_html | safe }}
       <button @click="darkMode = !darkMode"
               class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"

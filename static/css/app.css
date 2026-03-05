@@ -2354,6 +2354,38 @@ video {
         background: var(--card-bg);
     }
 
+.table-container table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+.table-container table th,
+.table-container table td {
+        min-height: 44px;
+    }
+
+.table-container table thead th {
+        white-space: nowrap;
+    }
+
+.table-container table tbody td[class*='text-right'] {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-variant-numeric: tabular-nums lining-nums;
+    }
+
+.table-container table tbody td .truncate {
+        display: block;
+        max-width: 100%;
+    }
+
+.table-container > table > thead,
+.table-container table > thead,
+.overflow-x-auto > table > thead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
 .table {
         width: 100%;
         border-collapse: collapse;
@@ -2483,6 +2515,31 @@ video {
     }
 
 .table-action-btn:hover { color: var(--ink); background: var(--parchment-dark); }
+
+.copy-token {
+        cursor: pointer;
+        position: relative;
+        border-bottom: 1px dashed rgba(15, 23, 42, 0.25);
+    }
+
+.dark .copy-token {
+        border-bottom-color: rgba(148, 163, 184, 0.45);
+    }
+
+.copy-token[data-copied='true']::after {
+        content: 'Copied';
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        font-size: 11px;
+        color: var(--teal-dark);
+        background: rgba(204, 251, 241, 0.9);
+        border: 1px solid rgba(13, 148, 136, 0.25);
+        border-radius: 4px;
+        padding: 1px 6px;
+        pointer-events: none;
+        white-space: nowrap;
+    }
 
 .empty-state {
         display: flex;

@@ -22,7 +22,7 @@
 </button>
 <a href="/procurement/rfqs/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-2") }}
-    New RFQ
+    Create RFQ
 </a>
 {% endblock %}
 
@@ -39,7 +39,7 @@
     </div>
     {% endif %}
 
-    {% from "components/macros.html" import live_search, pagination, icon_svg %}
+    {% from "components/macros.html" import live_search, pagination, icon_svg, status_badge, empty_state %}
     {% call(search_attrs) live_search(search=search, base_url="/procurement/rfqs", placeholder="Search RFQs...") %}
         <select name="status" class="form-select" {{ search_attrs }}>
             <option value="">All Status</option>
@@ -80,31 +80,18 @@
                         <td class="hidden sm:table-cell px-4 py-3">
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">{{ rfq.procurement_method.value | replace('_', ' ') | title }}</span>
                         </td>
-                        <td class="px-4 py-3">
-                            {% set label, classes = status_labels.get(rfq.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ classes }}">{{ label }}</span>
-                        </td>
+                        <td class="px-4 py-3">{{ status_badge(rfq.status, 'sm') }}</td>
                     </tr>
                     {% else %}
                     <tr>
                         <td colspan="5" class="py-12">
-                            <div class="text-center">
-                                {{ icon_svg("collection", "mx-auto h-12 w-12 text-slate-300 dark:text-slate-600", stroke_width="1.5") }}
-                                <p class="mt-2 text-sm font-medium text-slate-900 dark:text-white">No RFQs found</p>
-                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                    {% if filter_status or filter_method %}
-                                    Try adjusting your filter criteria
-                                    {% else %}
-                                    Create your first request for quotation to start sourcing
-                                    {% endif %}
-                                </p>
-                                {% if not (filter_status or filter_method) %}
-                                <a href="/procurement/rfqs/new" class="mt-4 inline-flex items-center btn btn-primary text-sm">
-                                    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-                                    New RFQ
-                                </a>
-                                {% endif %}
-                            </div>
+                            {{ empty_state(
+                                "No RFQs found",
+                                "Try adjusting your filter criteria" if (filter_status or filter_method) else "Create your first request for quotation to start sourcing.",
+                                "collection",
+                                "Create RFQ" if not (filter_status or filter_method) else none,
+                                "/procurement/rfqs/new" if not (filter_status or filter_method) else none
+                            ) }}
                         </td>
                     </tr>
                     {% endfor %}

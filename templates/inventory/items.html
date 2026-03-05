@@ -7,7 +7,7 @@
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/inventory/items" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Inventory</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Inventory Items</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Items</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -20,7 +20,7 @@
     </button>
     <a href="/inventory/items/new" class="btn btn-primary">
         {{ icon_svg("plus", "h-4 w-4 mr-2") }}
-        New Item
+        Create Item
     </a>
 </div>
 {% endblock %}
@@ -94,7 +94,8 @@
         base_url="/inventory/items",
         placeholder="Search by code, name, or barcode..."
     ) %}
-        <select name="category" class="form-select" {{ search_attrs }}>
+        <label for="inventory-filter-category" class="sr-only">Filter by category</label>
+        <select id="inventory-filter-category" name="category" class="form-select" aria-label="Filter by category" {{ search_attrs }}>
             <option value="">All Categories</option>
             {% for cat in categories %}
             <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
@@ -108,7 +109,41 @@
     {# Items Table with Bulk Selection #}
     <div x-data="bulkActions({ entityName: 'items' })">
         <div class="card">
-            <div class="table-container">
+            <div class="space-y-3 p-4 md:hidden">
+                {% for item in items %}
+                <article class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900/40">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <a href="/inventory/items/{{ item.item_id }}" class="font-mono text-sm font-semibold text-teal-600 dark:text-teal-400" data-copy-text="{{ item.item_code }}" title="Click to copy item code">{{ item.item_code }}</a>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate mt-1" title="{{ item.item_name }}">{{ item.item_name }}</p>
+                        </div>
+                        <input type="checkbox"
+                               class="bulk-checkbox"
+                               :checked="isSelected('{{ item.item_id }}')"
+                               @click.stop="toggleRow('{{ item.item_id }}')"
+                               aria-label="Select {{ item.item_code }}">
+                    </div>
+                    <div class="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div><p class="text-slate-500 dark:text-slate-400">Category</p><p class="text-slate-700 dark:text-slate-200 truncate">{{ item.category_code }}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Type</p><p class="text-slate-700 dark:text-slate-200">{{ item.item_type | replace('_', ' ') | title }}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">On Hand</p><p class="font-mono text-slate-900 dark:text-white">{{ "%.2f"|format(item.quantity_on_hand|float) if item.track_inventory else 'N/A' }}</p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Available</p><p class="font-mono text-slate-900 dark:text-white">{{ "%.2f"|format(item.quantity_available|float) if item.track_inventory else 'N/A' }}</p></div>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between">
+                        {{ status_badge('active' if item.is_active else 'inactive', 'sm') }}
+                        <a href="/inventory/items/{{ item.item_id }}" class="btn btn-secondary btn-sm">View</a>
+                    </div>
+                </article>
+                {% else %}
+                <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-6 text-center">
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">No items found</p>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Create your first inventory item to begin stock tracking.</p>
+                    <a href="/inventory/items/new" class="btn btn-primary btn-sm mt-3">Create Item</a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="table-container hidden md:block">
                 <table class="table">
                     <thead>
                         <tr>
@@ -129,12 +164,12 @@
                         <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             {{ bulk_select_cell(item.item_id) }}
                             <td>
-                                <a href="/inventory/items/{{ item.item_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-amber-300">
+                                <a href="/inventory/items/{{ item.item_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-amber-300" data-copy-text="{{ item.item_code }}" title="Click to copy item code">
                                     {{ item.item_code }}
                                 </a>
                             </td>
                             <td>
-                                <a href="/inventory/items/{{ item.item_id }}" class="font-medium text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+                                <a href="/inventory/items/{{ item.item_id }}" class="font-medium text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400 transition-colors truncate block" title="{{ item.item_name }}">
                                     {{ item.item_name }}
                                 </a>
                             </td>
@@ -193,7 +228,7 @@
                                     <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Get started by creating your first inventory item</p>
                                     <a href="/inventory/items/new" class="btn btn-primary mt-4">
                                         {{ icon_svg("plus", "h-4 w-4 mr-2") }}
-                                        Add Item
+                                        Create Item
                                     </a>
                                     {% endif %}
                                 </div>
