@@ -350,7 +350,7 @@ def receipt_detail_view(payment: CustomerPayment, customer: Customer | None) -> 
         "receipt_number": payment.payment_number,
         "customer_id": payment.customer_id,
         "customer_name": customer_display_name(customer) if customer else "",
-        "receipt_date": format_date(payment.payment_date),
+        "receipt_date": format_date(payment.payment_date, format="%d %b %Y"),
         "payment_method": payment.payment_method.value,
         "reference_number": payment.reference,
         "description": payment.description,
@@ -385,7 +385,7 @@ def allocation_view(
             allocation.exchange_difference,
             currency_code,
         ),
-        "allocation_date": format_date(allocation.allocation_date),
+        "allocation_date": format_date(allocation.allocation_date, format="%d %b %Y"),
     }
 
 

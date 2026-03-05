@@ -78,17 +78,41 @@
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Bank Account</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.bank_account_name if payment.bank_account_name else "-" }}</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.bank_account_name if payment.bank_account_name else "—" }}</p>
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Reference</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.reference_number | default("-") }}</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.reference_number if payment.reference_number else "—" }}</p>
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Currency</p>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.currency_code }}</p>
             </div>
         </div>
+
+        {% if payment.has_wht %}
+        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400 mb-3">Withholding Tax Deducted</h3>
+            <div class="grid gap-4 sm:grid-cols-4">
+                <div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">WHT Code</p>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.wht_code_name if payment.wht_code_name else "—" }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">Gross Amount</p>
+                    <p class="text-sm font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ payment.gross_amount }}</p>
+                </div>
+                <div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">WHT Deducted</p>
+                    <p class="text-sm font-semibold font-mono tabular-nums text-rose-600 dark:text-rose-400">({{ payment.withholding_tax_amount }})</p>
+                </div>
+                <div>
+                    <p class="text-xs text-amber-600 dark:text-amber-400">Net Paid</p>
+                    <p class="text-sm font-semibold font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="card p-6">

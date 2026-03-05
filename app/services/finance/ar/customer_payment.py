@@ -259,6 +259,7 @@ class CustomerPaymentService(ListResponseMixin):
                 payment_id=payment.payment_id,
                 invoice_id=coerce_uuid(alloc.invoice_id),
                 allocated_amount=alloc.amount,
+                allocation_date=payment.payment_date,
             )
             db.add(allocation)
 
@@ -890,6 +891,7 @@ class CustomerPaymentService(ListResponseMixin):
                 payment_id=pay_id,
                 invoice_id=coerce_uuid(alloc.invoice_id),
                 allocated_amount=alloc.amount,
+                allocation_date=payment.payment_date,
             )
             db.add(allocation)
 

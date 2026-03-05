@@ -400,8 +400,20 @@ class PaymentWebService:
             if acct:
                 bank_account_name = f"{acct.account_code} - {acct.account_name}"
 
+        # Resolve WHT code name
+        wht_code_name = ""
+        if payment.withholding_tax_code_id:
+            from app.models.finance.tax.tax_code import TaxCode
+
+            wht_code = db.get(TaxCode, payment.withholding_tax_code_id)
+            if wht_code:
+                rate_pct = float(wht_code.tax_rate * 100)
+                wht_code_name = f"{wht_code.tax_name} ({rate_pct:g}%)"
+
         return {
-            "payment": payment_detail_view(payment, supplier, bank_account_name),
+            "payment": payment_detail_view(
+                payment, supplier, bank_account_name, wht_code_name
+            ),
             "supplier": supplier_form_view(supplier) if supplier else None,
             "allocations": allocations_view,
             "attachments": attachments_view,
@@ -682,10 +694,13 @@ class PaymentWebService:
             if "application/json" in content_type:
                 return {"success": True, "payment_id": str(payment.payment_id)}
 
-            return RedirectResponse(
-                url="/finance/ap/payments?success=Payment+created+successfully",
-                status_code=303,
-            )
+            redirect_url = "/finance/ap/payments?success=Payment+created+successfully"
+            if request.headers.get("HX-Request"):
+                return HTMLResponse(
+                    content="",
+                    headers={"HX-Redirect": redirect_url},
+                )
+            return RedirectResponse(url=redirect_url, status_code=303)
 
         except Exception as e:
             logger.exception("create_payment_response: failed")

@@ -298,14 +298,18 @@ def payment_detail_view(
     payment: SupplierPayment,
     supplier: Supplier | None,
     bank_account_name: str = "",
+    wht_code_name: str = "",
 ) -> dict:
     """Transform payment to detail view."""
+    wht_amount = payment.withholding_tax_amount or 0
+    gross_amount = payment.gross_amount or payment.amount
+    has_wht = wht_amount > 0
     return {
         "payment_id": payment.payment_id,
         "payment_number": payment.payment_number,
         "supplier_id": payment.supplier_id,
         "supplier_name": supplier_display_name(supplier) if supplier else "",
-        "payment_date": format_date(payment.payment_date),
+        "payment_date": format_date(payment.payment_date, format="%d %b %Y"),
         "payment_method": payment.payment_method.value,
         "reference_number": payment.reference,
         "amount": format_currency(payment.amount, payment.currency_code),
@@ -313,6 +317,10 @@ def payment_detail_view(
         "status": payment_status_label(payment.status),
         "currency_code": payment.currency_code,
         "bank_account_name": bank_account_name,
+        "has_wht": has_wht,
+        "gross_amount": format_currency(gross_amount, payment.currency_code),
+        "withholding_tax_amount": format_currency(wht_amount, payment.currency_code),
+        "wht_code_name": wht_code_name,
     }
 
 
@@ -332,7 +340,7 @@ def allocation_view(
             allocation.exchange_difference,
             currency_code,
         ),
-        "allocation_date": format_date(allocation.allocation_date),
+        "allocation_date": format_date(allocation.allocation_date, format="%d %b %Y"),
     }
 
 

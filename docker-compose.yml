@@ -196,7 +196,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-dotmac_erp}
     ports:
-      - "127.0.0.1:5437:5432"
+      - "0.0.0.0:5437:5432"
     volumes:
       - dotmac_erp_db_data:/var/lib/postgresql/data
     healthcheck:

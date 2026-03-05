@@ -13,9 +13,11 @@
     <div class="space-y-3">
         {% for activity in recent_activity %}
         <div class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                 <span class="font-semibold text-slate-900 dark:text-white">{{ activity.action_label }}</span>
+                <span class="text-slate-400 dark:text-slate-500">by</span>
                 <span class="text-slate-600 dark:text-slate-400">{{ activity.actor_name }}</span>
+                <span class="text-slate-400 dark:text-slate-500">&middot;</span>
                 <span class="text-xs text-slate-500 dark:text-slate-500">{{ activity.occurred_at }}</span>
             </div>
             {% if activity.changed_fields_label %}
