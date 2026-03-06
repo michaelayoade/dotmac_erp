@@ -30,7 +30,7 @@ branch_labels = None
 depends_on = None
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
-BANK_CATEGORY_ID = "2065b3bc-052e-42f7-8536-9af1bec26eae"
+PREFERRED_BANK_CATEGORY_ID = "2065b3bc-052e-42f7-8536-9af1bec26eae"
 
 # 13 fiscal periods spanning Jan 2025 — Jan 2026
 AFFECTED_PERIOD_IDS = [
@@ -83,34 +83,58 @@ def upgrade() -> None:
 
     # ------------------------------------------------------------------
     # Step 1: Create 5 new numbered bank accounts (idempotent)
+    #
+    # CI/test DBs may not contain the historical fixed UUID category. Resolve
+    # a bank category dynamically so the migration remains portable.
     # ------------------------------------------------------------------
-    for code, name in NEW_BANK_ACCOUNTS:
-        conn.execute(
-            sa_text(
-                """
-                INSERT INTO gl.account (
-                    account_id, organization_id, category_id, account_code,
-                    account_name, account_type, normal_balance, is_active,
-                    is_posting_allowed, is_budgetable, is_multi_currency,
-                    is_reconciliation_required, is_cash_equivalent,
-                    is_financial_instrument, subledger_type
-                ) VALUES (
-                    gen_random_uuid(), :org_id, :cat_id, :code,
-                    :name, 'POSTING', 'DEBIT', true,
-                    true, false, false,
-                    true, true,
-                    false, 'BANK'
-                )
-                ON CONFLICT (organization_id, account_code) DO NOTHING
-                """
-            ),
-            {
-                "org_id": ORG_ID,
-                "cat_id": BANK_CATEGORY_ID,
-                "code": code,
-                "name": name,
-            },
-        )
+    bank_category_id = conn.execute(
+        sa_text(
+            """
+            SELECT category_id
+            FROM gl.account_category
+            WHERE organization_id = :org_id
+              AND (
+                category_id = CAST(:preferred_cat_id AS uuid)
+                OR category_code IN ('1200', '1201', '1202', '1203')
+                OR lower(category_name) LIKE '%bank%'
+              )
+            ORDER BY (category_id = CAST(:preferred_cat_id AS uuid)) DESC,
+                     display_order ASC,
+                     hierarchy_level ASC
+            LIMIT 1
+            """
+        ),
+        {"org_id": ORG_ID, "preferred_cat_id": PREFERRED_BANK_CATEGORY_ID},
+    ).scalar_one_or_none()
+
+    if bank_category_id is not None:
+        for code, name in NEW_BANK_ACCOUNTS:
+            conn.execute(
+                sa_text(
+                    """
+                    INSERT INTO gl.account (
+                        account_id, organization_id, category_id, account_code,
+                        account_name, account_type, normal_balance, is_active,
+                        is_posting_allowed, is_budgetable, is_multi_currency,
+                        is_reconciliation_required, is_cash_equivalent,
+                        is_financial_instrument, subledger_type
+                    ) VALUES (
+                        gen_random_uuid(), :org_id, :cat_id, :code,
+                        :name, 'POSTING', 'DEBIT', true,
+                        true, false, false,
+                        true, true,
+                        false, 'BANK'
+                    )
+                    ON CONFLICT (organization_id, account_code) DO NOTHING
+                    """
+                ),
+                {
+                    "org_id": ORG_ID,
+                    "cat_id": bank_category_id,
+                    "code": code,
+                    "name": name,
+                },
+            )
 
     # ------------------------------------------------------------------
     # Step 2: Build mapping in audit table (ERPNext code → numbered code)
