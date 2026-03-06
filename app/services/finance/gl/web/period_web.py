@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -21,6 +21,7 @@ from app.models.finance.gl.account_balance import AccountBalance, BalanceType
 from app.models.finance.gl.account_category import AccountCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
+from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.gl.fiscal_period import (
@@ -213,6 +214,66 @@ class PeriodWebService:
                         "credit": format_currency(tb_credit, balance.currency_code)
                         if tb_credit
                         else "",
+                    }
+                )
+
+        # Fallback to posted ledger lines when account balances are not yet refreshed.
+        if not balances:
+            fallback_stmt = (
+                select(
+                    Account.account_id,
+                    Account.account_code,
+                    Account.account_name,
+                    AccountCategory.ifrs_category,
+                    func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0).label(
+                        "debit"
+                    ),
+                    func.coalesce(func.sum(PostedLedgerLine.credit_amount), 0).label(
+                        "credit"
+                    ),
+                )
+                .join(Account, PostedLedgerLine.account_id == Account.account_id)
+                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .where(
+                    PostedLedgerLine.organization_id == org_id,
+                    PostedLedgerLine.posting_date <= ref_date,
+                )
+                .group_by(
+                    Account.account_id,
+                    Account.account_code,
+                    Account.account_name,
+                    AccountCategory.ifrs_category,
+                )
+                .order_by(Account.account_code)
+            )
+            fallback_rows = db.execute(fallback_stmt).all()
+
+            for account_id, account_code, account_name, ifrs_category, debit, credit in (
+                fallback_rows
+            ):
+                raw_debit = Decimal(str(debit or 0))
+                raw_credit = Decimal(str(credit or 0))
+                net = raw_debit - raw_credit
+                if net > 0:
+                    tb_debit = net
+                    tb_credit = Decimal("0")
+                elif net < 0:
+                    tb_debit = Decimal("0")
+                    tb_credit = abs(net)
+                else:
+                    tb_debit = Decimal("0")
+                    tb_credit = Decimal("0")
+
+                total_debit += tb_debit
+                total_credit += tb_credit
+                balances.append(
+                    {
+                        "account_id": str(account_id),
+                        "account_code": account_code,
+                        "account_name": account_name,
+                        "category": ifrs_label(ifrs_category),
+                        "debit": format_currency(tb_debit) if tb_debit else "",
+                        "credit": format_currency(tb_credit) if tb_credit else "",
                     }
                 )
 

@@ -20,6 +20,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.models.finance.gl.account_category import IFRSCategory
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 
 # ---------------------------------------------------------------------------
@@ -598,3 +599,46 @@ class TestListMethodsUseSelect:
 
         mock_db.scalars.assert_called()
         mock_db.query.assert_not_called()
+
+
+class TestTrialBalanceFallback:
+    """Regression tests for GL trial balance web context."""
+
+    def test_falls_back_to_posted_ledger_when_balance_cache_empty(self):
+        """Trial balance should not be empty when only posted ledger lines exist."""
+        from app.services.finance.gl.web.period_web import PeriodWebService
+
+        org_id = uuid4()
+        account_id = uuid4()
+        period_id = uuid4()
+        mock_db = MagicMock()
+
+        period = SimpleNamespace(fiscal_period_id=period_id)
+        empty_balance_rows = MagicMock()
+        empty_balance_rows.all.return_value = []
+
+        fallback_rows = MagicMock()
+        fallback_rows.all.return_value = [
+            (
+                account_id,
+                "1000",
+                "Cash",
+                IFRSCategory.ASSETS,
+                Decimal("150.00"),
+                Decimal("0.00"),
+            )
+        ]
+
+        mock_db.scalar.return_value = period
+        mock_db.execute.side_effect = [empty_balance_rows, fallback_rows]
+
+        context = PeriodWebService.trial_balance_context(
+            db=mock_db,
+            organization_id=str(org_id),
+            as_of_date="2026-03-01",
+        )
+
+        assert len(context["balances"]) == 1
+        assert context["balances"][0]["account_id"] == str(account_id)
+        assert context["balances"][0]["account_code"] == "1000"
+        assert "150.00" in context["total_debit"]
