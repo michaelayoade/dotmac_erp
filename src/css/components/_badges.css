@@ -14,6 +14,32 @@
         border-radius: var(--radius-badge);
         white-space: nowrap;
     }
+    .badge-sm {
+        padding: 2px 6px;
+        font-size: 11px;
+        line-height: 1.2;
+    }
+    .badge-md {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 12px;
+        line-height: 1.2;
+    }
+    .badge-lg {
+        padding: 6px 10px;
+        font-size: 13px;
+        line-height: 1.25;
+    }
+
+    .badge-symbol {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        font-size: 11px;
+        line-height: 1;
+        font-weight: 700;
+        opacity: 0.8;
+    }
     .badge-dot {
         width: 6px;
         height: 6px;

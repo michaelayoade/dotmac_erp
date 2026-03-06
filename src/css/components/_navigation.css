@@ -4,6 +4,18 @@
    ============================================================================ */
 
 @layer components {
+    @media (max-width: 559px) {
+        .topbar-title-responsive {
+            font-size: clamp(14px, 4.2vw, 18px);
+            line-height: 1.15;
+        }
+        .topbar-breadcrumbs-responsive,
+        .topbar-breadcrumbs-responsive * {
+            font-size: clamp(10px, 2.9vw, 13px);
+            line-height: 1.2;
+        }
+    }
+
     .nav-module {
         position: relative;
         display: flex;
