@@ -11,7 +11,7 @@
         padding: var(--spacing-xs) var(--spacing-sm);
         font-size: 12px;
         font-weight: 600;
-        border-radius: var(--radius-badge);
+        border-radius: 9999px;
         white-space: nowrap;
     }
     .badge-sm {

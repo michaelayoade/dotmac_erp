@@ -17,15 +17,18 @@
         font-family: 'DM Sans', system-ui, sans-serif;
         border-radius: var(--radius-btn);
         cursor: pointer;
-        transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-        outline: none;
+        letter-spacing: 0.025em;
+        transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
         border: none;
         position: relative;
         overflow: hidden;
     }
 
-    .btn:focus-visible { box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.4); }
-    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:focus-visible {
+        outline: var(--ring-width) solid var(--ring-color);
+        outline-offset: var(--ring-offset);
+    }
+    .btn:active:not(:disabled) { transform: scale(0.96); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .btn-primary {
