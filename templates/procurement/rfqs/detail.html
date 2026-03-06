@@ -119,7 +119,7 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-4 py-3 text-slate-900 dark:text-white">{{ resp.vendor_name }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ resp.submitted_date }}</td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(resp.total_amount) }}</td>
+                        <td class="px-4 py-3 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(resp.total_amount) }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ resp.validity_period }} days</td>
                         <td class="px-4 py-3">
                             {% set rlabel, rclasses = response_status_labels.get(resp.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}

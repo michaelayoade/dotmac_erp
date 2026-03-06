@@ -25,7 +25,7 @@
             <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div><span class="text-slate-500 dark:text-slate-400">Total Value:</span><p class="font-semibold text-slate-900 dark:text-white">{{ plan.currency_code }} {{ "{:,.2f}".format(plan.total_estimated_value) }}</p></div>
+            <div><span class="text-slate-500 dark:text-slate-400">Total Value:</span><p class="font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ plan.currency_code }} {{ "{:,.2f}".format(plan.total_estimated_value) }}</p></div>
             <div><span class="text-slate-500 dark:text-slate-400">Items:</span><p class="font-semibold text-slate-900 dark:text-white">{{ items | length }}</p></div>
             <div><span class="text-slate-500 dark:text-slate-400">Created:</span><p class="font-semibold text-slate-900 dark:text-white">{{ plan.created_at | format_date }}</p></div>
             {% if plan.approved_at %}<div><span class="text-slate-500 dark:text-slate-400">Approved:</span><p class="font-semibold text-slate-900 dark:text-white">{{ plan.approved_at | format_date }}</p></div>{% endif %}
@@ -54,7 +54,7 @@
                         <td class="px-4 py-3 text-slate-900 dark:text-white">{{ item.description }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ item.procurement_method.value }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Q{{ item.planned_quarter }}</td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(item.estimated_value) }}</td>
+                        <td class="px-4 py-3 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(item.estimated_value) }}</td>
                         <td class="px-4 py-3">{{ status_badge(item.status.value, size="sm") }}</td>
                     </tr>
                     {% else %}

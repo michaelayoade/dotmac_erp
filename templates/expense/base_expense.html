@@ -8,6 +8,10 @@
 
 {% block body %}
 {% include "partials/_brand_context.html" %}
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-teal-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none">
+    Skip to main content
+</a>
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{
@@ -113,6 +117,7 @@
 
             <!-- Expense Claims -->
             <a href="/expense/claims"
+               :aria-current="activeModule === 'claims' ? 'page' : false"
                :class="activeModule === 'claims' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("document", "h-5 w-5 flex-shrink-0") }}
@@ -121,6 +126,7 @@
 
             <!-- Cash Advances -->
             <a href="/expense/advances"
+               :aria-current="activeModule === 'advances' ? 'page' : false"
                :class="activeModule === 'advances' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("currency", "h-5 w-5 flex-shrink-0") }}
@@ -129,6 +135,7 @@
 
             <!-- Corporate Cards -->
             <a href="/expense/cards"
+               :aria-current="activeModule === 'cards' ? 'page' : false"
                :class="activeModule === 'cards' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("credit-card", "h-5 w-5 flex-shrink-0") }}
@@ -142,6 +149,7 @@
 
             <!-- Categories -->
             <a href="/expense/categories"
+               :aria-current="activeModule === 'categories' ? 'page' : false"
                :class="activeModule === 'categories' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("tag", "h-5 w-5 flex-shrink-0") }}
@@ -150,6 +158,7 @@
 
             <!-- Spending Limits -->
             <a href="/expense/limits"
+               :aria-current="activeModule === 'limits' ? 'page' : false"
                :class="activeModule === 'limits' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("clock", "h-5 w-5 flex-shrink-0") }}
@@ -157,6 +166,7 @@
             </a>
 
             <a href="/expense/limits/reviewer/approvers"
+               :aria-current="activeModule === 'limits-review' ? 'page' : false"
                :class="activeModule === 'limits-review' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("document-report", "h-5 w-5 flex-shrink-0") }}
@@ -170,6 +180,7 @@
 
             <!-- Summary Report -->
             <a href="/expense/reports/summary"
+               :aria-current="activeModule === 'reports-summary' ? 'page' : false"
                :class="activeModule === 'reports-summary' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("document-report", "h-5 w-5 flex-shrink-0") }}
@@ -178,6 +189,7 @@
 
             <!-- By Category Report -->
             <a href="/expense/reports/by-category"
+               :aria-current="activeModule === 'reports-category' ? 'page' : false"
                :class="activeModule === 'reports-category' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("tag", "h-5 w-5 flex-shrink-0") }}
@@ -186,6 +198,7 @@
 
             <!-- By Employee Report -->
             <a href="/expense/reports/by-employee"
+               :aria-current="activeModule === 'reports-employee' ? 'page' : false"
                :class="activeModule === 'reports-employee' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("user-group", "h-5 w-5 flex-shrink-0") }}
@@ -194,6 +207,7 @@
 
             <!-- Trends Report -->
             <a href="/expense/reports/trends"
+               :aria-current="activeModule === 'reports-trends' ? 'page' : false"
                :class="activeModule === 'reports-trends' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("trending-up", "h-5 w-5 flex-shrink-0") }}
@@ -202,6 +216,7 @@
 
             <!-- My Approvals Report -->
             <a href="/expense/reports/my-approvals"
+               :aria-current="activeModule === 'reports-my-approvals' ? 'page' : false"
                :class="activeModule === 'reports-my-approvals' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("clipboard-check", "h-5 w-5 flex-shrink-0") }}
@@ -229,7 +244,7 @@
         {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="amber", back_fallback=(back_fallback_url | trim)) }}
 
         <!-- Page Content -->
-        <main class="min-h-[calc(100vh-4rem)] bg-dashboard">
+        <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">
             <div class="app-page">
                 {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
                 {% block content %}{% endblock %}

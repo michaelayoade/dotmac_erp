@@ -71,7 +71,7 @@
                         </td>
                         <td class="hidden sm:table-cell px-4 py-3 text-slate-600 dark:text-slate-400">{{ contract.title }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ contract.supplier_name }}</td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(contract.contract_value) }}</td>
+                        <td class="px-4 py-3 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(contract.contract_value) }}</td>
                         <td class="px-4 py-3">{{ status_badge(contract.status, 'sm') }}</td>
                     </tr>
                     {% else %}

@@ -46,7 +46,7 @@
             </div>
             <div>
                 <span class="text-slate-500 dark:text-slate-400">Total Amount:</span>
-                <p class="font-semibold text-slate-900 dark:text-white">{{ "{:,.2f}".format(requisition.total_estimated_amount) }}</p>
+                <p class="font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(requisition.total_estimated_amount) }}</p>
             </div>
             <div>
                 <span class="text-slate-500 dark:text-slate-400">Lines:</span>
@@ -89,8 +89,8 @@
                         <td class="px-4 py-3 text-slate-900 dark:text-white">{{ line.description }}</td>
                         <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ line.quantity }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ line.uom or '-' }}</td>
-                        <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(line.estimated_unit_price) }}</td>
-                        <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.estimated_amount) }}</td>
+                        <td class="px-4 py-3 text-right font-mono tabular-nums text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(line.estimated_unit_price) }}</td>
+                        <td class="px-4 py-3 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(line.estimated_amount) }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No lines.</td></tr>
@@ -100,7 +100,7 @@
                 <tfoot class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
                         <td colspan="5" class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">Total:</td>
-                        <td class="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">{{ "{:,.2f}".format(requisition.total_estimated_amount) }}</td>
+                        <td class="px-4 py-3 text-right font-bold font-mono tabular-nums text-slate-900 dark:text-white">{{ "{:,.2f}".format(requisition.total_estimated_amount) }}</td>
                     </tr>
                 </tfoot>
                 {% endif %}

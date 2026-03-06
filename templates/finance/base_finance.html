@@ -8,6 +8,10 @@
 
 {% block body %}
 {% include "partials/_brand_context.html" %}
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-teal-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none">
+    Skip to main content
+</a>
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{
@@ -331,7 +335,7 @@
         {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="teal", back_fallback=(back_fallback_url | trim)) }}
 
         <!-- Page Content -->
-        <main class="min-h-[calc(100vh-4rem)] bg-dashboard">
+        <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">
             <div class="app-page">
                 {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
                 {% block content %}{% endblock %}

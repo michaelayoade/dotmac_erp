@@ -36,23 +36,23 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="/finance/remita/generate" class="space-y-6" x-data="{
-            biller: '{{ form_data.biller_id if form_data else '' }}',
-            serviceTypeId: '{{ form_data.service_type_id if form_data else '' }}',
-            serviceName: '{{ form_data.service_name if form_data else '' }}',
+        <form method="POST" action="/finance/remita/generate" class="space-y-6" x-data='{
+            biller: "{{ form_data.biller_id if form_data else "" }}",
+            serviceTypeId: "{{ form_data.service_type_id if form_data else "" }}",
+            serviceName: "{{ form_data.service_name if form_data else "" }}",
             services: {{ services_by_biller | tojson }},
             getServices() {
                 return this.services[this.biller] || [];
             },
             hasServices() {
-                return this.getServices().length >
-            {{ request.state.csrf_form | safe }} 0;
+                return this.getServices().length > 0;
             },
             onServiceSelect(event) {
                 this.serviceTypeId = event.target.value;
                 this.serviceName = event.target.options[event.target.selectedIndex].text;
             }
-        }">
+        }'>
+            {{ request.state.csrf_form | safe }}
             {% set payer_defaults = payer_defaults if payer_defaults else {} %}
             {% if form_data and form_data.source_type and form_data.source_id %}
             <input type="hidden" name="source_type" value="{{ form_data.source_type }}">

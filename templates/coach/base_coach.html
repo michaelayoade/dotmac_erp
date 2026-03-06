@@ -7,6 +7,10 @@
 
 {% block body %}
 {% include "partials/_brand_context.html" %}
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-teal-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none">
+    Skip to main content
+</a>
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{ sidebarOpen: false, isDesktop: false, init() { this.isDesktop = window.innerWidth >= 1024; window.addEventListener('resize', () => { this.isDesktop = window.innerWidth >= 1024; if (this.isDesktop) this.sidebarOpen = false; }); } }">
@@ -67,7 +71,7 @@
   </aside>
 
   <!-- Main -->
-  <main class="app-main flex-1">
+  <main id="main-content" class="app-main flex-1">
     <div class="px-6 pt-6">
       <div class="flex items-center gap-3 lg:hidden mb-4">
         <button class="btn btn-secondary" @click="sidebarOpen = true">Menu</button>

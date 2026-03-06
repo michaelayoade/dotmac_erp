@@ -93,6 +93,15 @@
     --input-border: rgba(15, 23, 42, 0.15);
     --input-focus: #0d9488;
 
+    /* Animation duration tokens — unified motion rhythm */
+    --duration-interaction: 150ms;  /* Color, opacity, icon state changes */
+    --duration-ui: 200ms;           /* Layout shifts, button hover, sidebar */
+    --duration-entrance: 300ms;     /* Component enter/exit, toast, modal */
+    --duration-page: 400ms;         /* Full page transitions */
+    --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);  /* Material ease */
+    --easing-decelerate: cubic-bezier(0, 0, 0.2, 1);   /* Enter/appear */
+    --easing-accelerate: cubic-bezier(0.4, 0, 1, 1);   /* Exit/dismiss */
+
     /* Button shadows */
     --btn-shadow: 0 4px 12px rgba(26, 31, 54, 0.25);
     --btn-shadow-hover: 0 8px 20px rgba(26, 31, 54, 0.35);
@@ -194,10 +203,10 @@ code {
 }
 
 .label-caps {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     color: var(--ink-muted);
 }
 
@@ -333,7 +342,8 @@ code {
     z-index: 40;
     overflow: hidden;
     transform: translateX(0);
-    transition: width 0.3s ease, transform 0.3s ease;
+    transition: width var(--duration-entrance) var(--easing-standard),
+                transform var(--duration-entrance) var(--easing-standard);
 }
 
 .app-main {
@@ -979,7 +989,8 @@ code {
 /* Hover lift effect */
 
 .hover-lift {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform var(--duration-ui) var(--easing-standard),
+                box-shadow var(--duration-ui) var(--easing-standard);
 }
 
 .hover-lift:hover {
@@ -2079,7 +2090,7 @@ video {
         font-family: 'DM Sans', system-ui, sans-serif;
         border-radius: var(--radius-btn);
         cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: all var(--duration-ui) var(--easing-standard);
         outline: none;
         border: none;
         position: relative;
@@ -2163,32 +2174,34 @@ video {
         content: '' !important;
         position: absolute !important;
         inset: 0 !important;
-        background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%) !important;
+        background: radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 70%) !important;
         opacity: 0 !important;
         transform: scale(0) !important;
-        transition: all 0.3s ease !important;
+        transition: opacity var(--duration-entrance) var(--easing-standard),
+                    transform var(--duration-entrance) var(--easing-standard) !important;
     }
 
 .btn::after {
         content: '';
         position: absolute;
         inset: 0;
-        background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 70%);
         opacity: 0;
         transform: scale(0);
-        transition: all 0.3s ease;
+        transition: opacity var(--duration-entrance) var(--easing-standard),
+                    transform var(--duration-entrance) var(--easing-standard);
     }
 
 .\!btn:active::after {
         opacity: 1 !important;
         transform: scale(2) !important;
-        transition: all 0s !important;
+        transition: opacity 0.05s, transform 0.05s !important;
     }
 
 .btn:active::after {
         opacity: 1;
         transform: scale(2);
-        transition: all 0s;
+        transition: opacity 0.05s, transform 0.05s;
     }
 
 .form-label {
@@ -2216,7 +2229,7 @@ video {
         background: var(--parchment);
         border: 1.5px solid var(--input-border);
         border-radius: var(--radius-input);
-        transition: all 0.2s ease;
+        transition: all var(--duration-ui) var(--easing-standard);
         outline: none;
         box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
     }
@@ -2428,7 +2441,7 @@ video {
         vertical-align: middle;
     }
 
-.table tbody tr { transition: background 0.15s ease; }
+.table tbody tr { transition: background var(--duration-interaction) var(--easing-standard); }
 
 .table tbody tr:hover { background: rgba(13, 148, 136, 0.04); }
 
@@ -2559,7 +2572,7 @@ video {
         justify-content: center;
         background: linear-gradient(135deg, var(--teal-light) 0%, var(--gold-light) 100%);
         margin-bottom: var(--spacing-2xl);
-        animation: emptyIconFloat 3s ease-in-out infinite;
+        animation: emptyIconFloat 2.5s ease-in-out infinite;
     }
 
 .dark .empty-state-icon {
@@ -2570,7 +2583,7 @@ video {
 
 @keyframes emptyIconFloat {
         0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-8px); }
+        50% { transform: translateY(-5px); }
     }
 
 .empty-state-title {
@@ -2832,7 +2845,7 @@ video {
         border-top-color: currentColor;
         border-right-color: currentColor;
         border-radius: 50%;
-        animation: btnSpin 0.6s linear infinite;
+        animation: btnSpin 0.5s linear infinite;
     }
 
 @keyframes btnSpin {
@@ -2876,7 +2889,7 @@ video {
         border-top-color: currentColor;
         border-right-color: currentColor;
         border-radius: 50%;
-        animation: btnSpin 0.6s linear infinite;
+        animation: btnSpin 0.5s linear infinite;
     }
 
 .htmx-request.\!btn::after,
@@ -2889,7 +2902,7 @@ video {
         border-top-color: currentColor !important;
         border-right-color: currentColor !important;
         border-radius: 50% !important;
-        animation: btnSpin 0.6s linear infinite !important;
+        animation: btnSpin 0.5s linear infinite !important;
     }
 
 /* Loading indicator element (alternative approach) */
@@ -2902,7 +2915,7 @@ video {
         border-top-color: currentColor !important;
         border-right-color: currentColor !important;
         border-radius: 50% !important;
-        animation: btnSpin 0.6s linear infinite !important;
+        animation: btnSpin 0.5s linear infinite !important;
     }
 
 .btn .btn-spinner {
@@ -2913,7 +2926,7 @@ video {
         border-top-color: currentColor;
         border-right-color: currentColor;
         border-radius: 50%;
-        animation: btnSpin 0.6s linear infinite;
+        animation: btnSpin 0.5s linear infinite;
     }
 
 .htmx-request .btn-spinner,

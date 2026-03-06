@@ -107,6 +107,10 @@
 {% endblock %}
 
 {% block body %}
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-teal-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none">
+    Skip to main content
+</a>
     {% set brand_name = brand.name %}
     {% set brand_mark = brand.mark %}
 
@@ -293,7 +297,7 @@
         </aside>
 
         <!-- Main Content -->
-        <main class="app-main">
+        <main id="main-content" class="app-main">
             {% set back_fallback_url %}{% block back_fallback %}/admin{% endblock %}{% endset %}
             <!-- Top Header -->
             <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">

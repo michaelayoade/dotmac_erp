@@ -8,6 +8,10 @@
 
 {% block body %}
 {% include "partials/_brand_context.html" %}
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-teal-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none">
+    Skip to main content
+</a>
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{
@@ -114,6 +118,7 @@
             <!-- Inventory Module -->
             <div x-data="{ open: ['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) }">
                 <button @click="open = !open"
+                        :aria-current="['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) ? 'true' : false"
                         :class="['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     {{ icon_svg("box", "h-5 w-5 flex-shrink-0") }}
@@ -139,6 +144,7 @@
             <!-- Transaction Shortcuts -->
             <div x-data="{ open: activeModule === 'inv-transactions' }">
                 <button @click="open = !open"
+                        :aria-current="activeModule === 'inv-transactions' ? 'true' : false"
                         :class="activeModule === 'inv-transactions' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     {{ icon_svg("switch-horizontal", "h-5 w-5 flex-shrink-0 text-emerald-500") }}
@@ -163,6 +169,7 @@
 
             <div x-data="{ open: ['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) }">
                 <button @click="open = !open"
+                        :aria-current="['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) ? 'true' : false"
                         :class="['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     {{ icon_svg("building", "h-5 w-5 flex-shrink-0") }}
@@ -199,7 +206,7 @@
         {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="amber") }}
 
         <!-- Page Content -->
-        <main class="min-h-[calc(100vh-4rem)] bg-dashboard">
+        <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">
             <div class="app-page">
                 {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
                 {% block content %}{% endblock %}
