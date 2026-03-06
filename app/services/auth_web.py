@@ -110,11 +110,15 @@ class AuthWebService:
             # No SSO provider URL configured
             return None
 
-        # Build redirect URL back to this app
-        # Use the current request's URL as the base for the redirect
-        scheme = get_request_scheme(request)
-        host = get_request_host(request) or request.url.netloc
-        redirect_url = f"{scheme}://{host}{next_url}"
+        # Build redirect URL back to this app.
+        # next_url may already be an absolute URL if it passed sanitization.
+        parsed_next = urlparse(next_url)
+        if parsed_next.scheme in ("http", "https") and parsed_next.netloc:
+            redirect_url = next_url
+        else:
+            scheme = get_request_scheme(request)
+            host = get_request_host(request) or request.url.netloc
+            redirect_url = f"{scheme}://{host}{next_url}"
 
         # Build SSO provider login URL with redirect parameter
         params = urlencode({"next": redirect_url})
@@ -236,10 +240,33 @@ class AuthWebService:
         safe_next_url = _sanitize_redirect_url(next_url, request, default="/login")
         response = RedirectResponse(url=safe_next_url, status_code=302)
 
+        cookie_settings: dict = {
+            "key": "refresh_token",
+            "domain": None,
+            "path": "/",
+        }
+        access_settings: dict = {
+            "key": "access_token",
+            "domain": None,
+            "path": "/",
+        }
+
         db = SessionLocal()
         try:
-            cookie_settings = AuthFlow.refresh_cookie_settings(db)
-            access_settings = AuthFlow.access_cookie_settings(db)
+            try:
+                cookie_settings = AuthFlow.refresh_cookie_settings(db)
+            except Exception:
+                logger.warning(
+                    "Failed to load refresh cookie settings; using defaults",
+                    exc_info=True,
+                )
+            try:
+                access_settings = AuthFlow.access_cookie_settings(db)
+            except Exception:
+                logger.warning(
+                    "Failed to load access cookie settings; using defaults",
+                    exc_info=True,
+                )
 
             # Get refresh token from cookie to revoke the session
             refresh_token = request.cookies.get(cookie_settings["key"])
