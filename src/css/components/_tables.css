@@ -27,10 +27,10 @@
     .table th {
         padding: var(--spacing-md) var(--spacing-xl);
         text-align: left;
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         color: var(--ink-muted);
         border-bottom: 2px solid var(--card-border);
         white-space: nowrap;

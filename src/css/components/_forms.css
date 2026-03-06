@@ -22,8 +22,10 @@
     .form-input,
     .form-select {
         width: 100%;
+        min-height: 44px;
         padding: var(--spacing-input-y) var(--spacing-input-x);
         font-size: 15px;
+        line-height: 1.35;
         font-family: 'DM Sans', system-ui, sans-serif;
         color: var(--ink);
         background: var(--parchment);

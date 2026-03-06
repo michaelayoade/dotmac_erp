@@ -25,7 +25,7 @@
     a.stat-hero-link:active { transform: scale(0.98); }
     .dark a.stat-hero-link:hover { background-color: rgba(13, 148, 136, 0.08); }
     .stat-hero-label {
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.1em;
@@ -137,7 +137,7 @@
     .section-label { display: flex; align-items: center; gap: var(--spacing-lg); margin-bottom: var(--spacing-xl); }
     .section-label::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
     .section-label-text {
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.1em;
@@ -189,7 +189,7 @@
         font-weight: 500;
     }
     .kpi-badge {
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         padding: 2px var(--spacing-sm);
         border-radius: var(--radius-lg);

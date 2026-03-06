@@ -12,8 +12,8 @@
 .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
 /* Focus states */
-:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; border-radius: 6px; }
 
 /* Tooltip */
 [data-tooltip] { position: relative; }
