@@ -202,7 +202,7 @@
         {% set page_title_html %}{% block page_title %}{{ page_title | default("Operations") }}{% endblock %}{% endset %}
         {% set breadcrumbs_html %}{% block breadcrumbs %}{% endblock %}{% endset %}
         {% set header_actions_html %}{% block header_actions %}{% endblock %}{% endset %}
-        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="amber", back_fallback=(back_fallback_url | trim)) }}
+        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="indigo", back_fallback=(back_fallback_url | trim)) }}
 
         <!-- Page Content -->
         <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">
