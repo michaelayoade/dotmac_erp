@@ -8,11 +8,20 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import and_, case, extract, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import (
+    Integer,
+    and_,
+    case,
+    extract,
+    func,
+    or_,
+    select,
+    type_coerce,
+    union_all,
+)
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
@@ -135,23 +144,20 @@ class DashboardService:
     @staticmethod
     def get_available_years(db: Session, organization_id: UUID) -> list[int]:
         org_id = coerce_uuid(organization_id)
-        sources = [
-            (Invoice, Invoice.invoice_date),
-            (SupplierInvoice, SupplierInvoice.invoice_date),
-            (JournalEntry, JournalEntry.entry_date),
-            (FiscalPeriod, FiscalPeriod.start_date),
-        ]
-        years: set[int] = set()
-        for model, column in sources:
-            org_col = cast(Any, model).organization_id
-            rows = db.execute(
-                select(extract("year", column))
-                .where(org_col == org_id, column.isnot(None))
-                .distinct()
-            ).all()
-            for (year_value,) in rows:
-                if year_value is not None:
-                    years.add(int(year_value))
+        # Use only fiscal_period and journal_entry — small tables with
+        # reliable year coverage.  Avoids scanning large invoice tables.
+        combined = union_all(
+            select(extract("year", FiscalPeriod.start_date).label("yr")).where(
+                FiscalPeriod.organization_id == org_id,
+                FiscalPeriod.start_date.isnot(None),
+            ),
+            select(extract("year", JournalEntry.entry_date).label("yr")).where(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.entry_date.isnot(None),
+            ),
+        ).subquery()
+        rows = db.execute(select(combined.c.yr).distinct()).all()
+        years = {int(r[0]) for r in rows if r[0] is not None}
         return sorted(years, reverse=True)
 
     @staticmethod
@@ -257,6 +263,68 @@ class DashboardService:
         )
         revenue_total, expense_total = db.execute(revenue_expense_stmt).one()
         return _safe_decimal(revenue_total), _safe_decimal(expense_total)
+
+    @staticmethod
+    def get_gl_revenue_expenses_with_cogs(
+        db: Session,
+        organization_id: UUID,
+        year: int | None = None,
+    ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+        """Combined query for revenue, expenses, COGS, and OPEX in one scan."""
+        org_id = coerce_uuid(organization_id)
+        cogs_match = _cogs_match_clause()
+        debit_minus_credit = (
+            PostedLedgerLine.debit_amount - PostedLedgerLine.credit_amount
+        )
+        credit_minus_debit = (
+            PostedLedgerLine.credit_amount - PostedLedgerLine.debit_amount
+        )
+        is_expense = AccountCategory.ifrs_category == IFRSCategory.EXPENSES
+        is_revenue = AccountCategory.ifrs_category == IFRSCategory.REVENUE
+
+        stmt = (
+            select(
+                func.coalesce(
+                    func.sum(case((is_revenue, credit_minus_debit), else_=0)), 0
+                ).label("revenue"),
+                func.coalesce(
+                    func.sum(case((is_expense, debit_minus_credit), else_=0)), 0
+                ).label("expenses"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (and_(is_expense, cogs_match), debit_minus_credit),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("cogs"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (and_(is_expense, ~cogs_match), debit_minus_credit),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("opex"),
+            )
+            .join(Account, Account.account_id == PostedLedgerLine.account_id)
+            .join(AccountCategory, AccountCategory.category_id == Account.category_id)
+            .where(
+                PostedLedgerLine.organization_id == org_id,
+                AccountCategory.organization_id == org_id,
+                Account.is_active.is_(True),
+            )
+        )
+        stmt = _apply_year_filter(stmt, PostedLedgerLine.posting_date, year)
+        row = db.execute(stmt).one()
+        return (
+            _safe_decimal(row.revenue),
+            _safe_decimal(row.expenses),
+            _safe_decimal(row.cogs),
+            _safe_decimal(row.opex),
+        )
 
     @staticmethod
     def get_gl_control_balances(
@@ -410,12 +478,17 @@ class DashboardService:
         db: Session,
         organization_id: UUID,
         year: int | None = None,
+        *,
+        gl_balances: tuple[Decimal, Decimal] | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
 
-        gl_ar_balance, gl_ap_balance = DashboardService.get_gl_control_balances(
-            db, org_id, year=year
-        )
+        if gl_balances is not None:
+            gl_ar_balance, gl_ap_balance = gl_balances
+        else:
+            gl_ar_balance, gl_ap_balance = DashboardService.get_gl_control_balances(
+                db, org_id, year=year
+            )
 
         open_ar_statuses = [
             InvoiceStatus.DRAFT.value,
@@ -490,12 +563,10 @@ class DashboardService:
         """
         org_id = coerce_uuid(organization_id)
 
-        revenue, expenses = DashboardService.get_gl_revenue_expenses(
-            db, org_id, year=year
-        )
-
-        cogs_spend, opex_spend = DashboardService.get_cogs_opex_spend(
-            db, org_id, year=year
+        revenue, expenses, cogs_spend, opex_spend = (
+            DashboardService.get_gl_revenue_expenses_with_cogs(
+                db, org_id, year=year
+            )
         )
         ar_control_balance, ap_control_balance = (
             DashboardService.get_gl_control_balances(db, org_id, year=year)
@@ -565,9 +636,13 @@ class DashboardService:
         """
         org_id = coerce_uuid(organization_id)
 
-        journals_stmt = select(JournalEntry).where(
-            JournalEntry.organization_id == org_id,
-            JournalEntry.status == JournalStatus.POSTED,
+        journals_stmt = (
+            select(JournalEntry)
+            .options(selectinload(JournalEntry.lines))
+            .where(
+                JournalEntry.organization_id == org_id,
+                JournalEntry.status == JournalStatus.POSTED,
+            )
         )
         journals_stmt = _apply_year_filter(
             journals_stmt, JournalEntry.posting_date, year
@@ -1104,9 +1179,7 @@ class DashboardService:
             Dict with aging amounts and percentages for current, 1-30, 31-60, 60+ days
         """
         org_id = coerce_uuid(organization_id)
-        today = date.today()
 
-        # Query open AR invoices
         open_statuses = [
             InvoiceStatus.DRAFT.value,
             InvoiceStatus.SUBMITTED.value,
@@ -1114,46 +1187,77 @@ class DashboardService:
             InvoiceStatus.PARTIALLY_PAID.value,
         ]
 
-        invoices_stmt = select(
-            Invoice.due_date,
-            (Invoice.total_amount - Invoice.amount_paid).label("outstanding"),
+        outstanding_expr = Invoice.total_amount - Invoice.amount_paid
+        # In PostgreSQL, (date - date) returns an integer number of days.
+        # Explicitly coerce to Integer so SQLAlchemy doesn't wrap comparisons
+        # in date_part(), which fails on the integer result.
+        days_overdue_expr = type_coerce(
+            func.current_date() - Invoice.due_date, Integer
+        )
+
+        aging_stmt = select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            or_(
+                                Invoice.due_date.is_(None),
+                                days_overdue_expr <= 0,
+                            ),
+                            outstanding_expr,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("bucket_current"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(days_overdue_expr > 0, days_overdue_expr <= 30),
+                            outstanding_expr,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("bucket_30"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(days_overdue_expr > 30, days_overdue_expr <= 60),
+                            outstanding_expr,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("bucket_60"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (days_overdue_expr > 60, outstanding_expr),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("bucket_90"),
         ).where(
             Invoice.organization_id == org_id,
             Invoice.status.in_(open_statuses),
+            outstanding_expr > 0,
         )
-        invoices_stmt = _apply_year_filter(invoices_stmt, Invoice.invoice_date, year)
-        invoices = db.execute(invoices_stmt).all()
+        aging_stmt = _apply_year_filter(aging_stmt, Invoice.invoice_date, year)
+        row = db.execute(aging_stmt).one()
 
-        # Initialize buckets
-        current = Decimal("0")
-        days_1_30 = Decimal("0")
-        days_31_60 = Decimal("0")
-        days_60_plus = Decimal("0")
-
-        for inv in invoices:
-            outstanding = _safe_decimal(inv.outstanding)
-            if outstanding <= 0:
-                continue
-
-            if inv.due_date is None:
-                # No due date, treat as current
-                current += outstanding
-                continue
-
-            days_overdue = (today - inv.due_date).days
-
-            if days_overdue <= 0:
-                current += outstanding
-            elif days_overdue <= 30:
-                days_1_30 += outstanding
-            elif days_overdue <= 60:
-                days_31_60 += outstanding
-            else:
-                days_60_plus += outstanding
-
+        current = _safe_decimal(row.bucket_current)
+        days_1_30 = _safe_decimal(row.bucket_30)
+        days_31_60 = _safe_decimal(row.bucket_60)
+        days_60_plus = _safe_decimal(row.bucket_90)
         total = current + days_1_30 + days_31_60 + days_60_plus
 
-        # Calculate percentages (avoid division by zero)
         if total > 0:
             current_pct = float((current / total) * 100)
             days_1_30_pct = float((days_1_30 / total) * 100)

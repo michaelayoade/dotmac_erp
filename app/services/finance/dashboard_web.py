@@ -83,6 +83,10 @@ class DashboardWebService:
         available_years = dashboard_service.get_available_years(db, organization_id)
         selected_year = _resolve_year_selection(year, available_years)
         stats = dashboard_service.get_stats(db, organization_id, year=selected_year)
+
+        # Reuse GL control balances from stats to avoid duplicate queries.
+        gl_balances = (stats.ar_control_balance, stats.ap_control_balance)
+
         recent_journals = dashboard_service.get_recent_journals(
             db, organization_id, limit=10, year=selected_year
         )
@@ -110,7 +114,7 @@ class DashboardWebService:
             db, organization_id, year=selected_year
         )
         subledger_recon = dashboard_service.get_subledger_reconciliation(
-            db, organization_id, year=selected_year
+            db, organization_id, year=selected_year, gl_balances=gl_balances
         )
 
         # Pre-computed analytics snapshot (None when stale or unavailable).
