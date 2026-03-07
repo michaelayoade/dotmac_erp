@@ -18,7 +18,6 @@ from sqlalchemy import (
     func,
     or_,
     select,
-    type_coerce,
     union_all,
 )
 from sqlalchemy.orm import Session, selectinload
@@ -1189,9 +1188,9 @@ class DashboardService:
 
         outstanding_expr = Invoice.total_amount - Invoice.amount_paid
         # In PostgreSQL, (date - date) returns an integer number of days.
-        # Explicitly coerce to Integer so SQLAlchemy doesn't wrap comparisons
-        # in date_part(), which fails on the integer result.
-        days_overdue_expr = type_coerce(
+        # Cast explicitly to Integer so SQLAlchemy comparisons use plain
+        # integer operators instead of date_part(), which fails on int.
+        days_overdue_expr = func.cast(
             func.current_date() - Invoice.due_date, Integer
         )
 
