@@ -190,9 +190,10 @@ def post_invoice(
             )
 
     # ── Stamp duty debit line ──────────────────────────────────────
-    stamp_duty_amount = invoice.stamp_duty_amount or Decimal("0")
-    if stamp_duty_amount > Decimal("0") and invoice.stamp_duty_code_id:
-        stamp_code = db.get(TaxCode, invoice.stamp_duty_code_id)
+    stamp_duty_amount = getattr(invoice, "stamp_duty_amount", None) or Decimal("0")
+    stamp_duty_code_id = getattr(invoice, "stamp_duty_code_id", None)
+    if stamp_duty_amount > Decimal("0") and stamp_duty_code_id:
+        stamp_code = db.get(TaxCode, stamp_duty_code_id)
         if not stamp_code or stamp_code.organization_id != org_id:
             return APPostingResult(
                 success=False, message="Stamp duty tax code not found"
@@ -234,9 +235,10 @@ def post_invoice(
             )
 
     # ── WHT credit line ────────────────────────────────────────────
-    wht_amount = invoice.withholding_tax_amount or Decimal("0")
-    if wht_amount > Decimal("0") and invoice.withholding_tax_code_id:
-        wht_code = db.get(TaxCode, invoice.withholding_tax_code_id)
+    wht_amount = getattr(invoice, "withholding_tax_amount", None) or Decimal("0")
+    withholding_tax_code_id = getattr(invoice, "withholding_tax_code_id", None)
+    if wht_amount > Decimal("0") and withholding_tax_code_id:
+        wht_code = db.get(TaxCode, withholding_tax_code_id)
         if not wht_code or wht_code.organization_id != org_id:
             return APPostingResult(success=False, message="WHT tax code not found")
         if wht_code.tax_type != TaxType.WITHHOLDING:

@@ -271,7 +271,7 @@ def test_create_batch_from_invoice_ids_groups_and_links_payments():
     assert all(
         payment.payment_batch_id == batch.batch_id for payment in created_payments
     )
-    db.commit.assert_called_once()
+    db.flush.assert_called()
 
 
 def test_create_batch_from_invoice_ids_rejects_non_payable_invoice():

@@ -39,7 +39,7 @@ repos:
       - id: semgrep
         name: semgrep
         language: system
-        entry: poetry run semgrep --config .semgrep/ --error --severity ERROR
+        entry: semgrep --config .semgrep/ --error --severity ERROR
         types: [python]
         exclude: (tests/|alembic/|scripts/)
 

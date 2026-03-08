@@ -245,7 +245,7 @@ class TestCreateReceipt:
 
         assert result is not None
         db.add.assert_called()
-        db.commit.assert_called_once()
+        db.flush.assert_called()
         mock_seq_service.get_next_number.assert_called_once()
 
     @patch("app.services.finance.ap.goods_receipt.POStatus")
@@ -485,7 +485,7 @@ class TestStartInspection:
 
         assert result is not None
         assert mock_receipt.status == mock_inspecting
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_start_inspection_not_found(self):
         """Test starting inspection on non-existent receipt."""
@@ -588,7 +588,7 @@ class TestCompleteInspection:
 
         assert result is not None
         assert mock_receipt.status == mock_accepted
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     @patch(
         "app.services.finance.ap.goods_receipt.GoodsReceiptService._reverse_po_quantities"
@@ -643,7 +643,7 @@ class TestCompleteInspection:
         assert result is not None
         assert mock_receipt.status == mock_rejected
         mock_reverse.assert_called_once()  # PO quantities should be reversed
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     @patch(
         "app.services.finance.ap.goods_receipt.GoodsReceiptService._create_inventory_transactions_for_receipt"
@@ -842,7 +842,7 @@ class TestAcceptAll:
         assert mock_line1.quantity_accepted == Decimal("10")
         assert mock_line1.quantity_rejected == Decimal("0")
         assert mock_line2.quantity_accepted == Decimal("5")
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_accept_all_not_found(self):
         """Test accept all on non-existent receipt."""

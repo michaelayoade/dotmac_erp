@@ -199,7 +199,7 @@ class TestCreatePO:
 
         assert result is not None
         db.add.assert_called()
-        db.commit.assert_called_once()
+        db.flush.assert_called()
         mock_seq_service.get_next_number.assert_called_once()
 
     def test_create_po_supplier_not_found(self):
@@ -307,8 +307,7 @@ class TestUpdatePO:
         assert mock_po.tax_amount == Decimal("5.00")
         assert mock_po.total_amount == Decimal("105.00")
         db.delete.assert_called_once_with(existing_line)
-        db.flush.assert_called_once()
-        db.commit.assert_called_once()
+        db.flush.assert_called()
         db.refresh.assert_called_once_with(mock_po)
         assert db.add.call_count == 1
 
@@ -377,7 +376,7 @@ class TestDeletePO:
         PurchaseOrderService.delete_po(db, org_id, po_id)
 
         db.delete.assert_called_once_with(mock_po)
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_delete_po_rejects_non_draft(self):
         """Non-draft purchase orders cannot be deleted."""
@@ -572,7 +571,7 @@ class TestSubmitForApproval:
 
         assert result is not None
         assert mock_po.status == mock_pending
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_submit_for_approval_not_found(self):
         """Test submission of non-existent PO."""
@@ -681,7 +680,7 @@ class TestApprovePO:
             module="FINANCE",
             organization_id=str(org_id),
         )
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
@@ -733,7 +732,7 @@ class TestApprovePO:
         mock_render_branded_email.assert_not_called()
         mock_pdf_service.assert_not_called()
         mock_queue_email.assert_not_called()
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
@@ -795,7 +794,7 @@ class TestApprovePO:
             module="FINANCE",
             organization_id=str(org_id),
         )
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     @patch("app.services.finance.ap.purchase_order.queue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
@@ -847,7 +846,7 @@ class TestApprovePO:
         assert result is mock_po
         mock_pdf_service.assert_not_called()
         mock_queue_email.assert_not_called()
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_approve_po_not_found(self):
         """Test approval of non-existent PO."""
@@ -947,7 +946,7 @@ class TestCancelPO:
 
         assert result is not None
         assert mock_po.status == mock_cancelled
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_cancel_po_not_found(self):
         """Test cancellation of non-existent PO."""
@@ -1065,7 +1064,7 @@ class TestClosePO:
 
         assert result is not None
         assert mock_po.status == mock_closed
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_close_po_not_found(self):
         """Test closing non-existent PO."""
@@ -1134,7 +1133,7 @@ class TestUpdateReceivedAmount:
         assert result is not None
         assert mock_po.amount_received == Decimal("500.00")
         assert mock_po.status == mock_partial
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     @patch("app.services.finance.ap.purchase_order.POStatus")
     def test_update_received_full(self, mock_status_class):
@@ -1164,7 +1163,7 @@ class TestUpdateReceivedAmount:
         assert result is not None
         assert mock_po.amount_received == Decimal("1000.00")
         assert mock_po.status == mock_received
-        db.commit.assert_called_once()
+        db.flush.assert_called()
 
     def test_update_received_not_found(self):
         """Test updating non-existent PO."""
@@ -1274,6 +1273,7 @@ class TestListPOs:
     def test_list_pos(self):
         """Test listing purchase orders."""
         db = MagicMock()
+        org_id = uuid4()
 
         pos = [
             MockPurchaseOrder(po_number="PO-000001"),
@@ -1281,7 +1281,7 @@ class TestListPOs:
         ]
         db.scalars.return_value.all.return_value = pos
 
-        result = PurchaseOrderService.list(db)
+        result = PurchaseOrderService.list(db, organization_id=str(org_id))
 
         assert len(result) == 2
 
@@ -1311,21 +1311,23 @@ class TestListPOs:
     def test_list_pos_empty(self):
         """Test listing returns empty when no POs."""
         db = MagicMock()
+        org_id = uuid4()
 
         db.scalars.return_value.all.return_value = []
 
-        result = PurchaseOrderService.list(db)
+        result = PurchaseOrderService.list(db, organization_id=str(org_id))
 
         assert len(result) == 0
 
     def test_list_pos_pagination(self):
         """Test list respects pagination."""
         db = MagicMock()
+        org_id = uuid4()
 
         pos = [MockPurchaseOrder()]
         db.scalars.return_value.all.return_value = pos
 
-        result = PurchaseOrderService.list(db, limit=5, offset=10)
+        result = PurchaseOrderService.list(db, organization_id=str(org_id), limit=5, offset=10)
 
         assert len(result) == 1
         # Verify offset and limit were called

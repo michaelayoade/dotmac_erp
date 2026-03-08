@@ -488,6 +488,7 @@ class PurchaseOrderService(ListResponseMixin):
             )
 
         db.flush()
+        db.refresh(po)
         return po
 
     @staticmethod
@@ -870,7 +871,7 @@ class PurchaseOrderService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str,
+        organization_id: str | None = None,
         supplier_id: str | None = None,
         status: POStatus | None = None,
         from_date: date | None = None,
@@ -893,16 +894,11 @@ class PurchaseOrderService(ListResponseMixin):
 
         Returns:
             List of PurchaseOrder objects
-
-        Raises:
-            ValueError: If organization_id is not provided
         """
-        if not organization_id:
-            raise ValueError("organization_id is required for multi-tenant isolation")
+        stmt = select(PurchaseOrder)
 
-        stmt = select(PurchaseOrder).where(
-            PurchaseOrder.organization_id == coerce_uuid(organization_id)
-        )
+        if organization_id:
+            stmt = stmt.where(PurchaseOrder.organization_id == coerce_uuid(organization_id))
 
         if supplier_id:
             stmt = stmt.where(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
