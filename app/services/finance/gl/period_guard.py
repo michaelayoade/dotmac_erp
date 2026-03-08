@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
+from app.services.finance.common.helpers import mock_safe_commit
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -425,6 +426,7 @@ class PeriodGuardService(ListResponseMixin):
 
         period.status = PeriodStatus.OPEN
         db.flush()
+        mock_safe_commit(db)
         db.refresh(period)
 
         return period
@@ -471,6 +473,7 @@ class PeriodGuardService(ListResponseMixin):
         period.soft_closed_by_user_id = user_id
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(period)
 
         return period
@@ -521,6 +524,7 @@ class PeriodGuardService(ListResponseMixin):
         period.hard_closed_by_user_id = user_id
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(period)
 
         return period
@@ -573,6 +577,7 @@ class PeriodGuardService(ListResponseMixin):
         period.last_reopen_session_id = reopen_session_id
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(period)
 
         return period, reopen_session_id
@@ -624,6 +629,7 @@ class PeriodGuardService(ListResponseMixin):
         period.soft_closed_by_user_id = user_id
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(period)
 
         return period

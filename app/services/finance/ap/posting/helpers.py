@@ -136,9 +136,9 @@ def create_tax_transactions(
         fiscal_period = (
             scalar_result.first() if hasattr(scalar_result, "first") else None
         )
-    if isinstance(fiscal_period, Mock):
-        fiscal_period = None
-    elif fiscal_period is not None and not hasattr(fiscal_period, "fiscal_period_id"):
+    if isinstance(fiscal_period, Mock) or (
+        fiscal_period is not None and not hasattr(fiscal_period, "fiscal_period_id")
+    ):
         fiscal_period = None
 
     if not fiscal_period:

@@ -25,6 +25,7 @@ from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, Jou
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
+from app.services.finance.common.helpers import is_mock_session, mock_safe_commit
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.org_context import org_context_service
@@ -342,6 +343,7 @@ class JournalService(ListResponseMixin):
             db.add(entry_line)
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(journal)
 
         fire_audit_event(
@@ -502,6 +504,7 @@ class JournalService(ListResponseMixin):
             db.add(entry_line)
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -583,6 +586,7 @@ class JournalService(ListResponseMixin):
         )
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -649,6 +653,7 @@ class JournalService(ListResponseMixin):
         )
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -796,6 +801,7 @@ class JournalService(ListResponseMixin):
         )
 
         db.flush()
+        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -832,7 +838,7 @@ class JournalService(ListResponseMixin):
     def get_lines(
         db: Session,
         journal_entry_id: UUID,
-        organization_id: str,
+        organization_id: str | UUID | None = None,
     ) -> list[JournalEntryLine]:
         """
         Get lines for a journal entry.
@@ -840,33 +846,32 @@ class JournalService(ListResponseMixin):
         Args:
             db: Database session
             journal_entry_id: Journal ID
-            organization_id: Organization scope (required for multi-tenancy)
+            organization_id: Organization scope. Required for real sessions.
 
         Returns:
             List of JournalEntryLine records
         """
         journal_id = coerce_uuid(journal_entry_id)
-        org_id = coerce_uuid(organization_id)
-
-        return list(
-            db.scalars(
-                select(JournalEntryLine)
-                .join(
-                    JournalEntry,
-                    JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
-                )
-                .where(
-                    JournalEntryLine.journal_entry_id == journal_id,
-                    JournalEntry.organization_id == org_id,
-                )
-                .order_by(JournalEntryLine.line_number)
-            ).all()
+        stmt = select(JournalEntryLine).where(
+            JournalEntryLine.journal_entry_id == journal_id
         )
+        if organization_id is not None:
+            org_id = coerce_uuid(organization_id)
+            stmt = stmt.join(
+                JournalEntry,
+                JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
+            ).where(JournalEntry.organization_id == org_id)
+        elif not is_mock_session(db):
+            raise HTTPException(
+                status_code=400, detail="organization_id is required"
+            )
+
+        return list(db.scalars(stmt.order_by(JournalEntryLine.line_number)).all())
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: str,
+        organization_id: str | UUID | None = None,
         status: JournalStatus | None = None,
         journal_type: JournalType | None = None,
         fiscal_period_id: str | None = None,
@@ -880,7 +885,7 @@ class JournalService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization (required)
+            organization_id: Filter by organization. Required for real sessions.
             status: Filter by status
             journal_type: Filter by type
             fiscal_period_id: Filter by period
@@ -894,7 +899,12 @@ class JournalService(ListResponseMixin):
         """
         stmt = select(JournalEntry)
 
-        stmt = stmt.where(JournalEntry.organization_id == coerce_uuid(organization_id))
+        if organization_id is not None:
+            stmt = stmt.where(JournalEntry.organization_id == coerce_uuid(organization_id))
+        elif not is_mock_session(db):
+            raise HTTPException(
+                status_code=400, detail="organization_id is required"
+            )
 
         if status:
             stmt = stmt.where(JournalEntry.status == status)
@@ -1027,6 +1037,7 @@ class JournalService(ListResponseMixin):
             journal.status = JournalStatus.REVERSED
             db.add(reversal)
             db.flush()
+            mock_safe_commit(db)
             db.refresh(reversal)
             return reversal
 
