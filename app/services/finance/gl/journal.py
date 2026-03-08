@@ -853,8 +853,7 @@ class JournalService(ListResponseMixin):
                 select(JournalEntryLine)
                 .join(
                     JournalEntry,
-                    JournalEntryLine.journal_entry_id
-                    == JournalEntry.journal_entry_id,
+                    JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
                 )
                 .where(
                     JournalEntryLine.journal_entry_id == journal_id,
@@ -895,9 +894,7 @@ class JournalService(ListResponseMixin):
         """
         stmt = select(JournalEntry)
 
-        stmt = stmt.where(
-            JournalEntry.organization_id == coerce_uuid(organization_id)
-        )
+        stmt = stmt.where(JournalEntry.organization_id == coerce_uuid(organization_id))
 
         if status:
             stmt = stmt.where(JournalEntry.status == status)

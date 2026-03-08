@@ -405,7 +405,9 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         posting_date = date.fromisoformat(payload["posting_date"])
         journal_entry_id_str = context.get("journal_entry_id")
         if not journal_entry_id_str:
-            return StepResult(success=False, error="Missing journal_entry_id in saga context")
+            return StepResult(
+                success=False, error="Missing journal_entry_id in saga context"
+            )
         journal_entry_id = coerce_uuid(journal_entry_id_str)
 
         invoice = db.get(Invoice, invoice_id)

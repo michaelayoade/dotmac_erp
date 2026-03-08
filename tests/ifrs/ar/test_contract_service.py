@@ -122,7 +122,9 @@ class MockPerformanceObligation:
         self.obligation_number = obligation_number
         self.description = description
         self.is_distinct = is_distinct
-        self.satisfaction_pattern = satisfaction_pattern or SatisfactionPattern.OVER_TIME
+        self.satisfaction_pattern = (
+            satisfaction_pattern or SatisfactionPattern.OVER_TIME
+        )
         self.over_time_method = over_time_method
         self.progress_measure = progress_measure
         self.standalone_selling_price = standalone_selling_price

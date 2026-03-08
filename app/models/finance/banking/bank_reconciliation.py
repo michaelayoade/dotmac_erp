@@ -374,7 +374,9 @@ class BankReconciliationLine(Base):
 
     # Status
     is_cleared: Mapped[bool] = mapped_column(Boolean, default=False)
-    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cleared_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Notes
     notes: Mapped[str] = mapped_column(Text, nullable=True)

@@ -306,9 +306,7 @@ class TestGetCustomerPayment:
         payment = MockCustomerPayment(organization_id=org_id)
         mock_db.get.return_value = payment
 
-        result = CustomerPaymentService.get(
-            mock_db, str(payment.payment_id), org_id
-        )
+        result = CustomerPaymentService.get(mock_db, str(payment.payment_id), org_id)
 
         assert result == payment
 

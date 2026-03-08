@@ -97,10 +97,12 @@ def process_probation_ending_notifications() -> dict:
 
                     # Send notification to manager
                     if manager:
-                        success = notification_service.send_probation_ending_notification(
-                            employee,
-                            manager,
-                            days_remaining=days_remaining,
+                        success = (
+                            notification_service.send_probation_ending_notification(
+                                employee,
+                                manager,
+                                days_remaining=days_remaining,
+                            )
                         )
 
                         if success:
@@ -211,10 +213,12 @@ def process_contract_expiry_notifications() -> dict:
 
                     # Send notification to manager and HR
                     if manager:
-                        success = notification_service.send_contract_expiry_notification(
-                            employee,
-                            manager,
-                            days_remaining=days_remaining,
+                        success = (
+                            notification_service.send_contract_expiry_notification(
+                                employee,
+                                manager,
+                                days_remaining=days_remaining,
+                            )
                         )
 
                         if success:
@@ -500,12 +504,10 @@ def process_performance_review_reminders() -> dict:
                             for appraisal in pending_appraisals:
                                 employee = db.get(Employee, appraisal.employee_id)
                                 if employee:
-                                    success = (
-                                        notification_service.send_self_assessment_reminder(
-                                            employee,
-                                            cycle,
-                                            days_remaining=days_to_deadline,
-                                        )
+                                    success = notification_service.send_self_assessment_reminder(
+                                        employee,
+                                        cycle,
+                                        days_remaining=days_to_deadline,
                                     )
                                     if success:
                                         results["self_assessment_reminders"] += 1
@@ -531,13 +533,11 @@ def process_performance_review_reminders() -> dict:
                                 manager = db.get(Employee, appraisal.manager_id)
                                 employee = db.get(Employee, appraisal.employee_id)
                                 if manager and employee:
-                                    success = (
-                                        notification_service.send_manager_review_reminder(
-                                            manager,
-                                            employee,
-                                            cycle,
-                                            days_remaining=days_to_deadline,
-                                        )
+                                    success = notification_service.send_manager_review_reminder(
+                                        manager,
+                                        employee,
+                                        cycle,
+                                        days_remaining=days_to_deadline,
                                     )
                                     if success:
                                         results["manager_review_reminders"] += 1
@@ -632,10 +632,12 @@ def process_certification_expiry_notifications() -> dict:
                         continue
 
                     # Send notification to employee
-                    success = notification_service.send_certification_expiry_notification(
-                        employee,
-                        cert,
-                        days_remaining=days_remaining,
+                    success = (
+                        notification_service.send_certification_expiry_notification(
+                            employee,
+                            cert,
+                            days_remaining=days_remaining,
+                        )
                     )
 
                     if success:

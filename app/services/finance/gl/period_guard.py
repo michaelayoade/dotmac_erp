@@ -681,9 +681,7 @@ class PeriodGuardService(ListResponseMixin):
         """
         stmt = select(FiscalPeriod)
 
-        stmt = stmt.where(
-            FiscalPeriod.organization_id == coerce_uuid(organization_id)
-        )
+        stmt = stmt.where(FiscalPeriod.organization_id == coerce_uuid(organization_id))
 
         if fiscal_year_id:
             stmt = stmt.where(

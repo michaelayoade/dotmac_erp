@@ -441,10 +441,9 @@ def test_get_gl_balance_and_prior_reconciliation():
     db.execute.return_value.one.return_value = SimpleNamespace(
         debits=Decimal("100.00"), credits=Decimal("40.00")
     )
-    assert (
-        svc._get_gl_balance(db, uuid4(), date(2024, 1, 1), organization_id=org_id)
-        == Decimal("60.00")
-    )
+    assert svc._get_gl_balance(
+        db, uuid4(), date(2024, 1, 1), organization_id=org_id
+    ) == Decimal("60.00")
 
     db.execute.return_value.scalar_one_or_none.return_value = "prior"
     assert (
@@ -525,7 +524,9 @@ def test_get_reconciliation_report():
     ]
     db.get.return_value = recon
 
-    report = svc.get_reconciliation_report(db, recon.organization_id, recon.reconciliation_id)
+    report = svc.get_reconciliation_report(
+        db, recon.organization_id, recon.reconciliation_id
+    )
     assert report["matched_items"]["count"] == 1
     assert report["adjustments"]["count"] == 1
     assert report["outstanding_deposits"]["count"] == 1

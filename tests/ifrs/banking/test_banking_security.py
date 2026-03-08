@@ -78,7 +78,9 @@ class TestStatementDuplicateIsolation:
         # Verify the compiled SQL includes organization_id
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
         where_part = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
-        assert "organization_id" in where_part, f"organization_id not found in WHERE clause: {compiled}"
+        assert "organization_id" in where_part, (
+            f"organization_id not found in WHERE clause: {compiled}"
+        )
 
     def test_check_duplicate_without_org_still_works(
         self, bank_account_id: uuid.UUID
@@ -129,7 +131,9 @@ class TestReconciliationPriorIsolation:
         stmt = call_args[0][0]
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
         where_part = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
-        assert "organization_id" in where_part, f"organization_id not found in WHERE clause: {compiled}"
+        assert "organization_id" in where_part, (
+            f"organization_id not found in WHERE clause: {compiled}"
+        )
 
     def test_prior_reconciliation_always_requires_org(
         self, bank_account_id: uuid.UUID, org_a_id: uuid.UUID
@@ -365,4 +369,6 @@ class TestCategorizationDuplicateIsolation:
         stmt = call_args[0][0]
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
         where_part = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
-        assert "organization_id" in where_part, f"organization_id not found in WHERE clause: {compiled}"
+        assert "organization_id" in where_part, (
+            f"organization_id not found in WHERE clause: {compiled}"
+        )

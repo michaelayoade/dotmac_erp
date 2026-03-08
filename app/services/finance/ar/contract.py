@@ -301,12 +301,15 @@ class ContractService(ListResponseMixin):
             )
 
         # Verify contract has performance obligations
-        obligation_count = db.scalar(
-            select(func.count(PerformanceObligation.obligation_id)).where(
-                PerformanceObligation.contract_id == contract_id,
-                PerformanceObligation.organization_id == org_id,
+        obligation_count = (
+            db.scalar(
+                select(func.count(PerformanceObligation.obligation_id)).where(
+                    PerformanceObligation.contract_id == contract_id,
+                    PerformanceObligation.organization_id == org_id,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         if obligation_count == 0:
             raise HTTPException(
@@ -362,12 +365,15 @@ class ContractService(ListResponseMixin):
             )
 
         # Get next obligation number
-        max_number = db.scalar(
-            select(func.count(PerformanceObligation.obligation_id)).where(
-                PerformanceObligation.contract_id == contract_id,
-                PerformanceObligation.organization_id == org_id,
+        max_number = (
+            db.scalar(
+                select(func.count(PerformanceObligation.obligation_id)).where(
+                    PerformanceObligation.contract_id == contract_id,
+                    PerformanceObligation.organization_id == org_id,
+                )
             )
-        ) or 0
+            or 0
+        )
 
         obligation = PerformanceObligation(
             contract_id=contract_id,
@@ -755,8 +761,7 @@ class ContractService(ListResponseMixin):
             db.scalars(
                 select(PerformanceObligation).where(
                     PerformanceObligation.contract_id == contract.contract_id,
-                    PerformanceObligation.organization_id
-                    == contract.organization_id,
+                    PerformanceObligation.organization_id == contract.organization_id,
                 )
             ).all()
         )
@@ -831,15 +836,18 @@ class ContractService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Contract not found")
 
         # Check all obligations are satisfied
-        unsatisfied = db.scalar(
-            select(func.count(PerformanceObligation.obligation_id)).where(
-                and_(
-                    PerformanceObligation.contract_id == contract_id,
-                    PerformanceObligation.organization_id == org_id,
-                    PerformanceObligation.status != "SATISFIED",
+        unsatisfied = (
+            db.scalar(
+                select(func.count(PerformanceObligation.obligation_id)).where(
+                    and_(
+                        PerformanceObligation.contract_id == contract_id,
+                        PerformanceObligation.organization_id == org_id,
+                        PerformanceObligation.status != "SATISFIED",
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         if unsatisfied > 0:
             raise HTTPException(
@@ -859,9 +867,7 @@ class ContractService(ListResponseMixin):
         organization_id: UUID | None = None,
     ) -> Contract | None:
         """Get a contract by ID."""
-        stmt = select(Contract).where(
-            Contract.contract_id == coerce_uuid(contract_id)
-        )
+        stmt = select(Contract).where(Contract.contract_id == coerce_uuid(contract_id))
         if organization_id is not None:
             stmt = stmt.where(Contract.organization_id == coerce_uuid(organization_id))
         return db.scalar(stmt)
@@ -912,8 +918,7 @@ class ContractService(ListResponseMixin):
             db.scalars(
                 select(RevenueRecognitionEvent)
                 .where(
-                    RevenueRecognitionEvent.obligation_id
-                    == coerce_uuid(obligation_id),
+                    RevenueRecognitionEvent.obligation_id == coerce_uuid(obligation_id),
                     RevenueRecognitionEvent.organization_id
                     == coerce_uuid(organization_id),
                 )

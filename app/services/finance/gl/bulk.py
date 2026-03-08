@@ -77,11 +77,14 @@ class AccountBulkService(BulkActionService[Account]):
             )
 
         # Check for journal entry lines
-        journal_count = self.db.scalar(
-            select(func.count())
-            .select_from(JournalEntryLine)
-            .where(JournalEntryLine.account_id == entity.account_id)
-        ) or 0
+        journal_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(JournalEntryLine)
+                .where(JournalEntryLine.account_id == entity.account_id)
+            )
+            or 0
+        )
 
         if journal_count > 0:
             return (

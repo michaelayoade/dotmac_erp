@@ -297,7 +297,9 @@ class TestSubmit:
         user_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT
+        )
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.submit(
@@ -332,7 +334,9 @@ class TestSubmit:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED
+        )
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -356,7 +360,9 @@ class TestApprove:
         user_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.SUBMITTED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.SUBMITTED
+        )
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.approve(
@@ -391,7 +397,9 @@ class TestApprove:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT
+        )
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -414,7 +422,9 @@ class TestConfirm:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED
+        )
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.confirm(
@@ -446,7 +456,9 @@ class TestConfirm:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT
+        )
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -466,7 +478,9 @@ class TestConfirm:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED
+        )
         mock_db.get.return_value = mock_so
 
         SalesOrderService.confirm(
@@ -486,7 +500,9 @@ class TestConfirm:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED
+        )
         mock_db.get.return_value = mock_so
 
         SalesOrderService.confirm(
@@ -972,7 +988,9 @@ class TestCancel:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.SHIPPED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.SHIPPED
+        )
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -1085,7 +1103,9 @@ class TestHold:
         user_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.CONFIRMED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.CONFIRMED
+        )
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.hold(
@@ -1119,7 +1139,9 @@ class TestHold:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.COMPLETED)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.COMPLETED
+        )
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -1247,7 +1269,9 @@ class TestReleaseHold:
         so_id = uuid.uuid4()
         org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(
+            so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT
+        )
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:

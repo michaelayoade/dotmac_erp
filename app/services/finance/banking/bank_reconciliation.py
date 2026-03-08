@@ -219,7 +219,9 @@ class BankReconciliationService:
 
         # Get GL balance as of reconciliation date
         gl_balance = self._get_gl_balance(
-            db, bank_account.gl_account_id, input.reconciliation_date,
+            db,
+            bank_account.gl_account_id,
+            input.reconciliation_date,
             organization_id=organization_id,
         )
 

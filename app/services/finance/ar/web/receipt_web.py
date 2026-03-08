@@ -259,7 +259,9 @@ class ReceiptWebService:
                             }
                         )
             except (ValueError, KeyError, AttributeError) as exc:
-                logger.warning("Failed to load allocation for receipt %s: %s", receipt_id, exc)
+                logger.warning(
+                    "Failed to load allocation for receipt %s: %s", receipt_id, exc
+                )
 
         # Determine selected customer (if provided)
         selected_customer_id = None

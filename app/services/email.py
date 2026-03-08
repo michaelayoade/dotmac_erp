@@ -201,7 +201,9 @@ def employee_can_receive_email(employee: object | None) -> bool:
     if person is not None:
         return person_can_receive_email(person)
 
-    email = getattr(employee, "work_email", None) or getattr(employee, "personal_email", None)
+    email = getattr(employee, "work_email", None) or getattr(
+        employee, "personal_email", None
+    )
     return isinstance(email, str) and bool(email.strip())
 
 

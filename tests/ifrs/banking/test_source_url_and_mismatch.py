@@ -364,7 +364,12 @@ class TestStatementDetailContextEnhancements:
         line_scalars.all.return_value = [lines[2]]  # page 2, limit 2 → 1 line
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
-        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+        mock_db.scalars.side_effect = [
+            line_scalars,
+            empty_scalars,
+            empty_scalars,
+            empty_scalars,
+        ]
 
         mock_recon = MagicMock()
         mock_recon.get_statement_match_suggestions.return_value = {}
@@ -408,7 +413,12 @@ class TestStatementDetailContextEnhancements:
         line_scalars.all.return_value = [line]
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
-        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+        mock_db.scalars.side_effect = [
+            line_scalars,
+            empty_scalars,
+            empty_scalars,
+            empty_scalars,
+        ]
 
         mock_recon = MagicMock()
         mock_recon.get_statement_match_suggestions.return_value = {}
@@ -454,7 +464,12 @@ class TestStatementDetailContextEnhancements:
         line_scalars.all.return_value = [line]
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
-        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+        mock_db.scalars.side_effect = [
+            line_scalars,
+            empty_scalars,
+            empty_scalars,
+            empty_scalars,
+        ]
 
         # Mock the JournalEntryLine lookup for matched lines
         mock_jl = MockJournalEntryLine(line_id=jl_id)
@@ -506,7 +521,12 @@ class TestStatementDetailContextEnhancements:
         line_scalars.all.return_value = [line]
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
-        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+        mock_db.scalars.side_effect = [
+            line_scalars,
+            empty_scalars,
+            empty_scalars,
+            empty_scalars,
+        ]
 
         mock_recon = MagicMock()
         mock_recon.get_statement_match_suggestions.return_value = {}
@@ -547,7 +567,12 @@ class TestStatementDetailContextEnhancements:
         line_scalars.all.return_value = [line]
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
-        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+        mock_db.scalars.side_effect = [
+            line_scalars,
+            empty_scalars,
+            empty_scalars,
+            empty_scalars,
+        ]
 
         doc_id = uuid4()
         suggestion = MatchSuggestion(
@@ -611,7 +636,12 @@ class TestStatementDetailContextEnhancements:
         line_scalars.all.return_value = [matched_line, unmatched_line]
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
-        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+        mock_db.scalars.side_effect = [
+            line_scalars,
+            empty_scalars,
+            empty_scalars,
+            empty_scalars,
+        ]
 
         # Mock the JournalEntryLine lookup
         mock_jl = MockJournalEntryLine(line_id=jl_id)

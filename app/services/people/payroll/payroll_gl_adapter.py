@@ -216,7 +216,8 @@ class PayrollGLAdapter:
                             debit_amount_functional=functional_amount,
                             credit_amount_functional=Decimal("0"),
                             description=f"Employer Pension - {slip.employee_name}",
-                            cost_center_id=slip.cost_center_id or employee.cost_center_id,
+                            cost_center_id=slip.cost_center_id
+                            or employee.cost_center_id,
                         )
                     )
 

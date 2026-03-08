@@ -401,7 +401,11 @@ class TestRejectReconciliation:
         mock_db.get.return_value = recon
 
         result = service.reject(
-            mock_db, recon.organization_id, recon.reconciliation_id, user_id, "Incorrect entries"
+            mock_db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            user_id,
+            "Incorrect entries",
         )
 
         assert result.status == ReconciliationStatus.rejected

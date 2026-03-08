@@ -99,9 +99,7 @@ class CustomerWebService:
         )
 
         count_subq = query.with_entities(Customer.customer_id).subquery()
-        total_count = db.scalar(
-            select(func.count()).select_from(count_subq)
-        ) or 0
+        total_count = db.scalar(select(func.count()).select_from(count_subq)) or 0
 
         order_map = {
             "customer_code": Customer.customer_code,

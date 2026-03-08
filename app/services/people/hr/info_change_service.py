@@ -800,7 +800,9 @@ class InfoChangeService:
             f"{reason_line}\n"
             f"View details: {action_url}"
         )
-        safe_notes = html.escape(request.reviewer_notes) if request.reviewer_notes else ""
+        safe_notes = (
+            html.escape(request.reviewer_notes) if request.reviewer_notes else ""
+        )
         body_html = (
             f"<p>Your request to update your {change_label} was {status}.</p>"
             f"{f'<p>Reason: {safe_notes}</p>' if safe_notes else ''}"

@@ -646,9 +646,7 @@ class LedgerPostingService(ListResponseMixin):
         """
         stmt = select(PostingBatch)
 
-        stmt = stmt.where(
-            PostingBatch.organization_id == coerce_uuid(organization_id)
-        )
+        stmt = stmt.where(PostingBatch.organization_id == coerce_uuid(organization_id))
 
         if status:
             stmt = stmt.where(PostingBatch.status == status)

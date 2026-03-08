@@ -499,9 +499,7 @@ class ARAgingService(ListResponseMixin):
             ARAgingSnapshot.organization_id == coerce_uuid(organization_id)
         )
         if customer_id:
-            stmt = stmt.where(
-                ARAgingSnapshot.customer_id == coerce_uuid(customer_id)
-            )
+            stmt = stmt.where(ARAgingSnapshot.customer_id == coerce_uuid(customer_id))
         if snapshot_date:
             stmt = stmt.where(ARAgingSnapshot.snapshot_date == snapshot_date)
         if aging_bucket:

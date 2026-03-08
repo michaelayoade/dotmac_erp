@@ -125,10 +125,16 @@ class ProbationService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_employee(self, employee_id: UUID, organization_id: UUID | None = None) -> Employee | None:
+    def get_employee(
+        self, employee_id: UUID, organization_id: UUID | None = None
+    ) -> Employee | None:
         """Get employee by ID with optional org isolation."""
         employee = self.db.get(Employee, employee_id)
-        if employee and organization_id is not None and employee.organization_id != organization_id:
+        if (
+            employee
+            and organization_id is not None
+            and employee.organization_id != organization_id
+        ):
             return None
         return employee
 

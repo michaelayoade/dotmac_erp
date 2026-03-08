@@ -584,9 +584,7 @@ class CustomerPaymentService(ListResponseMixin):
         # Apply allocations to invoices
         allocations = list(
             db.scalars(
-                select(PaymentAllocation).where(
-                    PaymentAllocation.payment_id == pay_id
-                )
+                select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
             ).all()
         )
 
@@ -971,9 +969,7 @@ class CustomerPaymentService(ListResponseMixin):
 
         # Delete existing allocations and recreate
         db.execute(
-            delete(PaymentAllocation).where(
-                PaymentAllocation.payment_id == pay_id
-            )
+            delete(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
         )
 
         # Create new allocations
@@ -1028,9 +1024,7 @@ class CustomerPaymentService(ListResponseMixin):
 
         return list(
             db.scalars(
-                select(PaymentAllocation).where(
-                    PaymentAllocation.payment_id == pay_id
-                )
+                select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
             ).all()
         )
 
@@ -1055,9 +1049,7 @@ class CustomerPaymentService(ListResponseMixin):
             )
 
         db.execute(
-            delete(PaymentAllocation).where(
-                PaymentAllocation.payment_id == pay_id
-            )
+            delete(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
         )
         db.delete(payment)
         db.flush()
@@ -1080,9 +1072,7 @@ class CustomerPaymentService(ListResponseMixin):
         )
 
         if customer_id:
-            stmt = stmt.where(
-                CustomerPayment.customer_id == coerce_uuid(customer_id)
-            )
+            stmt = stmt.where(CustomerPayment.customer_id == coerce_uuid(customer_id))
 
         if status:
             stmt = stmt.where(CustomerPayment.status == status)

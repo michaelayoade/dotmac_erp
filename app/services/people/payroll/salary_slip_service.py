@@ -525,10 +525,7 @@ class SalarySlipService:
             # For pro-rated months (mid-month joiners/leavers), pass the
             # full (un-prorated) gross and basic to the PAYE calculator so
             # it annualises correctly, then pro-rate the resulting amounts.
-            if (
-                total_working_days > 0
-                and payment_days < total_working_days
-            ):
+            if total_working_days > 0 and payment_days < total_working_days:
                 proration_factor = Decimal(str(payment_days)) / Decimal(
                     str(total_working_days)
                 )

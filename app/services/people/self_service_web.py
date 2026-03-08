@@ -2414,7 +2414,9 @@ class SelfServiceWebService:
         from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
-        case = discipline_service.get_case_or_404(case_id, organization_id=coerce_uuid(org_id))
+        case = discipline_service.get_case_or_404(
+            case_id, organization_id=coerce_uuid(org_id)
+        )
 
         # Verify this is the employee's own case
         if case.employee_id != employee_id:
@@ -2447,7 +2449,9 @@ class SelfServiceWebService:
         from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
-        case = discipline_service.get_case_or_404(case_id, organization_id=coerce_uuid(org_id))
+        case = discipline_service.get_case_or_404(
+            case_id, organization_id=coerce_uuid(org_id)
+        )
 
         # Verify this is the employee's own case
         if case.employee_id != employee_id:

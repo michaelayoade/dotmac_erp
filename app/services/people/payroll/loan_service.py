@@ -653,7 +653,9 @@ class LoanService:
         if not loan:
             raise ValueError(f"Loan {loan_id} not found")
         if organization_id is not None and loan.organization_id != organization_id:
-            raise ValueError(f"Loan {loan_id} does not belong to organization {organization_id}")
+            raise ValueError(
+                f"Loan {loan_id} does not belong to organization {organization_id}"
+            )
 
         if loan.status != LoanStatus.DISBURSED:
             raise RuntimeError(

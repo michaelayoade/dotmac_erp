@@ -691,9 +691,7 @@ class TestConvertToSalesOrder:
 
     @patch("app.services.finance.ar.quote.QuoteService._get_quote")
     @patch("app.services.finance.ar.quote.SyncNumberingService")
-    def test_convert_to_sales_order_success(
-        self, mock_numbering_class, mock_get_quote
-    ):
+    def test_convert_to_sales_order_success(self, mock_numbering_class, mock_get_quote):
         """Test converting accepted quote to sales order."""
         mock_db = MagicMock()
         quote_id = uuid.uuid4()

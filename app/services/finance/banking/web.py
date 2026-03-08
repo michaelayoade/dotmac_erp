@@ -1176,11 +1176,14 @@ class BankingWebService:
             return {"statement": None, "lines": [], "account_map": {}}
 
         currency = statement.currency_code
-        total_count = db.scalar(
-            select(func.count(BankStatementLine.line_id)).where(
-                BankStatementLine.statement_id == statement.statement_id
+        total_count = (
+            db.scalar(
+                select(func.count(BankStatementLine.line_id)).where(
+                    BankStatementLine.statement_id == statement.statement_id
+                )
             )
-        ) or 0
+            or 0
+        )
         total_pages = max(1, (total_count + limit - 1) // limit)
         offset = (page - 1) * limit
         paged_lines = list(

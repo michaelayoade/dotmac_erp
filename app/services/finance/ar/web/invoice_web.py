@@ -108,9 +108,7 @@ class InvoiceWebService:
         )
 
         count_subq = query.with_entities(Invoice.invoice_id).subquery()
-        total_count = db.scalar(
-            select(func.count()).select_from(count_subq)
-        ) or 0
+        total_count = db.scalar(select(func.count()).select_from(count_subq)) or 0
 
         sort_dir_norm = (sort_dir or "desc").lower()
         if sort_dir_norm not in {"asc", "desc"}:
@@ -603,7 +601,9 @@ class InvoiceWebService:
         context = base_context(request, auth, "New AR Invoice", "ar")
         context.update(
             self.invoice_form_context(
-                db, str(auth.organization_id), customer_id=customer_id,
+                db,
+                str(auth.organization_id),
+                customer_id=customer_id,
                 user_id=str(auth.user_id) if auth.user_id else None,
             )
         )
@@ -733,10 +733,13 @@ class InvoiceWebService:
                 )
 
             context = base_context(request, auth, "New AR Invoice", "ar")
-            context.update(self.invoice_form_context(
-                db, str(auth.organization_id),
-                user_id=str(auth.user_id) if auth.user_id else None,
-            ))
+            context.update(
+                self.invoice_form_context(
+                    db,
+                    str(auth.organization_id),
+                    user_id=str(auth.user_id) if auth.user_id else None,
+                )
+            )
             context["error"] = str(e)
             context["form_data"] = data
             return templates.TemplateResponse(
@@ -1051,10 +1054,13 @@ class InvoiceWebService:
                 )
 
             context = base_context(request, auth, "Edit AR Invoice", "ar")
-            context.update(self.invoice_form_context(
-                db, str(auth.organization_id),
-                user_id=str(auth.user_id) if auth.user_id else None,
-            ))
+            context.update(
+                self.invoice_form_context(
+                    db,
+                    str(auth.organization_id),
+                    user_id=str(auth.user_id) if auth.user_id else None,
+                )
+            )
             context["error"] = str(e)
             context["form_data"] = data
             return templates.TemplateResponse(
