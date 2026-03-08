@@ -4,7 +4,7 @@ Creates the registry for dynamic feature flag definitions.
 Seeds with the 13 existing hardcoded flags.
 
 Revision ID: a1b2c3d4e5f6
-Revises: None (standalone — safe to merge)
+Revises: 20260308_expense_approval_steps
 """
 
 import uuid
@@ -15,7 +15,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "a1b2c3d4e5f6"
-down_revision = None
+down_revision = "20260308_expense_approval_steps"
 branch_labels = None
 depends_on = None
 
@@ -223,10 +223,10 @@ def upgrade() -> None:
         sa.column("flag_key", sa.String),
         sa.column("label", sa.String),
         sa.column("description", sa.Text),
-        sa.column("category", sa.String),
+        sa.column("category", feature_flag_category),
         sa.column("default_enabled", sa.Boolean),
         sa.column("sort_order", sa.Integer),
-        sa.column("status", sa.String),
+        sa.column("status", feature_flag_status),
         sa.column("created_at", sa.DateTime),
         sa.column("updated_at", sa.DateTime),
     )

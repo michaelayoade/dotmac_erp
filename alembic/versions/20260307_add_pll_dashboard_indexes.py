@@ -14,16 +14,18 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pll_org_posting_date "
-        "ON gl.posted_ledger_line (organization_id, posting_date)"
-    )
-    op.execute(
-        "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pll_org_account_date "
-        "ON gl.posted_ledger_line (organization_id, account_id, posting_date)"
-    )
+    with op.get_context().autocommit_block():
+        op.execute(
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pll_org_posting_date "
+            "ON gl.posted_ledger_line (organization_id, posting_date)"
+        )
+        op.execute(
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_pll_org_account_date "
+            "ON gl.posted_ledger_line (organization_id, account_id, posting_date)"
+        )
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX IF EXISTS gl.idx_pll_org_posting_date")
-    op.execute("DROP INDEX IF EXISTS gl.idx_pll_org_account_date")
+    with op.get_context().autocommit_block():
+        op.execute("DROP INDEX IF EXISTS gl.idx_pll_org_posting_date")
+        op.execute("DROP INDEX IF EXISTS gl.idx_pll_org_account_date")

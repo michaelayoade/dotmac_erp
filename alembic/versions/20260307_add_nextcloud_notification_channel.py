@@ -58,4 +58,7 @@ def downgrade() -> None:
     op.drop_column("people", "nextcloud_user_id")
     op.drop_column("notification", "nextcloud_sent_at", schema="public")
     op.drop_column("notification", "nextcloud_sent", schema="public")
-    # Note: PostgreSQL does not support removing enum values
+    raise NotImplementedError(
+        "Downgrade is partial: PostgreSQL enum values added to "
+        "notificationchannel and settingdomain cannot be removed safely."
+    )
