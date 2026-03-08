@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -156,6 +156,12 @@ class CustomerPaymentService(ListResponseMixin):
                 raise ValidationError("Allocation total exceeds payment amount")
 
             for alloc in input.allocations:
+                # Lock the invoice row to prevent over-allocation race condition
+                db.execute(
+                    select(Invoice)
+                    .where(Invoice.invoice_id == coerce_uuid(alloc.invoice_id))
+                    .with_for_update()
+                )
                 invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
                     raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
@@ -263,8 +269,7 @@ class CustomerPaymentService(ListResponseMixin):
             )
             db.add(allocation)
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -537,14 +542,12 @@ class CustomerPaymentService(ListResponseMixin):
                 tax_transaction_service,
             )
 
-            fiscal_period = (
-                db.query(FiscalPeriod)
-                .filter(
+            fiscal_period = db.scalar(
+                select(FiscalPeriod).where(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= payment.payment_date,
                     FiscalPeriod.end_date >= payment.payment_date,
                 )
-                .first()
             )
 
             tax_code = db.get(TaxCode, payment.wht_code_id)
@@ -579,10 +582,12 @@ class CustomerPaymentService(ListResponseMixin):
                 )
 
         # Apply allocations to invoices
-        allocations = (
-            db.query(PaymentAllocation)
-            .filter(PaymentAllocation.payment_id == pay_id)
-            .all()
+        allocations = list(
+            db.scalars(
+                select(PaymentAllocation).where(
+                    PaymentAllocation.payment_id == pay_id
+                )
+            ).all()
         )
 
         for alloc in allocations:
@@ -594,8 +599,7 @@ class CustomerPaymentService(ListResponseMixin):
                 else:
                     invoice.status = InvoiceStatus.PARTIALLY_PAID
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -686,20 +690,15 @@ class CustomerPaymentService(ListResponseMixin):
             raise ValidationError("Payment is already voided")
 
         # Reverse allocations if payment was cleared
-        if payment.status == PaymentStatus.CLEARED:
+        was_cleared = payment.status == PaymentStatus.CLEARED
+        if was_cleared:
             allocations = list(
-                db.query(PaymentAllocation)
-                .filter(PaymentAllocation.payment_id == pay_id)
-                .all()
+                db.scalars(
+                    select(PaymentAllocation).where(
+                        PaymentAllocation.payment_id == pay_id
+                    )
+                ).all()
             )
-            if not allocations:
-                allocations = list(
-                    db.scalars(
-                        select(PaymentAllocation).where(
-                            PaymentAllocation.payment_id == pay_id
-                        )
-                    ).all()
-                )
 
             for alloc in allocations:
                 invoice = db.get(Invoice, alloc.invoice_id)
@@ -710,10 +709,44 @@ class CustomerPaymentService(ListResponseMixin):
                     else:
                         invoice.status = InvoiceStatus.PARTIALLY_PAID
 
+        # Create GL reversal journal if payment was cleared and has a journal
+        if was_cleared and payment.journal_entry_id:
+            try:
+                from app.services.finance.gl.reversal import ReversalService
+
+                user_id = coerce_uuid(voided_by_user_id)
+                result = ReversalService.create_reversal(
+                    db=db,
+                    organization_id=org_id,
+                    original_journal_id=payment.journal_entry_id,
+                    reversal_date=date.today(),
+                    created_by_user_id=user_id,
+                    reason=f"Payment voided: {reason}",
+                    auto_post=True,
+                    idempotency_key=f"{org_id}:AR:PAY:{pay_id}:void-reversal:v1",
+                )
+                if result.success:
+                    logger.info(
+                        "Created GL reversal journal %s for voided payment %s",
+                        result.reversal_journal_id,
+                        pay_id,
+                    )
+                else:
+                    logger.warning(
+                        "GL reversal failed for voided payment %s: %s",
+                        pay_id,
+                        result.message,
+                    )
+            except Exception as e:
+                logger.exception(
+                    "Failed to create GL reversal for voided payment %s: %s",
+                    pay_id,
+                    e,
+                )
+
         payment.status = PaymentStatus.VOID
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -738,20 +771,15 @@ class CustomerPaymentService(ListResponseMixin):
             )
 
         # Reverse allocations if payment was cleared
-        if payment.status == PaymentStatus.CLEARED:
+        was_cleared = payment.status == PaymentStatus.CLEARED
+        if was_cleared:
             allocations = list(
-                db.query(PaymentAllocation)
-                .filter(PaymentAllocation.payment_id == pay_id)
-                .all()
+                db.scalars(
+                    select(PaymentAllocation).where(
+                        PaymentAllocation.payment_id == pay_id
+                    )
+                ).all()
             )
-            if not allocations:
-                allocations = list(
-                    db.scalars(
-                        select(PaymentAllocation).where(
-                            PaymentAllocation.payment_id == pay_id
-                        )
-                    ).all()
-                )
 
             for alloc in allocations:
                 invoice = db.get(Invoice, alloc.invoice_id)
@@ -762,10 +790,44 @@ class CustomerPaymentService(ListResponseMixin):
                     else:
                         invoice.status = InvoiceStatus.PARTIALLY_PAID
 
+        # Create GL reversal journal if payment was cleared and has a journal
+        if was_cleared and payment.journal_entry_id:
+            try:
+                from app.services.finance.gl.reversal import ReversalService
+
+                user_id = payment.created_by_user_id
+                result = ReversalService.create_reversal(
+                    db=db,
+                    organization_id=org_id,
+                    original_journal_id=payment.journal_entry_id,
+                    reversal_date=date.today(),
+                    created_by_user_id=user_id,
+                    reason=f"Payment bounced: {reason}",
+                    auto_post=True,
+                    idempotency_key=f"{org_id}:AR:PAY:{pay_id}:bounce-reversal:v1",
+                )
+                if result.success:
+                    logger.info(
+                        "Created GL reversal journal %s for bounced payment %s",
+                        result.reversal_journal_id,
+                        pay_id,
+                    )
+                else:
+                    logger.warning(
+                        "GL reversal failed for bounced payment %s: %s",
+                        pay_id,
+                        result.message,
+                    )
+            except Exception as e:
+                logger.exception(
+                    "Failed to create GL reversal for bounced payment %s: %s",
+                    pay_id,
+                    e,
+                )
+
         payment.status = PaymentStatus.BOUNCED
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -881,9 +943,11 @@ class CustomerPaymentService(ListResponseMixin):
         payment.description = input.description
 
         # Delete existing allocations and recreate
-        db.query(PaymentAllocation).filter(
-            PaymentAllocation.payment_id == pay_id
-        ).delete()
+        db.execute(
+            delete(PaymentAllocation).where(
+                PaymentAllocation.payment_id == pay_id
+            )
+        )
 
         # Create new allocations
         for alloc in input.allocations:
@@ -895,8 +959,7 @@ class CustomerPaymentService(ListResponseMixin):
             )
             db.add(allocation)
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -936,10 +999,12 @@ class CustomerPaymentService(ListResponseMixin):
         if not payment or payment.organization_id != org_id:
             raise NotFoundError("Payment not found")
 
-        return (
-            db.query(PaymentAllocation)
-            .filter(PaymentAllocation.payment_id == pay_id)
-            .all()
+        return list(
+            db.scalars(
+                select(PaymentAllocation).where(
+                    PaymentAllocation.payment_id == pay_id
+                )
+            ).all()
         )
 
     @staticmethod
@@ -962,17 +1027,18 @@ class CustomerPaymentService(ListResponseMixin):
                 "Only draft receipts can be deleted."
             )
 
-        db.query(PaymentAllocation).filter(
-            PaymentAllocation.payment_id == pay_id
-        ).delete()
+        db.execute(
+            delete(PaymentAllocation).where(
+                PaymentAllocation.payment_id == pay_id
+            )
+        )
         db.delete(payment)
         db.flush()
-        db.commit()
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         customer_id: str | None = None,
         status: PaymentStatus | None = None,
         payment_method: PaymentMethod | None = None,
@@ -982,32 +1048,30 @@ class CustomerPaymentService(ListResponseMixin):
         offset: int = 0,
     ) -> list[CustomerPayment]:
         """List payments with optional filters."""
-        query = db.query(CustomerPayment)
-
-        if organization_id:
-            query = query.filter(
-                CustomerPayment.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = select(CustomerPayment).where(
+            CustomerPayment.organization_id == coerce_uuid(organization_id)
+        )
 
         if customer_id:
-            query = query.filter(
+            stmt = stmt.where(
                 CustomerPayment.customer_id == coerce_uuid(customer_id)
             )
 
         if status:
-            query = query.filter(CustomerPayment.status == status)
+            stmt = stmt.where(CustomerPayment.status == status)
 
         if payment_method:
-            query = query.filter(CustomerPayment.payment_method == payment_method)
+            stmt = stmt.where(CustomerPayment.payment_method == payment_method)
 
         if from_date:
-            query = query.filter(CustomerPayment.payment_date >= from_date)
+            stmt = stmt.where(CustomerPayment.payment_date >= from_date)
 
         if to_date:
-            query = query.filter(CustomerPayment.payment_date <= to_date)
+            stmt = stmt.where(CustomerPayment.payment_date <= to_date)
 
-        query = query.order_by(CustomerPayment.payment_date.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(CustomerPayment.payment_date.desc())
+        stmt = stmt.limit(limit).offset(offset)
+        return list(db.scalars(stmt).all())
 
 
 # Module-level singleton instance

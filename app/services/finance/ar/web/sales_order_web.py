@@ -873,7 +873,7 @@ class SalesOrderWebService:
                 db, so_id, str(auth.user_id), organization_id=str(auth.organization_id)
             )
             return RedirectResponse(
-                url=f"/ar/invoices/{invoice.invoice_id}?saved=1", status_code=303
+                url=f"/finance/ar/invoices/{invoice.invoice_id}?saved=1", status_code=303
             )
         except Exception:
             logger.exception("create_invoice_response: failed")

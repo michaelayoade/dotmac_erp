@@ -21,7 +21,10 @@ from tests.ifrs.ar.conftest import (
 @pytest.fixture
 def mock_db():
     """Create mock database session."""
-    return MagicMock()
+    db = MagicMock()
+    # Default scalars().all() returns empty list
+    db.scalars.return_value.all.return_value = []
+    return db
 
 
 @pytest.fixture
@@ -87,30 +90,16 @@ class TestCreateCustomerPayment:
             allocations=allocations,
         )
 
-        with patch("app.services.finance.ar.customer_payment.Customer"):
-            with patch(
-                "app.services.finance.ar.customer_payment.CustomerPayment"
-            ) as MockPay:
-                mock_payment = MockCustomerPayment(
-                    organization_id=org_id,
-                    customer_id=customer.customer_id,
-                )
-                MockPay.return_value = mock_payment
-
-                with patch(
-                    "app.services.finance.ar.customer_payment.PaymentAllocation"
-                ):
-                    with patch("app.services.finance.ar.customer_payment.Invoice"):
-                        with patch(
-                            "app.services.finance.ar.customer_payment.SequenceService.get_next_number",
-                            return_value="RCP-0001",
-                        ):
-                            CustomerPaymentService.create_payment(
-                                mock_db, org_id, payment_input, user_id
-                            )
+        with patch(
+            "app.services.finance.ar.customer_payment.SequenceService.get_next_number",
+            return_value="RCP-0001",
+        ):
+            CustomerPaymentService.create_payment(
+                mock_db, org_id, payment_input, user_id
+            )
 
         mock_db.add.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_create_payment_invalid_customer_fails(self, mock_db, org_id, user_id):
         """Test that invalid customer fails validation."""
@@ -133,11 +122,10 @@ class TestCreateCustomerPayment:
             allocations=[],
         )
 
-        with patch("app.services.finance.ar.customer_payment.Customer"):
-            with pytest.raises(NotFoundError):
-                CustomerPaymentService.create_payment(
-                    mock_db, org_id, payment_input, user_id
-                )
+        with pytest.raises(NotFoundError):
+            CustomerPaymentService.create_payment(
+                mock_db, org_id, payment_input, user_id
+            )
 
 
 class TestPostPayment:
@@ -172,35 +160,32 @@ class TestPostPayment:
             return None
 
         mock_db.get.side_effect = mock_get
-        # Mock query for allocations
-        mock_db.query.return_value.filter.return_value.all.return_value = (
-            payment.allocations
-        )
+        # Mock scalars().all() for allocation query
+        mock_db.scalars.return_value.all.return_value = payment.allocations
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with patch("app.services.finance.ar.customer_payment.Customer"):
+        with patch(
+            "app.services.finance.ar.customer_payment._resolve_bank_gl_account_id",
+            return_value=uuid4(),
+        ):
+            with patch(
+                "app.services.finance.gl.journal.JournalService"
+            ) as mock_journal_cls:
                 with patch(
-                    "app.services.finance.ar.customer_payment.PaymentAllocation"
-                ):
-                    # Patch at source modules since imports are local
-                    with patch(
-                        "app.services.finance.gl.journal.JournalService"
-                    ) as mock_journal:
-                        with patch(
-                            "app.services.finance.gl.ledger_posting.LedgerPostingService"
-                        ) as mock_posting:
-                            mock_journal.create_journal.return_value = MagicMock(
-                                journal_entry_id=uuid4()
-                            )
-                            mock_posting.post_journal_entry.return_value = MagicMock(
-                                success=True
-                            )
-                            result = CustomerPaymentService.post_payment(
-                                mock_db, org_id, payment.payment_id, user_id
-                            )
+                    "app.services.finance.gl.ledger_posting.LedgerPostingService"
+                ) as mock_posting_cls:
+                    mock_journal = MagicMock(journal_entry_id=uuid4())
+                    mock_journal_cls.create_journal.return_value = mock_journal
+                    mock_journal_cls.submit_journal.return_value = None
+                    mock_journal_cls.approve_journal.return_value = None
+                    mock_posting_cls.post_journal_entry.return_value = MagicMock(
+                        success=True, posting_batch_id=uuid4()
+                    )
+                    result = CustomerPaymentService.post_payment(
+                        mock_db, org_id, payment.payment_id, user_id
+                    )
 
         assert result.status == PaymentStatus.CLEARED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestMarkBouncedPayment:
@@ -218,13 +203,12 @@ class TestMarkBouncedPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            result = CustomerPaymentService.mark_bounced(
-                mock_db, org_id, payment.payment_id, "NSF"
-            )
+        result = CustomerPaymentService.mark_bounced(
+            mock_db, org_id, payment.payment_id, "NSF"
+        )
 
         assert result.status == PaymentStatus.BOUNCED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_mark_bounced_cleared_payment(self, mock_db, org_id):
         """Test marking a cleared payment as bounced reverses allocations."""
@@ -236,6 +220,8 @@ class TestMarkBouncedPayment:
             status=PaymentStatus.CLEARED,
             amount=Decimal("1000.00"),
         )
+        # No journal_entry_id so GL reversal branch is skipped
+        payment.journal_entry_id = None
         payment.allocations = [
             MockPaymentAllocation(
                 payment_id=payment.payment_id,
@@ -260,21 +246,15 @@ class TestMarkBouncedPayment:
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.query.return_value.filter.return_value.all.return_value = (
-            payment.allocations
+        # Mock scalars().all() for allocation query
+        mock_db.scalars.return_value.all.return_value = payment.allocations
+
+        result = CustomerPaymentService.mark_bounced(
+            mock_db, org_id, payment.payment_id, "NSF"
         )
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with patch("app.services.finance.ar.customer_payment.Invoice"):
-                with patch(
-                    "app.services.finance.ar.customer_payment.PaymentAllocation"
-                ):
-                    result = CustomerPaymentService.mark_bounced(
-                        mock_db, org_id, payment.payment_id, "NSF"
-                    )
-
         assert result.status == PaymentStatus.BOUNCED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestVoidCustomerPayment:
@@ -291,13 +271,12 @@ class TestVoidCustomerPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            result = CustomerPaymentService.void_payment(
-                mock_db, org_id, payment.payment_id, user_id, "Duplicate"
-            )
+        result = CustomerPaymentService.void_payment(
+            mock_db, org_id, payment.payment_id, user_id, "Duplicate"
+        )
 
         assert result.status == PaymentStatus.VOID
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_void_already_void_fails(self, mock_db, org_id, user_id):
         """Test that voiding already voided payment fails."""
@@ -311,11 +290,10 @@ class TestVoidCustomerPayment:
         )
         mock_db.get.return_value = payment
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with pytest.raises(ValidationError, match="already voided"):
-                CustomerPaymentService.void_payment(
-                    mock_db, org_id, payment.payment_id, user_id, "Error"
-                )
+        with pytest.raises(ValidationError, match="already voided"):
+            CustomerPaymentService.void_payment(
+                mock_db, org_id, payment.payment_id, user_id, "Error"
+            )
 
 
 class TestGetCustomerPayment:
@@ -328,8 +306,9 @@ class TestGetCustomerPayment:
         payment = MockCustomerPayment(organization_id=org_id)
         mock_db.get.return_value = payment
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            result = CustomerPaymentService.get(mock_db, str(payment.payment_id), org_id)
+        result = CustomerPaymentService.get(
+            mock_db, str(payment.payment_id), org_id
+        )
 
         assert result == payment
 
@@ -340,9 +319,8 @@ class TestGetCustomerPayment:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with pytest.raises(NotFoundError):
-                CustomerPaymentService.get(mock_db, str(uuid4()), org_id)
+        with pytest.raises(NotFoundError):
+            CustomerPaymentService.get(mock_db, str(uuid4()), org_id)
 
     def test_get_wrong_org_raises(self, mock_db, org_id):
         """Test getting payment from wrong org raises NotFoundError."""
@@ -353,9 +331,8 @@ class TestGetCustomerPayment:
         mock_db.get.return_value = payment
         wrong_org = uuid4()
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with pytest.raises(NotFoundError):
-                CustomerPaymentService.get(mock_db, str(payment.payment_id), wrong_org)
+        with pytest.raises(NotFoundError):
+            CustomerPaymentService.get(mock_db, str(payment.payment_id), wrong_org)
 
 
 class TestListCustomerPayments:
@@ -367,20 +344,13 @@ class TestListCustomerPayments:
         from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payments = [MockCustomerPayment(organization_id=org_id)]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = payments
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = payments
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            result = CustomerPaymentService.list(
-                mock_db,
-                organization_id=str(org_id),
-                status=PaymentStatus.PENDING,
-            )
+        result = CustomerPaymentService.list(
+            mock_db,
+            organization_id=str(org_id),
+            status=PaymentStatus.PENDING,
+        )
 
         assert result == payments
 
@@ -404,13 +374,11 @@ class TestGetPaymentAllocations:
 
         # Mock db.get to find the payment
         mock_db.get.return_value = payment
-        # Mock the query for allocations
-        mock_db.query.return_value.filter.return_value.all.return_value = allocations
+        # Mock scalars().all() for allocation query
+        mock_db.scalars.return_value.all.return_value = allocations
 
-        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with patch("app.services.finance.ar.customer_payment.PaymentAllocation"):
-                result = CustomerPaymentService.get_payment_allocations(
-                    mock_db, org_id, payment_id
-                )
+        result = CustomerPaymentService.get_payment_allocations(
+            mock_db, org_id, payment_id
+        )
 
         assert len(result) == 2

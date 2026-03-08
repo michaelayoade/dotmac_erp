@@ -62,23 +62,21 @@ class TestCreateCustomer:
 
     def test_create_customer_success(self, mock_db, org_id, sample_customer_input):
         """Test successful customer creation."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # No duplicate
-        mock_db.query.return_value = mock_query
+        # validate_unique_code uses db.query().filter().first() -> falls back to db.scalar()
+        mock_db.scalar.return_value = None  # No duplicate
 
-        with patch("app.services.finance.ar.customer.Customer") as MockCustomerClass:
-            mock_customer = MockCustomer(
-                organization_id=org_id,
-                customer_code=sample_customer_input.customer_code,
-                legal_name=sample_customer_input.customer_name,
-            )
-            MockCustomerClass.return_value = mock_customer
-
+        with (
+            patch(
+                "app.services.finance.ar.customer.validate_unique_code",
+            ),
+            patch.object(
+                CustomerService, "_generate_customer_code", return_value="CUS-001"
+            ),
+        ):
             CustomerService.create_customer(mock_db, org_id, sample_customer_input)
 
             mock_db.add.assert_called_once()
-            mock_db.commit.assert_called_once()
+            mock_db.flush.assert_called()
             mock_db.refresh.assert_called_once()
 
     def test_create_duplicate_customer_code_fails(
@@ -93,12 +91,16 @@ class TestCreateCustomer:
             customer_code=sample_customer_input.customer_code,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = existing
-        mock_db.query.return_value = mock_query
+        # validate_unique_code tries db.query first, falls back to db.scalar
+        mock_db.scalar.return_value = existing
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.validate_unique_code",
+            side_effect=HTTPException(
+                status_code=400,
+                detail="Customer code 'CUS-001' already exists",
+            ),
+        ):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.create_customer(mock_db, org_id, sample_customer_input)
 
@@ -117,23 +119,20 @@ class TestUpdateCustomer:
         )
         mock_db.get.return_value = customer
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # No duplicate
-        mock_db.query.return_value = mock_query
-
         with (
-            patch("app.services.finance.ar.customer.Customer"),
             patch(
-                "app.services.finance.common.helpers.get_model_pk_column",
-                return_value="customer_id",
+                "app.services.finance.ar.customer.get_org_scoped_entity",
+                return_value=customer,
+            ),
+            patch(
+                "app.services.finance.ar.customer.validate_unique_code",
             ),
         ):
             result = CustomerService.update_customer(
                 mock_db, org_id, customer.customer_id, sample_customer_input
             )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
         assert result.customer_code == sample_customer_input.customer_code
 
     def test_update_nonexistent_customer_fails(
@@ -144,7 +143,10 @@ class TestUpdateCustomer:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=None,
+        ):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.update_customer(
                     mock_db, org_id, uuid4(), sample_customer_input
@@ -164,7 +166,11 @@ class TestUpdateCustomer:
         )
         mock_db.get.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        # get_org_scoped_entity checks organization_id match, returns None for wrong org
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=None,
+        ):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.update_customer(
                     mock_db, org_id, customer.customer_id, sample_customer_input
@@ -186,13 +192,16 @@ class TestUpdateCreditLimit:
 
         new_limit = Decimal("50000.00")
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             result = CustomerService.update_credit_limit(
                 mock_db, org_id, customer.customer_id, new_limit
             )
 
         assert result.credit_limit == new_limit
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestUpdateRiskCategory:
@@ -208,13 +217,16 @@ class TestUpdateRiskCategory:
         )
         mock_db.get.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             result = CustomerService.update_risk_category(
                 mock_db, org_id, customer.customer_id, RiskCategory.HIGH
             )
 
         assert result.risk_category == RiskCategory.HIGH
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestDeactivateCustomer:
@@ -225,10 +237,10 @@ class TestDeactivateCustomer:
         customer = MockCustomer(organization_id=org_id, is_active=True)
         mock_db.get.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            result = CustomerService.deactivate_customer(
-                mock_db, org_id, customer.customer_id
-            )
+        # toggle_entity_status calls get_org_scoped_entity which uses db.get
+        result = CustomerService.deactivate_customer(
+            mock_db, org_id, customer.customer_id
+        )
 
         assert result.is_active is False
         mock_db.commit.assert_called()
@@ -239,9 +251,8 @@ class TestDeactivateCustomer:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            with pytest.raises(HTTPException) as exc:
-                CustomerService.deactivate_customer(mock_db, org_id, uuid4())
+        with pytest.raises(HTTPException) as exc:
+            CustomerService.deactivate_customer(mock_db, org_id, uuid4())
 
         assert exc.value.status_code == 404
 
@@ -254,10 +265,9 @@ class TestActivateCustomer:
         customer = MockCustomer(organization_id=org_id, is_active=False)
         mock_db.get.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            result = CustomerService.activate_customer(
-                mock_db, org_id, customer.customer_id
-            )
+        result = CustomerService.activate_customer(
+            mock_db, org_id, customer.customer_id
+        )
 
         assert result.is_active is True
         mock_db.commit.assert_called()
@@ -274,7 +284,7 @@ class TestCheckCreditLimit:
         )
         mock_db.get.return_value = customer
 
-        # Mock outstanding invoices
+        # Mock outstanding invoices via db.scalars().all()
         invoice = MockInvoice(
             customer_id=customer.customer_id,
             total_amount=Decimal("2000.00"),
@@ -282,12 +292,14 @@ class TestCheckCreditLimit:
             status=MockInvoiceStatus.POSTED,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [invoice]
-        mock_db.query.return_value = mock_query
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [invoice]
+        mock_db.scalars.return_value = mock_scalars
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             is_within, current_balance, available = CustomerService.check_credit_limit(
                 mock_db, org_id, customer.customer_id, Decimal("5000.00")
             )
@@ -304,7 +316,7 @@ class TestCheckCreditLimit:
         )
         mock_db.get.return_value = customer
 
-        # Mock outstanding invoices
+        # Mock outstanding invoices via db.scalars().all()
         invoice = MockInvoice(
             customer_id=customer.customer_id,
             total_amount=Decimal("4000.00"),
@@ -312,12 +324,14 @@ class TestCheckCreditLimit:
             status=MockInvoiceStatus.POSTED,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [invoice]
-        mock_db.query.return_value = mock_query
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [invoice]
+        mock_db.scalars.return_value = mock_scalars
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             is_within, current_balance, available = CustomerService.check_credit_limit(
                 mock_db, org_id, customer.customer_id, Decimal("2000.00")
             )
@@ -334,7 +348,10 @@ class TestCheckCreditLimit:
         )
         mock_db.get.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             is_within, current_balance, available = CustomerService.check_credit_limit(
                 mock_db, org_id, customer.customer_id, Decimal("1000000.00")
             )
@@ -351,7 +368,10 @@ class TestGetCustomer:
         customer = MockCustomer(organization_id=org_id)
         mock_db.get.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             result = CustomerService.get(mock_db, org_id, str(customer.customer_id))
 
         assert result == customer
@@ -362,7 +382,10 @@ class TestGetCustomer:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            side_effect=HTTPException(status_code=404, detail="Customer not found"),
+        ):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.get(mock_db, org_id, str(uuid4()))
 
@@ -378,25 +401,18 @@ class TestGetCustomerByCode:
             organization_id=org_id,
             customer_code="CUS-001",
         )
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = customer
-        mock_db.query.return_value = mock_query
+        # get_by_code uses db.scalar(select(...))
+        mock_db.scalar.return_value = customer
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            result = CustomerService.get_by_code(mock_db, org_id, "CUS-001")
+        result = CustomerService.get_by_code(mock_db, org_id, "CUS-001")
 
         assert result == customer
 
     def test_get_customer_by_code_not_found(self, mock_db, org_id):
         """Test getting non-existent customer by code returns None."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = None
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            result = CustomerService.get_by_code(mock_db, org_id, "NOTFOUND")
+        result = CustomerService.get_by_code(mock_db, org_id, "NOTFOUND")
 
         assert result is None
 
@@ -407,46 +423,31 @@ class TestListCustomers:
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing customers with filters."""
         customers = [MockCustomer(organization_id=org_id)]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = customers
-        mock_db.query.return_value = mock_query
+        # list() uses db.scalars(stmt).all()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = customers
+        mock_db.scalars.return_value = mock_scalars
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            result = CustomerService.list(
-                mock_db,
-                organization_id=str(org_id),
-                is_active=True,
-            )
+        result = CustomerService.list(
+            mock_db,
+            organization_id=str(org_id),
+            is_active=True,
+        )
 
         assert result == customers
 
     def test_list_with_search(self, mock_db, org_id):
         """Test listing customers with search."""
         customers = [MockCustomer(organization_id=org_id, legal_name="Acme Corp")]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = customers
-        mock_db.query.return_value = mock_query
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = customers
+        mock_db.scalars.return_value = mock_scalars
 
-        with (
-            patch("app.services.finance.ar.customer.Customer"),
-            patch(
-                "app.services.finance.ar.customer.apply_search_filter",
-                return_value=mock_query,
-            ),
-        ):
-            result = CustomerService.list(
-                mock_db,
-                organization_id=str(org_id),
-                search="Acme",
-            )
+        result = CustomerService.list(
+            mock_db,
+            organization_id=str(org_id),
+            search="Acme",
+        )
 
         assert result == customers
 
@@ -462,7 +463,7 @@ class TestGetCustomerSummary:
         )
         mock_db.get.return_value = customer
 
-        # Mock outstanding invoices
+        # Mock outstanding invoices via db.scalars().all()
         invoice1 = MockInvoice(
             customer_id=customer.customer_id,
             total_amount=Decimal("1000.00"),
@@ -476,12 +477,14 @@ class TestGetCustomerSummary:
             status=MockInvoiceStatus.PARTIALLY_PAID,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [invoice1, invoice2]
-        mock_db.query.return_value = mock_query
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [invoice1, invoice2]
+        mock_db.scalars.return_value = mock_scalars
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=customer,
+        ):
             result = CustomerService.get_customer_summary(
                 mock_db, org_id, customer.customer_id
             )
@@ -498,7 +501,10 @@ class TestGetCustomerSummary:
 
         mock_db.get.return_value = None
 
-        with patch("app.services.finance.ar.customer.Customer"):
+        with patch(
+            "app.services.finance.ar.customer.get_org_scoped_entity",
+            return_value=None,
+        ):
             with pytest.raises(HTTPException) as exc:
                 CustomerService.get_customer_summary(mock_db, org_id, uuid4())
 

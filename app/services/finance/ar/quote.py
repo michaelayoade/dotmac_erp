@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -134,8 +135,6 @@ class QuoteService:
         # Recalculate totals
         QuoteService._recalculate_totals(quote)
         db.flush()
-        db.commit()
-        db.refresh(quote)
 
         return quote
 
@@ -334,8 +333,6 @@ class QuoteService:
         quote.updated_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -356,8 +353,6 @@ class QuoteService:
         quote.sent_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -373,8 +368,6 @@ class QuoteService:
             quote.status = QuoteStatus.VIEWED
             quote.viewed_at = datetime.utcnow()
             db.flush()
-            db.commit()
-            db.refresh(quote)
 
         return quote
 
@@ -400,8 +393,6 @@ class QuoteService:
         quote.accepted_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -441,8 +432,7 @@ class QuoteService:
         except Exception:
             logger.exception("Ignored exception")
 
-        db.commit()
-        db.refresh(quote)
+        db.flush()
         return quote
 
     @staticmethod
@@ -518,9 +508,6 @@ class QuoteService:
         quote.converted_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(invoice)
-        db.refresh(quote)
         return invoice
 
     @staticmethod
@@ -600,9 +587,6 @@ class QuoteService:
         quote.converted_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(so)
-        db.refresh(quote)
         return so
 
     @staticmethod
@@ -623,27 +607,37 @@ class QuoteService:
         quote.updated_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(quote)
         return quote
 
     @staticmethod
-    def expire_quotes(db: Session) -> int:
-        """Mark expired quotes. Returns count of expired quotes."""
+    def expire_quotes(
+        db: Session,
+        organization_id: UUID | str | None = None,
+    ) -> int:
+        """Mark expired quotes. Returns count of expired quotes.
+
+        Args:
+            db: Database session.
+            organization_id: When provided, only expire quotes for this org.
+                When called from Celery scheduled tasks without org_id, it
+                intentionally processes all organizations.
+        """
         today = date.today()
-        count = (
-            db.query(Quote)
-            .filter(
+        stmt = (
+            update(Quote)
+            .where(
                 Quote.status.in_(
                     [QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.VIEWED]
                 ),
                 Quote.valid_until < today,
             )
-            .update({"status": QuoteStatus.EXPIRED}, synchronize_session=False)
+            .values(status=QuoteStatus.EXPIRED)
         )
+        if organization_id is not None:
+            stmt = stmt.where(Quote.organization_id == coerce_uuid(organization_id))
+        result = db.execute(stmt)
         db.flush()
-        db.commit()
-        return count
+        return result.rowcount or 0
 
     @staticmethod
     def list_quotes(
@@ -663,19 +657,19 @@ class QuoteService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(Quote).filter(Quote.organization_id == org_id)
+        stmt = select(Quote).where(Quote.organization_id == org_id)
 
         if customer_id:
-            query = query.filter(Quote.customer_id == coerce_uuid(customer_id))
+            stmt = stmt.where(Quote.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.filter(Quote.status == status)
+            stmt = stmt.where(Quote.status == status)
 
         if start_date:
-            query = query.filter(Quote.quote_date >= start_date)
+            stmt = stmt.where(Quote.quote_date >= start_date)
 
         if end_date:
-            query = query.filter(Quote.quote_date <= end_date)
+            stmt = stmt.where(Quote.quote_date <= end_date)
 
         column_map = {
             "quote_date": Quote.quote_date,
@@ -684,11 +678,11 @@ class QuoteService:
             "total_amount": Quote.total_amount,
             "status": Quote.status,
         }
-        query = apply_sort(
-            query, sort, sort_dir, column_map, default=Quote.quote_date.desc()
+        stmt = apply_sort(
+            stmt, sort, sort_dir, column_map, default=Quote.quote_date.desc()
         )
 
-        return query.offset(offset).limit(limit).all()
+        return list(db.scalars(stmt.offset(offset).limit(limit)).all())
 
 
 quote_service = QuoteService()

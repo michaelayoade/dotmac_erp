@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -30,7 +30,6 @@ from app.services.finance.common import (
     toggle_entity_status,
     validate_unique_code,
 )
-from app.services.finance.common.search import apply_search_filter
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -255,7 +254,7 @@ class CustomerService(ListResponseMixin):
         )
 
         db.add(customer)
-        db.commit()
+        db.flush()
         db.refresh(customer)
 
         return customer
@@ -281,7 +280,6 @@ class CustomerService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
-        org_id = coerce_uuid(organization_id)
 
         customer = get_org_scoped_entity(
             db=db,
@@ -290,8 +288,6 @@ class CustomerService(ListResponseMixin):
             org_id=org_id,
             entity_name="Customer",
         )
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
 
@@ -366,7 +362,7 @@ class CustomerService(ListResponseMixin):
                 )
         customer.parent_customer_id = input.parent_customer_id
 
-        db.commit()
+        db.flush()
         db.refresh(customer)
 
         return customer
@@ -456,7 +452,7 @@ class CustomerService(ListResponseMixin):
             if update_data["is_active"] != customer.is_active:
                 customer.is_active = update_data["is_active"]
 
-        db.commit()
+        db.flush()
         db.refresh(customer)
 
         return customer
@@ -503,20 +499,10 @@ class CustomerService(ListResponseMixin):
         )
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
 
         customer.credit_limit = new_credit_limit
 
-        db.commit()
+        db.flush()
         db.refresh(customer)
 
         return customer
@@ -552,7 +538,7 @@ class CustomerService(ListResponseMixin):
 
         customer.risk_category = new_risk_category
 
-        db.commit()
+        db.flush()
         db.refresh(customer)
 
         return customer
@@ -628,16 +614,14 @@ class CustomerService(ListResponseMixin):
             return (True, Decimal("0"), Decimal("999999999"))
 
         # Get outstanding balance
-        invoices = (
-            db.query(Invoice)
-            .filter(
-                and_(
+        invoices = list(
+            db.scalars(
+                select(Invoice).where(
                     Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
-            )
-            .all()
+            ).all()
         )
 
         current_balance = sum((inv.balance_due for inv in invoices), Decimal("0"))
@@ -662,8 +646,6 @@ class CustomerService(ListResponseMixin):
         )
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
-        if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
         return customer
 
     @staticmethod
@@ -675,15 +657,11 @@ class CustomerService(ListResponseMixin):
         """Get a customer by code."""
         org_id = coerce_uuid(organization_id)
 
-        return (
-            db.query(Customer)
-            .filter(
-                and_(
-                    Customer.organization_id == org_id,
-                    Customer.customer_code == customer_code,
-                )
+        return db.scalar(
+            select(Customer).where(
+                Customer.organization_id == org_id,
+                Customer.customer_code == customer_code,
             )
-            .first()
         )
 
     @staticmethod
@@ -703,34 +681,35 @@ class CustomerService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         org_id = coerce_uuid(organization_id)
-        stmt = db.query(Customer).filter(Customer.organization_id == org_id)
+        stmt = select(Customer).where(Customer.organization_id == org_id)
 
         if customer_type:
-            stmt = stmt.filter(Customer.customer_type == customer_type)
+            stmt = stmt.where(Customer.customer_type == customer_type)
 
         if risk_category:
-            stmt = stmt.filter(Customer.risk_category == risk_category)
+            stmt = stmt.where(Customer.risk_category == risk_category)
 
         if is_active is not None:
-            stmt = stmt.filter(Customer.is_active == is_active)
+            stmt = stmt.where(Customer.is_active == is_active)
 
         if is_related_party is not None:
-            stmt = stmt.filter(Customer.is_related_party == is_related_party)
+            stmt = stmt.where(Customer.is_related_party == is_related_party)
 
         if search:
-            stmt = apply_search_filter(
-                stmt,
-                search.strip(),
-                [
-                    Customer.customer_code,
-                    Customer.legal_name,
-                    Customer.trading_name,
-                    Customer.tax_identification_number,
-                ],
+            from sqlalchemy import or_
+
+            pattern = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    Customer.customer_code.ilike(pattern),
+                    Customer.legal_name.ilike(pattern),
+                    Customer.trading_name.ilike(pattern),
+                    Customer.tax_identification_number.ilike(pattern),
+                )
             )
 
         stmt = stmt.order_by(Customer.legal_name).limit(limit).offset(offset)
-        return stmt.all()
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def list_children(
@@ -739,8 +718,6 @@ class CustomerService(ListResponseMixin):
         parent_customer_id: UUID,
     ) -> builtins.list[Customer]:
         """List child (sub-account) customers for a given parent."""
-        from sqlalchemy import select
-
         org_id = coerce_uuid(organization_id)
         parent_id = coerce_uuid(parent_customer_id)
         stmt = (
@@ -777,16 +754,14 @@ class CustomerService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Customer not found")
 
         # Get outstanding invoices
-        invoices = (
-            db.query(Invoice)
-            .filter(
-                and_(
+        invoices = list(
+            db.scalars(
+                select(Invoice).where(
                     Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
-            )
-            .all()
+            ).all()
         )
 
         total_outstanding = sum((inv.balance_due for inv in invoices), Decimal("0"))
@@ -823,16 +798,20 @@ class CustomerService(ListResponseMixin):
         if not customer or customer.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Customer not found")
 
+        from sqlalchemy import func
+
         from app.models.finance.ar.customer_payment import CustomerPayment
         from app.models.finance.ar.invoice import Invoice
 
         invoice_count = (
-            db.query(Invoice)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == cust_id,
+            db.scalar(
+                select(func.count())
+                .select_from(Invoice)
+                .where(
+                    Invoice.organization_id == org_id,
+                    Invoice.customer_id == cust_id,
+                )
             )
-            .count()
             or 0
         )
         if invoice_count > 0:
@@ -845,12 +824,14 @@ class CustomerService(ListResponseMixin):
             )
 
         payment_count = (
-            db.query(CustomerPayment)
-            .filter(
-                CustomerPayment.organization_id == org_id,
-                CustomerPayment.customer_id == cust_id,
+            db.scalar(
+                select(func.count())
+                .select_from(CustomerPayment)
+                .where(
+                    CustomerPayment.organization_id == org_id,
+                    CustomerPayment.customer_id == cust_id,
+                )
             )
-            .count()
             or 0
         )
         if payment_count > 0:
@@ -864,7 +845,6 @@ class CustomerService(ListResponseMixin):
 
         db.delete(customer)
         db.flush()
-        db.commit()
 
 
 # Module-level singleton instance

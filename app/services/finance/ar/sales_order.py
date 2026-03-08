@@ -9,6 +9,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -117,8 +118,6 @@ class SalesOrderService:
         # Recalculate totals
         SalesOrderService._recalculate_totals(so)
         db.flush()
-        db.commit()
-        db.refresh(so)
 
         return so
 
@@ -317,8 +316,7 @@ class SalesOrderService:
         except Exception:
             logger.exception("Ignored exception")
 
-        db.commit()
-        db.refresh(so)
+        db.flush()
         return so
 
     @staticmethod
@@ -362,8 +360,7 @@ class SalesOrderService:
         except Exception:
             logger.exception("Ignored exception")
 
-        db.commit()
-        db.refresh(so)
+        db.flush()
         return so
 
     @staticmethod
@@ -410,8 +407,6 @@ class SalesOrderService:
             )
 
         db.flush()
-        db.commit()
-        db.refresh(so)
         return so
 
     @staticmethod
@@ -556,9 +551,6 @@ class SalesOrderService:
             )
 
         db.flush()
-        db.commit()
-        db.refresh(shipment)
-        db.refresh(so)
         return shipment
 
     @staticmethod
@@ -578,8 +570,6 @@ class SalesOrderService:
         shipment.delivered_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(shipment)
         return shipment
 
     @staticmethod
@@ -722,9 +712,6 @@ class SalesOrderService:
             so.completed_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(invoice)
-        db.refresh(so)
         return invoice
 
     @staticmethod
@@ -805,8 +792,6 @@ class SalesOrderService:
             )
 
         db.flush()
-        db.commit()
-        db.refresh(so)
         return so
 
     @staticmethod
@@ -831,8 +816,6 @@ class SalesOrderService:
         so.updated_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(so)
         return so
 
     @staticmethod
@@ -868,8 +851,6 @@ class SalesOrderService:
         so.updated_at = datetime.utcnow()
 
         db.flush()
-        db.commit()
-        db.refresh(so)
         return so
 
     @staticmethod
@@ -890,19 +871,19 @@ class SalesOrderService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(SalesOrder).filter(SalesOrder.organization_id == org_id)
+        stmt = select(SalesOrder).where(SalesOrder.organization_id == org_id)
 
         if customer_id:
-            query = query.filter(SalesOrder.customer_id == coerce_uuid(customer_id))
+            stmt = stmt.where(SalesOrder.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.filter(SalesOrder.status == status)
+            stmt = stmt.where(SalesOrder.status == status)
 
         if start_date:
-            query = query.filter(SalesOrder.order_date >= start_date)
+            stmt = stmt.where(SalesOrder.order_date >= start_date)
 
         if end_date:
-            query = query.filter(SalesOrder.order_date <= end_date)
+            stmt = stmt.where(SalesOrder.order_date <= end_date)
 
         column_map = {
             "order_date": SalesOrder.order_date,
@@ -910,11 +891,11 @@ class SalesOrderService:
             "total_amount": SalesOrder.total_amount,
             "status": SalesOrder.status,
         }
-        query = apply_sort(
-            query, sort, sort_dir, column_map, default=SalesOrder.order_date.desc()
+        stmt = apply_sort(
+            stmt, sort, sort_dir, column_map, default=SalesOrder.order_date.desc()
         )
 
-        return query.offset(offset).limit(limit).all()
+        return list(db.scalars(stmt.offset(offset).limit(limit)).all())
 
     @staticmethod
     def _reserve_stock_on_confirm(db: Session, so: SalesOrder) -> None:

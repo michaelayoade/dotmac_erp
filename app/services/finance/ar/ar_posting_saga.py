@@ -318,7 +318,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                 db, org_id, journal.journal_entry_id, user_id
             )
 
-            db.commit()
+            db.flush()
 
             logger.info(
                 "Created journal %s for AR invoice %s",
@@ -368,7 +368,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
 
         try:
             journal.status = JournalStatus.VOID
-            db.commit()
+            db.flush()
             logger.info("Voided AR journal %s during saga compensation", journal_id)
             return True
         except Exception:
@@ -386,7 +386,10 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         invoice_id = coerce_uuid(payload["invoice_id"])
         user_id = coerce_uuid(payload["posted_by_user_id"])
         posting_date = date.fromisoformat(payload["posting_date"])
-        journal_entry_id = coerce_uuid(context["journal_entry_id"])
+        journal_entry_id_str = context.get("journal_entry_id")
+        if not journal_entry_id_str:
+            return StepResult(success=False, error="Missing journal_entry_id in saga context")
+        journal_entry_id = coerce_uuid(journal_entry_id_str)
 
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
@@ -416,7 +419,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
 
             logger.info(
                 "Posted AR journal %s to ledger, batch %s",
-                context["journal_number"],
+                context.get("journal_number", "unknown"),
                 result.batch_id,
             )
 
@@ -563,7 +566,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                     e,
                 )
 
-        db.commit()
+        db.flush()
 
         return StepResult(
             success=True,
@@ -590,7 +593,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                 if tax_txn:
                     db.delete(tax_txn)
 
-            db.commit()
+            db.flush()
             logger.info(
                 "Voided %d AR tax transactions during saga compensation", len(tax_ids)
             )
@@ -609,8 +612,15 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         """Update invoice status to POSTED."""
         invoice_id = coerce_uuid(payload["invoice_id"])
         user_id = coerce_uuid(payload["posted_by_user_id"])
-        journal_entry_id = coerce_uuid(context["journal_entry_id"])
-        posting_batch_id = coerce_uuid(context["posting_batch_id"])
+        journal_entry_id_str = context.get("journal_entry_id")
+        posting_batch_id_str = context.get("posting_batch_id")
+        if not journal_entry_id_str or not posting_batch_id_str:
+            return StepResult(
+                success=False,
+                error="Missing journal_entry_id or posting_batch_id in saga context",
+            )
+        journal_entry_id = coerce_uuid(journal_entry_id_str)
+        posting_batch_id = coerce_uuid(posting_batch_id_str)
 
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
@@ -625,7 +635,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         invoice.posted_by_user_id = user_id
         invoice.posted_at = datetime.now(UTC)
 
-        db.commit()
+        db.flush()
 
         logger.info("Updated AR invoice %s status to POSTED", invoice.invoice_number)
 
@@ -655,7 +665,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
                 invoice.posted_by_user_id = None
                 invoice.posted_at = None
 
-                db.commit()
+                db.flush()
                 logger.info(
                     "Reverted AR invoice %s status to %s",
                     invoice.invoice_number,

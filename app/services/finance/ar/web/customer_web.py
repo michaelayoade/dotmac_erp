@@ -746,7 +746,7 @@ class CustomerWebService:
             customer = customer_service.get(db, org_id, customer_id)
             if not customer or customer.organization_id != auth.organization_id:
                 return RedirectResponse(
-                    url=f"/ar/customers/{customer_id}?error=Customer+not+found",
+                    url=f"/finance/ar/customers/{customer_id}?error=Customer+not+found",
                     status_code=303,
                 )
 
@@ -768,18 +768,18 @@ class CustomerWebService:
             )
 
             return RedirectResponse(
-                url=f"/ar/customers/{customer_id}?success=Attachment+uploaded",
+                url=f"/finance/ar/customers/{customer_id}?success=Attachment+uploaded",
                 status_code=303,
             )
 
         except ValueError as e:
             return RedirectResponse(
-                url=f"/ar/customers/{customer_id}?error={str(e)}",
+                url=f"/finance/ar/customers/{customer_id}?error={str(e)}",
                 status_code=303,
             )
         except Exception:
             logger.exception("upload_customer_attachment_response: failed")
             return RedirectResponse(
-                url=f"/ar/customers/{customer_id}?error=Upload+failed",
+                url=f"/finance/ar/customers/{customer_id}?error=Upload+failed",
                 status_code=303,
             )

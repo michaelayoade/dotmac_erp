@@ -386,7 +386,7 @@ class CreditNoteWebService:
                 "category": att.category.value,
                 "description": att.description,
                 "uploaded_at": att.uploaded_at,
-                "download_url": f"/ar/attachments/{att.attachment_id}/download",
+                "download_url": f"/finance/ar/attachments/{att.attachment_id}/download",
             }
             for att in attachments
         ]
@@ -604,7 +604,7 @@ class CreditNoteWebService:
         credit_note = db.get(Invoice, cn_id)
         if not credit_note or credit_note.organization_id != org_id:
             return RedirectResponse(
-                url="/finance/ar/credit-notes?success=Record+updated+successfully",
+                url="/finance/ar/credit-notes?error=Credit+note+not+found",
                 status_code=303,
             )
 
@@ -820,7 +820,7 @@ class CreditNoteWebService:
             credit_note = ar_invoice_service.get(db, org_id, credit_note_id)
             if not credit_note or credit_note.organization_id != auth.organization_id:
                 return RedirectResponse(
-                    url=f"/ar/credit-notes/{credit_note_id}?error=Credit+note+not+found",
+                    url=f"/finance/ar/credit-notes/{credit_note_id}?error=Credit+note+not+found",
                     status_code=303,
                 )
 
@@ -842,18 +842,18 @@ class CreditNoteWebService:
             )
 
             return RedirectResponse(
-                url=f"/ar/credit-notes/{credit_note_id}?success=Attachment+uploaded",
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Attachment+uploaded",
                 status_code=303,
             )
 
         except ValueError as e:
             return RedirectResponse(
-                url=f"/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
                 status_code=303,
             )
         except Exception:
             logger.exception("upload_credit_note_attachment_response: failed")
             return RedirectResponse(
-                url=f"/ar/credit-notes/{credit_note_id}?error=Upload+failed",
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error=Upload+failed",
                 status_code=303,
             )

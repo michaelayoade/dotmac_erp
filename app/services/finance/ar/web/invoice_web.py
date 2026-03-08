@@ -249,6 +249,7 @@ class InvoiceWebService:
         db: Session,
         organization_id: str,
         customer_id: str | None = None,
+        user_id: str | None = None,
     ) -> dict:
         """Get context for invoice create form."""
         logger.debug(
@@ -337,7 +338,7 @@ class InvoiceWebService:
             "cost_centers": get_cost_centers(db, org_id),
             "projects": get_projects(db, org_id),
             "organization_id": str(organization_id),
-            "user_id": "00000000-0000-0000-0000-000000000001",
+            "user_id": user_id or "00000000-0000-0000-0000-000000000001",
             "selected_customer_id": "",
             "locked_customer": False,
         }
@@ -485,7 +486,7 @@ class InvoiceWebService:
                 "category": att.category.value,
                 "description": att.description,
                 "uploaded_at": att.uploaded_at,
-                "download_url": f"/ar/attachments/{att.attachment_id}/download",
+                "download_url": f"/finance/ar/attachments/{att.attachment_id}/download",
             }
             for att in attachments
         ]
@@ -599,7 +600,8 @@ class InvoiceWebService:
         context = base_context(request, auth, "New AR Invoice", "ar")
         context.update(
             self.invoice_form_context(
-                db, str(auth.organization_id), customer_id=customer_id
+                db, str(auth.organization_id), customer_id=customer_id,
+                user_id=str(auth.user_id) if auth.user_id else None,
             )
         )
 
@@ -728,7 +730,10 @@ class InvoiceWebService:
                 )
 
             context = base_context(request, auth, "New AR Invoice", "ar")
-            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context.update(self.invoice_form_context(
+                db, str(auth.organization_id),
+                user_id=str(auth.user_id) if auth.user_id else None,
+            ))
             context["error"] = str(e)
             context["form_data"] = data
             return templates.TemplateResponse(
@@ -941,6 +946,7 @@ class InvoiceWebService:
                 db,
                 str(auth.organization_id),
                 customer_id=str(invoice.customer_id),
+                user_id=str(auth.user_id) if auth.user_id else None,
             )
         )
 
@@ -1042,7 +1048,10 @@ class InvoiceWebService:
                 )
 
             context = base_context(request, auth, "Edit AR Invoice", "ar")
-            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context.update(self.invoice_form_context(
+                db, str(auth.organization_id),
+                user_id=str(auth.user_id) if auth.user_id else None,
+            ))
             context["error"] = str(e)
             context["form_data"] = data
             return templates.TemplateResponse(
@@ -1068,7 +1077,7 @@ class InvoiceWebService:
             invoice = ar_invoice_service.get(db, org_id, invoice_id)
             if not invoice or invoice.organization_id != auth.organization_id:
                 return RedirectResponse(
-                    url=f"/ar/invoices/{invoice_id}?error=Invoice+not+found",
+                    url=f"/finance/ar/invoices/{invoice_id}?error=Invoice+not+found",
                     status_code=303,
                 )
 
@@ -1090,18 +1099,18 @@ class InvoiceWebService:
             )
 
             return RedirectResponse(
-                url=f"/ar/invoices/{invoice_id}?success=Attachment+uploaded",
+                url=f"/finance/ar/invoices/{invoice_id}?success=Attachment+uploaded",
                 status_code=303,
             )
 
         except ValueError as e:
             return RedirectResponse(
-                url=f"/ar/invoices/{invoice_id}?error={str(e)}",
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
             )
         except Exception:
             logger.exception("upload_invoice_attachment_response: failed")
             return RedirectResponse(
-                url=f"/ar/invoices/{invoice_id}?error=Upload+failed",
+                url=f"/finance/ar/invoices/{invoice_id}?error=Upload+failed",
                 status_code=303,
             )

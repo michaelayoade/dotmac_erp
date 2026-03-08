@@ -258,8 +258,8 @@ class ReceiptWebService:
                                 "amount": float(alloc.allocated_amount),
                             }
                         )
-            except Exception:
-                logger.exception("Ignored exception")
+            except (ValueError, KeyError, AttributeError) as exc:
+                logger.warning("Failed to load allocation for receipt %s: %s", receipt_id, exc)
 
         # Determine selected customer (if provided)
         selected_customer_id = None
@@ -408,7 +408,10 @@ class ReceiptWebService:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
             invoices = list(
                 db.scalars(
-                    select(Invoice).where(Invoice.invoice_id.in_(invoice_ids))
+                    select(Invoice).where(
+                        Invoice.organization_id == org_id,
+                        Invoice.invoice_id.in_(invoice_ids),
+                    )
                 ).all()
             )
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
@@ -439,7 +442,7 @@ class ReceiptWebService:
                 "category": att.category.value,
                 "description": att.description,
                 "uploaded_at": att.uploaded_at,
-                "download_url": f"/ar/attachments/{att.attachment_id}/download",
+                "download_url": f"/finance/ar/attachments/{att.attachment_id}/download",
             }
             for att in attachments
         ]
@@ -836,7 +839,7 @@ class ReceiptWebService:
                 return {"success": True, "receipt_id": receipt_id}
 
             return RedirectResponse(
-                url=f"/ar/receipts/{receipt_id}?success=Receipt+updated+successfully",
+                url=f"/finance/ar/receipts/{receipt_id}?success=Receipt+updated+successfully",
                 status_code=303,
             )
 
@@ -901,7 +904,7 @@ class ReceiptWebService:
             receipt = customer_payment_service.get(db, receipt_id, org_id)
             if not receipt:
                 return RedirectResponse(
-                    url=f"/ar/receipts/{receipt_id}?error=Receipt+not+found",
+                    url=f"/finance/ar/receipts/{receipt_id}?error=Receipt+not+found",
                     status_code=303,
                 )
 
@@ -923,18 +926,18 @@ class ReceiptWebService:
             )
 
             return RedirectResponse(
-                url=f"/ar/receipts/{receipt_id}?success=Attachment+uploaded",
+                url=f"/finance/ar/receipts/{receipt_id}?success=Attachment+uploaded",
                 status_code=303,
             )
 
         except ValueError as e:
             return RedirectResponse(
-                url=f"/ar/receipts/{receipt_id}?error={str(e)}",
+                url=f"/finance/ar/receipts/{receipt_id}?error={str(e)}",
                 status_code=303,
             )
         except Exception:
             logger.exception("upload_receipt_attachment_response: failed")
             return RedirectResponse(
-                url=f"/ar/receipts/{receipt_id}?error=Upload+failed",
+                url=f"/finance/ar/receipts/{receipt_id}?error=Upload+failed",
                 status_code=303,
             )

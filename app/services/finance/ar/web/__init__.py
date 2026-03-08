@@ -151,13 +151,13 @@ class ARWebService(  # type: ignore[misc]
         attachment_service.delete(db, attachment_id, auth.organization_id)
 
         redirect_map = {
-            "CUSTOMER_INVOICE": f"/ar/invoices/{entity_id}",
-            "CUSTOMER_PAYMENT": f"/ar/receipts/{entity_id}",
-            "CREDIT_NOTE": f"/ar/credit-notes/{entity_id}",
-            "CUSTOMER": f"/ar/customers/{entity_id}",
+            "CUSTOMER_INVOICE": f"/finance/ar/invoices/{entity_id}",
+            "CUSTOMER_PAYMENT": f"/finance/ar/receipts/{entity_id}",
+            "CREDIT_NOTE": f"/finance/ar/credit-notes/{entity_id}",
+            "CUSTOMER": f"/finance/ar/customers/{entity_id}",
         }
 
-        redirect_url = redirect_map.get(entity_type, "/ar/invoices")
+        redirect_url = redirect_map.get(entity_type, "/finance/ar/invoices")
         return RedirectResponse(
             url=f"{redirect_url}?success=Attachment+deleted",
             status_code=303,

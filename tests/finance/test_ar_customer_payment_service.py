@@ -341,6 +341,7 @@ def test_void_and_bounce_reverse_allocations():
         payment_id=uuid4(),
         organization_id=org_id,
         status=PaymentStatus.CLEARED,
+        journal_entry_id=None,
     )
     invoice = SimpleNamespace(
         amount_paid=Decimal("50.00"),
