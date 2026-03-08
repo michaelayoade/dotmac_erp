@@ -347,6 +347,7 @@ def test_void_and_bounce_reverse_allocations():
         amount_paid=Decimal("50.00"),
         total_amount=Decimal("100.00"),
         status=InvoiceStatus.PAID,
+        due_date=date(2099, 12, 31),
     )
     allocation = SimpleNamespace(invoice_id=uuid4(), allocated_amount=Decimal("50.00"))
 

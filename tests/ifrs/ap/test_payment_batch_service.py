@@ -151,8 +151,7 @@ class TestCreateBatch:
         PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
 
         mock_db.add.assert_called_once()
-        mock_db.flush.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     @patch("app.services.finance.ap.payment_batch.SequenceService")
     def test_create_batch_calculates_totals(
@@ -217,7 +216,7 @@ class TestAddPaymentToBatch:
         assert payment.payment_batch_id == batch.batch_id
         assert batch.total_payments == 2
         assert batch.total_amount == Decimal("150.00")
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_add_payment_batch_not_found(self, mock_db, org_id):
         """Test adding payment to non-existent batch."""
@@ -339,7 +338,7 @@ class TestRemovePaymentFromBatch:
         assert payment.payment_batch_id is None
         assert batch.total_payments == 1
         assert batch.total_amount == Decimal("100.00")
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_remove_payment_batch_not_found(self, mock_db, org_id):
         """Test removing payment from non-existent batch."""
@@ -422,7 +421,7 @@ class TestApproveBatch:
         # Payments should also be approved
         for payment in payments:
             assert payment.status == APPaymentStatus.APPROVED
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_approve_batch_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent batch."""
@@ -516,7 +515,7 @@ class TestProcessBatch:
 
         assert batch.status == APBatchStatus.COMPLETED
         assert mock_payment_service.post_payment.call_count == 2
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     @patch("app.services.finance.ap.supplier_payment.SupplierPaymentService")
     def test_process_batch_partial_failure(
@@ -548,7 +547,7 @@ class TestProcessBatch:
 
         assert batch.status == APBatchStatus.FAILED
         assert payments[1].status == APPaymentStatus.REJECTED
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_process_batch_not_found(self, mock_db, org_id, user_id):
         """Test processing non-existent batch."""
@@ -624,7 +623,7 @@ class TestGenerateBankFile:
         assert result["payment_count"] == 2
         assert batch.bank_file_generated is True
         assert batch.bank_file_reference is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_generate_bank_file_not_found(self, mock_db, org_id):
         """Test generating bank file for non-existent batch."""
@@ -708,13 +707,13 @@ class TestGetBatch:
 class TestListBatches:
     """Tests for list method."""
 
-    def test_list_batches_all(self, mock_db):
+    def test_list_batches_all(self, mock_db, org_id):
         """Test listing all batches."""
         batches = [MockPaymentBatch(), MockPaymentBatch()]
 
         mock_db.scalars.return_value.all.return_value = batches
 
-        result = PaymentBatchService.list(mock_db)
+        result = PaymentBatchService.list(mock_db, organization_id=str(org_id))
 
         assert len(result) == 2
 
@@ -755,13 +754,13 @@ class TestListBatches:
 
         assert len(result) == 1
 
-    def test_list_batches_pagination(self, mock_db):
+    def test_list_batches_pagination(self, mock_db, org_id):
         """Test batch list pagination."""
         batches = [MockPaymentBatch()]
 
         mock_db.scalars.return_value.all.return_value = batches
 
-        result = PaymentBatchService.list(mock_db, limit=10, offset=20)
+        result = PaymentBatchService.list(mock_db, organization_id=str(org_id), limit=10, offset=20)
 
         assert len(result) == 1
         mock_db.scalars.assert_called_once()

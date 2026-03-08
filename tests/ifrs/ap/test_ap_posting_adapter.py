@@ -48,6 +48,8 @@ class MockSupplierInvoice:
         ap_control_account_id: uuid.UUID = None,
         journal_entry_id: uuid.UUID = None,
         correlation_id: uuid.UUID = None,
+        stamp_duty_amount: Decimal = Decimal("0"),
+        stamp_duty_code_id: uuid.UUID = None,
     ):
         self.invoice_id = invoice_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -65,6 +67,8 @@ class MockSupplierInvoice:
         self.ap_control_account_id = ap_control_account_id or uuid.uuid4()
         self.journal_entry_id = journal_entry_id
         self.correlation_id = correlation_id or uuid.uuid4()
+        self.stamp_duty_amount = stamp_duty_amount
+        self.stamp_duty_code_id = stamp_duty_code_id
 
 
 class MockSupplierInvoiceLine:
@@ -1380,7 +1384,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalar.return_value = None
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1406,9 +1410,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalar.return_value = fiscal_period
 
         result = create_tax_transactions(
             db=mock_db,

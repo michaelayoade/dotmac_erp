@@ -233,7 +233,7 @@ class ExpenseAPAdapter:
                     action_record.status = ExpenseClaimActionStatus.FAILED
                     db.flush()
             except Exception:
-                pass
+                logger.debug("Failed to mark action as FAILED for claim %s", claim_id)
             logger.exception(f"Error creating AP invoice for claim {claim_id}")
             return APPostingResult(
                 success=False,
