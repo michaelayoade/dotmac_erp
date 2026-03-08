@@ -100,7 +100,7 @@ class PaymentWebService:
         org_id = coerce_uuid(organization_id)
         from app.services.finance.ap.payment_query import build_payment_query
 
-        query = build_payment_query(
+        base_stmt = build_payment_query(
             db=db,
             organization_id=organization_id,
             search=search,
@@ -111,7 +111,7 @@ class PaymentWebService:
         )
 
         total_count = (
-            query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
+            db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0
         )
 
         sort_dir_norm = (sort_dir or "desc").lower()
@@ -127,13 +127,13 @@ class PaymentWebService:
         order_col = order_map.get(sort or "", SupplierPayment.payment_date)
         order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
 
-        payments = (
-            query.with_entities(SupplierPayment, Supplier)
+        # Add Supplier to result columns so we get (SupplierPayment, Supplier) tuples
+        payments = db.execute(
+            base_stmt.add_columns(Supplier)
             .order_by(order_expr, SupplierPayment.payment_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         payments_view = []
         for payment, supplier in payments:
@@ -328,7 +328,8 @@ class PaymentWebService:
         payment = None
         try:
             payment = supplier_payment_service.get(db, payment_id)
-        except Exception:
+        except (ValueError, LookupError) as e:
+            logger.warning("Failed to load entity: %s", e)
             payment = None
 
         if not payment or payment.organization_id != org_id:
@@ -337,7 +338,8 @@ class PaymentWebService:
         supplier = None
         try:
             supplier = supplier_service.get(db, org_id, str(payment.supplier_id))
-        except Exception:
+        except (ValueError, LookupError) as e:
+            logger.warning("Failed to load entity: %s", e)
             supplier = None
 
         allocations = supplier_payment_service.get_payment_allocations(

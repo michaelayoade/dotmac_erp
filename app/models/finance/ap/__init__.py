@@ -12,9 +12,11 @@ from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
+    PostingStatus,
     SupplierInvoice,
     SupplierInvoiceStatus,
     SupplierInvoiceType,
+    ThreeWayMatchStatus,
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
@@ -36,6 +38,8 @@ __all__ = [
     "SupplierInvoice",
     "SupplierInvoiceType",
     "SupplierInvoiceStatus",
+    "PostingStatus",
+    "ThreeWayMatchStatus",
     "SupplierInvoiceLine",
     "SupplierInvoiceLineTax",
     "SupplierPayment",

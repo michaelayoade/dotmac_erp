@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
+    PostingStatus,
     SupplierInvoice,
     SupplierInvoiceStatus,
     SupplierInvoiceType,
@@ -143,10 +144,10 @@ class APInvoicePostingSaga(SagaOrchestrator):
         invoice = db.get(SupplierInvoice, invoice_id)
         if not invoice:
             return StepResult(success=False, error="Supplier invoice not found")
-        if not invoice or invoice.organization_id != org_id:
+        if invoice.organization_id != org_id:
             return StepResult(
                 success=False,
-                error="Invoice not found",
+                error="Invoice not found for organization",
             )
 
         if invoice.status != SupplierInvoiceStatus.APPROVED:
@@ -212,6 +213,10 @@ class APInvoicePostingSaga(SagaOrchestrator):
         invoice = db.get(SupplierInvoice, invoice_id)
         if not invoice:
             return StepResult(success=False, error="Supplier invoice not found")
+        if invoice.organization_id != org_id:
+            return StepResult(
+                success=False, error="Invoice does not belong to organization"
+            )
 
         supplier = db.get(Supplier, invoice.supplier_id)
         if not supplier:
@@ -628,7 +633,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
         original_status = invoice.status.value
 
         invoice.status = SupplierInvoiceStatus.POSTED
-        invoice.posting_status = "POSTED"
+        invoice.posting_status = PostingStatus.POSTED
         invoice.journal_entry_id = journal_entry_id
         invoice.posting_batch_id = posting_batch_id
         invoice.posted_by_user_id = user_id
@@ -660,7 +665,7 @@ class APInvoicePostingSaga(SagaOrchestrator):
             invoice = db.get(SupplierInvoice, invoice_id)
             if invoice:
                 invoice.status = SupplierInvoiceStatus(original_status)
-                invoice.posting_status = "NOT_POSTED"
+                invoice.posting_status = PostingStatus.NOT_POSTED
                 invoice.journal_entry_id = None
                 invoice.posting_batch_id = None
                 invoice.posted_by_user_id = None

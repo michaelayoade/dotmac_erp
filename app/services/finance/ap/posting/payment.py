@@ -11,9 +11,12 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalType
@@ -137,22 +140,71 @@ def post_payment(
     gross_amount = payment.gross_amount or (payment.amount + wht_amount)
     net_amount = payment.amount
 
-    gross_functional = gross_amount * exchange_rate
     net_functional = net_amount * exchange_rate
     wht_functional = wht_amount * exchange_rate
 
-    # Build journal lines
-    journal_lines = [
-        # Debit AP Control (reduce liability) - GROSS amount
-        JournalLineInput(
-            account_id=supplier.ap_control_account_id,
-            debit_amount=gross_amount,
-            credit_amount=Decimal("0"),
-            debit_amount_functional=gross_functional,
-            credit_amount_functional=Decimal("0"),
-            description=f"Payment to {supplier.legal_name}",
-        ),
-        # Credit Bank/Cash - NET amount (what we actually pay)
+    # Resolve AP control account from allocated invoices so the debit
+    # matches the account originally credited when each invoice was posted.
+    # If multiple invoices use different AP control accounts we create one
+    # debit line per distinct account, weighted by allocated amount.
+    allocations = list(
+        db.scalars(
+            select(APPaymentAllocation).where(
+                APPaymentAllocation.payment_id == pay_id,
+            )
+        ).all()
+    )
+
+    # Map each distinct AP control account to its share of the gross amount.
+    ap_account_amounts: dict[UUID, Decimal] = {}
+    if allocations:
+        for alloc in allocations:
+            inv = db.get(SupplierInvoice, alloc.invoice_id)
+            if not inv or inv.organization_id != org_id:
+                continue
+            acct_id = inv.ap_control_account_id
+            ap_account_amounts[acct_id] = (
+                ap_account_amounts.get(acct_id, Decimal("0")) + alloc.allocated_amount
+            )
+
+    # Fall back to the supplier's current default when there are no
+    # allocations (e.g. on-account / advance payments).
+    if not ap_account_amounts:
+        ap_account_amounts[supplier.ap_control_account_id] = gross_amount
+
+    # Scale allocation totals so they sum to the payment gross amount,
+    # which may differ from the sum of allocations when WHT is involved.
+    alloc_total = sum(ap_account_amounts.values())
+    if alloc_total and alloc_total != gross_amount:
+        scale = gross_amount / alloc_total
+        ap_account_amounts = {
+            acct: (amt * scale).quantize(Decimal("0.000001"))
+            for acct, amt in ap_account_amounts.items()
+        }
+        # Adjust rounding on the last entry so the sum matches exactly.
+        rounding_diff = gross_amount - sum(ap_account_amounts.values())
+        if rounding_diff:
+            last_key = list(ap_account_amounts.keys())[-1]
+            ap_account_amounts[last_key] += rounding_diff
+
+    # Build journal lines — one AP debit line per distinct control account
+    journal_lines: list[JournalLineInput] = []
+    for acct_id, acct_amount in ap_account_amounts.items():
+        acct_functional = acct_amount * exchange_rate
+        journal_lines.append(
+            # Debit AP Control (reduce liability)
+            JournalLineInput(
+                account_id=acct_id,
+                debit_amount=acct_amount,
+                credit_amount=Decimal("0"),
+                debit_amount_functional=acct_functional,
+                credit_amount_functional=Decimal("0"),
+                description=f"Payment to {supplier.legal_name}",
+            ),
+        )
+
+    # Credit Bank/Cash - NET amount (what we actually pay)
+    journal_lines.append(
         JournalLineInput(
             account_id=bank_gl_account_id,
             debit_amount=Decimal("0"),
@@ -161,7 +213,7 @@ def post_payment(
             credit_amount_functional=net_functional,
             description=f"AP Payment: {payment.payment_number}",
         ),
-    ]
+    )
 
     # Add WHT Payable line if WHT is withheld
     # WHT we withhold goes to tax_collected_account (liability to remit to tax authority)

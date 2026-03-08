@@ -200,7 +200,7 @@ class SupplierWebService:
         org_id = coerce_uuid(organization_id)
         from app.services.finance.ap.supplier_query import build_supplier_query
 
-        query = build_supplier_query(
+        base_stmt = build_supplier_query(
             db=db,
             organization_id=organization_id,
             search=search,
@@ -208,7 +208,7 @@ class SupplierWebService:
         )
 
         total_count = (
-            query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
+            db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0
         )
         supplier_sort_map: dict[str, Any] = {
             "legal_name": Supplier.legal_name,
@@ -217,14 +217,14 @@ class SupplierWebService:
             # UI "Status" column maps to active/inactive flag on Supplier.
             "status": Supplier.is_active,
         }
-        query = apply_sort(
-            query,
+        sorted_stmt = apply_sort(
+            base_stmt,
             sort,
             sort_dir,
             supplier_sort_map,
             default=Supplier.legal_name.asc(),
         )
-        suppliers = query.limit(limit).offset(offset).all()
+        suppliers = list(db.scalars(sorted_stmt.limit(limit).offset(offset)).all())
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
@@ -352,7 +352,8 @@ class SupplierWebService:
         if supplier_id:
             try:
                 supplier = supplier_service.get(db, org_id, supplier_id)
-            except Exception:
+            except (ValueError, LookupError) as e:
+                logger.warning("Failed to load entity: %s", e)
                 supplier = None
         supplier_view = supplier_form_view(supplier) if supplier else None
 
@@ -384,7 +385,8 @@ class SupplierWebService:
         supplier = None
         try:
             supplier = supplier_service.get(db, org_id, supplier_id)
-        except Exception:
+        except (ValueError, LookupError) as e:
+            logger.warning("Failed to load entity: %s", e)
             supplier = None
 
         if not supplier or supplier.organization_id != org_id:

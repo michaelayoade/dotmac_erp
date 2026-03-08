@@ -74,7 +74,9 @@ class GoodsReceiptLine(Base):
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    inspection_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    inspection_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     inspection_status: Mapped[InspectionStatus] = mapped_column(
         Enum(InspectionStatus, name="inspection_status"),
         nullable=False,

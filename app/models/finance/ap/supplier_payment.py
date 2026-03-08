@@ -81,6 +81,7 @@ class SupplierPayment(Base):
     )
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
         nullable=False,
     )
     supplier_id: Mapped[uuid.UUID] = mapped_column(
@@ -91,6 +92,7 @@ class SupplierPayment(Base):
 
     payment_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("ap.payment_batch.batch_id"),
         nullable=True,
     )
     payment_number: Mapped[str] = mapped_column(String(30), nullable=False)
@@ -114,7 +116,9 @@ class SupplierPayment(Base):
 
     # Bank
     bank_account_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("banking.bank_accounts.bank_account_id"),
+        nullable=False,
     )
     reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 

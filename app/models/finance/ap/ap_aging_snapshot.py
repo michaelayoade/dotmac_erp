@@ -31,6 +31,7 @@ class APAgingSnapshot(Base):
     __tablename__ = "ap_aging_snapshot"
     __table_args__ = (
         UniqueConstraint(
+            "organization_id",
             "fiscal_period_id",
             "supplier_id",
             "aging_bucket",
@@ -47,10 +48,13 @@ class APAgingSnapshot(Base):
     )
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
         nullable=False,
     )
     fiscal_period_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("gl.fiscal_period.fiscal_period_id"),
+        nullable=False,
     )
     snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
 

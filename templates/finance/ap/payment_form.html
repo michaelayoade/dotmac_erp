@@ -33,8 +33,8 @@
                         <option value="">Select supplier</option>
                         {% for supplier in suppliers_list %}
                         <option value="{{ supplier.supplier_id }}"
-                                data-wht-applicable="{{ supplier.withholding_tax_applicable|default(false)|lower }}"
-                                data-wht-code-id="{{ supplier.withholding_tax_code_id|default('') }}"
+                                data-wht-applicable="{{ (supplier.withholding_tax_applicable if supplier.withholding_tax_applicable else false)|lower }}"
+                                data-wht-code-id="{{ supplier.withholding_tax_code_id if supplier.withholding_tax_code_id else '' }}"
                                 {% if invoice and invoice.supplier_id|string == supplier.supplier_id|string %}selected{% endif %}>
                             {{ supplier.supplier_name }} ({{ supplier.supplier_code }})
                         </option>

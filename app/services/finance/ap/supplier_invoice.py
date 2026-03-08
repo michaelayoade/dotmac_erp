@@ -24,6 +24,7 @@ from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
+    PostingStatus,
     SupplierInvoice,
     SupplierInvoiceStatus,
     SupplierInvoiceType,
@@ -478,9 +479,6 @@ class SupplierInvoiceService(ListResponseMixin):
                     )
                     db.add(line_tax)
 
-        db.commit()
-        db.refresh(invoice)
-
         fire_audit_event(
             db=db,
             organization_id=org_id,
@@ -496,6 +494,8 @@ class SupplierInvoiceService(ListResponseMixin):
             },
             user_id=user_id,
         )
+
+        db.flush()
 
         return invoice
 
@@ -715,8 +715,7 @@ class SupplierInvoiceService(ListResponseMixin):
                     )
                     db.add(line_tax)
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -792,8 +791,7 @@ class SupplierInvoiceService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -878,8 +876,7 @@ class SupplierInvoiceService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -941,7 +938,7 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.posted_at = datetime.now(UTC)
         invoice.journal_entry_id = result.journal_entry_id
         invoice.posting_batch_id = result.posting_batch_id
-        invoice.posting_status = "POSTED"
+        invoice.posting_status = PostingStatus.POSTED
 
         # Update item costs from invoice lines
         SupplierInvoiceService._update_item_costs_from_invoice(db, org_id, invoice)
@@ -976,8 +973,7 @@ class SupplierInvoiceService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -1038,7 +1034,7 @@ class SupplierInvoiceService(ListResponseMixin):
             if result.success:
                 invoice.journal_entry_id = result.journal_entry_id
                 invoice.posting_batch_id = result.posting_batch_id
-                invoice.posting_status = "POSTED"
+                invoice.posting_status = PostingStatus.POSTED
                 logger.info(
                     "Auto-posted AP invoice %s (journal %s)",
                     invoice.invoice_id,
@@ -1119,8 +1115,7 @@ class SupplierInvoiceService(ListResponseMixin):
             reason=reason,
         )
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -1160,8 +1155,7 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice.status = SupplierInvoiceStatus.ON_HOLD
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -1198,8 +1192,7 @@ class SupplierInvoiceService(ListResponseMixin):
         else:
             invoice.status = SupplierInvoiceStatus.SUBMITTED
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -1244,8 +1237,7 @@ class SupplierInvoiceService(ListResponseMixin):
         else:
             invoice.status = SupplierInvoiceStatus.PARTIALLY_PAID
 
-        db.commit()
-        db.refresh(invoice)
+        db.flush()
 
         return invoice
 
@@ -1517,7 +1509,7 @@ class SupplierInvoiceService(ListResponseMixin):
             delete(SupplierInvoiceLine).where(SupplierInvoiceLine.invoice_id == inv_id)
         )
         db.delete(invoice)
-        db.commit()
+        db.flush()
 
 
 # Module-level singleton instance

@@ -207,8 +207,7 @@ class SupplierService(ListResponseMixin):
         )
 
         db.add(supplier)
-        db.commit()
-        db.refresh(supplier)
+        db.flush()
 
         return supplier
 
@@ -288,8 +287,7 @@ class SupplierService(ListResponseMixin):
         supplier.primary_contact = input.primary_contact
         supplier.bank_details = input.bank_details
 
-        db.commit()
-        db.refresh(supplier)
+        db.flush()
 
         return supplier
 
@@ -377,8 +375,7 @@ class SupplierService(ListResponseMixin):
                     SupplierService._check_no_outstanding_balance(db, supplier)
                     supplier.is_active = False
 
-        db.commit()
-        db.refresh(supplier)
+        db.flush()
 
         return supplier
 
@@ -521,7 +518,7 @@ class SupplierService(ListResponseMixin):
             )
 
         db.delete(supplier)
-        db.commit()
+        db.flush()
 
     @staticmethod
     def get(
@@ -612,45 +609,28 @@ class SupplierService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         org_id = coerce_uuid(organization_id)
-        try:
-            query = db.query(Supplier).filter(Supplier.organization_id == org_id)
+        stmt = select(Supplier).where(Supplier.organization_id == org_id)
 
-            if supplier_type:
-                query = query.filter(Supplier.supplier_type == supplier_type)
+        if supplier_type:
+            stmt = stmt.where(Supplier.supplier_type == supplier_type)
 
-            if is_active is not None:
-                query = query.filter(Supplier.is_active == is_active)
+        if is_active is not None:
+            stmt = stmt.where(Supplier.is_active == is_active)
 
-            if is_related_party is not None:
-                query = query.filter(Supplier.is_related_party == is_related_party)
-            if search:
-                query = apply_search_filter(query, Supplier, search)
+        if is_related_party is not None:
+            stmt = stmt.where(Supplier.is_related_party == is_related_party)
 
-            return list(
-                query.order_by(Supplier.legal_name).limit(limit).offset(offset).all()
+        if search:
+            pattern = f"%{search}%"
+            stmt = stmt.where(
+                Supplier.supplier_code.ilike(pattern)
+                | Supplier.legal_name.ilike(pattern)
+                | Supplier.trading_name.ilike(pattern)
+                | Supplier.tax_identification_number.ilike(pattern)
             )
-        except Exception:
-            stmt = select(Supplier).where(Supplier.organization_id == org_id)
 
-            if supplier_type:
-                stmt = stmt.where(Supplier.supplier_type == supplier_type)
-
-            if is_active is not None:
-                stmt = stmt.where(Supplier.is_active == is_active)
-
-            if is_related_party is not None:
-                stmt = stmt.where(Supplier.is_related_party == is_related_party)
-            if search:
-                pattern = f"%{search}%"
-                stmt = stmt.where(
-                    Supplier.supplier_code.ilike(pattern)
-                    | Supplier.legal_name.ilike(pattern)
-                    | Supplier.trading_name.ilike(pattern)
-                    | Supplier.tax_identification_number.ilike(pattern)
-                )
-
-            stmt = stmt.order_by(Supplier.legal_name)
-            return list(db.scalars(stmt.limit(limit).offset(offset)))
+        stmt = stmt.order_by(Supplier.legal_name).limit(limit).offset(offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def get_supplier_summary(

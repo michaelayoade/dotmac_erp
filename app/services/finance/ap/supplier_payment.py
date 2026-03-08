@@ -353,11 +353,7 @@ class SupplierPaymentService(ListResponseMixin):
             user_id=user_id,
         )
 
-        if auto_commit:
-            db.commit()
-            db.refresh(payment)
-        else:
-            db.flush()
+        db.flush()
 
         return payment
 
@@ -441,8 +437,7 @@ class SupplierPaymentService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -501,11 +496,17 @@ class SupplierPaymentService(ListResponseMixin):
         payment.journal_entry_id = result.journal_entry_id
         payment.posting_batch_id = result.posting_batch_id
 
-        # Apply allocations to invoices
+        # Apply allocations to invoices (join through SupplierPayment for org_id filter)
         allocations = list(
             db.scalars(
-                select(APPaymentAllocation).where(
-                    APPaymentAllocation.payment_id == pay_id
+                select(APPaymentAllocation)
+                .join(
+                    SupplierPayment,
+                    APPaymentAllocation.payment_id == SupplierPayment.payment_id,
+                )
+                .where(
+                    APPaymentAllocation.payment_id == pay_id,
+                    SupplierPayment.organization_id == org_id,
                 )
             ).all()
         )
@@ -565,8 +566,7 @@ class SupplierPaymentService(ListResponseMixin):
                 payment.payment_id,
             )
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -676,8 +676,14 @@ class SupplierPaymentService(ListResponseMixin):
         if payment.status == APPaymentStatus.SENT:
             allocations = list(
                 db.scalars(
-                    select(APPaymentAllocation).where(
-                        APPaymentAllocation.payment_id == pay_id
+                    select(APPaymentAllocation)
+                    .join(
+                        SupplierPayment,
+                        APPaymentAllocation.payment_id == SupplierPayment.payment_id,
+                    )
+                    .where(
+                        APPaymentAllocation.payment_id == pay_id,
+                        SupplierPayment.organization_id == org_id,
                     )
                 ).all()
             )
@@ -706,8 +712,7 @@ class SupplierPaymentService(ListResponseMixin):
             user_id=coerce_uuid(voided_by_user_id),
         )
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -744,8 +749,7 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment.status = APPaymentStatus.CLEARED
 
-        db.commit()
-        db.refresh(payment)
+        db.flush()
 
         return payment
 
@@ -832,7 +836,7 @@ class SupplierPaymentService(ListResponseMixin):
             delete(APPaymentAllocation).where(APPaymentAllocation.payment_id == pay_id)
         )
         db.delete(payment)
-        db.commit()
+        db.flush()
 
     @staticmethod
     def list(

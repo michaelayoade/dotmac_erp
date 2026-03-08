@@ -54,12 +54,25 @@ class SupplierInvoiceStatus(str, enum.Enum):
     @classmethod
     def outstanding(cls) -> frozenset["SupplierInvoiceStatus"]:
         """Statuses where the invoice has an unpaid balance."""
-        return frozenset({cls.POSTED, cls.PARTIALLY_PAID, cls.ON_HOLD})
+        return frozenset({cls.APPROVED, cls.POSTED, cls.PARTIALLY_PAID, cls.ON_HOLD})
 
     @classmethod
     def terminal(cls) -> frozenset["SupplierInvoiceStatus"]:
         """Statuses where the invoice is fully settled or cancelled."""
         return frozenset({cls.PAID, cls.VOID})
+
+
+class PostingStatus(str, enum.Enum):
+    NOT_POSTED = "NOT_POSTED"
+    PENDING = "PENDING"
+    POSTED = "POSTED"
+
+
+class ThreeWayMatchStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    MATCHED = "MATCHED"
+    UNMATCHED = "UNMATCHED"
+    EXCEPTION = "EXCEPTION"
 
 
 class SupplierInvoice(Base, VersionedMixin):
@@ -93,6 +106,7 @@ class SupplierInvoice(Base, VersionedMixin):
     )
     organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
         nullable=False,
     )
     supplier_id: Mapped[uuid.UUID] = mapped_column(
@@ -150,6 +164,7 @@ class SupplierInvoice(Base, VersionedMixin):
     # Accounting
     ap_control_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("gl.account.account_id"),
         nullable=False,
     )
     journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -162,18 +177,17 @@ class SupplierInvoice(Base, VersionedMixin):
     )
 
     # Posting status
-    posting_status: Mapped[str] = mapped_column(
-        String(20),
+    posting_status: Mapped[PostingStatus] = mapped_column(
+        Enum(PostingStatus, name="posting_status", schema="ap"),
         nullable=False,
-        default="NOT_POSTED",
+        default=PostingStatus.NOT_POSTED,
     )
 
     # Three-way match
-    three_way_match_status: Mapped[str] = mapped_column(
-        String(20),
+    three_way_match_status: Mapped[ThreeWayMatchStatus] = mapped_column(
+        Enum(ThreeWayMatchStatus, name="three_way_match_status", schema="ap"),
         nullable=False,
-        default="PENDING",
-        comment="PENDING, MATCHED, UNMATCHED, EXCEPTION",
+        default=ThreeWayMatchStatus.PENDING,
     )
 
     # Withholding

@@ -375,8 +375,7 @@ class PurchaseOrderService(ListResponseMixin):
             )
             db.add(line)
 
-        db.commit()
-        db.refresh(po)
+        db.flush()
 
         return po
 
@@ -488,8 +487,7 @@ class PurchaseOrderService(ListResponseMixin):
                 )
             )
 
-        db.commit()
-        db.refresh(po)
+        db.flush()
         return po
 
     @staticmethod
@@ -534,7 +532,7 @@ class PurchaseOrderService(ListResponseMixin):
             )
 
         db.delete(po)
-        db.commit()
+        db.flush()
 
     @staticmethod
     def submit_for_approval(
@@ -597,8 +595,7 @@ class PurchaseOrderService(ListResponseMixin):
         except Exception as e:
             logger.exception("Workflow event failed for PO %s submit: %s", po_id, e)
 
-        db.commit()
-        db.refresh(po)
+        db.flush()
 
         return po
 
@@ -679,8 +676,7 @@ class PurchaseOrderService(ListResponseMixin):
                 "Supplier notification failed for PO %s approval: %s", po_id, e
             )
 
-        db.commit()
-        db.refresh(po)
+        db.flush()
 
         return po
 
@@ -747,8 +743,7 @@ class PurchaseOrderService(ListResponseMixin):
         except Exception as e:
             logger.exception("Workflow event failed for PO %s cancel: %s", po_id, e)
 
-        db.commit()
-        db.refresh(po)
+        db.flush()
 
         return po
 
@@ -786,8 +781,7 @@ class PurchaseOrderService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Cannot close cancelled PO")
 
         po.status = POStatus.CLOSED
-        db.commit()
-        db.refresh(po)
+        db.flush()
 
         return po
 
@@ -830,8 +824,7 @@ class PurchaseOrderService(ListResponseMixin):
         elif po.amount_received > 0:
             po.status = POStatus.PARTIALLY_RECEIVED
 
-        db.commit()
-        db.refresh(po)
+        db.flush()
 
         return po
 
@@ -877,7 +870,7 @@ class PurchaseOrderService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         supplier_id: str | None = None,
         status: POStatus | None = None,
         from_date: date | None = None,
@@ -890,7 +883,7 @@ class PurchaseOrderService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization
+            organization_id: Organization scope (required)
             supplier_id: Filter by supplier
             status: Filter by status
             from_date: Filter by start date
@@ -900,13 +893,16 @@ class PurchaseOrderService(ListResponseMixin):
 
         Returns:
             List of PurchaseOrder objects
-        """
-        stmt = select(PurchaseOrder)
 
-        if organization_id:
-            stmt = stmt.where(
-                PurchaseOrder.organization_id == coerce_uuid(organization_id)
-            )
+        Raises:
+            ValueError: If organization_id is not provided
+        """
+        if not organization_id:
+            raise ValueError("organization_id is required for multi-tenant isolation")
+
+        stmt = select(PurchaseOrder).where(
+            PurchaseOrder.organization_id == coerce_uuid(organization_id)
+        )
 
         if supplier_id:
             stmt = stmt.where(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))

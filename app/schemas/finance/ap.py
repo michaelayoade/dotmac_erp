@@ -116,7 +116,7 @@ class APInvoiceCreate(BaseModel):
 
     supplier_id: UUID
     invoice_type: str = Field(default="standard", max_length=20)
-    invoice_number: str = Field(max_length=50)
+    invoice_number: str = Field(max_length=30)
     invoice_date: date
     received_date: date | None = None
     due_date: date
@@ -138,7 +138,7 @@ class APInvoiceLineRead(BaseModel):
     unit_price: Decimal
     line_amount: Decimal
     tax_amount: Decimal
-    total_amount: Decimal
+    total_amount: Decimal  # computed property on model
 
 
 class APInvoiceRead(BaseModel):
@@ -308,7 +308,6 @@ class GRRead(BaseModel):
     receipt_number: str
     receipt_date: date
     status: str
-    total_amount: Decimal
 
 
 # =============================================================================

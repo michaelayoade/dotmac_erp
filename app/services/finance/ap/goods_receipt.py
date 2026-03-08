@@ -281,8 +281,7 @@ class GoodsReceiptService(ListResponseMixin):
         # Update PO received amount and status
         GoodsReceiptService._update_po_status(db, po)
 
-        db.commit()
-        db.refresh(receipt)
+        db.flush()
 
         return receipt
 
@@ -323,8 +322,7 @@ class GoodsReceiptService(ListResponseMixin):
             )
 
         receipt.status = ReceiptStatus.INSPECTING
-        db.commit()
-        db.refresh(receipt)
+        db.flush()
 
         return receipt
 
@@ -420,6 +418,8 @@ class GoodsReceiptService(ListResponseMixin):
         # If rejected, reverse PO line quantities
         if receipt.status == ReceiptStatus.REJECTED:
             GoodsReceiptService._reverse_po_quantities(db, receipt)
+        elif receipt.status == ReceiptStatus.PARTIAL:
+            GoodsReceiptService._reverse_rejected_quantities(db, receipt)
 
         # Create inventory transactions for accepted lines (if any)
         if receipt.status in [ReceiptStatus.ACCEPTED, ReceiptStatus.PARTIAL]:
@@ -434,8 +434,7 @@ class GoodsReceiptService(ListResponseMixin):
                 user_id=receipt.received_by_user_id,
             )
 
-        db.commit()
-        db.refresh(receipt)
+        db.flush()
 
         return receipt
 
@@ -494,8 +493,7 @@ class GoodsReceiptService(ListResponseMixin):
             user_id=receipt.received_by_user_id,
         )
 
-        db.commit()
-        db.refresh(receipt)
+        db.flush()
 
         return receipt
 
@@ -639,7 +637,33 @@ class GoodsReceiptService(ListResponseMixin):
 
         # Recalculate PO status
         po = db.scalars(
-            select(PurchaseOrder).where(PurchaseOrder.po_id == receipt.po_id)
+            select(PurchaseOrder).where(
+                PurchaseOrder.po_id == receipt.po_id,
+                PurchaseOrder.organization_id == receipt.organization_id,
+            )
+        ).first()
+        if po:
+            GoodsReceiptService._update_po_status(db, po)
+
+    @staticmethod
+    def _reverse_rejected_quantities(db: Session, receipt: GoodsReceipt) -> None:
+        """Reverse only rejected quantities on PO lines for a partial receipt."""
+        for line in receipt.lines:
+            if line.quantity_rejected > 0:
+                po_line = db.scalars(
+                    select(PurchaseOrderLine).where(
+                        PurchaseOrderLine.line_id == line.po_line_id
+                    )
+                ).first()
+                if po_line:
+                    po_line.quantity_received -= line.quantity_rejected
+
+        # Recalculate PO status
+        po = db.scalars(
+            select(PurchaseOrder).where(
+                PurchaseOrder.po_id == receipt.po_id,
+                PurchaseOrder.organization_id == receipt.organization_id,
+            )
         ).first()
         if po:
             GoodsReceiptService._update_po_status(db, po)

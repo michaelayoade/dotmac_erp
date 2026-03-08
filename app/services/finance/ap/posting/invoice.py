@@ -3,7 +3,9 @@ AP Invoice Posting - Post supplier invoices to GL.
 
 Transforms supplier invoices into journal entries with:
 - Debit: Expense/Asset/Inventory accounts (from invoice lines)
-- Credit: AP Control account
+- Debit: Stamp duty expense account (if stamp_duty_amount > 0)
+- Credit: WHT payable account (if withholding_tax_amount > 0)
+- Credit: AP Control account (net of WHT, plus stamp duty)
 """
 
 from datetime import date
@@ -21,6 +23,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.gl.journal_entry import JournalType
+from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.common import coerce_uuid
 from app.services.finance.ap.posting.helpers import (
     create_assets_for_capitalizable_lines,
@@ -186,17 +189,113 @@ def post_invoice(
                 )
             )
 
-    # Credit line (AP Control account)
+    # ── Stamp duty debit line ──────────────────────────────────────
+    stamp_duty_amount = invoice.stamp_duty_amount or Decimal("0")
+    if stamp_duty_amount > Decimal("0") and invoice.stamp_duty_code_id:
+        stamp_code = db.get(TaxCode, invoice.stamp_duty_code_id)
+        if not stamp_code or stamp_code.organization_id != org_id:
+            return APPostingResult(
+                success=False, message="Stamp duty tax code not found"
+            )
+        if stamp_code.tax_type != TaxType.STAMP_DUTY:
+            return APPostingResult(
+                success=False,
+                message="Selected stamp duty code is not a STAMP_DUTY tax code",
+            )
+        # Use tax_expense_account_id (stamp duty is an expense to the buyer)
+        stamp_account_id = stamp_code.tax_expense_account_id
+        if not stamp_account_id:
+            return APPostingResult(
+                success=False,
+                message="Stamp duty expense account is not configured on the tax code",
+            )
+        stamp_functional = stamp_duty_amount * exchange_rate
+        if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=stamp_account_id,
+                    debit_amount=Decimal("0"),
+                    credit_amount=abs(stamp_duty_amount),
+                    debit_amount_functional=Decimal("0"),
+                    credit_amount_functional=abs(stamp_functional),
+                    description=f"AP Credit Note stamp duty: {invoice.invoice_number}",
+                )
+            )
+        else:
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=stamp_account_id,
+                    debit_amount=stamp_duty_amount,
+                    credit_amount=Decimal("0"),
+                    debit_amount_functional=stamp_functional,
+                    credit_amount_functional=Decimal("0"),
+                    description=f"AP Invoice stamp duty: {invoice.invoice_number}",
+                )
+            )
+
+    # ── WHT credit line ────────────────────────────────────────────
+    wht_amount = invoice.withholding_tax_amount or Decimal("0")
+    if wht_amount > Decimal("0") and invoice.withholding_tax_code_id:
+        wht_code = db.get(TaxCode, invoice.withholding_tax_code_id)
+        if not wht_code or wht_code.organization_id != org_id:
+            return APPostingResult(success=False, message="WHT tax code not found")
+        if wht_code.tax_type != TaxType.WITHHOLDING:
+            return APPostingResult(
+                success=False,
+                message="Selected WHT code is not a WITHHOLDING tax code",
+            )
+        # WHT payable = tax_collected_account_id (amount owed to tax authority)
+        wht_account_id = wht_code.tax_collected_account_id
+        if not wht_account_id:
+            return APPostingResult(
+                success=False,
+                message="WHT payable account is not configured on the WHT tax code",
+            )
+        wht_functional = wht_amount * exchange_rate
+        if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+            # Credit note reverses WHT: debit WHT payable
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=wht_account_id,
+                    debit_amount=abs(wht_amount),
+                    credit_amount=Decimal("0"),
+                    debit_amount_functional=abs(wht_functional),
+                    credit_amount_functional=Decimal("0"),
+                    description=f"AP Credit Note WHT reversal: {invoice.invoice_number}",
+                )
+            )
+        else:
+            # Standard invoice: credit WHT payable (we owe tax authority)
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=wht_account_id,
+                    debit_amount=Decimal("0"),
+                    credit_amount=wht_amount,
+                    debit_amount_functional=Decimal("0"),
+                    credit_amount_functional=wht_functional,
+                    description=f"AP Invoice WHT withheld: {invoice.invoice_number}",
+                )
+            )
+
+    # ── AP Control credit line ─────────────────────────────────────
+    # AP control = total_amount + stamp_duty - WHT
+    # (stamp duty increases the obligation; WHT reduces what we owe the supplier)
+    ap_amount = invoice.total_amount + stamp_duty_amount - wht_amount
     total_functional = invoice.functional_currency_amount
+    ap_functional = (
+        total_functional
+        + (stamp_duty_amount * exchange_rate)
+        - (wht_amount * exchange_rate)
+    )
 
     if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
         # Credit note: debit AP (reduce liability)
         journal_lines.append(
             JournalLineInput(
                 account_id=invoice.ap_control_account_id,
-                debit_amount=abs(invoice.total_amount),
+                debit_amount=abs(ap_amount),
                 credit_amount=Decimal("0"),
-                debit_amount_functional=abs(total_functional),
+                debit_amount_functional=abs(ap_functional),
                 credit_amount_functional=Decimal("0"),
                 description=f"AP Credit Note: {supplier.legal_name}",
             )
@@ -207,9 +306,9 @@ def post_invoice(
             JournalLineInput(
                 account_id=invoice.ap_control_account_id,
                 debit_amount=Decimal("0"),
-                credit_amount=invoice.total_amount,
+                credit_amount=ap_amount,
                 debit_amount_functional=Decimal("0"),
-                credit_amount_functional=total_functional,
+                credit_amount_functional=ap_functional,
                 description=f"AP Invoice: {supplier.legal_name}",
             )
         )

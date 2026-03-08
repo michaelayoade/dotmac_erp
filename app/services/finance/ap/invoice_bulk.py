@@ -11,7 +11,8 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -79,7 +80,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if extra_filters:
             supplier_id = str(extra_filters.get("supplier_id") or "")
 
-        query = build_invoice_query(
+        stmt = build_invoice_query(
             db=self.db,
             organization_id=str(self.organization_id),
             search=search,
@@ -89,7 +90,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
             end_date=end_date,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(stmt).all())
         return self._build_csv(entities)
 
     def can_delete(self, entity: SupplierInvoice) -> tuple[bool, str]:
@@ -131,18 +132,13 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if self._supplier_names is None:
             from app.models.finance.ap.supplier import Supplier
 
-            rows: list[tuple[UUID, str | None, str | None]] = (
-                Query(
-                    [
-                        Supplier.supplier_id,
-                        Supplier.trading_name,
-                        Supplier.legal_name,
-                    ],
-                    session=self.db,
-                )
-                .filter(Supplier.organization_id == self.organization_id)
-                .all()
-            )
+            rows = self.db.execute(
+                select(
+                    Supplier.supplier_id,
+                    Supplier.trading_name,
+                    Supplier.legal_name,
+                ).where(Supplier.organization_id == self.organization_id)
+            ).all()
             self._supplier_names = {str(r[0]): r[1] or r[2] or "" for r in rows}
         return self._supplier_names.get(str(supplier_id), "")
 

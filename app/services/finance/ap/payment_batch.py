@@ -140,11 +140,7 @@ class PaymentBatchService(ListResponseMixin):
         db.add(batch)
         db.flush()
 
-        if auto_commit:
-            db.commit()
-            db.refresh(batch)
-        else:
-            db.flush()
+        db.flush()
 
         return batch
 
@@ -334,11 +330,9 @@ class PaymentBatchService(ListResponseMixin):
             for payment in payments:
                 payment.payment_batch_id = batch.batch_id
 
-            db.commit()
-            db.refresh(batch)
+            db.flush()
             return batch
         except Exception:
-            db.rollback()
             raise
 
     @staticmethod
@@ -408,8 +402,7 @@ class PaymentBatchService(ListResponseMixin):
         batch.total_payments += 1
         batch.total_amount += payment.amount
 
-        db.commit()
-        db.refresh(batch)
+        db.flush()
 
         return batch
 
@@ -472,8 +465,7 @@ class PaymentBatchService(ListResponseMixin):
         batch.total_payments -= 1
         batch.total_amount -= payment.amount
 
-        db.commit()
-        db.refresh(batch)
+        db.flush()
 
         return batch
 
@@ -556,8 +548,7 @@ class PaymentBatchService(ListResponseMixin):
                 payment.approved_by_user_id = user_id
                 payment.approved_at = datetime.now(UTC)
 
-        db.commit()
-        db.refresh(batch)
+        db.flush()
 
         return batch
 
@@ -633,8 +624,7 @@ class PaymentBatchService(ListResponseMixin):
         else:
             batch.status = APBatchStatus.FAILED
 
-        db.commit()
-        db.refresh(batch)
+        db.flush()
 
         return batch
 
@@ -717,7 +707,7 @@ class PaymentBatchService(ListResponseMixin):
         batch.bank_file_reference = file_reference
         batch.bank_file_generated_at = datetime.now(UTC)
 
-        db.commit()
+        db.flush()
 
         return {
             "file_reference": file_reference,
@@ -760,7 +750,10 @@ class PaymentBatchService(ListResponseMixin):
         return list(
             db.scalars(
                 select(SupplierPayment)
-                .where(SupplierPayment.payment_batch_id == batch_id)
+                .where(
+                    SupplierPayment.payment_batch_id == batch_id,
+                    SupplierPayment.organization_id == org_id,
+                )
                 .order_by(SupplierPayment.payment_number)
             ).all()
         )
@@ -782,7 +775,7 @@ class PaymentBatchService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         status: APBatchStatus | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
@@ -794,7 +787,7 @@ class PaymentBatchService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization
+            organization_id: Organization scope (required)
             status: Filter by status
             from_date: Filter by start date
             to_date: Filter by end date
@@ -803,13 +796,16 @@ class PaymentBatchService(ListResponseMixin):
 
         Returns:
             List of APPaymentBatch objects
-        """
-        stmt = select(APPaymentBatch)
 
-        if organization_id:
-            stmt = stmt.where(
-                APPaymentBatch.organization_id == coerce_uuid(organization_id)
-            )
+        Raises:
+            ValueError: If organization_id is not provided
+        """
+        if not organization_id:
+            raise ValueError("organization_id is required for multi-tenant isolation")
+
+        stmt = select(APPaymentBatch).where(
+            APPaymentBatch.organization_id == coerce_uuid(organization_id)
+        )
 
         if status:
             stmt = stmt.where(APPaymentBatch.status == status)

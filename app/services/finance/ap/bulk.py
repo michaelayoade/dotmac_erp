@@ -11,6 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -61,9 +62,13 @@ class SupplierBulkService(BulkActionService[Supplier]):
         """
         # Check for associated invoices
         invoice_count = (
-            self.db.query(SupplierInvoice)
-            .filter(SupplierInvoice.supplier_id == entity.supplier_id)
-            .count()
+            self.db.scalar(
+                select(func.count(SupplierInvoice.invoice_id)).where(
+                    SupplierInvoice.supplier_id == entity.supplier_id,
+                    SupplierInvoice.organization_id == self.organization_id,
+                )
+            )
+            or 0
         )
 
         if invoice_count > 0:
@@ -104,14 +109,14 @@ class SupplierBulkService(BulkActionService[Supplier]):
         """
         from app.services.finance.ap.supplier_query import build_supplier_query
 
-        query = build_supplier_query(
+        stmt = build_supplier_query(
             db=self.db,
             organization_id=str(self.organization_id),
             search=search,
             status=status,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(stmt).all())
         return self._build_csv(entities)
 
 

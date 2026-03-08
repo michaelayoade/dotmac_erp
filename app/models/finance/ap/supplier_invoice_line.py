@@ -118,6 +118,11 @@ class SupplierInvoiceLine(Base):
         server_default=func.now(),
     )
 
+    @property
+    def total_amount(self) -> Decimal:
+        """Line amount plus tax amount."""
+        return (self.line_amount or Decimal("0")) + (self.tax_amount or Decimal("0"))
+
     # Relationships
     invoice: Mapped["SupplierInvoice"] = relationship(
         "SupplierInvoice", back_populates="lines"

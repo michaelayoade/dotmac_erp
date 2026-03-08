@@ -8,7 +8,15 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,7 +32,10 @@ class SupplierInvoiceLineTax(Base):
     """
 
     __tablename__ = "supplier_invoice_line_tax"
-    __table_args__ = {"schema": "ap"}
+    __table_args__ = (
+        UniqueConstraint("line_id", "tax_code_id", name="uq_line_tax_code"),
+        {"schema": "ap"},
+    )
 
     line_tax_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

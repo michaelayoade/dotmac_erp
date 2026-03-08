@@ -112,10 +112,18 @@ class ExpenseAPAdapter:
             action_result = db.execute(action_stmt)
             db.flush()
             if (action_result.rowcount or 0) == 0:
+                # Conflict: another process already started invoice creation.
+                # Refresh the claim to check if the other process completed.
+                db.refresh(claim)
+                if claim.supplier_invoice_id:
+                    return APPostingResult(
+                        success=True,
+                        supplier_invoice_id=claim.supplier_invoice_id,
+                        error_message=None,
+                    )
                 return APPostingResult(
-                    success=True,
-                    supplier_invoice_id=claim.supplier_invoice_id,
-                    error_message=None,
+                    success=False,
+                    error_message="Invoice creation already in progress by another process",
                 )
 
             # Get the employee
@@ -200,7 +208,7 @@ class ExpenseAPAdapter:
             ).scalar_one_or_none()
             if action_record:
                 action_record.status = ExpenseClaimActionStatus.COMPLETED
-            db.commit()
+            db.flush()
 
             logger.info(
                 f"Created AP invoice {invoice.invoice_id} for expense claim {claim_id}"
@@ -223,11 +231,10 @@ class ExpenseAPAdapter:
                 ).scalar_one_or_none()
                 if action_record:
                     action_record.status = ExpenseClaimActionStatus.FAILED
-                    db.commit()
+                    db.flush()
             except Exception:
-                db.rollback()
+                pass
             logger.exception(f"Error creating AP invoice for claim {claim_id}")
-            db.rollback()
             return APPostingResult(
                 success=False,
                 error_message=str(e),
@@ -270,7 +277,7 @@ class ExpenseAPAdapter:
         supplier_input = SupplierInput(
             supplier_code=supplier_code,
             supplier_name=supplier_name,
-            supplier_type=SupplierType.VENDOR,
+            supplier_type=SupplierType.RELATED_PARTY,
             email=person.email if person else None,
             payment_terms_days=0,  # Immediate payment
         )

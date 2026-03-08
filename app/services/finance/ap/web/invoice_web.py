@@ -105,7 +105,7 @@ class InvoiceWebService:
 
         from app.services.finance.ap.invoice_query import build_invoice_query
 
-        base_query = build_invoice_query(
+        base_stmt = build_invoice_query(
             db=db,
             organization_id=organization_id,
             search=search,
@@ -116,8 +116,7 @@ class InvoiceWebService:
         )
 
         total_count = (
-            base_query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar()
-            or 0
+            db.scalar(select(func.count()).select_from(base_stmt.subquery())) or 0
         )
 
         invoice_sort_map = {
@@ -128,60 +127,58 @@ class InvoiceWebService:
             "due_date": SupplierInvoice.due_date,
             "status": SupplierInvoice.status,
         }
-        sorted_query = apply_sort(
-            base_query,
+        sorted_stmt = apply_sort(
+            base_stmt,
             sort,
             sort_dir,
             invoice_sort_map,
             default=SupplierInvoice.invoice_date.desc(),
         )
 
-        invoices = (
-            sorted_query.with_entities(SupplierInvoice, Supplier)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        # Add Supplier to the result columns so we get (SupplierInvoice, Supplier) tuples
+        invoices = db.execute(
+            sorted_stmt.add_columns(Supplier).limit(limit).offset(offset)
+        ).all()
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
-        stats_base = base_query.with_entities(SupplierInvoice)
-        outstanding_filter = stats_base.filter(
-            SupplierInvoice.status.in_(open_statuses)
+        # Build stats using the same base filters as a subquery source
+        outstanding_base = base_stmt.where(SupplierInvoice.status.in_(open_statuses))
+
+        balance_expr = func.coalesce(
+            func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
         )
 
-        total_outstanding = outstanding_filter.with_entities(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-            )
-        ).scalar() or Decimal("0")
+        total_outstanding = db.scalar(
+            select(balance_expr).select_from(outstanding_base.subquery())
+        ) or Decimal("0")
 
-        past_due = outstanding_filter.filter(
-            SupplierInvoice.due_date < today
-        ).with_entities(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+        past_due = db.scalar(
+            select(balance_expr).select_from(
+                outstanding_base.where(SupplierInvoice.due_date < today).subquery()
             )
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = outstanding_filter.filter(
-            SupplierInvoice.due_date >= today,
-            SupplierInvoice.due_date <= due_this_week_end,
-        ).with_entities(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+        due_this_week = db.scalar(
+            select(balance_expr).select_from(
+                outstanding_base.where(
+                    SupplierInvoice.due_date >= today,
+                    SupplierInvoice.due_date <= due_this_week_end,
+                ).subquery()
             )
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
         pending_count = (
-            stats_base.filter(
-                SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL
+            db.scalar(
+                select(func.count()).select_from(
+                    base_stmt.where(
+                        SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL
+                    ).subquery()
+                )
             )
-            .with_entities(func.count(SupplierInvoice.invoice_id))
-            .scalar()
             or 0
         )
 
@@ -423,7 +420,6 @@ class InvoiceWebService:
             "tax_codes": tax_codes,
             "asset_categories": asset_categories,
             "organization_id": organization_id,
-            "user_id": "00000000-0000-0000-0000-000000000001",
             "selected_supplier": selected_supplier,
             "selected_po": selected_po,
             "po_lines": po_lines,
@@ -445,7 +441,8 @@ class InvoiceWebService:
         invoice = None
         try:
             invoice = supplier_invoice_service.get(db, invoice_id)
-        except Exception:
+        except (ValueError, LookupError) as e:
+            logger.warning("Failed to load entity: %s", e)
             invoice = None
 
         if not invoice or invoice.organization_id != org_id:
@@ -454,7 +451,8 @@ class InvoiceWebService:
         supplier = None
         try:
             supplier = supplier_service.get(db, org_id, str(invoice.supplier_id))
-        except Exception:
+        except (ValueError, LookupError) as e:
+            logger.warning("Failed to load entity: %s", e)
             supplier = None
 
         lines = supplier_invoice_service.get_invoice_lines(

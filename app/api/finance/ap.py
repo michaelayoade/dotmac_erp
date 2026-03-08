@@ -177,11 +177,11 @@ def update_supplier(
 def create_ap_invoice(
     payload: APInvoiceCreate,
     organization_id: UUID = Depends(require_organization_id),
-    created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:invoices:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new AP invoice."""
+    created_by_user_id = UUID(auth["person_id"])
     lines = [
         InvoiceLineInput(
             expense_account_id=line.expense_account_id,
@@ -280,11 +280,11 @@ def list_ap_invoices(
 def submit_ap_invoice(
     invoice_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    submitted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:invoices:submit")),
     db: Session = Depends(get_db),
 ):
     """Submit an AP invoice for approval."""
+    submitted_by_user_id = UUID(auth["person_id"])
     return supplier_invoice_service.submit_invoice(
         db=db,
         organization_id=organization_id,
@@ -297,11 +297,11 @@ def submit_ap_invoice(
 def approve_ap_invoice(
     invoice_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    approved_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:invoices:approve")),
     db: Session = Depends(get_db),
 ):
     """Approve an AP invoice."""
+    approved_by_user_id = UUID(auth["person_id"])
     return supplier_invoice_service.approve_invoice(
         db=db,
         organization_id=organization_id,
@@ -315,11 +315,11 @@ def post_ap_invoice(
     invoice_id: UUID,
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:invoices:post")),
     db: Session = Depends(get_db),
 ):
     """Post an AP invoice to the GL."""
+    posted_by_user_id = UUID(auth["person_id"])
     result = ap_posting_adapter.post_invoice(
         db=db,
         organization_id=organization_id,
@@ -346,11 +346,11 @@ def post_ap_invoice(
 def create_ap_payment(
     payload: APPaymentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:payments:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new AP payment."""
+    created_by_user_id = UUID(auth["person_id"])
     try:
         input_data = supplier_payment_service.build_payment_input(
             supplier_id=payload.supplier_id,
@@ -441,11 +441,11 @@ def post_ap_payment(
     payment_id: UUID,
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:payments:post")),
     db: Session = Depends(get_db),
 ):
     """Post an AP payment to the GL."""
+    posted_by_user_id = UUID(auth["person_id"])
     result = ap_posting_adapter.post_payment(
         db=db,
         organization_id=organization_id,
@@ -500,11 +500,11 @@ from app.services.finance.ap import (  # noqa: E402
 def create_purchase_order(
     payload: POCreate,
     organization_id: UUID = Depends(require_organization_id),
-    created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new purchase order."""
+    created_by_user_id = UUID(auth["person_id"])
     lines = [
         POLineInput(
             item_id=line.item_id,
@@ -580,11 +580,11 @@ def list_purchase_orders(
 def submit_po_for_approval(
     po_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    submitted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:submit")),
     db: Session = Depends(get_db),
 ):
     """Submit PO for approval."""
+    submitted_by_user_id = UUID(auth["person_id"])
     return purchase_order_service.submit_for_approval(
         db, organization_id, po_id, submitted_by_user_id
     )
@@ -594,11 +594,11 @@ def submit_po_for_approval(
 def approve_purchase_order(
     po_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    approved_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:approve")),
     db: Session = Depends(get_db),
 ):
     """Approve a purchase order."""
+    approved_by_user_id = UUID(auth["person_id"])
     return purchase_order_service.approve_po(
         db, organization_id, po_id, approved_by_user_id
     )
@@ -638,11 +638,11 @@ from app.services.finance.ap import (  # noqa: E402
 def create_goods_receipt(
     payload: GRCreate,
     organization_id: UUID = Depends(require_organization_id),
-    received_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:create")),
     db: Session = Depends(get_db),
 ):
     """Create a goods receipt against a PO."""
+    received_by_user_id = UUID(auth["person_id"])
     try:
         input_data = goods_receipt_service.build_receipt_input(
             po_id=payload.po_id,
@@ -835,11 +835,11 @@ def add_payment_to_batch(
 def approve_payment_batch(
     batch_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    approved_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:approve")),
     db: Session = Depends(get_db),
 ):
     """Approve a payment batch."""
+    approved_by_user_id = UUID(auth["person_id"])
     return payment_batch_service.approve_batch(
         db, organization_id, batch_id, approved_by_user_id
     )
@@ -849,11 +849,11 @@ def approve_payment_batch(
 def process_payment_batch(
     batch_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    processed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:process")),
     db: Session = Depends(get_db),
 ):
     """Process an approved payment batch."""
+    processed_by_user_id = UUID(auth["person_id"])
     return payment_batch_service.process_batch(
         db, organization_id, batch_id, processed_by_user_id
     )

@@ -12,7 +12,7 @@ import logging
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -122,16 +122,14 @@ def create_tax_transactions(
     tax_transaction_ids: list[UUID] = []
 
     # Get fiscal period from invoice date
-    fiscal_period = (
-        db.query(FiscalPeriod)
-        .filter(
+    fiscal_period = db.scalar(
+        select(FiscalPeriod).where(
             and_(
                 FiscalPeriod.organization_id == organization_id,
                 FiscalPeriod.start_date <= invoice.invoice_date,
                 FiscalPeriod.end_date >= invoice.invoice_date,
             )
         )
-        .first()
     )
 
     if not fiscal_period:
@@ -225,16 +223,14 @@ def create_wht_transaction(
     from app.services.finance.tax.tax_transaction import TaxTransactionInput
 
     # Get fiscal period from payment date
-    fiscal_period = (
-        db.query(FiscalPeriod)
-        .filter(
+    fiscal_period = db.scalar(
+        select(FiscalPeriod).where(
             and_(
                 FiscalPeriod.organization_id == organization_id,
                 FiscalPeriod.start_date <= payment.payment_date,
                 FiscalPeriod.end_date >= payment.payment_date,
             )
         )
-        .first()
     )
 
     if not fiscal_period:

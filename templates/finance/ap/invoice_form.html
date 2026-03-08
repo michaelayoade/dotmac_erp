@@ -765,11 +765,7 @@
                                         {% for account in expense_accounts %}
                                         <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
                                         {% else %}
-                                        <tr>
-                                            <td colspan="99" class="p-0">
-                                                {{ empty_state("No expense_accounts found", "There are no expense_accounts to display.") }}
-                                            </td>
-                                        </tr>
+                                        <option disabled>No accounts available</option>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -806,11 +802,7 @@
                                         {% for tax in tax_codes %}
                                         <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%){% if tax.is_inclusive %} Incl.{% endif %}</option>
                                         {% else %}
-                                        <tr>
-                                            <td colspan="99" class="p-0">
-                                                {{ empty_state("No tax_codes found", "There are no tax_codes to display.") }}
-                                            </td>
-                                        </tr>
+                                        <option disabled>No tax codes available</option>
                                         {% endfor %}
                                     </select>
                                 </td>

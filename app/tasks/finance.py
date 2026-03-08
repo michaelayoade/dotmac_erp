@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
+from app.models.person import Person
 from app.models.rbac import PersonRole, Role
 
 logger = logging.getLogger(__name__)
@@ -26,22 +27,26 @@ logger = logging.getLogger(__name__)
 
 def _get_finance_recipients(
     db: Session,
+    organization_id: UUID,
     role_names: list[str],
 ) -> list[UUID]:
     """
-    Get user IDs with specified finance roles.
+    Get user IDs with specified finance roles within a single organization.
 
     Args:
         db: Database session
+        organization_id: Organization to scope recipients to
         role_names: List of role names to include
 
     Returns:
-        List of person_ids with the specified roles
+        List of person_ids with the specified roles in the given organization
     """
     stmt = (
         select(PersonRole.person_id)
         .join(Role, PersonRole.role_id == Role.id)
+        .join(Person, PersonRole.person_id == Person.id)
         .where(
+            Person.organization_id == organization_id,
             Role.name.in_(role_names),
             Role.is_active.is_(True),
         )
@@ -83,16 +88,18 @@ def process_fiscal_period_reminders() -> dict[str, Any]:
                 if not notice_type:
                     continue
 
-                # Get accountants and finance managers
+                # Get accountants and finance managers for this org
                 recipients = _get_finance_recipients(
                     db,
+                    period.organization_id,
                     ["accountant", "finance_manager", "controller", "cfo"],
                 )
 
                 if not recipients:
                     logger.warning(
-                        "No finance recipients found for period %s",
+                        "No finance recipients found for period %s (org %s)",
                         period.fiscal_period_id,
+                        period.organization_id,
                     )
                     continue
 
@@ -160,6 +167,7 @@ def process_tax_period_reminders() -> dict[str, Any]:
 
                 recipients = _get_finance_recipients(
                     db,
+                    period.organization_id,
                     ["accountant", "finance_manager", "tax_accountant", "controller"],
                 )
 
@@ -183,37 +191,40 @@ def process_tax_period_reminders() -> dict[str, Any]:
         results["periods_overdue"] = len(overdue)
 
         if overdue:
-            recipients = _get_finance_recipients(
-                db,
-                [
-                    "accountant",
-                    "finance_manager",
-                    "tax_accountant",
-                    "controller",
-                    "cfo",
-                ],
-            )
+            # Group by org for multi-tenant safety
+            by_org: dict[UUID, list] = {}
+            for period in overdue:
+                by_org.setdefault(period.organization_id, []).append(period)
 
-            if recipients:
-                # Group by org for multi-tenant safety
-                by_org: dict[UUID, list] = {}
-                for period in overdue:
-                    by_org.setdefault(period.organization_id, []).append(period)
+            for org_id, org_periods in by_org.items():
+                try:
+                    recipients = _get_finance_recipients(
+                        db,
+                        org_id,
+                        [
+                            "accountant",
+                            "finance_manager",
+                            "tax_accountant",
+                            "controller",
+                            "cfo",
+                        ],
+                    )
 
-                for org_id, org_periods in by_org.items():
-                    try:
-                        sent = service.send_tax_period_digest(
-                            org_periods, recipients, org_id
-                        )
-                        results["notifications_sent"] += sent
-                    except Exception as e:
-                        logger.exception(
-                            "Failed to send tax overdue digest for org %s",
-                            org_id,
-                        )
-                        results["errors"].append(
-                            f"Tax overdue digest org {org_id}: {str(e)}"
-                        )
+                    if not recipients:
+                        continue
+
+                    sent = service.send_tax_period_digest(
+                        org_periods, recipients, org_id
+                    )
+                    results["notifications_sent"] += sent
+                except Exception as e:
+                    logger.exception(
+                        "Failed to send tax overdue digest for org %s",
+                        org_id,
+                    )
+                    results["errors"].append(
+                        f"Tax overdue digest org {org_id}: {str(e)}"
+                    )
 
         db.commit()
 
@@ -266,29 +277,32 @@ def process_bank_reconciliation_reminders() -> dict[str, Any]:
                 results["accounts_needing_action"] += 1
 
         if accounts_with_urgency:
-            recipients = _get_finance_recipients(
-                db,
-                ["accountant", "finance_manager", "controller"],
-            )
+            # Group by org for multi-tenant safety
+            by_org: dict[UUID, list[tuple]] = {}
+            for acct, urg in accounts_with_urgency:
+                by_org.setdefault(acct.organization_id, []).append((acct, urg))
 
-            if recipients:
-                # Group by org for multi-tenant safety
-                by_org: dict[UUID, list[tuple]] = {}
-                for acct, urg in accounts_with_urgency:
-                    by_org.setdefault(acct.organization_id, []).append((acct, urg))
+            for org_id, org_accounts in by_org.items():
+                try:
+                    recipients = _get_finance_recipients(
+                        db,
+                        org_id,
+                        ["accountant", "finance_manager", "controller"],
+                    )
 
-                for org_id, org_accounts in by_org.items():
-                    try:
-                        sent = service.send_reconciliation_digest(
-                            org_accounts, recipients, org_id
-                        )
-                        results["notifications_sent"] += sent
-                    except Exception as e:
-                        logger.exception(
-                            "Failed to send reconciliation digest for org %s",
-                            org_id,
-                        )
-                        results["errors"].append(f"Recon digest org {org_id}: {str(e)}")
+                    if not recipients:
+                        continue
+
+                    sent = service.send_reconciliation_digest(
+                        org_accounts, recipients, org_id
+                    )
+                    results["notifications_sent"] += sent
+                except Exception as e:
+                    logger.exception(
+                        "Failed to send reconciliation digest for org %s",
+                        org_id,
+                    )
+                    results["errors"].append(f"Recon digest org {org_id}: {str(e)}")
 
         db.commit()
 
@@ -344,6 +358,7 @@ def process_ar_collection_reminders() -> dict[str, Any]:
 
                 recipients = _get_finance_recipients(
                     db,
+                    invoice.organization_id,
                     ["accountant", "ar_clerk", "finance_manager", "collections"],
                 )
 
@@ -422,6 +437,7 @@ def process_subledger_reconciliation() -> dict[str, Any]:
 
                     recipients = _get_finance_recipients(
                         db,
+                        org.organization_id,
                         ["accountant", "finance_manager", "controller"],
                     )
 
@@ -443,6 +459,7 @@ def process_subledger_reconciliation() -> dict[str, Any]:
 
                     recipients = _get_finance_recipients(
                         db,
+                        org.organization_id,
                         ["accountant", "finance_manager", "controller"],
                     )
 
@@ -502,7 +519,9 @@ def process_all_finance_reminders() -> dict[str, Any]:
         "task_errors": [],
     }
 
-    # Run each task independently - catch errors so one failure doesn't stop others
+    # Run each subtask directly (not via .delay()) so we can aggregate
+    # results into a single return dict for monitoring. Each call is wrapped
+    # in its own try/except so one failure does not prevent the others.
     task_runners = [
         ("fiscal_periods", process_fiscal_period_reminders),
         ("tax_periods", process_tax_period_reminders),
@@ -515,7 +534,7 @@ def process_all_finance_reminders() -> dict[str, Any]:
         try:
             results[task_name] = task_func()
         except Exception as e:
-            logger.exception("Task %s failed", task_name)
+            logger.exception("Finance reminder subtask '%s' failed", task_name)
             results[task_name] = {"error": str(e)}
             results["task_errors"].append(f"{task_name}: {str(e)}")
 

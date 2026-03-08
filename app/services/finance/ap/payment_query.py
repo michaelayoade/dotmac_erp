@@ -4,8 +4,8 @@ Shared AP payment query builder for list + export.
 
 from __future__ import annotations
 
-from sqlalchemy import or_
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import Select, or_, select
+from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
@@ -22,38 +22,40 @@ def build_payment_query(
     status: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
-) -> Query:
+) -> Select:
     """
     Build the base AP payment query with filters applied.
+
+    Returns a SQLAlchemy 2.0 Select statement (not a legacy Query).
     """
     org_id = coerce_uuid(organization_id)
     status_value = parse_payment_status(status)
     from_date = parse_date(start_date)
     to_date = parse_date(end_date)
 
-    query: Query[SupplierPayment] = (
-        Query([SupplierPayment], session=db)
+    stmt = (
+        select(SupplierPayment)
         .join(Supplier, SupplierPayment.supplier_id == Supplier.supplier_id)
-        .filter(SupplierPayment.organization_id == org_id)
+        .where(SupplierPayment.organization_id == org_id)
     )
 
     if supplier_id:
-        query = query.filter(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
+        stmt = stmt.where(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
     if status == "POSTED":
-        query = query.filter(SupplierPayment.status.in_(APPaymentStatus.effective()))
+        stmt = stmt.where(SupplierPayment.status.in_(APPaymentStatus.effective()))
     elif status_value:
-        query = query.filter(SupplierPayment.status == status_value)
+        stmt = stmt.where(SupplierPayment.status == status_value)
     if from_date:
-        query = query.filter(SupplierPayment.payment_date >= from_date)
+        stmt = stmt.where(SupplierPayment.payment_date >= from_date)
     if to_date:
-        query = query.filter(SupplierPayment.payment_date <= to_date)
+        stmt = stmt.where(SupplierPayment.payment_date <= to_date)
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
+        stmt = stmt.where(
             or_(
                 SupplierPayment.payment_number.ilike(search_pattern),
                 SupplierPayment.reference.ilike(search_pattern),
             )
         )
 
-    return query
+    return stmt
