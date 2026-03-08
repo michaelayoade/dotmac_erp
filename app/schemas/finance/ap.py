@@ -319,10 +319,11 @@ class GRRead(BaseModel):
 class PaymentBatchCreate(BaseModel):
     """Create payment batch request."""
 
-    batch_name: str = Field(max_length=100)
-    payment_date: date
+    batch_date: date
     bank_account_id: UUID
-    payment_method: str = "EFT"
+    payment_method: str = "BANK_TRANSFER"
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    invoice_ids: list[UUID] = Field(min_length=1)
     description: str | None = None
 
 
@@ -333,11 +334,13 @@ class PaymentBatchRead(BaseModel):
     batch_id: UUID
     organization_id: UUID
     batch_number: str
-    batch_name: str
-    payment_date: date
+    batch_date: date
+    payment_method: str
+    bank_account_id: UUID
+    currency_code: str
     status: str
     total_amount: Decimal
-    payment_count: int
+    total_payments: int
 
 
 class BankFileResultRead(BaseModel):

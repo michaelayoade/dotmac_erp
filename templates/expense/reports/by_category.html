@@ -48,7 +48,7 @@
             </div>
         </div>
 
-        <div class="card p-5">
+        <a href="/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}" class="card card-hover p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30">
                     {{ icon_svg("currency", "h-6 w-6 text-blue-600 dark:text-blue-400") }}
@@ -58,9 +58,9 @@
                     <p class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:,.2f}".format(report.total_claimed) }}</p>
                 </div>
             </div>
-        </div>
+        </a>
 
-        <div class="card p-5">
+        <a href="/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&status=APPROVED" class="card card-hover p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 dark:bg-green-900/30">
                     {{ icon_svg("check-circle", "h-6 w-6 text-green-600 dark:text-green-400") }}
@@ -70,7 +70,7 @@
                     <p class="text-2xl font-semibold text-green-600 dark:text-green-400 font-mono">{{ "{:,.2f}".format(report.total_approved) }}</p>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
 
     <!-- Category Breakdown Table -->
@@ -93,7 +93,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for cat in report.categories %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onclick="window.location='/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&search={{ cat.category_name | urlencode }}'">
                         <td class="px-5 py-3">
                             <div class="font-medium text-slate-900 dark:text-white">{{ cat.category_name }}</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ cat.category_code }}</div>
@@ -154,13 +154,13 @@
         <div class="p-5">
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {% for cat in report.categories[:8] %}
-                <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <a href="/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&search={{ cat.category_name | urlencode }}" class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
                     <div class="w-3 h-3 rounded-full" style="background-color: hsl({{ loop.index0 * 40 }}, 70%, 50%)"></div>
                     <div class="flex-1 min-w-0">
                         <div class="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{{ cat.category_name }}</div>
                         <div class="text-xs text-slate-500 dark:text-slate-400">{{ "{:.1f}".format(cat.percentage) }}%</div>
                     </div>
-                </div>
+                </a>
                 {% endfor %}
             </div>
         </div>

@@ -328,8 +328,10 @@ from app.models.expense import (  # noqa: E402
     ExpenseCategory,
     ExpenseClaim,
     ExpenseClaimAction,
+    ExpenseClaimApprovalStep,
     ExpenseClaimItem,
 )
+from app.models.feature_flag import FeatureFlagRegistry  # noqa: E402
 from app.models.finance.platform.idempotency_record import (  # noqa: E402
     IdempotencyRecord,
 )
@@ -363,7 +365,9 @@ SQLITE_COMPATIBLE_TABLES = [
     ExpenseClaim.__table__,
     ExpenseClaimItem.__table__,
     ExpenseClaimAction.__table__,
+    ExpenseClaimApprovalStep.__table__,
     IdempotencyRecord.__table__,
+    FeatureFlagRegistry.__table__,
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures

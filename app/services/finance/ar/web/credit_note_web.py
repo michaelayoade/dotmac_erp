@@ -590,6 +590,92 @@ class CreditNoteWebService:
             status_code=303,
         )
 
+    def credit_note_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Render the edit form for draft credit notes."""
+        org_id = coerce_uuid(auth.organization_id)
+        cn_id = coerce_uuid(credit_note_id)
+
+        credit_note = db.get(Invoice, cn_id)
+        if not credit_note or credit_note.organization_id != org_id:
+            return RedirectResponse(
+                url="/finance/ar/credit-notes?success=Record+updated+successfully",
+                status_code=303,
+            )
+
+        if credit_note.status != InvoiceStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error=Only+draft+credit+notes+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit Credit Note", "ar")
+        context.update(self.credit_note_form_context(db, str(auth.organization_id)))
+        context["credit_note"] = credit_note
+        return templates.TemplateResponse(
+            request, "finance/ar/credit_note_form.html", context
+        )
+
+    async def update_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle credit note update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_credit_note_input(
+                db, data, coerce_uuid(auth.organization_id)
+            )
+            credit_note = ar_invoice_service.update_invoice(
+                db=db,
+                organization_id=coerce_uuid(auth.organization_id),
+                invoice_id=coerce_uuid(credit_note_id),
+                input=input_data,
+                updated_by_user_id=coerce_uuid(auth.user_id),
+            )
+
+            if "application/json" in content_type:
+                return JSONResponse(
+                    content={
+                        "success": True,
+                        "credit_note_id": str(credit_note.invoice_id),
+                    }
+                )
+
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note.invoice_id}?success=Credit+note+updated+successfully",
+                status_code=303,
+            )
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit Credit Note", "ar")
+            context.update(self.credit_note_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(
+                request, "finance/ar/credit_note_form.html", context
+            )
+
     # =====================================================================
     # Credit Note Status Transitions
     # =====================================================================

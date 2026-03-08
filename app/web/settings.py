@@ -32,6 +32,10 @@ MODULE_SETTINGS_HANDLERS = {
         get_context=module_settings_web_service.get_support_context,
         update_settings=module_settings_web_service.update_support_settings,
     ),
+    "help": ModuleSettingsHandler(
+        get_context=module_settings_web_service.get_help_context,
+        update_settings=module_settings_web_service.update_help_settings,
+    ),
     "inventory": ModuleSettingsHandler(
         get_context=module_settings_web_service.get_inventory_context,
         update_settings=module_settings_web_service.update_inventory_settings,
@@ -47,6 +51,10 @@ MODULE_SETTINGS_HANDLERS = {
     "procurement": ModuleSettingsHandler(
         get_context=module_settings_web_service.get_procurement_context,
         update_settings=module_settings_web_service.update_procurement_settings,
+    ),
+    "expense": ModuleSettingsHandler(
+        get_context=module_settings_web_service.get_expense_context,
+        update_settings=module_settings_web_service.update_expense_settings,
     ),
 }
 

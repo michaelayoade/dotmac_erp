@@ -14,6 +14,7 @@ from app.models.people.training import TrainingProgramStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import OrganizationService
 from app.services.people.training import TrainingService
+from app.services.people.training.training_service import TrainingProgramNotFoundError
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -44,15 +45,24 @@ class ProgramWebService:
             pagination=pagination,
         )
 
+        active_filters = [
+            name
+            for name, val in [("status", status), ("category", category)]
+            if val
+        ]
+
         return {
             "programs": result.items,
             "search": search,
             "status": status,
             "category": category,
             "statuses": [s.value for s in TrainingProgramStatus],
+            "active_filters": active_filters,
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,
+            "total_count": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -74,7 +84,7 @@ class ProgramWebService:
             svc = TrainingService(db)
             try:
                 program = svc.get_program(organization_id, coerce_uuid(program_id))
-            except Exception:
+            except (TrainingProgramNotFoundError, ValueError):
                 program = None
 
         return {
@@ -95,7 +105,7 @@ class ProgramWebService:
 
         try:
             program = svc.get_program(organization_id, coerce_uuid(program_id))
-        except Exception:
+        except (TrainingProgramNotFoundError, ValueError):
             return {"program": None, "events": []}
 
         events = svc.list_events(
@@ -132,6 +142,27 @@ class ProgramWebService:
             "prerequisites": form_data.get("prerequisites") or None,
             "syllabus": form_data.get("syllabus") or None,
         }
+
+    # Response helpers
+
+    def _program_error_context(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        org_id: UUID,
+        title: str,
+        form_data: dict,
+        error: str,
+        program_id: str | None = None,
+    ) -> dict:
+        """Build template context for program form validation errors."""
+        context = base_context(request, auth, title, "training", db=db)
+        context["request"] = request
+        context.update(self.program_form_context(db, org_id, program_id))
+        context["form_data"] = form_data
+        context["error"] = error
+        return context
 
     # Response methods
 
@@ -186,7 +217,7 @@ class ProgramWebService:
 
         if not ctx.get("program"):
             return RedirectResponse(
-                url="/people/training/programs?success=Record+saved+successfully",
+                url="/people/training/programs?error=Training+program+not+found",
                 status_code=303,
             )
 
@@ -214,7 +245,7 @@ class ProgramWebService:
 
         if not ctx.get("program"):
             return RedirectResponse(
-                url="/people/training/programs?success=Record+updated+successfully",
+                url="/people/training/programs?error=Training+program+not+found",
                 status_code=303,
             )
 
@@ -249,13 +280,10 @@ class ProgramWebService:
         except Exception as e:
             db.rollback()
             logger.exception("create_program_response: failed")
-            context = base_context(
-                request, auth, "New Training Program", "training", db=db
+            context = self._program_error_context(
+                request, auth, db, org_id,
+                "New Training Program", dict(form_data), str(e),
             )
-            context["request"] = request
-            context.update(self.program_form_context(db, org_id))
-            context["form_data"] = dict(form_data)
-            context["error"] = str(e)
             return templates.TemplateResponse(
                 request, "people/training/program_form.html", context
             )
@@ -283,10 +311,10 @@ class ProgramWebService:
         except Exception as e:
             db.rollback()
             logger.exception("update_program_response: failed")
-            context = base_context(request, auth, "Edit Program", "training", db=db)
-            context["request"] = request
-            context.update(self.program_form_context(db, org_id, program_id))
-            context["error"] = str(e)
+            context = self._program_error_context(
+                request, auth, db, org_id,
+                "Edit Program", dict(form_data), str(e), program_id,
+            )
             return templates.TemplateResponse(
                 request, "people/training/program_form.html", context
             )

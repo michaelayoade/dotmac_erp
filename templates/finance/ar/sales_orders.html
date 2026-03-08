@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters, filter_select_field, filter_entity_select_field, sortable_th, icon_svg %}
+{% from "components/macros.html" import status_badge, compact_filters, filter_select_field, filter_entity_select_field, sortable_th, icon_svg, pagination %}
 
 {% block page_title %}Sales Orders{% endblock %}
 
@@ -26,7 +26,7 @@
     {# Filters #}
     {% call(filter_attrs) compact_filters(
         base_url="/finance/sales-orders",
-        active_filters=active_filters | default([]),
+        active_filters=active_filters if active_filters else [],
         date_range=true,
         start_date=filter_start_date | default('', true),
         end_date=filter_end_date | default('', true)
@@ -144,6 +144,7 @@
         </div>
         {% endif %}
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'status': filter_status|default(''), 'customer_id': filter_customer_id|default(''), 'start_date': filter_start_date|default(''), 'end_date': filter_end_date|default('')}) }}
     </div>
 </div>
 {% endblock %}

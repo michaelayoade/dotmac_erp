@@ -55,9 +55,9 @@ MANUAL_PROJECT_CREATION_ENABLED = False
 def _manual_project_creation_disabled_response(request: Request):
     """Manual project creation is disabled; projects are CRM-synced."""
     return templates.TemplateResponse(
+        request,
         "errors/404.html",
         {
-            "request": request,
             "message": "Manual project creation is disabled. Projects are synced from CRM.",
         },
         status_code=404,
@@ -542,7 +542,7 @@ def list_projects(
         "planning_count": status_counts.get("PLANNING", 0),
     }
 
-    return templates.TemplateResponse("projects/list.html", context)
+    return templates.TemplateResponse(request, "projects/list.html", context)
 
 
 # ============================================================================
@@ -603,7 +603,7 @@ def new_project_form(
         "error": request.query_params.get("error"),
     }
 
-    return templates.TemplateResponse("projects/form.html", context)
+    return templates.TemplateResponse(request, "projects/form.html", context)
 
 
 @router.get("/{project_id}/edit", response_class=HTMLResponse)
@@ -659,7 +659,7 @@ def edit_project_form(
         "project_templates": _get_project_templates(db, org_id),
     }
 
-    return templates.TemplateResponse("projects/form.html", context)
+    return templates.TemplateResponse(request, "projects/form.html", context)
 
 
 # ============================================================================
@@ -670,17 +670,44 @@ def edit_project_form(
 @router.get("/templates", response_class=HTMLResponse)
 def project_template_list(
     request: Request,
+    page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_projects_access),
     db: Session = Depends(get_db),
 ):
     """Project template list page."""
-    templates_list = _get_project_templates(db, auth.organization_id)
+    from sqlalchemy import func, select
+
+    from app.models.pm.project_template import ProjectTemplate
+    from app.services.common import PaginationParams
+
+    org_id = coerce_uuid(auth.organization_id)
+    per_page = 50
+    total_count = db.scalar(
+        select(func.count()).select_from(ProjectTemplate).where(
+            ProjectTemplate.organization_id == org_id
+        )
+    ) or 0
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+
+    stmt = (
+        select(ProjectTemplate)
+        .where(ProjectTemplate.organization_id == org_id)
+        .order_by(ProjectTemplate.name)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    templates_list = list(db.scalars(stmt).all())
+
     context = {
         "request": request,
         **base_context(request, auth, "Project Templates", "templates", db=db),
         "templates": templates_list,
+        "page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
+        "limit": per_page,
     }
-    return templates.TemplateResponse("projects/templates/list.html", context)
+    return templates.TemplateResponse(request, "projects/templates/list.html", context)
 
 
 @router.get("/templates/new", response_class=HTMLResponse)
@@ -699,7 +726,7 @@ def new_project_template_form(
         "project_types": [t.value for t in ProjectType],
         "tasks_payload_json": "[]",
     }
-    return templates.TemplateResponse("projects/templates/form.html", context)
+    return templates.TemplateResponse(request, "projects/templates/form.html", context)
 
 
 @router.post("/templates", response_class=RedirectResponse)
@@ -854,7 +881,7 @@ def project_template_detail(
         "tasks": tasks,
         "dependencies": dependencies,
     }
-    return templates.TemplateResponse("projects/templates/detail.html", context)
+    return templates.TemplateResponse(request, "projects/templates/detail.html", context)
 
 
 @router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
@@ -886,7 +913,7 @@ def edit_project_template_form(
         "project_types": [t.value for t in ProjectType],
         "tasks_payload_json": json.dumps(tasks_payload),
     }
-    return templates.TemplateResponse("projects/templates/form.html", context)
+    return templates.TemplateResponse(request, "projects/templates/form.html", context)
 
 
 @router.post("/templates/{template_id}", response_class=RedirectResponse)
@@ -1025,37 +1052,41 @@ def global_task_list(
     status: str | None = None,
     priority: str | None = None,
     project_id: str | None = None,
+    page: int = Query(1, ge=1),
     db: Session = Depends(get_db),
 ):
     """Global task list page."""
     from app.models.pm.task import TaskPriority, TaskStatus
 
+    from app.services.common import PaginationParams
+
     org_id = coerce_uuid(auth.organization_id)
     services = _get_services(db, org_id)
 
-    tasks = (
-        services["task"]
-        .list_tasks(
-            project_id=coerce_uuid(project_id) if project_id else None,
-            status=TaskStatus(status) if status else None,
-            priority=TaskPriority(priority) if priority else None,
-            include_subtasks=True,
-        )
-        .items
+    result = services["task"].list_tasks(
+        project_id=coerce_uuid(project_id) if project_id else None,
+        status=TaskStatus(status) if status else None,
+        priority=TaskPriority(priority) if priority else None,
+        include_subtasks=True,
+        params=PaginationParams.from_page(page),
     )
 
     context = {
         "request": request,
         **base_context(request, auth, "Project Tasks", "tasks", db=db),
-        "tasks": tasks,
+        "tasks": result.items,
         "projects": _get_projects(db, org_id),
         "statuses": [s.value for s in TaskStatus],
         "priorities": [p.value for p in TaskPriority],
         "status_filter": status,
         "priority_filter": priority,
         "project_filter": project_id,
+        "page": result.page,
+        "total_pages": result.total_pages,
+        "total_count": result.total,
+        "limit": result.limit,
     }
-    return templates.TemplateResponse("projects/tasks/global_list.html", context)
+    return templates.TemplateResponse(request, "projects/tasks/global_list.html", context)
 
 
 @router.get("/tasks/new", response_class=HTMLResponse)
@@ -1078,7 +1109,7 @@ def global_task_new_form(
         "team_members": _get_employees(db, org_id),
         "tickets": _get_tickets(db, org_id),
     }
-    return templates.TemplateResponse("projects/tasks/global_form.html", context)
+    return templates.TemplateResponse(request, "projects/tasks/global_form.html", context)
 
 
 @router.post("/tasks", response_class=RedirectResponse)
@@ -1245,7 +1276,7 @@ def project_dashboard(
         "attachments": project_attachments,
     }
 
-    return templates.TemplateResponse("projects/detail.html", context)
+    return templates.TemplateResponse(request, "projects/detail.html", context)
 
 
 @router.post("/{project_id}/comments", response_class=RedirectResponse)
@@ -1851,7 +1882,7 @@ def project_tasks(
         "view_mode": "tree",
     }
 
-    return templates.TemplateResponse("projects/tasks/list.html", context)
+    return templates.TemplateResponse(request, "projects/tasks/list.html", context)
 
 
 @router.get("/{project_id}/tasks/{task_id}", response_class=HTMLResponse)
@@ -1950,7 +1981,7 @@ def task_detail(
         "attachments": task_attachments,
     }
 
-    return templates.TemplateResponse("projects/tasks/detail.html", context)
+    return templates.TemplateResponse(request, "projects/tasks/detail.html", context)
 
 
 @router.post("/{project_id}/tasks/{task_id}/comments", response_class=RedirectResponse)
@@ -2259,7 +2290,7 @@ def new_task_form(
         "priorities": [p.value for p in TaskPriority],
     }
 
-    return templates.TemplateResponse("projects/tasks/form.html", context)
+    return templates.TemplateResponse(request, "projects/tasks/form.html", context)
 
 
 @router.post("/{project_id}/tasks", response_class=RedirectResponse)
@@ -2411,7 +2442,7 @@ def edit_task_form(
         "priorities": [p.value for p in TaskPriority],
     }
 
-    return templates.TemplateResponse("projects/tasks/form.html", context)
+    return templates.TemplateResponse(request, "projects/tasks/form.html", context)
 
 
 @router.post("/{project_id}/tasks/{task_id}", response_class=RedirectResponse)
@@ -2855,7 +2886,7 @@ def project_gantt(
         "gantt_data": gantt_data,
     }
 
-    return templates.TemplateResponse("projects/gantt.html", context)
+    return templates.TemplateResponse(request, "projects/gantt.html", context)
 
 
 # ============================================================================
@@ -2895,7 +2926,7 @@ def project_team(
         "employees": employees,
     }
 
-    return templates.TemplateResponse("projects/team.html", context)
+    return templates.TemplateResponse(request, "projects/team.html", context)
 
 
 @router.post("/{project_id}/team", response_class=RedirectResponse)
@@ -3179,7 +3210,7 @@ def resource_utilization_report(
         "project_utilization": project_utilization,
     }
 
-    return templates.TemplateResponse("projects/utilization.html", context)
+    return templates.TemplateResponse(request, "projects/utilization.html", context)
 
 
 # ============================================================================
@@ -3217,7 +3248,7 @@ def project_milestones(
         "milestones": milestones,
     }
 
-    return templates.TemplateResponse("projects/milestones.html", context)
+    return templates.TemplateResponse(request, "projects/milestones.html", context)
 
 
 @router.post("/{project_id}/milestones", response_class=RedirectResponse)
@@ -3472,7 +3503,7 @@ def project_time_entries(
         "billing_status_filter": billing_status,
     }
 
-    return templates.TemplateResponse("projects/time/list.html", context)
+    return templates.TemplateResponse(request, "projects/time/list.html", context)
 
 
 @router.get("/{project_id}/time/new", response_class=HTMLResponse)
@@ -3519,7 +3550,7 @@ def new_time_entry_form(
         "today": date.today(),
     }
 
-    return templates.TemplateResponse("projects/time/form.html", context)
+    return templates.TemplateResponse(request, "projects/time/form.html", context)
 
 
 @router.post("/{project_id}/time", response_class=RedirectResponse)
@@ -3638,7 +3669,7 @@ def edit_time_entry_form(
         "preselected_task_id": None,
     }
 
-    return templates.TemplateResponse("projects/time/form.html", context)
+    return templates.TemplateResponse(request, "projects/time/form.html", context)
 
 
 @router.post("/{project_id}/time/{entry_id}", response_class=RedirectResponse)
@@ -3860,7 +3891,7 @@ def employee_timesheet(
         "billable_total": billable_total,
     }
 
-    return templates.TemplateResponse("projects/time/timesheet.html", context)
+    return templates.TemplateResponse(request, "projects/time/timesheet.html", context)
 
 
 @router.post("/timesheet/log", response_class=RedirectResponse)
@@ -3945,7 +3976,7 @@ def project_expenses(
         "summary": summary,
     }
 
-    return templates.TemplateResponse("projects/expenses.html", context)
+    return templates.TemplateResponse(request, "projects/expenses.html", context)
 
 
 # ============================================================================
@@ -3986,7 +4017,7 @@ def project_attachments(
         "attachments": attachments,
     }
 
-    return templates.TemplateResponse("projects/attachments.html", context)
+    return templates.TemplateResponse(request, "projects/attachments.html", context)
 
 
 @router.post("/{project_id}/attachments", response_class=RedirectResponse)

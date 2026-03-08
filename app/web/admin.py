@@ -1169,6 +1169,103 @@ async def admin_settings_feature_toggle(
     return RedirectResponse(url="/admin/settings/features?saved=1", status_code=303)
 
 
+@router.get("/settings/features/new", response_class=HTMLResponse)
+def admin_settings_feature_new(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Form to register a new feature flag."""
+    from app.models.feature_flag import FeatureFlagCategory
+
+    context = _admin_base_context(request, auth, "New Feature Flag", db)
+    context["categories"] = [c.value for c in FeatureFlagCategory]
+    context["form_data"] = {}
+    return templates.TemplateResponse(
+        request, "admin/settings/feature_form.html", context
+    )
+
+
+@router.post("/settings/features/create", response_class=HTMLResponse)
+async def admin_settings_feature_create(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Create a new feature flag from form submission."""
+    from app.models.feature_flag import FeatureFlagCategory
+    from app.services.feature_flag_service import FeatureFlagService
+
+    form = await request.form()
+    flag_key = str(form.get("flag_key", "")).strip()
+    label = str(form.get("label", "")).strip()
+    description = str(form.get("description", "")).strip()
+    category = str(form.get("category", "MODULE"))
+    default_enabled = str(form.get("default_enabled", "false")).lower() == "true"
+    owner = str(form.get("owner", "")).strip() or None
+
+    # Validation
+    errors = []
+    if not flag_key:
+        errors.append("Flag key is required")
+    if not label:
+        errors.append("Label is required")
+
+    if errors:
+        context = _admin_base_context(request, auth, "New Feature Flag", db)
+        context["categories"] = [c.value for c in FeatureFlagCategory]
+        context["form_data"] = dict(form)
+        context["error"] = "; ".join(errors)
+        return templates.TemplateResponse(
+            request, "admin/settings/feature_form.html", context
+        )
+
+    service = FeatureFlagService(db)
+    try:
+        cat = FeatureFlagCategory(category)
+    except ValueError:
+        cat = FeatureFlagCategory.MODULE
+
+    person_id = auth.person_id if auth else None
+    try:
+        service.register_flag(
+            flag_key=flag_key,
+            label=label,
+            description=description,
+            category=cat,
+            default_enabled=default_enabled,
+            owner=owner,
+            created_by_id=person_id,
+        )
+        db.commit()
+    except Exception as e:
+        context = _admin_base_context(request, auth, "New Feature Flag", db)
+        context["categories"] = [c.value for c in FeatureFlagCategory]
+        context["form_data"] = dict(form)
+        context["error"] = str(e)
+        return templates.TemplateResponse(
+            request, "admin/settings/feature_form.html", context
+        )
+
+    return RedirectResponse(url="/admin/settings/features?success=1", status_code=303)
+
+
+@router.post("/settings/features/{feature_key}/archive", response_class=HTMLResponse)
+async def admin_settings_feature_archive(
+    request: Request,
+    feature_key: str,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """Archive a feature flag."""
+    from app.services.feature_flag_service import FeatureFlagService
+
+    service = FeatureFlagService(db)
+    service.archive_flag(feature_key)
+    db.commit()
+    return RedirectResponse(url="/admin/settings/features?success=1", status_code=303)
+
+
 @router.get("/settings/service-hooks", response_class=HTMLResponse)
 def admin_settings_service_hooks(
     request: Request,

@@ -787,6 +787,8 @@ def material_request_list(
         start_date=start_date,
         end_date=end_date,
         project_id=project_id,
+        page=page,
+        limit=limit,
     )
 
 

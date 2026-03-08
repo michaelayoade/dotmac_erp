@@ -10,7 +10,7 @@ Multi-dimensional limit enforcement system for expense claims:
 
 import enum
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -817,7 +817,7 @@ class ExpensePeriodUsage(Base):
         self.total_claimed = claimed
         self.total_approved = approved
         self.claim_count = count
-        self.last_calculated_at = datetime.utcnow()
+        self.last_calculated_at = datetime.now(UTC)
         self.is_stale = False
 
     def __repr__(self) -> str:

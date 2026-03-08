@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, compact_filters, icon_svg %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Payment Batches{% endblock %}
@@ -25,7 +25,7 @@
     {# Filters #}
     {% call(filter_attrs) compact_filters(
         base_url="/finance/ap/payment-batches",
-        active_filters=active_filters | default([])
+        active_filters=active_filters if active_filters else []
     ) %}
     <div>
             <select name="status"
@@ -58,7 +58,7 @@
                     {% for batch in batches %}
                     <tr>
                         <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                            {{ batch.batch_date }}
+                            {{ batch.batch_date.strftime('%d %b %Y') if batch.batch_date else '—' }}
                         </td>
                         <td class="whitespace-nowrap font-mono text-sm text-slate-700 dark:text-slate-200">
                             {{ batch.batch_number }}
@@ -66,11 +66,11 @@
                         <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                             {{ batch.payment_method | replace('_', ' ') | title }}
                         </td>
-                        <td class="table-cell-amount">
-                            {{ batch.total_amount }} {{ batch.currency_code }}
+                        <td class="text-right font-mono tabular-nums">
+                            {{ "{:,.2f}".format(batch.total_amount) if batch.total_amount else '0.00' }} {{ batch.currency_code }}
                         </td>
-                        <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                            {{ batch.status.value if batch.status else '' }}
+                        <td class="whitespace-nowrap text-center">
+                            {{ status_badge(batch.status.value if batch.status else '', 'sm') }}
                         </td>
                     </tr>
                     {% else %}
@@ -84,6 +84,7 @@
             </table>
         </div>
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'status': status}) }}
     </div>
 
 </div>

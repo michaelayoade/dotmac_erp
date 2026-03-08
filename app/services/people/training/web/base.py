@@ -72,5 +72,5 @@ def event_status_label(status: TrainingEventStatus) -> dict:
     return {"text": label, "color": color}
 
 
-EVENT_TYPES = ["IN_PERSON", "VIRTUAL", "HYBRID", "SELF_PACED"]
+EVENT_TYPES = ["IN_PERSON", "ONLINE", "HYBRID"]
 TRAINING_TYPES = ["INTERNAL", "EXTERNAL", "ONLINE", "CERTIFICATION"]

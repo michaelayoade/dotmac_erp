@@ -314,11 +314,12 @@ def create_ar_receipt(
 @router.get("/receipts/{receipt_id}", response_model=ARReceiptRead)
 def get_ar_receipt(
     receipt_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ar:receipts:read")),
     db: Session = Depends(get_db),
 ):
     """Get an AR receipt by ID."""
-    return customer_payment_service.get(db, str(receipt_id))
+    return customer_payment_service.get(db, str(receipt_id), organization_id)
 
 
 @router.get("/receipts", response_model=ListResponse[ARReceiptRead])

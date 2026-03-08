@@ -42,6 +42,7 @@ from app.tasks.data_health import (
     run_data_health_check,
 )
 from app.tasks.email import send_email_async
+from app.tasks.feature_flags import archive_expired_feature_flags
 from app.tasks.expense import (
     calculate_expense_analytics,
     poll_stuck_expense_transfers,
@@ -71,6 +72,7 @@ from app.tasks.hr import (
     process_work_anniversary_notifications,
 )
 from app.tasks.notifications import (
+    process_pending_nextcloud_notifications,
     process_pending_notification_emails,
 )
 from app.tasks.outbox_relay import (
@@ -188,6 +190,8 @@ __all__ = [
     "generate_daily_workforce_insights",
     "generate_weekly_finance_report",
     "generate_weekly_hr_report",
+    # Feature flags
+    "archive_expired_feature_flags",
     # Data health tasks
     "cleanup_old_notifications",
     "process_stuck_outbox_events",
@@ -200,6 +204,7 @@ __all__ = [
     "run_data_health_check",
     # Notification tasks
     "process_pending_notification_emails",
+    "process_pending_nextcloud_notifications",
     "execute_async_hook",
     "cleanup_old_hook_executions",
     # Project SLA tasks

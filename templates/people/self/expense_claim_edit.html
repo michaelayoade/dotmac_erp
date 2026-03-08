@@ -161,7 +161,18 @@
 
         <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Link to Project/Ticket (Optional)</h3>
-            <div class="grid gap-4 sm:grid-cols-3">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                    <label for="cost_center_id" class="form-label">Cost Center</label>
+                    <select name="cost_center_id" id="cost_center_id" class="form-select w-full" {% if not can_edit %}disabled{% endif %}>
+                        <option value="">No cost center</option>
+                        {% for cc in cost_centers %}
+                        <option value="{{ cc.cost_center_id }}" {% if claim.cost_center_id and claim.cost_center_id == cc.cost_center_id %}selected{% endif %}>
+                            {{ cc.cost_center_code }} - {{ cc.cost_center_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div>
                     <label for="project_id" class="form-label">Project</label>
                     <select name="project_id" id="project_id" class="form-select w-full" {% if not can_edit %}disabled{% endif %}>

@@ -620,13 +620,19 @@ class ProcurementWebService:
             params={"status": status, "q": q},
             labels={"q": "Search"},
         )
+        page = (offset // limit) + 1 if limit else 1
+        total_pages = max(1, (total + limit - 1) // limit) if limit else 1
         return {
             "vendors": prequalifications,
             "total": total,
+            "total_count": total,
             "offset": offset,
             "limit": limit,
+            "page": page,
+            "total_pages": total_pages,
             "filter_status": status,
             "filter_q": q,
+            "search": q or "",
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
             "vendor_statuses": list(PrequalificationStatus),
             "active_filters": active_filters,

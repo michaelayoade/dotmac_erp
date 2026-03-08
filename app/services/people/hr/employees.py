@@ -33,6 +33,7 @@ from app.models.people.hr import (
     EmploymentType,
 )
 from app.models.person import Person
+from app.models.rbac import PersonRole, Role
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import PaginatedResult, PaginationParams, paginate
@@ -58,6 +59,7 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+DEFAULT_NEW_LOCAL_PASSWORD = "Dotmac@123"  # noqa: S105  # nosec B105
 
 if TYPE_CHECKING:
     from app.auth import Principal
@@ -295,7 +297,7 @@ class EmployeeService:
             count_column=Employee.employee_id,
         )
 
-    def get_employee_stats(self) -> dict:
+    def get_employee_stats(self) -> dict[str, int]:
         """Get employee count statistics by status.
 
         Returns:
@@ -326,13 +328,19 @@ class EmployeeService:
         }
 
     def get_employee(
-        self, employee_id: uuid.UUID, include_deleted: bool = False
+        self,
+        employee_id: uuid.UUID,
+        include_deleted: bool = False,
+        *,
+        eager_load: bool = False,
     ) -> Employee:
         """Get an employee by ID.
 
         Args:
             employee_id: The employee ID.
             include_deleted: Whether to include soft-deleted employees.
+            eager_load: If True, eager load person, department, and designation
+                relationships to avoid N+1 queries. Use for detail views.
 
         Returns:
             The Employee object.
@@ -340,6 +348,8 @@ class EmployeeService:
         Raises:
             EmployeeNotFoundError: If employee not found.
         """
+        from sqlalchemy.orm import joinedload
+
         stmt = select(Employee).where(
             Employee.employee_id == employee_id,
             Employee.organization_id == self.organization_id,
@@ -347,6 +357,15 @@ class EmployeeService:
 
         if not include_deleted:
             stmt = stmt.where(Employee.is_deleted == False)
+
+        if eager_load:
+            stmt = stmt.options(
+                joinedload(Employee.person),
+                joinedload(Employee.department),
+                joinedload(Employee.designation),
+                joinedload(Employee.employment_type),
+                joinedload(Employee.default_shift_type),
+            )
 
         employee = self.db.scalar(stmt)
 
@@ -422,7 +441,7 @@ class EmployeeService:
         return [
             EmployeeSummary(
                 id=emp.employee_id,
-                name=f"{person.first_name} {person.last_name}".strip(),
+                name=person.name,
                 email=person.email,
                 employee_number=emp.employee_code,
                 department=None,  # Would need to join with Department
@@ -468,7 +487,7 @@ class EmployeeService:
 
         def build_node(employee: Employee, current_depth: int) -> OrgChartNode:
             person = employee.person
-            name = f"{person.first_name} {person.last_name}".strip() if person else ""
+            name = person.name if person else ""
             email = person.email if person else None
 
             designation_name = (
@@ -728,6 +747,7 @@ class EmployeeService:
 
         self.db.add(employee)
         self.db.flush()
+        self._ensure_default_employee_role(person.id)
 
         fire_audit_event(
             db=self.db,
@@ -743,6 +763,29 @@ class EmployeeService:
         )
 
         return employee
+
+    def _ensure_default_employee_role(self, person_id: uuid.UUID) -> None:
+        """Ensure newly created employees have the default employee role."""
+        employee_role = self.db.scalar(
+            select(Role).where(
+                Role.name == "employee",
+                Role.is_active.is_(True),
+            )
+        )
+        if not employee_role:
+            raise ValidationError("Default role 'employee' is missing or inactive")
+
+        existing_assignment = self.db.scalar(
+            select(PersonRole).where(
+                PersonRole.person_id == person_id,
+                PersonRole.role_id == employee_role.id,
+            )
+        )
+        if existing_assignment:
+            return
+
+        self.db.add(PersonRole(person_id=person_id, role_id=employee_role.id))
+        self.db.flush()
 
     def update_employee(
         self, employee_id: uuid.UUID, data: EmployeeUpdateData
@@ -1002,8 +1045,19 @@ class EmployeeService:
         if not person or person.organization_id != self.organization_id:
             raise ValidationError("Employee is not linked to a valid user")
 
-        if provider == AuthProvider.local and (not username or not password):
-            raise ValidationError("Username and password are required for local auth")
+        resolved_username = (username or "").strip() or None
+        resolved_password = password
+
+        if provider == AuthProvider.local:
+            if not resolved_username:
+                resolved_username = (person.email or "").strip().lower() or None
+            if not resolved_password:
+                resolved_password = DEFAULT_NEW_LOCAL_PASSWORD
+            must_change_password = True
+            if not resolved_username:
+                raise ValidationError(
+                    "Username and password are required for local auth"
+                )
 
         existing = self.db.scalar(
             select(UserCredential).where(
@@ -1014,21 +1068,21 @@ class EmployeeService:
         if existing:
             raise ValidationError("User credentials already exist for this employee")
 
-        if username:
+        if resolved_username:
             username_in_use = self.db.scalar(
                 select(UserCredential).where(
                     UserCredential.provider == provider,
-                    UserCredential.username == username,
+                    UserCredential.username == resolved_username,
                 )
             )
             if username_in_use:
                 raise ValidationError("Username is already in use")
 
-        password_hash = hash_password(password) if password else None
+        password_hash = hash_password(resolved_password) if resolved_password else None
         credential = UserCredential(
             person_id=person.id,
             provider=provider,
-            username=username,
+            username=resolved_username,
             password_hash=password_hash,
             must_change_password=must_change_password,
             password_updated_at=datetime.now(UTC) if password_hash else None,

@@ -452,9 +452,16 @@ def _branding_config() -> FileUploadConfig:
 
 
 def _resume_config() -> FileUploadConfig:
-    extensions = frozenset(
-        ext.strip().lower() for ext in settings.resume_allowed_extensions.split(",")
-    )
+    allowed_doc_extensions = {".pdf", ".doc", ".docx"}
+    configured_extensions = {
+        ext.strip().lower()
+        for ext in settings.resume_allowed_extensions.split(",")
+        if ext.strip()
+    }
+    # Resume uploads are intentionally restricted to Word and PDF documents.
+    extensions = frozenset(configured_extensions & allowed_doc_extensions)
+    if not extensions:
+        extensions = frozenset(allowed_doc_extensions)
     # Derive content types from extensions
     ext_to_ct: dict[str, str] = {
         ".pdf": "application/pdf",

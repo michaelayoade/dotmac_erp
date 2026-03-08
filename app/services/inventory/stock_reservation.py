@@ -118,7 +118,7 @@ class StockReservationService:
                 message="Quantity must be greater than zero.",
             )
 
-        if not is_feature_enabled(self.db, FEATURE_STOCK_RESERVATION):
+        if not is_feature_enabled(self.db, organization_id, FEATURE_STOCK_RESERVATION):
             return ReservationResult(
                 success=False,
                 reservation_id=None,

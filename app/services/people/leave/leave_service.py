@@ -709,7 +709,10 @@ class LeaveService:
         if is_active is not None:
             query = query.where(LeaveAllocation.is_active == is_active)
 
-        query = query.order_by(LeaveAllocation.from_date.desc())
+        query = query.options(
+            joinedload(LeaveAllocation.employee).joinedload(Employee.person),
+            joinedload(LeaveAllocation.leave_type),
+        ).order_by(LeaveAllocation.from_date.desc())
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -719,7 +722,7 @@ class LeaveService:
         if pagination:
             query = query.offset(pagination.offset).limit(pagination.limit)
 
-        items = list(self.db.scalars(query).all())
+        items = list(self.db.scalars(query).unique().all())
 
         return PaginatedResult(
             items=items,
@@ -972,8 +975,13 @@ class LeaveService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[LeaveApplication]:
         """List leave applications."""
-        query = select(LeaveApplication).where(
-            LeaveApplication.organization_id == org_id
+        query = (
+            select(LeaveApplication)
+            .options(
+                joinedload(LeaveApplication.employee).joinedload(Employee.person),
+                joinedload(LeaveApplication.leave_type),
+            )
+            .where(LeaveApplication.organization_id == org_id)
         )
 
         if employee_id:
@@ -996,15 +1004,39 @@ class LeaveService:
 
         query = query.order_by(LeaveApplication.from_date.desc())
 
-        # Count total
-        count_query = select(func.count()).select_from(query.subquery())
+        # Count total (separate query without joinedload options)
+        count_query = select(func.count(LeaveApplication.application_id)).where(
+            LeaveApplication.organization_id == org_id
+        )
+        if employee_id:
+            count_query = count_query.where(
+                LeaveApplication.employee_id == employee_id
+            )
+        if leave_type_id:
+            count_query = count_query.where(
+                LeaveApplication.leave_type_id == leave_type_id
+            )
+        if status:
+            count_query = count_query.where(
+                LeaveApplication.status == (
+                    LeaveApplicationStatus(status)
+                    if isinstance(status, str)
+                    else status
+                )
+            )
+        if from_date:
+            count_query = count_query.where(
+                LeaveApplication.from_date >= from_date
+            )
+        if to_date:
+            count_query = count_query.where(LeaveApplication.to_date <= to_date)
         total = self.db.scalar(count_query) or 0
 
         # Apply pagination
         if pagination:
             query = query.offset(pagination.offset).limit(pagination.limit)
 
-        items = list(self.db.scalars(query).all())
+        items = list(self.db.scalars(query).unique().all())
 
         return PaginatedResult(
             items=items,
@@ -1027,9 +1059,16 @@ class LeaveService:
                 items=[], total=0, offset=0, limit=pagination.limit if pagination else 0
             )
 
-        query = select(LeaveApplication).where(
-            LeaveApplication.organization_id == org_id,
-            LeaveApplication.employee_id.in_(employee_ids),
+        query = (
+            select(LeaveApplication)
+            .options(
+                joinedload(LeaveApplication.employee).joinedload(Employee.person),
+                joinedload(LeaveApplication.leave_type),
+            )
+            .where(
+                LeaveApplication.organization_id == org_id,
+                LeaveApplication.employee_id.in_(employee_ids),
+            )
         )
 
         if status:
@@ -1040,13 +1079,25 @@ class LeaveService:
 
         query = query.order_by(LeaveApplication.from_date.desc())
 
-        count_query = select(func.count()).select_from(query.subquery())
+        # Count total (separate query without joinedload)
+        count_query = select(func.count(LeaveApplication.application_id)).where(
+            LeaveApplication.organization_id == org_id,
+            LeaveApplication.employee_id.in_(employee_ids),
+        )
+        if status:
+            count_query = count_query.where(
+                LeaveApplication.status == (
+                    LeaveApplicationStatus(status)
+                    if isinstance(status, str)
+                    else status
+                )
+            )
         total = self.db.scalar(count_query) or 0
 
         if pagination:
             query = query.offset(pagination.offset).limit(pagination.limit)
 
-        items = list(self.db.scalars(query).all())
+        items = list(self.db.scalars(query).unique().all())
 
         return PaginatedResult(
             items=items,
@@ -1229,7 +1280,7 @@ class LeaveService:
 
         application.status = LeaveApplicationStatus.APPROVED
         application.approved_by_id = approver_id
-        application.approved_at = datetime.utcnow()
+        application.approved_at = datetime.now(UTC)
 
         # Update allocation
         allocation = self.db.scalar(
@@ -1606,8 +1657,7 @@ class LeaveService:
         alloc_query = (
             select(
                 Employee.employee_id,
-                Person.first_name,
-                Person.last_name,
+                Person.name_expr().label("employee_name"),
                 Department.department_name.label("department_name"),
                 LeaveType.leave_type_name,
                 LeaveType.leave_type_id,
@@ -1640,6 +1690,7 @@ class LeaveService:
         results = self.db.execute(
             alloc_query.group_by(
                 Employee.employee_id,
+                Person.display_name,
                 Person.first_name,
                 Person.last_name,
                 Department.department_name,
@@ -1655,7 +1706,7 @@ class LeaveService:
             if emp_id not in employees_dict:
                 employees_dict[emp_id] = {
                     "employee_id": emp_id,
-                    "employee_name": f"{row.first_name} {row.last_name}",
+                    "employee_name": row.employee_name,
                     "department_name": row.department_name or "No Department",
                     "leave_balances": [],
                     "total_allocated": Decimal("0"),
@@ -1787,8 +1838,7 @@ class LeaveService:
         query = (
             select(
                 LeaveApplication,
-                Person.first_name,
-                Person.last_name,
+                Person.name_expr().label("employee_name"),
                 Department.department_name.label("department_name"),
                 LeaveType.leave_type_name,
             )
@@ -1810,11 +1860,11 @@ class LeaveService:
         results = self.db.execute(query.order_by(LeaveApplication.from_date)).all()
 
         leave_events = []
-        for app, first_name, last_name, dept_name, leave_type_name in results:
+        for app, employee_name, dept_name, leave_type_name in results:
             leave_events.append(
                 {
                     "application_id": str(app.application_id),
-                    "employee_name": f"{first_name} {last_name}",
+                    "employee_name": employee_name,
                     "department_name": dept_name or "No Department",
                     "leave_type_name": leave_type_name,
                     "from_date": app.from_date.isoformat(),

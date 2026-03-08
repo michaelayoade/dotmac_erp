@@ -129,14 +129,12 @@ def _format_ticket_for_list(ticket: Ticket) -> dict[str, Any]:
     # Get assigned employee name
     assigned_name = None
     if ticket.assigned_to and ticket.assigned_to.person:
-        p = ticket.assigned_to.person
-        assigned_name = f"{p.first_name or ''} {p.last_name or ''}".strip()
+        assigned_name = ticket.assigned_to.person.name
 
     # Get raised by name
     raised_name = None
     if ticket.raised_by and ticket.raised_by.person:
-        p = ticket.raised_by.person
-        raised_name = f"{p.first_name or ''} {p.last_name or ''}".strip()
+        raised_name = ticket.raised_by.person.name
     elif ticket.raised_by_email:
         raised_name = ticket.raised_by_email
 
@@ -277,20 +275,14 @@ def _format_ticket_for_detail(
         try:
             creator = db.get(Person, ticket.created_by_id)
             if creator:
-                base["created_by_name"] = (
-                    f"{creator.first_name or ''} {creator.last_name or ''}".strip()
-                    or "Unknown"
-                )
+                base["created_by_name"] = creator.name or "Unknown"
         except Exception:
             logger.exception("Ignored exception")
     if db and ticket.updated_by_id:
         try:
             updater = db.get(Person, ticket.updated_by_id)
             if updater:
-                base["updated_by_name"] = (
-                    f"{updater.first_name or ''} {updater.last_name or ''}".strip()
-                    or "Unknown"
-                )
+                base["updated_by_name"] = updater.name or "Unknown"
         except Exception:
             logger.exception("Ignored exception")
 
@@ -1067,20 +1059,18 @@ class SupportWebService:
             limit=10,
         )
 
-        # Get team performance
+        # Get team performance (reuse metrics to avoid redundant queries)
         team_performance = sla_service.get_team_performance(
             db,
             org_id,
-            date_from=parsed_date_from,
-            date_to=parsed_date_to,
+            metrics=metrics,
         )
 
-        # Get category performance
+        # Get category performance (reuse metrics to avoid redundant queries)
         category_performance = sla_service.get_category_performance(
             db,
             org_id,
-            date_from=parsed_date_from,
-            date_to=parsed_date_to,
+            metrics=metrics,
         )
 
         # Get aging report
@@ -1165,6 +1155,7 @@ class SupportWebService:
         *,
         breach_type: str = "all",
         include_resolved: bool = False,
+        page: int = 1,
     ) -> HTMLResponse:
         """Render the breached tickets report page."""
         from app.web.deps import base_context
@@ -1236,12 +1227,21 @@ class SupportWebService:
                 "include_resolved": {"true": "Yes"},
             },
         )
+        per_page = 50
+        total_count = len(breached_formatted)
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        start = (page - 1) * per_page
+        paginated_tickets = breached_formatted[start : start + per_page]
+
         context = {
             **base_context(request, auth, "Breached Tickets", "support", db=db),
-            "tickets": breached_formatted,
+            "tickets": paginated_tickets,
             "breach_type": breach_type,
             "include_resolved": include_resolved,
-            "total_count": len(breached_formatted),
+            "total_count": total_count,
+            "page": page,
+            "total_pages": total_pages,
+            "limit": per_page,
             "active_filters": active_filters,
         }
 
@@ -1482,7 +1482,7 @@ class SupportWebService:
         for activity in activities:
             author_name = None
             if activity.author:
-                author_name = f"{activity.author.first_name or ''} {activity.author.last_name or ''}".strip()
+                author_name = activity.author.name
 
             if activity.comment_type == CommentType.SYSTEM:
                 config = ACTION_CONFIG.get(

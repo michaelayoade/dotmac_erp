@@ -55,6 +55,8 @@ class MaterialRequestWebService:
         start_date: str | None = None,
         end_date: str | None = None,
         project_id: str | None = None,
+        page: int = 1,
+        per_page: int = 50,
     ) -> dict:
         """Get context for material request list page."""
         org_id = coerce_uuid(organization_id)
@@ -92,8 +94,23 @@ class MaterialRequestWebService:
         if project_id:
             stmt = stmt.where(MaterialRequest.project_id == coerce_uuid(project_id))
 
+        # Count total for pagination
+        from sqlalchemy import func as sa_func
+
+        count_stmt = select(sa_func.count()).select_from(
+            stmt.order_by(None).subquery()
+        )
+        total_count = db.scalar(count_stmt) or 0
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * per_page
+
         requests = (
-            db.scalars(stmt.order_by(MaterialRequest.created_at.desc()).limit(100))
+            db.scalars(
+                stmt.order_by(MaterialRequest.created_at.desc())
+                .offset(offset)
+                .limit(per_page)
+            )
             .unique()
             .all()
         )
@@ -176,6 +193,10 @@ class MaterialRequestWebService:
             "statuses": [s.value for s in MaterialRequestStatus],
             "request_types": [t.value for t in MaterialRequestType],
             "active_filters": active_filters,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "limit": per_page,
         }
 
     @staticmethod

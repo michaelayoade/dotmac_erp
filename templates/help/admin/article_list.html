@@ -1,0 +1,124 @@
+{% extends "help/base_help.html" %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg, live_search %}
+
+{% block page_title %}Manage Help Articles{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <li><a href="/help" class="hover:text-teal-600 dark:hover:text-teal-400">Help</a></li>
+        <li>/</li>
+        <li class="text-slate-900 dark:text-white" aria-current="page">Admin Articles</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/help/admin/articles/new" class="btn btn-primary btn-sm">
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+    New Article
+</a>
+<a href="/help/admin/dashboard" class="btn btn-secondary btn-sm">
+    {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
+    Dashboard
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% call(search_attrs) live_search(search=search, base_url="/help/admin/articles", placeholder="Search articles...") %}
+    <select name="status" class="form-select" {{ search_attrs }}>
+        {% for val, label in status_choices %}
+        <option value="{{ val }}" {{ 'selected' if status_filter == val else '' }}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="module" class="form-select" {{ search_attrs }}>
+        <option value="">All Modules</option>
+        {% for val, label in module_choices %}
+        <option value="{{ val }}" {{ 'selected' if module_filter == val else '' }}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    {% endcall %}
+
+    <div id="results-container">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Title</th>
+                        <th scope="col">Slug</th>
+                        <th scope="col">Module</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col" class="hidden sm:table-cell">Updated</th>
+                        <th scope="col" class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for article in articles %}
+                    <tr class="group">
+                        <td>
+                            <a href="/help/admin/articles/{{ article.article_id }}/edit"
+                               class="font-medium text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">
+                                {{ article.title }}
+                            </a>
+                        </td>
+                        <td class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ article.slug }}</td>
+                        <td class="text-sm">{{ article.module_key | replace('_', ' ') | title }}</td>
+                        <td class="text-center">{{ status_badge(article.status.value if article.status else 'DRAFT', 'sm') }}</td>
+                        <td class="hidden sm:table-cell text-sm text-slate-500 dark:text-slate-400">
+                            {{ article.updated_at.strftime('%d %b %Y') if article.updated_at else '' }}
+                        </td>
+                        <td class="text-right">
+                            <div class="flex justify-end gap-2">
+                                <a href="/help/admin/articles/{{ article.article_id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+                                {% if article.status.value != 'PUBLISHED' %}
+                                <form method="POST" action="/help/admin/articles/{{ article.article_id }}/publish" class="inline">
+                                    {{ request.state.csrf_form | safe }}
+                                    <button type="submit" class="btn btn-success btn-sm">Publish</button>
+                                </form>
+                                {% else %}
+                                <form method="POST" action="/help/admin/articles/{{ article.article_id }}/archive" class="inline">
+                                    {{ request.state.csrf_form | safe }}
+                                    <button type="submit" class="btn btn-secondary btn-sm">Archive</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6">
+                            {{ empty_state(
+                                title="No admin articles yet",
+                                description="Create custom help articles to supplement the built-in guides.",
+                                icon="document",
+                                cta_text="Create Article",
+                                cta_href="/help/admin/articles/new"
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-between px-4 py-3">
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Showing {{ ((page - 1) * per_page) + 1 }}–{{ [page * per_page, total] | min }} of {{ total }}
+            </p>
+            <div class="flex gap-2">
+                {% if page > 1 %}
+                <a href="/help/admin/articles?page={{ page - 1 }}&search={{ search }}&status={{ status_filter }}&module={{ module_filter }}"
+                   class="btn btn-secondary btn-sm">Previous</a>
+                {% endif %}
+                {% if page < total_pages %}
+                <a href="/help/admin/articles?page={{ page + 1 }}&search={{ search }}&status={{ status_filter }}&module={{ module_filter }}"
+                   class="btn btn-secondary btn-sm">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

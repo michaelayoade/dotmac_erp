@@ -1,0 +1,93 @@
+{% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import icon_svg %}
+{% import "components/settings_macros.html" as settings_ui %}
+
+{% block page_title %}Help Center Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Home</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/settings" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Settings</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Help Center</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6">
+    {{ settings_ui.settings_header("Help Center Settings", "Manage the JSON override used by /help so content can be updated without a code deploy.") }}
+    {{ settings_ui.settings_messages(settings_saved|default(false), error, "Help Center settings updated successfully.") }}
+
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <form method="POST" action="/settings/help" class="space-y-6">
+            {{ request.state.csrf_form | safe }}
+
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Override JSON</h2>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    Leave empty to use the built-in catalog. Provide a JSON object to replace lists such as <code>articles</code>, <code>tracks</code>, or <code>featured_articles</code>.
+                </p>
+                <label for="help_center_content_json" class="sr-only">Help center override JSON</label>
+                <textarea id="help_center_content_json" name="help_center_content_json" rows="24"
+                          class="mt-4 w-full rounded-xl border border-slate-300 bg-slate-950 px-4 py-3 font-mono text-xs text-slate-100 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-slate-600">{{ override_json }}</textarea>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <a href="/help" class="btn btn-secondary btn-sm">Open Help Center</a>
+                    <a href="/help/search" class="btn btn-secondary btn-sm">Preview Search</a>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3">
+                <a href="/settings" class="btn btn-secondary">Back</a>
+                <button type="submit" class="btn btn-primary">Save Help Settings</button>
+            </div>
+        </form>
+
+        <div class="space-y-6">
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Preview Summary</h2>
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Articles</dt>
+                        <dd class="font-semibold text-slate-900 dark:text-white">{{ preview_counts.articles }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Tracks</dt>
+                        <dd class="font-semibold text-slate-900 dark:text-white">{{ preview_counts.tracks }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Module Hubs</dt>
+                        <dd class="font-semibold text-slate-900 dark:text-white">{{ preview_counts.module_hubs }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Visible Tracks</h2>
+                <div class="mt-4 space-y-3">
+                    {% for track in preview_tracks %}
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                        <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ track.title }}</p>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ track.step_count }} lessons</p>
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No tracks are currently visible.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Article Preview</h2>
+                <div class="mt-4 space-y-3">
+                    {% for article in preview_articles %}
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ article.module_title }} · {{ article.content_type_label }}</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{{ article.title }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

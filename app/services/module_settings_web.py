@@ -7,6 +7,7 @@ Handles: Support, Inventory, Projects, Fleet, and Procurement settings.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from collections.abc import Callable
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain, SettingScope, SettingValueType
+from app.services.help_center import build_help_experience_payload
 from app.services.settings_spec import SettingSpec, coerce_value, get_spec
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,18 @@ MODULE_SETTINGS_CONFIGS = [
             "support_default_sla_resolution_hours",
             "support_auto_assignment_enabled",
             "support_ticket_prefix",
+        ],
+    ),
+    ModuleSettingsConfig(
+        key="help",
+        title="Help Center",
+        description="Help articles, tracks, and search experience",
+        url="/settings/help",
+        icon="question-mark-circle",
+        page_title="Help Center Settings",
+        template="settings/help.html",
+        setting_keys=[
+            "help_center_content_json",
         ],
     ),
     ModuleSettingsConfig(
@@ -116,6 +130,18 @@ MODULE_SETTINGS_CONFIGS = [
             "procurement_threshold_ministerial_max",
         ],
     ),
+    ModuleSettingsConfig(
+        key="expense",
+        title="Expense",
+        description="Reimbursement and AP integration settings",
+        url="/settings/expense",
+        icon="receipt",
+        page_title="Expense Settings",
+        template="settings/expense.html",
+        setting_keys=[
+            "expense_route_to_ap",
+        ],
+    ),
 ]
 
 
@@ -165,6 +191,79 @@ class ModuleSettingsWebService:
         return self._update_settings(
             db, organization_id, data, MODULE_SETTINGS_BY_KEY["support"].setting_keys
         )
+
+    # ========== Help Center Settings ==========
+
+    def get_help_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get help-center settings and current content preview."""
+        context = self._build_settings_context(
+            db, organization_id, MODULE_SETTINGS_BY_KEY["help"].setting_keys
+        )
+        raw_override = context["settings"]["help_center_content_json"]["value"]
+        override_dict: dict[str, Any] | None = None
+        if isinstance(raw_override, dict):
+            override_dict = raw_override
+        elif isinstance(raw_override, str) and raw_override.strip():
+            try:
+                override_dict = json.loads(raw_override)
+            except json.JSONDecodeError:
+                override_dict = None
+
+        preview = build_help_experience_payload(
+            accessible_modules=["finance", "people", "support", "procurement", "settings"],
+            roles=["admin"],
+            scopes=[],
+            is_admin=True,
+            overrides=override_dict,
+        )
+        context.update(
+            {
+                "override_json": json.dumps(override_dict or {}, indent=2),
+                "preview_articles": preview["articles"][:8],
+                "preview_tracks": preview["tracks"],
+                "preview_counts": {
+                    "articles": len(preview["articles"]),
+                    "tracks": len(preview["tracks"]),
+                    "module_hubs": len(preview["module_hubs"]),
+                },
+            }
+        )
+        return context
+
+    def update_help_settings(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, str | None]:
+        """Update help-center JSON override."""
+        value = (data.get("help_center_content_json") or "").strip()
+        if not value:
+            parsed: dict[str, Any] | None = None
+        else:
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError as exc:
+                return False, f"Invalid JSON override: {exc.msg}"
+            if not isinstance(parsed, dict):
+                return False, "Help Center override must be a JSON object."
+
+        try:
+            self._set_setting_value(
+                db,
+                organization_id,
+                "help_center_content_json",
+                parsed,
+                SettingValueType.json,
+            )
+            db.commit()
+            return True, None
+        except Exception as e:
+            db.rollback()
+            logger.exception("Failed to update help center settings")
+            return False, f"Failed to update Help Center settings: {e}"
 
     # ========== Inventory Settings ==========
 
@@ -255,6 +354,27 @@ class ModuleSettingsWebService:
             organization_id,
             data,
             MODULE_SETTINGS_BY_KEY["procurement"].setting_keys,
+        )
+
+    # ========== Expense Settings ==========
+
+    def get_expense_context(
+        self, db: Session, organization_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Get expense settings for the form."""
+        return self._build_settings_context(
+            db, organization_id, MODULE_SETTINGS_BY_KEY["expense"].setting_keys
+        )
+
+    def update_expense_settings(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        data: dict[str, Any],
+    ) -> tuple[bool, str | None]:
+        """Update expense settings."""
+        return self._update_settings(
+            db, organization_id, data, MODULE_SETTINGS_BY_KEY["expense"].setting_keys
         )
 
     def _build_settings_context(
@@ -384,11 +504,18 @@ class ModuleSettingsWebService:
             setting = result.scalar_one_or_none()
 
             if setting:
-                setting.value_text = str(value) if value is not None else None
+                setting.value_json = value if normalized_type == SettingValueType.json else None
+                setting.value_text = (
+                    None
+                    if normalized_type == SettingValueType.json
+                    else str(value) if value is not None else None
+                )
                 if normalized_type == SettingValueType.boolean:
                     setting.value_type = SettingValueType.boolean
                 elif normalized_type == SettingValueType.integer:
                     setting.value_type = SettingValueType.integer
+                elif normalized_type == SettingValueType.json:
+                    setting.value_type = SettingValueType.json
                 else:
                     setting.value_type = SettingValueType.string
             else:
@@ -397,7 +524,12 @@ class ModuleSettingsWebService:
                     key=key,
                     organization_id=organization_id,
                     scope=SettingScope.ORG_SPECIFIC,
-                    value_text=str(value) if value is not None else None,
+                    value_text=(
+                        None
+                        if normalized_type == SettingValueType.json
+                        else str(value) if value is not None else None
+                    ),
+                    value_json=value if normalized_type == SettingValueType.json else None,
                     value_type=SettingValueType.string,
                     is_active=True,
                 )
@@ -405,6 +537,8 @@ class ModuleSettingsWebService:
                     new_setting.value_type = SettingValueType.boolean
                 elif normalized_type == SettingValueType.integer:
                     new_setting.value_type = SettingValueType.integer
+                elif normalized_type == SettingValueType.json:
+                    new_setting.value_type = SettingValueType.json
                 db.add(new_setting)
         except Exception:
             raise
@@ -459,6 +593,8 @@ class ModuleSettingsWebService:
             return SettingDomain.fleet
         if key.startswith("procurement_"):
             return SettingDomain.procurement
+        if key.startswith("expense_"):
+            return SettingDomain.expense
         return SettingDomain.settings
 
 

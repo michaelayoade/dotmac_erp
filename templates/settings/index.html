@@ -37,6 +37,8 @@
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 group-hover:bg-amber-100 dark:group-hover:bg-amber-900/50 transition-colors">
                     {% if section.icon == 'ticket' %}
                     {{ icon_svg("ticket", "h-6 w-6") }}
+                    {% elif section.icon == 'question-mark-circle' %}
+                    {{ icon_svg("question-mark-circle", "h-6 w-6") }}
                     {% elif section.icon == 'cube' %}
                     {{ icon_svg("box", "h-6 w-6") }}
                     {% elif section.icon == 'clipboard-document-list' %}
@@ -45,6 +47,8 @@
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0zM3 7h11v8H3V7zm11 3h4l2 3v2h-6v-5z"/>
                     </svg>
+                    {% elif section.icon == 'receipt' %}
+                    {{ icon_svg("receipt", "h-6 w-6") }}
                     {% elif section.icon == 'shopping-bag' %}
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14l-1.5 12.5a2 2 0 01-2 1.5H8.5a2 2 0 01-2-1.5L5 8z"/>

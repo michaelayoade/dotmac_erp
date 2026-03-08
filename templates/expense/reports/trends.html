@@ -37,8 +37,6 @@
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div id="results-container">
-
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
@@ -50,8 +48,6 @@
                 </div>
             </div>
         </div>
-        </div>
-
 
         <div class="card p-5">
             <div class="flex items-center gap-4">
@@ -107,12 +103,12 @@
                         {% else %}
                         {% set height_pct = 0 %}
                         {% endif %}
-                        <div class="w-full max-w-12 bg-amber-500 dark:bg-amber-400 rounded-t transition-all hover:bg-amber-600 dark:hover:bg-amber-300 cursor-pointer group relative"
+                        <a href="/expense/claims/list?start_date={{ m.month }}-01&end_date={{ m.month }}-{{ '%02d' | format([28, 29, 30, 31] | last) }}" class="block w-full max-w-12 bg-amber-500 dark:bg-amber-400 rounded-t transition-all hover:bg-amber-600 dark:hover:bg-amber-300 cursor-pointer group relative"
                              style="height: {{ height_pct }}%; min-height: {% if m.claimed_amount > 0 %}4px{% else %}0{% endif %}">
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                                 {{ "{:,.0f}".format(m.claimed_amount) }}
                             </div>
-                        </div>
+                        </a>
                     </div>
                     <div class="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center w-full">
                         <span class="hidden lg:inline">{{ m.month_label }}</span>
@@ -154,7 +150,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for m in report.months %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onclick="window.location='/expense/claims/list?start_date={{ m.month }}-01&end_date={{ m.month }}-31'">
                         <td class="px-5 py-3">
                             <div class="font-medium text-slate-900 dark:text-white">{{ m.month_label }}</div>
                         </td>

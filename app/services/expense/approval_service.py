@@ -12,18 +12,19 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.expense import (
     ExpenseApproverLimit,
     ExpenseCategory,
     ExpenseClaim,
+    ExpenseClaimApprovalStep,
     ExpenseLimitRule,
     LimitActionType,
 )
@@ -50,6 +51,7 @@ class ApprovalStep:
     approver_id: UUID
     approver_name: str
     max_amount: Decimal
+    submission_round: int = 1
     is_escalation: bool = False
     is_completed: bool = False
     decision: str | None = None  # "APPROVED", "REJECTED", None
@@ -165,6 +167,28 @@ class ExpenseApprovalService:
         Returns:
             ApprovalChain with all required approval steps
         """
+        persisted_steps = self._get_persisted_steps(claim)
+        if persisted_steps and not force_rebuild:
+            return self._build_chain_from_persisted_steps(claim, persisted_steps)
+
+        return self._build_dynamic_approval_chain(claim)
+
+    def initialize_approval_chain(
+        self,
+        claim: ExpenseClaim,
+    ) -> ApprovalChain:
+        """Build and persist a fresh approval chain for the next submission round."""
+        chain = self._build_dynamic_approval_chain(claim)
+        submission_round = self._current_submission_round(claim.claim_id) + 1
+        for step in chain.steps:
+            step.submission_round = submission_round
+        self._persist_approval_chain(claim, chain, submission_round)
+        return self.get_approval_chain(claim)
+
+    def _build_dynamic_approval_chain(
+        self,
+        claim: ExpenseClaim,
+    ) -> ApprovalChain:
         from app.models.people.hr.employee import Employee
 
         org_id = claim.organization_id
@@ -199,7 +223,11 @@ class ExpenseApprovalService:
         )
 
         # Step 2: Start with expense approver (if set), otherwise manager
-        initial_approver_id = employee.expense_approver_id or employee.reports_to_id
+        initial_approver_id = (
+            claim.requested_approver_id
+            or employee.expense_approver_id
+            or employee.reports_to_id
+        )
         if initial_approver_id:
             manager = self.db.get(Employee, initial_approver_id)
             if manager:
@@ -209,7 +237,7 @@ class ExpenseApprovalService:
                         ApprovalStep(
                             step_number=1,
                             approver_id=manager.employee_id,
-                            approver_name=f"{manager.first_name} {manager.last_name}",
+                            approver_name=manager.full_name,
                             max_amount=manager_limit,
                             is_escalation=False,
                         )
@@ -229,7 +257,7 @@ class ExpenseApprovalService:
                         ApprovalStep(
                             step_number=idx,
                             approver_id=approver.employee_id,
-                            approver_name=f"{approver.first_name} {approver.last_name}",
+                            approver_name=approver.full_name,
                             max_amount=max_amt,
                             is_escalation=is_esc,
                         )
@@ -247,7 +275,7 @@ class ExpenseApprovalService:
                     ApprovalStep(
                         step_number=idx,
                         approver_id=approver.employee_id,
-                        approver_name=f"{approver.first_name} {approver.last_name}",
+                        approver_name=approver.full_name,
                         max_amount=max_amt,
                         is_escalation=False,
                     )
@@ -264,7 +292,7 @@ class ExpenseApprovalService:
                             ApprovalStep(
                                 step_number=len(steps) + 1,
                                 approver_id=approver.employee_id,
-                                approver_name=f"{approver.first_name} {approver.last_name}",
+                                approver_name=approver.full_name,
                                 max_amount=Decimal(
                                     "999999999"
                                 ),  # Rule-specified approvers have no limit
@@ -282,7 +310,7 @@ class ExpenseApprovalService:
                     ApprovalStep(
                         step_number=idx,
                         approver_id=approver.employee_id,
-                        approver_name=f"{approver.first_name} {approver.last_name}",
+                        approver_name=approver.full_name,
                         max_amount=max_amt,
                         is_escalation=False,
                     )
@@ -297,6 +325,101 @@ class ExpenseApprovalService:
             requires_all_approvals=multi_approval_required,
             is_complete=False,
         )
+
+    def _current_submission_round(self, claim_id: UUID) -> int:
+        return (
+            self.db.scalar(
+                select(func.max(ExpenseClaimApprovalStep.submission_round)).where(
+                    ExpenseClaimApprovalStep.claim_id == claim_id
+                )
+            )
+            or 0
+        )
+
+    def _get_persisted_steps(self, claim: ExpenseClaim) -> list[ExpenseClaimApprovalStep]:
+        latest_round = self._current_submission_round(claim.claim_id)
+        if latest_round <= 0:
+            return []
+        return list(
+            self.db.scalars(
+                select(ExpenseClaimApprovalStep)
+                .where(
+                    ExpenseClaimApprovalStep.claim_id == claim.claim_id,
+                    ExpenseClaimApprovalStep.submission_round == latest_round,
+                )
+                .order_by(
+                    ExpenseClaimApprovalStep.step_number,
+                    ExpenseClaimApprovalStep.created_at,
+                )
+            ).all()
+        )
+
+    def _build_chain_from_persisted_steps(
+        self,
+        claim: ExpenseClaim,
+        persisted_steps: list[ExpenseClaimApprovalStep],
+    ) -> ApprovalChain:
+        steps = [
+            ApprovalStep(
+                step_number=row.step_number,
+                approver_id=row.approver_id,
+                approver_name=row.approver_name,
+                max_amount=row.max_amount,
+                submission_round=row.submission_round,
+                is_escalation=row.is_escalation,
+                is_completed=bool(row.decision),
+                decision=row.decision,
+                decided_at=row.decided_at,
+                notes=row.notes,
+            )
+            for row in persisted_steps
+        ]
+        completed_steps = sum(1 for step in steps if step.is_completed)
+        requires_all = any(row.requires_all_approvals for row in persisted_steps)
+        final_decision = None
+        is_complete = False
+        if any(step.decision == "REJECTED" for step in steps):
+            is_complete = True
+            final_decision = "REJECTED"
+        elif steps and all(step.decision == "APPROVED" for step in steps):
+            is_complete = True
+            final_decision = "APPROVED"
+
+        pending_step_numbers = [step.step_number for step in steps if not step.is_completed]
+        current_step = min(pending_step_numbers) if pending_step_numbers else len(steps)
+        return ApprovalChain(
+            claim_id=claim.claim_id,
+            total_steps=len(steps),
+            completed_steps=completed_steps,
+            current_step=current_step,
+            steps=steps,
+            requires_all_approvals=requires_all,
+            is_complete=is_complete,
+            final_decision=final_decision,
+        )
+
+    def _persist_approval_chain(
+        self,
+        claim: ExpenseClaim,
+        chain: ApprovalChain,
+        submission_round: int,
+    ) -> None:
+        rows = [
+            ExpenseClaimApprovalStep(
+                organization_id=claim.organization_id,
+                claim_id=claim.claim_id,
+                submission_round=submission_round,
+                step_number=step.step_number,
+                approver_id=step.approver_id,
+                approver_name=step.approver_name,
+                max_amount=step.max_amount,
+                requires_all_approvals=chain.requires_all_approvals,
+                is_escalation=step.is_escalation,
+            )
+            for step in chain.steps
+        ]
+        self.db.add_all(rows)
+        self.db.flush()
 
     def check_escalation_needed(
         self,
@@ -410,51 +533,41 @@ class ExpenseApprovalService:
         Returns:
             Updated ApprovalChain
         """
-        chain = self.get_approval_chain(claim)
-
-        # Find the step for this approver
-        step = next((s for s in chain.steps if s.approver_id == approver_id), None)
-        if not step:
-            # Approver not in chain - check if they have authority
-            if self.check_escalation_needed(claim, approver_id):
-                raise ValueError("Approver does not have authority for this claim")
-            # Add them as an ad-hoc approver
-            step = ApprovalStep(
-                step_number=len(chain.steps) + 1,
-                approver_id=approver_id,
-                approver_name="Ad-hoc Approver",
-                max_amount=Decimal("0"),
-                is_escalation=False,
-            )
-            chain.steps.append(step)
-
-        # Update step
-        step.is_completed = True
-        step.decision = decision
-        step.decided_at = datetime.utcnow()
-        step.notes = notes
-
-        # Update chain status
-        chain.completed_steps = sum(1 for s in chain.steps if s.is_completed)
-
-        if decision == "REJECTED":
-            chain.is_complete = True
-            chain.final_decision = "REJECTED"
-        elif chain.requires_all_approvals:
-            if chain.completed_steps >= chain.total_steps:
-                all_approved = all(
-                    s.decision == "APPROVED" for s in chain.steps if s.is_completed
-                )
-                chain.is_complete = True
-                chain.final_decision = "APPROVED" if all_approved else "REJECTED"
+        persisted_steps = self._get_persisted_steps(claim)
+        if not persisted_steps:
+            chain = self.initialize_approval_chain(claim)
+            persisted_steps = self._get_persisted_steps(claim)
         else:
-            # Single approval sufficient
-            chain.is_complete = True
-            chain.final_decision = "APPROVED"
+            chain = self._build_chain_from_persisted_steps(claim, persisted_steps)
 
-        chain.current_step = chain.completed_steps + 1
+        pending_steps = [row for row in persisted_steps if not row.decision]
+        if not pending_steps:
+            raise ValueError("Claim has no pending approval steps")
 
-        return chain
+        allowed_approver_ids = set(chain.current_approvers)
+        if approver_id not in allowed_approver_ids:
+            raise ValueError("Approver is not assigned to the current approval step")
+
+        step_row = next(
+            (
+                row
+                for row in pending_steps
+                if row.approver_id == approver_id
+                and (
+                    chain.requires_all_approvals
+                    or row.step_number == chain.current_step
+                )
+            ),
+            None,
+        )
+        if step_row is None:
+            raise ValueError("Approver is not assigned to the current approval step")
+
+        step_row.decision = decision
+        step_row.decided_at = datetime.now(UTC)
+        step_row.notes = notes
+        self.db.flush()
+        return self.get_approval_chain(claim, force_rebuild=False)
 
     # =========================================================================
     # Receipt Validation
@@ -481,7 +594,12 @@ class ExpenseApprovalService:
         for item in claim.items:
             # Load category
             category = (
-                self.db.get(ExpenseCategory, item.category_id)
+                self.db.scalar(
+                    select(ExpenseCategory).where(
+                        ExpenseCategory.category_id == item.category_id,
+                        ExpenseCategory.organization_id == claim.organization_id,
+                    )
+                )
                 if item.category_id
                 else None
             )

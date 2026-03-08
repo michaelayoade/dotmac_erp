@@ -33,7 +33,7 @@
     {# Filters #}
     {% call(filter_attrs) compact_filters(
         base_url="/finance/reports/general-ledger",
-        active_filters=active_filters | default([]),
+        active_filters=active_filters if active_filters else [],
         date_range=true,
         start_date=start_date_iso | default('', true),
         end_date=end_date_iso | default('', true)
@@ -92,9 +92,9 @@
                         </td>
                         <td class="py-2 px-2 text-slate-900 dark:text-white">{{ txn.description }}</td>
                         <td class="py-2 px-2 text-slate-500 dark:text-slate-400">{{ txn.reference }}</td>
-                        <td class="py-2 px-2 text-right font-mono {% if txn.debit %}text-slate-900 dark:text-white{% else %}text-slate-300 dark:text-slate-600{% endif %}">{{ txn.debit or '-' }}</td>
-                        <td class="py-2 px-2 text-right font-mono {% if txn.credit %}text-slate-900 dark:text-white{% else %}text-slate-300 dark:text-slate-600{% endif %}">{{ txn.credit or '-' }}</td>
-                        <td class="py-2 px-2 text-right font-mono font-medium text-slate-900 dark:text-white">{{ txn.balance }}</td>
+                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if txn.debit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ txn.debit or '-' }}</td>
+                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if txn.credit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ txn.credit or '-' }}</td>
+                        <td class="py-2 px-2 text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ txn.balance }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

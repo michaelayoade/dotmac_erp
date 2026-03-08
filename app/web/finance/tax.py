@@ -7,6 +7,7 @@ HTML template routes for tax periods, returns, and reporting.
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
+from starlette.responses import RedirectResponse
 
 from app.services.finance.tax.web import tax_web_service
 from app.web.deps import WebAuthContext, get_db, require_finance_access
@@ -369,6 +370,7 @@ def list_fiscal_positions(
     request: Request,
     search: str | None = None,
     is_active: str | None = None,
+    page: int = 1,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -378,7 +380,7 @@ def list_fiscal_positions(
     )
 
     return fiscal_position_web_service.list_response(
-        request, auth, db, search=search, is_active=is_active
+        request, auth, db, search=search, is_active=is_active, page=page
     )
 
 
@@ -410,7 +412,8 @@ async def create_fiscal_position(
     form = await request.form()
     form_data = dict(form)
     response = fiscal_position_web_service.create_response(request, auth, db, form_data)
-    db.commit()
+    if isinstance(response, RedirectResponse):
+        db.commit()
     return response
 
 
@@ -465,7 +468,8 @@ async def update_fiscal_position(
     response = fiscal_position_web_service.update_response(
         request, auth, fiscal_position_id, db, form_data
     )
-    db.commit()
+    if isinstance(response, RedirectResponse):
+        db.commit()
     return response
 
 

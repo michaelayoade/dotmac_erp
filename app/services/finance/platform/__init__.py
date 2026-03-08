@@ -13,10 +13,6 @@ from app.services.finance.platform.authorization import (
     AuthorizationService,
     authorization_service,
 )
-from app.services.finance.platform.feature_flag import (
-    FeatureFlagService,
-    feature_flag_service,
-)
 from app.services.finance.platform.fx import FXService, fx_service
 from app.services.finance.platform.idempotency import (
     IdempotencyService,
@@ -39,8 +35,6 @@ __all__ = [
     "sequence_service",
     "FXService",
     "fx_service",
-    "FeatureFlagService",
-    "feature_flag_service",
     "OutboxPublisher",
     "outbox_publisher",
     "AuditLogService",

@@ -16,7 +16,7 @@ from uuid import UUID
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.people.hr.checklist_template import (
     AssigneeRole,
@@ -178,14 +178,30 @@ class OnboardingAdminWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        page: int = 1,
     ) -> HTMLResponse:
         """Render checklist templates list."""
+        from sqlalchemy import func as sa_func
+
         org_id = coerce_uuid(auth.organization_id)
+        per_page = 50
+
+        base_where = ChecklistTemplate.organization_id == org_id
+        total_count = (
+            db.scalar(
+                select(sa_func.count()).select_from(ChecklistTemplate).where(base_where)
+            )
+            or 0
+        )
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
 
         stmt = (
             select(ChecklistTemplate)
-            .where(ChecklistTemplate.organization_id == org_id)
+            .options(selectinload(ChecklistTemplate.items))
+            .where(base_where)
             .order_by(ChecklistTemplate.template_type, ChecklistTemplate.template_name)
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         )
         template_list = list(db.scalars(stmt).all())
 
@@ -202,6 +218,10 @@ class OnboardingAdminWebService:
                 "templates": template_list,
                 "item_counts": item_counts,
                 "template_types": ChecklistTemplateType,
+                "page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "limit": per_page,
             }
         )
 
@@ -447,37 +467,65 @@ class OnboardingAdminWebService:
         auth: WebAuthContext,
         db: Session,
         status_filter: str | None = None,
+        page: int = 1,
     ) -> HTMLResponse:
         """Render list of all onboardings."""
-        org_id = coerce_uuid(auth.organization_id)
+        from sqlalchemy import func as sa_func
 
-        stmt = (
-            select(EmployeeOnboarding)
-            .options(
-                joinedload(EmployeeOnboarding.employee),
-            )
-            .where(EmployeeOnboarding.organization_id == org_id)
+        org_id = coerce_uuid(auth.organization_id)
+        per_page = 50
+
+        base_stmt = select(EmployeeOnboarding).where(
+            EmployeeOnboarding.organization_id == org_id
         )
 
         if status_filter:
             try:
                 status_enum = BoardingStatus(status_filter)
-                stmt = stmt.where(EmployeeOnboarding.status == status_enum)
+                base_stmt = base_stmt.where(EmployeeOnboarding.status == status_enum)
             except ValueError:
                 pass  # Ignore invalid status filter
 
-        stmt = stmt.order_by(
-            EmployeeOnboarding.status,
-            EmployeeOnboarding.date_of_joining.desc(),
+        total_count = (
+            db.scalar(select(sa_func.count()).select_from(base_stmt.subquery())) or 0
+        )
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+
+        stmt = (
+            base_stmt.options(
+                joinedload(EmployeeOnboarding.employee),
+                selectinload(EmployeeOnboarding.activities),
+            )
+            .order_by(
+                EmployeeOnboarding.status,
+                EmployeeOnboarding.date_of_joining.desc(),
+            )
+            .offset((page - 1) * per_page)
+            .limit(per_page)
         )
 
         onboardings = list(db.scalars(stmt).all())
 
-        # Calculate progress for each
-        svc = OnboardingService(db)
-        progress_map = {}
+        # Calculate progress for each — template expects dict with percentage/completed/total
+        progress_map: dict[Any, dict[str, int]] = {}
         for ob in onboardings:
-            progress_map[ob.onboarding_id] = svc.calculate_progress(ob)
+            total = len(ob.activities) if ob.activities else 0
+            completed = (
+                sum(
+                    1
+                    for a in ob.activities
+                    if getattr(a, "activity_status", "") in ("COMPLETED", "SKIPPED")
+                    or getattr(a, "status", "") in ("completed", "skipped")
+                )
+                if ob.activities
+                else 0
+            )
+            percentage = int((completed / total) * 100) if total else 0
+            progress_map[ob.onboarding_id] = {
+                "percentage": percentage,
+                "completed": completed,
+                "total": total,
+            }
 
         context = base_context(
             request, auth, "Employee Onboardings", "onboarding", db=db
@@ -488,6 +536,10 @@ class OnboardingAdminWebService:
                 "progress_map": progress_map,
                 "status_filter": status_filter,
                 "statuses": list(BoardingStatus),
+                "page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "limit": per_page,
             }
         )
 

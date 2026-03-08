@@ -214,8 +214,20 @@ class TestSettingsAPIV1:
         )
         assert response.status_code == 200
 
-    def test_upsert_features_setting_v1(self, client, auth_headers):
+    def test_upsert_features_setting_v1(self, client, auth_headers, db_session):
         """Test upserting a features setting via v1 API."""
+        from app.models.feature_flag import FeatureFlagRegistry
+
+        # Seed the registry entry (feature flags are now registry-backed)
+        db_session.add(
+            FeatureFlagRegistry(
+                flag_key="enable_leases",
+                label="Leases",
+                description="Enable lease accounting",
+            )
+        )
+        db_session.commit()
+
         key = "enable_leases"
         payload = {"value_json": True}
         response = client.put(
@@ -325,6 +337,23 @@ class TestEmailSettingsAPI:
 class TestFeaturesSettingsAPI:
     """Tests for the /settings/features endpoints."""
 
+    @staticmethod
+    def _seed_feature_registry(db_session):
+        """Seed feature flag registry entries for testing."""
+        from sqlalchemy import select
+
+        from app.models.feature_flag import FeatureFlagRegistry
+
+        for key in ("enable_multi_currency", "enable_budgeting", "enable_inventory"):
+            exists = db_session.scalar(
+                select(FeatureFlagRegistry).where(FeatureFlagRegistry.flag_key == key)
+            )
+            if not exists:
+                db_session.add(
+                    FeatureFlagRegistry(flag_key=key, label=key.replace("_", " ").title(), description="Test flag")
+                )
+        db_session.commit()
+
     def test_list_features_settings(self, client, auth_headers):
         """Test listing features settings."""
         response = client.get("/settings/features", headers=auth_headers)
@@ -347,8 +376,9 @@ class TestFeaturesSettingsAPI:
         response = client.get("/settings/features", follow_redirects=False)
         assert response.status_code in [401, 302]
 
-    def test_get_features_setting(self, client, auth_headers):
+    def test_get_features_setting(self, client, auth_headers, db_session):
         """Test getting a specific features setting."""
+        self._seed_feature_registry(db_session)
         # First create the setting
         client.put(
             "/settings/features/enable_multi_currency",
@@ -369,8 +399,9 @@ class TestFeaturesSettingsAPI:
         )
         assert response.status_code == 400
 
-    def test_upsert_features_setting(self, client, auth_headers):
+    def test_upsert_features_setting(self, client, auth_headers, db_session):
         """Test creating a features setting via upsert."""
+        self._seed_feature_registry(db_session)
         key = "enable_budgeting"
         payload = {"value_json": True}
         response = client.put(
@@ -380,8 +411,9 @@ class TestFeaturesSettingsAPI:
         data = response.json()
         assert data["key"] == key
 
-    def test_upsert_features_setting_disable(self, client, auth_headers):
+    def test_upsert_features_setting_disable(self, client, auth_headers, db_session):
         """Test disabling a feature flag."""
+        self._seed_feature_registry(db_session)
         key = "enable_inventory"
         payload = {"value_json": False}
         response = client.put(

@@ -78,13 +78,13 @@
                         <td class="text-slate-600 dark:text-slate-400 max-w-xs truncate">
                             {{ adv.purpose }}
                         </td>
-                        <td class="text-right font-mono text-slate-900 dark:text-white">
+                        <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">
                             {{ "{:,.2f}".format(adv.requested_amount) }}
                         </td>
-                        <td class="text-right font-mono text-slate-600 dark:text-slate-400">
+                        <td class="text-right font-mono tabular-nums text-slate-600 dark:text-slate-400">
                             {{ "{:,.2f}".format(adv.approved_amount) if adv.approved_amount else '—' }}
                         </td>
-                        <td class="text-right font-mono">
+                        <td class="text-right font-mono tabular-nums">
                             {% if adv.outstanding_balance > 0 %}
                             <span class="text-amber-600 dark:text-amber-400">{{ "{:,.2f}".format(adv.outstanding_balance) }}</span>
                             {% else %}

@@ -2,7 +2,17 @@ import enum
 import uuid
 from datetime import UTC, date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
@@ -55,6 +65,7 @@ class Person(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     phone: Mapped[str | None] = mapped_column(String(40))
+    nextcloud_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     gender: Mapped[Gender] = mapped_column(Enum(Gender), default=Gender.unknown)
@@ -98,6 +109,18 @@ class Person(Base):
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
+
+    @classmethod
+    def name_expr(cls):
+        """SQL expression equivalent of the name property.
+
+        Use in select() queries instead of accessing first_name/last_name directly:
+            select(Person.name_expr().label("employee_name"))
+        """
+        return func.coalesce(
+            cls.display_name,
+            func.trim(cls.first_name + " " + cls.last_name),
+        )
 
     @property
     def name(self) -> str:

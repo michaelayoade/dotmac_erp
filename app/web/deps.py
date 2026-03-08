@@ -8,7 +8,8 @@ proper tenant context handling.
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from urllib.parse import quote_plus
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
@@ -34,6 +35,8 @@ from app.services.finance.branding import BrandingService, CSSGenerator
 from app.templates import templates  # noqa: F401 - re-exported for web routes
 
 logger = logging.getLogger(__name__)
+
+_SESSION_TOUCH_INTERVAL = timedelta(seconds=60)
 
 
 def _set_actor_context(request: Request, actor_id: UUID | str) -> None:
@@ -681,6 +684,99 @@ def base_context(
         # Extract feedback param from query string for success banner
         _saved = bool(request.query_params.get("saved"))
 
+        help_module_map = {
+            "dashboard": "settings" if request.url.path.startswith("/operations") else "",
+            "training": "people",
+            "employees": "people",
+            "departments": "people",
+            "designations": "people",
+            "employment-types": "people",
+            "grades": "people",
+            "locations": "people",
+            "skills": "people",
+            "competencies": "people",
+            "job-descriptions": "people",
+            "onboarding": "people",
+            "attendance": "people",
+            "leave": "people",
+            "payroll": "people",
+            "recruitment": "people",
+            "support": "support",
+            "inventory": "inventory",
+            "projects": "projects",
+            "fleet": "fleet",
+            "procurement": "procurement",
+            "settings": "settings",
+            "coach": "coach",
+            "expense": "expense",
+            "finance": "finance",
+        }
+        contextual_module = help_module_map.get(active_module, "")
+        if not contextual_module:
+            path = request.url.path
+            if path.startswith("/finance"):
+                contextual_module = "finance"
+            elif path.startswith("/people"):
+                contextual_module = "people"
+            elif path.startswith("/support"):
+                contextual_module = "support"
+            elif path.startswith("/inventory"):
+                contextual_module = "inventory"
+            elif path.startswith("/projects"):
+                contextual_module = "projects"
+            elif path.startswith("/fleet"):
+                contextual_module = "fleet"
+            elif path.startswith("/procurement"):
+                contextual_module = "procurement"
+            elif path.startswith("/expense"):
+                contextual_module = "expense"
+            elif path.startswith("/settings"):
+                contextual_module = "settings"
+            elif path.startswith("/coach"):
+                contextual_module = "coach"
+
+        # Deep route-to-article mapping for contextual help
+        route_article_map = {
+            "/finance/gl/periods": "finance-period-close-checklist",
+            "/finance/gl/journals": "finance-journal-entry",
+            "/finance/gl/trial-balance": "finance-trial-balance-not-balanced",
+            "/finance/ar/invoices": "finance-invoice-to-cash",
+            "/finance/ap/invoices": "finance-ap-invoice-processing",
+            "/finance/ap/payments": "finance-payment-run",
+            "/finance/banking/reconciliation": "finance-bank-reconciliation",
+            "/finance/tax/periods": "finance-tax-period-filing",
+            "/finance/gl/chart-of-accounts": "finance-chart-of-accounts-setup",
+            "/people/hr/employees": "people-onboarding-workflow",
+            "/people/leave": "people-leave-management",
+            "/people/attendance": "people-attendance-setup",
+            "/people/recruit": "people-recruitment-pipeline",
+            "/people/payroll": "people-payroll-processing",
+            "/people/training": "people-training-workflow",
+            "/inventory/items": "inventory-warehouse-setup",
+            "/inventory/material-requests": "inventory-material-request-flow",
+            "/procurement/vendors": "procurement-vendor-evaluation",
+            "/procurement/purchase-orders": "procurement-po-to-grn",
+            "/support/dashboard": "support-team-setup",
+            "/projects/tasks": "projects-task-delivery",
+            "/expense/claims": "expense-claim-submission",
+        }
+        path = request.url.path
+        contextual_help_url = ""
+        contextual_article_slug = ""
+        if path.startswith("/help"):
+            contextual_help_url = ""
+        else:
+            # Check deep route mapping first
+            for route_prefix, article_slug in route_article_map.items():
+                if path.startswith(route_prefix):
+                    contextual_help_url = f"/help/articles/{article_slug}"
+                    contextual_article_slug = article_slug
+                    break
+            if not contextual_help_url and contextual_module:
+                contextual_help_url = f"/help/module/{contextual_module}"
+            elif not contextual_help_url:
+                contextual_help_url = f"/help/search?q={quote_plus(page_title)}"
+
         context = {
             "request": request,
             "title": page_title,
@@ -708,6 +804,9 @@ def base_context(
             "org_timezone": getattr(organization, "timezone", None)
             if organization
             else None,
+            "contextual_help_url": contextual_help_url,
+            "contextual_article_slug": contextual_article_slug,
+            "contextual_help_search_url": f"/help/search?q={quote_plus(page_title)}",
         }
         if effective_db and auth.organization_id and get_currency_context is not None:
             try:
@@ -971,13 +1070,14 @@ def _resolve_session_from_refresh_token(
         )
         if not session or is_session_inactive(session, now):
             return None
-        # Update session activity tracking
-        if auth_db:
-            session.last_seen_at = now
-            auth_db.commit()
-        else:
-            session.last_seen_at = now
-            db.flush()
+        # Update session activity tracking (throttled to avoid row-lock contention)
+        if not session.last_seen_at or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL:
+            if auth_db:
+                session.last_seen_at = now
+                auth_db.commit()
+            else:
+                session.last_seen_at = now
+                db.flush()
         return session.person_id, session.id
     finally:
         if auth_db:
@@ -1095,13 +1195,14 @@ def require_web_auth(
                     status_code=401, detail="Session expired due to inactivity"
                 )
 
-            # Update session activity tracking
-            if auth_db:
-                session.last_seen_at = now
-                auth_db.commit()
-            else:
-                session.last_seen_at = now
-                db.flush()
+            # Update session activity tracking (throttled to avoid row-lock contention)
+            if not session.last_seen_at or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL:
+                if auth_db:
+                    session.last_seen_at = now
+                    auth_db.commit()
+                else:
+                    session.last_seen_at = now
+                    db.flush()
 
         finally:
             if auth_db:
@@ -1245,13 +1346,14 @@ def optional_web_auth(
             if is_session_inactive(session, now):
                 return WebAuthContext(is_authenticated=False)
 
-            # Update session activity tracking
-            if auth_db:
-                session.last_seen_at = now
-                auth_db.commit()
-            else:
-                session.last_seen_at = now
-                db.flush()
+            # Update session activity tracking (throttled to avoid row-lock contention)
+            if not session.last_seen_at or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL:
+                if auth_db:
+                    session.last_seen_at = now
+                    auth_db.commit()
+                else:
+                    session.last_seen_at = now
+                    db.flush()
 
         finally:
             if auth_db:

@@ -11,6 +11,8 @@ This service handles:
 import logging
 import uuid
 from dataclasses import dataclass
+from pathlib import PurePosixPath
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -81,6 +83,35 @@ class CareersWebService:
         self._careers_service = CareersService(db)
         self._resume_service = ResumeService()
 
+    @staticmethod
+    def _to_public_careers_branding_url(
+        org_slug: str, org_id: uuid.UUID, raw_url: str | None
+    ) -> str | None:
+        """Map authenticated branding URLs to public careers branding URLs."""
+        if not raw_url:
+            return None
+
+        parsed = urlparse(raw_url)
+        raw_path = parsed.path or raw_url
+        path = PurePosixPath(raw_path)
+        parts = path.parts
+        if len(parts) < 5:
+            return raw_url
+
+        # Supports both /files/branding/{org_id}/{filename} and
+        # /uploads/branding/{org_id}/{filename}.
+        prefix, bucket, org_part, filename = parts[-4:]
+        if prefix not in {"files", "uploads"} or bucket != "branding":
+            return raw_url
+
+        try:
+            if uuid.UUID(org_part) != org_id:
+                return raw_url
+        except ValueError:
+            return raw_url
+
+        return f"/careers/{org_slug}/branding/{filename}"
+
     def get_organization_context(self, slug: str) -> OrganizationContext | None:
         """
         Get organization context for template rendering.
@@ -119,7 +150,13 @@ class CareersWebService:
             brand["css"] = css_gen.generate()
             brand["fonts_url"] = css_gen.get_google_fonts_url()
 
-        logo_url = brand["logo_url"]
+        logo_url = self._to_public_careers_branding_url(
+            slug, org.organization_id, brand["logo_url"]
+        )
+        brand["logo_url"] = logo_url
+        brand["favicon_url"] = self._to_public_careers_branding_url(
+            slug, org.organization_id, brand["favicon_url"]
+        )
 
         return OrganizationContext(
             org=org,

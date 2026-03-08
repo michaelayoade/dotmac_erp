@@ -363,11 +363,7 @@ class PayrollEventHandlers:
 
                 # Get approver name
                 approver = db.get(Person, event.approved_by_id)
-                approver_name = (
-                    f"{approver.first_name} {approver.last_name}"
-                    if approver
-                    else "Unknown"
-                )
+                approver_name = approver.name if approver else "Unknown"
 
                 # Get submitter (created_by)
                 submitter_id = getattr(run, "created_by_id", None)
@@ -430,11 +426,7 @@ class PayrollEventHandlers:
 
                 # Get canceller name
                 canceller = db.get(Person, event.triggered_by_id)
-                canceller_name = (
-                    f"{canceller.first_name} {canceller.last_name}"
-                    if canceller
-                    else "Unknown"
-                )
+                canceller_name = canceller.name if canceller else "Unknown"
 
                 # Find payroll team
                 payroll_team_ids = list(

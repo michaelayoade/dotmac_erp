@@ -3,6 +3,7 @@ Notification delivery background tasks.
 
 Handles:
 - Delivery of pending email notifications stored in public.notification
+- Delivery of pending Nextcloud Talk notifications
 """
 
 import logging
@@ -51,7 +52,11 @@ def process_pending_notification_emails(
             .where(Notification.email_sent == False)  # noqa: E712
             .where(
                 Notification.channel.in_(
-                    [NotificationChannel.EMAIL, NotificationChannel.BOTH]
+                    [
+                        NotificationChannel.EMAIL,
+                        NotificationChannel.BOTH,
+                        NotificationChannel.ALL,
+                    ]
                 )
             )
             .order_by(Notification.created_at.asc())
@@ -113,6 +118,116 @@ def process_pending_notification_emails(
     if results["processed"] > 0:
         logger.info(
             "Notification email dispatch: processed=%d sent=%d skipped=%d failed=%d",
+            results["processed"],
+            results["sent"],
+            results["skipped"],
+            results["failed"],
+        )
+
+    return results
+
+
+class NextcloudDispatchResults(TypedDict):
+    processed: int
+    sent: int
+    skipped: int
+    failed: int
+
+
+@shared_task
+def process_pending_nextcloud_notifications(
+    batch_size: int = 100,
+) -> NextcloudDispatchResults:
+    """
+    Send pending Nextcloud Talk notifications and mark delivery status.
+
+    Notes:
+    - Only notifications with channel NEXTCLOUD/ALL and nextcloud_sent=False are selected.
+    - Uses FOR UPDATE SKIP LOCKED to prevent duplicate processing across workers.
+    - Requires nextcloud_server_url, nextcloud_username, nextcloud_password in
+      domain settings (notifications domain).
+    """
+    from app.services.nextcloud.client import (
+        NextcloudError,
+        NextcloudTalkClient,
+        is_configured,
+    )
+
+    results: NextcloudDispatchResults = {
+        "processed": 0,
+        "sent": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
+
+    with SessionLocal() as db:
+        if not is_configured(db):
+            return results
+
+        stmt = (
+            select(Notification)
+            .where(Notification.nextcloud_sent == False)  # noqa: E712
+            .where(
+                Notification.channel.in_(
+                    [
+                        NotificationChannel.NEXTCLOUD,
+                        NotificationChannel.ALL,
+                    ]
+                )
+            )
+            .order_by(Notification.created_at.asc())
+            .limit(batch_size)
+            .with_for_update(of=Notification, skip_locked=True)
+        )
+        notifications = list(db.execute(stmt).scalars().all())
+
+        if not notifications:
+            return results
+
+        client = NextcloudTalkClient.from_db(db)
+
+        for notification in notifications:
+            results["processed"] += 1
+
+            nc_user_id = None
+            if notification.recipient:
+                nc_user_id = notification.recipient.nextcloud_user_id
+
+            if not nc_user_id:
+                logger.warning(
+                    "Skipping notification %s: recipient nextcloud_user_id missing",
+                    notification.notification_id,
+                )
+                results["skipped"] += 1
+                continue
+
+            try:
+                message = f"**{notification.title}**\n{notification.message}"
+                if notification.action_url:
+                    message += f"\n\n{notification.action_url}"
+
+                client.send_to_user(nc_user_id, message)
+                notification.nextcloud_sent = True
+                notification.nextcloud_sent_at = datetime.now(UTC)
+                results["sent"] += 1
+            except NextcloudError:
+                logger.exception(
+                    "Failed sending Nextcloud notification %s",
+                    notification.notification_id,
+                )
+                results["failed"] += 1
+            except Exception:
+                logger.exception(
+                    "Unexpected error sending Nextcloud notification %s",
+                    notification.notification_id,
+                )
+                results["failed"] += 1
+
+        db.commit()
+
+    if results["processed"] > 0:
+        logger.info(
+            "Nextcloud dispatch: processed=%d sent=%d skipped=%d failed=%d",
             results["processed"],
             results["sent"],
             results["skipped"],

@@ -14,6 +14,7 @@ from app.models.people.training import TrainingEventStatus, TrainingProgramStatu
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import EmployeeFilters, EmployeeService
 from app.services.people.training import TrainingService
+from app.services.people.training.training_service import TrainingEventNotFoundError
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -61,6 +62,17 @@ class EventWebService:
             pagination=PaginationParams(limit=200),
         ).items
 
+        active_filters = [
+            name
+            for name, val in [
+                ("status", status),
+                ("program_id", program_id),
+                ("start_date", start_date),
+                ("end_date", end_date),
+            ]
+            if val
+        ]
+
         return {
             "events": result.items,
             "programs": programs,
@@ -70,9 +82,12 @@ class EventWebService:
             "start_date": start_date,
             "end_date": end_date,
             "statuses": [s.value for s in TrainingEventStatus],
+            "active_filters": active_filters,
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,
+            "total_count": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -104,7 +119,7 @@ class EventWebService:
         if event_id:
             try:
                 event = svc.get_event(organization_id, coerce_uuid(event_id))
-            except Exception:
+            except (TrainingEventNotFoundError, ValueError):
                 event = None
 
         return {
@@ -127,11 +142,46 @@ class EventWebService:
 
         try:
             event = svc.get_event(organization_id, coerce_uuid(event_id))
-        except Exception:
+        except (TrainingEventNotFoundError, ValueError):
             return {"event": None}
 
         return {
             "event": event,
+            "error": None,
+        }
+
+    @staticmethod
+    def invite_attendees_context(
+        db: Session,
+        organization_id: UUID,
+        event_id: str,
+        search: str | None = None,
+    ) -> dict:
+        """Build context for attendee invitation page."""
+        svc = TrainingService(db)
+        emp_svc = EmployeeService(db, organization_id)
+
+        try:
+            event = svc.get_event(organization_id, coerce_uuid(event_id))
+        except (TrainingEventNotFoundError, ValueError):
+            return {"event": None, "employees": [], "search": search or ""}
+
+        employees = emp_svc.list_employees(
+            filters=EmployeeFilters(status="ACTIVE", search=search),
+            pagination=PaginationParams(limit=500),
+            eager_load=True,
+        ).items
+        invited_ids = {attendee.employee_id for attendee in event.attendees}
+
+        return {
+            "event": event,
+            "employees": [
+                employee
+                for employee in employees
+                if employee.employee_id not in invited_ids
+            ],
+            "search": search or "",
+            "already_invited_count": len(invited_ids),
             "error": None,
         }
 
@@ -160,6 +210,27 @@ class EventWebService:
             "currency_code": form_data.get("currency_code", "NGN"),
             "description": form_data.get("description") or None,
         }
+
+    # Response helpers
+
+    def _event_error_context(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        org_id: UUID,
+        title: str,
+        form_data: dict,
+        error: str,
+        event_id: str | None = None,
+    ) -> dict:
+        """Build template context for event form validation errors."""
+        context = base_context(request, auth, title, "training", db=db)
+        context["request"] = request
+        context.update(self.event_form_context(db, org_id, event_id))
+        context["form_data"] = form_data
+        context["error"] = error
+        return context
 
     # Response methods
 
@@ -226,7 +297,7 @@ class EventWebService:
 
         if not ctx.get("event"):
             return RedirectResponse(
-                url="/people/training/events?success=Record+saved+successfully",
+                url="/people/training/events?error=Training+event+not+found",
                 status_code=303,
             )
 
@@ -252,7 +323,7 @@ class EventWebService:
 
         if not ctx.get("event"):
             return RedirectResponse(
-                url="/people/training/events?success=Record+updated+successfully",
+                url="/people/training/events?error=Training+event+not+found",
                 status_code=303,
             )
 
@@ -287,13 +358,10 @@ class EventWebService:
         except Exception as e:
             db.rollback()
             logger.exception("create_event_response: failed")
-            context = base_context(
-                request, auth, "New Training Event", "training", db=db
+            context = self._event_error_context(
+                request, auth, db, org_id,
+                "New Training Event", dict(form_data), str(e),
             )
-            context["request"] = request
-            context.update(self.event_form_context(db, org_id))
-            context["form_data"] = dict(form_data)
-            context["error"] = str(e)
             return templates.TemplateResponse(
                 request, "people/training/event_form.html", context
             )
@@ -321,10 +389,10 @@ class EventWebService:
         except Exception as e:
             db.rollback()
             logger.exception("update_event_response: failed")
-            context = base_context(request, auth, "Edit Event", "training", db=db)
-            context["request"] = request
-            context.update(self.event_form_context(db, org_id, event_id))
-            context["error"] = str(e)
+            context = self._event_error_context(
+                request, auth, db, org_id,
+                "Edit Event", dict(form_data), str(e), event_id,
+            )
             return templates.TemplateResponse(
                 request, "people/training/event_form.html", context
             )
@@ -340,12 +408,194 @@ class EventWebService:
         svc = TrainingService(db)
 
         try:
-            svc.update_event(
-                org_id, coerce_uuid(event_id), status=TrainingEventStatus.SCHEDULED
-            )
+            svc.schedule_event(org_id, coerce_uuid(event_id))
             db.commit()
             return RedirectResponse(
                 url=f"/people/training/events/{event_id}?success=Event+scheduled",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def invite_attendees_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        event_id: str,
+        search: str | None = None,
+    ) -> HTMLResponse | RedirectResponse:
+        """Render attendee invitation page."""
+        ctx = self.invite_attendees_context(
+            db,
+            coerce_uuid(auth.organization_id),
+            event_id,
+            search,
+        )
+
+        if not ctx.get("event"):
+            return RedirectResponse(
+                url="/people/training/events?error=Training+event+not+found",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Invite Attendees", "training", db=db)
+        context["request"] = request
+        context.update(ctx)
+        return templates.TemplateResponse(
+            request, "people/training/invite_attendees.html", context
+        )
+
+    async def invite_attendees_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        event_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Invite selected employees to a training event."""
+        form_data = await request.form()
+        employee_ids = [
+            parse_uuid(value)
+            for value in form_data.getlist("employee_ids")
+            if parse_uuid(value)
+        ]
+        org_id = coerce_uuid(auth.organization_id)
+        svc = TrainingService(db)
+
+        if not employee_ids:
+            context = base_context(request, auth, "Invite Attendees", "training", db=db)
+            context["request"] = request
+            context.update(self.invite_attendees_context(db, org_id, event_id))
+            context["error"] = "Select at least one employee to invite."
+            return templates.TemplateResponse(
+                request, "people/training/invite_attendees.html", context
+            )
+
+        try:
+            attendees = svc.bulk_invite(org_id, coerce_uuid(event_id), employee_ids)
+            db.commit()
+            return RedirectResponse(
+                url=(
+                    f"/people/training/events/{event_id}"
+                    f"?success={len(attendees)}+attendee(s)+invited"
+                ),
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            logger.exception("invite_attendees_response: failed")
+            context = base_context(request, auth, "Invite Attendees", "training", db=db)
+            context["request"] = request
+            context.update(self.invite_attendees_context(db, org_id, event_id))
+            context["error"] = str(e)
+            return templates.TemplateResponse(
+                request, "people/training/invite_attendees.html", context
+            )
+
+    def confirm_attendee_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        event_id: str,
+        attendee_id: str,
+    ) -> RedirectResponse:
+        """Confirm an invited attendee."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = TrainingService(db)
+
+        try:
+            svc.confirm_attendance(org_id, coerce_uuid(attendee_id))
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?success=Attendee+confirmed",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def mark_attended_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        event_id: str,
+        attendee_id: str,
+    ) -> RedirectResponse:
+        """Mark an attendee as attended."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = TrainingService(db)
+
+        try:
+            svc.mark_attended(org_id, coerce_uuid(attendee_id))
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?success=Attendance+recorded",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def issue_certificate_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        event_id: str,
+        attendee_id: str,
+    ) -> RedirectResponse:
+        """Issue a certificate for an attendee."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = TrainingService(db)
+
+        try:
+            certificate_number = (
+                f"TRN-{event_id.replace('-', '')[:8].upper()}-"
+                f"{attendee_id.replace('-', '')[:8].upper()}"
+            )
+            svc.issue_certificate(
+                org_id,
+                coerce_uuid(attendee_id),
+                certificate_number=certificate_number,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?success=Certificate+issued",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def remove_attendee_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        event_id: str,
+        attendee_id: str,
+    ) -> RedirectResponse:
+        """Remove an attendee from an event."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = TrainingService(db)
+
+        try:
+            svc.remove_attendee(org_id, coerce_uuid(event_id), coerce_uuid(attendee_id))
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/training/events/{event_id}?success=Attendee+removed",
                 status_code=303,
             )
         except Exception as e:

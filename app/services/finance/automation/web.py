@@ -687,7 +687,8 @@ class AutomationWebService:
         template_id: str,
     ) -> dict:
         """Get context for recurring template detail page."""
-        template = recurring_service.get(db, coerce_uuid(template_id))
+        org_id = coerce_uuid(organization_id)
+        template = recurring_service.get(db, coerce_uuid(template_id), organization_id=org_id)
         if not template:
             return {"template": None, "error": "Template not found"}
 
@@ -736,7 +737,7 @@ class AutomationWebService:
         trigger_event: str | None = None,
         is_active: bool | None = None,
         page: int = 1,
-        page_size: int = 20,
+        page_size: int = 50,
     ) -> dict:
         """Get context for workflow rules list page."""
         org_id = coerce_uuid(organization_id)
@@ -776,9 +777,18 @@ class AutomationWebService:
             labels={"is_active": "Active"},
             options={"is_active": {"true": "Yes", "false": "No"}},
         )
+        total_count = len(items)
+        total_pages = max(1, (total_count + page_size - 1) // page_size)
+        start = (page - 1) * page_size
+        paginated_items = items[start : start + page_size]
+
         return {
-            "rules": items,
-            "total": len(items),
+            "rules": paginated_items,
+            "total": total_count,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "limit": page_size,
             "entity_types": [
                 {"value": et.value, "label": _workflow_entity_type_label(et)}
                 for et in WorkflowEntityType
@@ -824,7 +834,8 @@ class AutomationWebService:
         }
 
         if rule_id:
-            rule = workflow_service.get(db, coerce_uuid(rule_id))
+            org_id = coerce_uuid(organization_id)
+            rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
             if rule:
                 executions = workflow_service.get_executions(
                     db, rule_id=rule.rule_id, limit=10
@@ -841,7 +852,8 @@ class AutomationWebService:
         rule_id: str,
     ) -> dict:
         """Get context for workflow rule detail page."""
-        rule = workflow_service.get(db, coerce_uuid(rule_id))
+        org_id = coerce_uuid(organization_id)
+        rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 
@@ -918,21 +930,22 @@ class AutomationWebService:
         """Get context for custom fields list page."""
         org_id = coerce_uuid(organization_id)
 
+        # Resolve entity_type filter for the DB query
+        et_filter: CustomFieldEntityType | None = None
+        if entity_type:
+            try:
+                et_filter = CustomFieldEntityType(entity_type)
+            except ValueError:
+                pass
+
         fields = custom_fields_service.list_all(
             db,
             org_id,
             is_active=is_active,
+            entity_type=et_filter,
             limit=page_size,
             offset=(page - 1) * page_size,
         )
-
-        # Filter by entity type if specified
-        if entity_type:
-            try:
-                et = CustomFieldEntityType(entity_type)
-                fields = [f for f in fields if f.entity_type == et]
-            except ValueError:
-                pass
 
         items = [_custom_field_list_view(f) for f in fields]
 
@@ -944,11 +957,30 @@ class AutomationWebService:
                 grouped[key] = []
             grouped[key].append(item)
 
+        # Count total matching records for pagination
+        count_stmt = select(func.count(CustomFieldDefinition.field_id)).where(
+            CustomFieldDefinition.organization_id == org_id,
+        )
+        if is_active is not None:
+            count_stmt = count_stmt.where(
+                CustomFieldDefinition.is_active == is_active
+            )
+        if et_filter is not None:
+            count_stmt = count_stmt.where(
+                CustomFieldDefinition.entity_type == et_filter
+            )
+        total_count = db.scalar(count_stmt) or 0
+        total_pages = max(1, (total_count + page_size - 1) // page_size)
+
         active_filters = build_active_filters(params={"entity_type": entity_type})
         return {
             "fields": items,
             "grouped_fields": grouped,
-            "total": len(items),
+            "total": total_count,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "limit": page_size,
             "entity_types": [
                 {"value": et.value, "label": _custom_field_entity_type_label(et)}
                 for et in CustomFieldEntityType
@@ -985,7 +1017,8 @@ class AutomationWebService:
         }
 
         if field_id:
-            field = custom_fields_service.get(db, coerce_uuid(field_id))
+            org_id = coerce_uuid(organization_id)
+            field = custom_fields_service.get(db, coerce_uuid(field_id), organization_id=org_id)
             if field:
                 context["field"] = _custom_field_detail_view(field)
                 context["is_edit"] = True
@@ -999,7 +1032,8 @@ class AutomationWebService:
         field_id: str,
     ) -> dict:
         """Get context for custom field detail page."""
-        field = custom_fields_service.get(db, coerce_uuid(field_id))
+        org_id = coerce_uuid(organization_id)
+        field = custom_fields_service.get(db, coerce_uuid(field_id), organization_id=org_id)
         if not field:
             return {"field": None, "error": "Field not found"}
 
@@ -1119,8 +1153,9 @@ class AutomationWebService:
         }
 
         if template_id:
+            org_id = coerce_uuid(organization_id)
             template = db.get(DocumentTemplate, coerce_uuid(template_id))
-            if template:
+            if template and template.organization_id == org_id:
                 context["template"] = _document_template_detail_view(template)
                 context["is_edit"] = True
 
@@ -1133,8 +1168,9 @@ class AutomationWebService:
         template_id: str,
     ) -> dict:
         """Get context for document template detail page."""
+        org_id = coerce_uuid(organization_id)
         template = db.get(DocumentTemplate, coerce_uuid(template_id))
-        if not template:
+        if not template or template.organization_id != org_id:
             return {"template": None, "error": "Template not found"}
 
         return {
@@ -1187,6 +1223,7 @@ class AutomationWebService:
         template_id: UUID,
         user_id: UUID,
         data: dict,
+        organization_id: UUID | None = None,
     ) -> DocumentTemplate:
         """Update an existing document template.
 
@@ -1195,15 +1232,18 @@ class AutomationWebService:
             template_id: Template UUID to update
             user_id: User UUID performing the update
             data: Form data dict with updated values
+            organization_id: Organization UUID for ownership check
 
         Returns:
             Updated DocumentTemplate
 
         Raises:
-            ValueError: If template not found
+            ValueError: If template not found or doesn't belong to org
         """
         template = db.get(DocumentTemplate, template_id)
         if not template:
+            raise ValueError("Template not found")
+        if organization_id is not None and template.organization_id != organization_id:
             raise ValueError("Template not found")
 
         template.template_name = data.get("template_name", template.template_name)
@@ -1229,22 +1269,26 @@ class AutomationWebService:
         self,
         db: Session,
         template_id: UUID,
+        organization_id: UUID | None = None,
     ) -> bool:
         """Soft delete a document template.
 
         Args:
             db: Database session
             template_id: Template UUID to delete
+            organization_id: Organization UUID for ownership check
 
         Returns:
             True if deleted, False if not found
         """
         template = db.get(DocumentTemplate, template_id)
-        if template:
-            template.is_active = False
-            db.flush()
-            return True
-        return False
+        if not template:
+            return False
+        if organization_id is not None and template.organization_id != organization_id:
+            return False
+        template.is_active = False
+        db.flush()
+        return True
 
     # -------------------------------------------------------------------------
     # Workflow Version History
@@ -1257,7 +1301,8 @@ class AutomationWebService:
         rule_id: str,
     ) -> dict:
         """Get context for workflow rule version history page."""
-        rule = workflow_service.get(db, coerce_uuid(rule_id))
+        org_id = coerce_uuid(organization_id)
+        rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
         if not rule:
             return {"rule": None, "error": "Rule not found"}
 

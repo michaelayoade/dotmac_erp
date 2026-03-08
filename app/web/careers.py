@@ -8,12 +8,14 @@ No authentication required.
 import logging
 import secrets
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.files import _stream_s3_file
 from app.db import SessionLocal
 from app.middleware.rate_limit import check_rate_limit
 from app.models.person import Person, PersonStatus
@@ -220,6 +222,21 @@ def job_detail_page(
             "job": job,
         },
     )
+
+
+@router.get("/{org_slug}/branding/{filename}")
+def careers_branding_asset(
+    org_slug: str,
+    filename: str,
+    db: Session = Depends(get_db),
+):
+    """Public branding asset endpoint for careers pages."""
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    ctx, _ = _require_org_ctx(org_slug, db)
+    s3_key = f"branding/{ctx.org_id}/{filename}"
+    return _stream_s3_file(s3_key, filename=filename, disposition="inline")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

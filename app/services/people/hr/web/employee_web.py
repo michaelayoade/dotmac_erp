@@ -156,11 +156,7 @@ class HRWebService:
         managers = []
         for mgr in manager_result.items:
             person = mgr.person
-            full_name = (
-                f"{person.first_name or ''} {person.last_name or ''}".strip()
-                if person
-                else ""
-            )
+            full_name = person.name if person else ""
             managers.append(
                 {
                     "employee_id": mgr.employee_id,
@@ -181,9 +177,7 @@ class HRWebService:
                 {
                     "employee_id": emp.employee_id,
                     "employee_code": emp.employee_code,
-                    "person_name": f"{person.first_name or ''} {person.last_name or ''}".strip()
-                    if person
-                    else "",
+                    "person_name": person.name if person else "",
                     "email": person.email if person else "",
                     "department_name": dept.department_name if dept else "",
                     "designation_name": desig.designation_name if desig else "",
@@ -1002,11 +996,7 @@ class HRWebService:
                 manager_person = db.get(Person, manager_emp.person_id)
                 manager = {
                     "employee_id": manager_emp.employee_id,
-                    "name": (
-                        f"{manager_person.first_name or ''} {manager_person.last_name or ''}".strip()
-                        if manager_person
-                        else ""
-                    ),
+                    "name": manager_person.name if manager_person else "",
                 }
         expense_approver = None
         if employee.expense_approver_id:
@@ -1021,11 +1011,7 @@ class HRWebService:
                 approver_person = db.get(Person, approver_emp.person_id)
                 expense_approver = {
                     "employee_id": approver_emp.employee_id,
-                    "name": (
-                        f"{approver_person.first_name or ''} {approver_person.last_name or ''}".strip()
-                        if approver_person
-                        else ""
-                    ),
+                    "name": approver_person.name if approver_person else "",
                 }
 
         credentials: list[UserCredential] = []

@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.support.category import TicketCategory
@@ -213,6 +213,160 @@ class SLAService:
 
         return first_comment
 
+    @staticmethod
+    def _get_sla_target_from_ticket(ticket: Ticket) -> SLATarget:
+        """Get SLA target using already-loaded relationships (no DB queries)."""
+        response_hours = None
+        resolution_hours = None
+        source = "default"
+
+        if ticket.category:
+            if ticket.category.response_hours:
+                response_hours = ticket.category.response_hours
+                source = "category"
+            if ticket.category.resolution_hours:
+                resolution_hours = ticket.category.resolution_hours
+                if source != "category":
+                    source = "category"
+
+        if ticket.team and (response_hours is None or resolution_hours is None):
+            if response_hours is None and ticket.team.default_response_hours:
+                response_hours = ticket.team.default_response_hours
+                source = "team" if source == "default" else source
+            if resolution_hours is None and ticket.team.default_resolution_hours:
+                resolution_hours = ticket.team.default_resolution_hours
+                source = "team" if source == "default" else source
+
+        return SLATarget(
+            response_hours=response_hours or DEFAULT_RESPONSE_HOURS,
+            resolution_hours=resolution_hours or DEFAULT_RESOLUTION_HOURS,
+            source=source,
+        )
+
+    def _batch_first_response_times(
+        self,
+        db: Session,
+        ticket_ids: list[UUID],
+    ) -> dict[UUID, datetime]:
+        """Get first response times for multiple tickets in 2 queries total."""
+        if not ticket_ids:
+            return {}
+
+        # Query 1: first REPLIED status change per ticket
+        status_changes = db.execute(
+            select(
+                TicketComment.ticket_id,
+                func.min(TicketComment.created_at).label("first_at"),
+            )
+            .where(
+                TicketComment.ticket_id.in_(ticket_ids),
+                TicketComment.comment_type == CommentType.SYSTEM,
+                TicketComment.action == "status_change",
+                TicketComment.new_value == "REPLIED",
+            )
+            .group_by(TicketComment.ticket_id)
+        ).all()
+        result: dict[UUID, datetime] = {row.ticket_id: row.first_at for row in status_changes}
+
+        # Query 2: first non-internal comment for tickets not yet found
+        remaining = [tid for tid in ticket_ids if tid not in result]
+        if remaining:
+            first_comments = db.execute(
+                select(
+                    TicketComment.ticket_id,
+                    func.min(TicketComment.created_at).label("first_at"),
+                )
+                .where(
+                    TicketComment.ticket_id.in_(remaining),
+                    TicketComment.comment_type == CommentType.COMMENT,
+                    TicketComment.is_internal == False,  # noqa: E712
+                    TicketComment.is_deleted == False,  # noqa: E712
+                )
+                .group_by(TicketComment.ticket_id)
+            ).all()
+            for row in first_comments:
+                result[row.ticket_id] = row.first_at
+
+        return result
+
+    @staticmethod
+    def _compute_sla_status(
+        ticket: Ticket,
+        sla_target: SLATarget,
+        first_response: datetime | None,
+        now: datetime,
+    ) -> TicketSLAStatus:
+        """Compute SLA status from preloaded data (no DB queries)."""
+        response_due_at = ticket.created_at + timedelta(hours=sla_target.response_hours)
+        response_hours = None
+        response_breached = False
+        response_breach_hours = None
+
+        if first_response:
+            response_hours = (first_response - ticket.created_at).total_seconds() / 3600
+            response_breached = response_hours > sla_target.response_hours
+            if response_breached:
+                response_breach_hours = response_hours - sla_target.response_hours
+        else:
+            if now > response_due_at and ticket.status not in (
+                TicketStatus.RESOLVED,
+                TicketStatus.CLOSED,
+            ):
+                response_breached = True
+                response_breach_hours = (now - response_due_at).total_seconds() / 3600
+
+        resolution_due_at = ticket.created_at + timedelta(hours=sla_target.resolution_hours)
+        resolution_hours = None
+        resolution_breached = False
+        resolution_breach_hours = None
+
+        resolved_at = None
+        if ticket.resolution_date:
+            resolved_at = datetime.combine(ticket.resolution_date, datetime.min.time())
+            if ticket.created_at.tzinfo:
+                resolved_at = resolved_at.replace(tzinfo=ticket.created_at.tzinfo)
+            resolution_hours = (resolved_at - ticket.created_at).total_seconds() / 3600
+            resolution_breached = resolution_hours > sla_target.resolution_hours
+            if resolution_breached:
+                resolution_breach_hours = resolution_hours - sla_target.resolution_hours
+        else:
+            if now > resolution_due_at and ticket.status not in (
+                TicketStatus.RESOLVED,
+                TicketStatus.CLOSED,
+            ):
+                resolution_breached = True
+                resolution_breach_hours = (now - resolution_due_at).total_seconds() / 3600
+
+        return TicketSLAStatus(
+            ticket_id=ticket.ticket_id,
+            ticket_number=ticket.ticket_number,
+            subject=ticket.subject,
+            status=ticket.status,
+            priority=ticket.priority,
+            created_at=ticket.created_at,
+            response_target_hours=sla_target.response_hours,
+            response_due_at=response_due_at,
+            first_response_at=first_response,
+            response_hours=round(response_hours, 2) if response_hours else None,
+            response_breached=response_breached,
+            response_breach_hours=round(response_breach_hours, 2)
+            if response_breach_hours
+            else None,
+            resolution_target_hours=sla_target.resolution_hours,
+            resolution_due_at=resolution_due_at,
+            resolved_at=resolved_at,
+            resolution_hours=round(resolution_hours, 2) if resolution_hours else None,
+            resolution_breached=resolution_breached,
+            resolution_breach_hours=round(resolution_breach_hours, 2)
+            if resolution_breach_hours
+            else None,
+            category_name=ticket.category.category_name if ticket.category else None,
+            team_name=ticket.team.team_name if ticket.team else None,
+            assigned_to_name=ticket.assigned_to.full_name
+            if ticket.assigned_to
+            else None,
+        )
+
     def get_ticket_sla_status(
         self,
         db: Session,
@@ -353,9 +507,23 @@ class SLAService:
 
         tickets = list(db.execute(query).scalars().unique().all())
 
+        # Batch-fetch first response times
+        ticket_ids = [t.ticket_id for t in tickets]
+        first_responses = self._batch_first_response_times(db, ticket_ids)
+
+        now = datetime.now()
         breached = []
         for ticket in tickets:
-            sla_status = self.get_ticket_sla_status(db, ticket)
+            sla_target = self._get_sla_target_from_ticket(ticket)
+            first_response = first_responses.get(ticket.ticket_id)
+            ticket_now = (
+                datetime.now(ticket.created_at.tzinfo)
+                if ticket.created_at.tzinfo
+                else now
+            )
+            sla_status = self._compute_sla_status(
+                ticket, sla_target, first_response, ticket_now
+            )
 
             is_breached = False
             if (
@@ -490,9 +658,8 @@ class SLAService:
         """
         Calculate aggregated SLA metrics for a time period.
 
-        Args:
-            date_from: Start date (defaults to 30 days ago)
-            date_to: End date (defaults to today)
+        Uses batch queries for first-response times (2 queries total)
+        instead of per-ticket queries.
         """
         org_id = coerce_uuid(organization_id)
 
@@ -518,6 +685,10 @@ class SLAService:
 
         tickets = list(db.execute(query).scalars().unique().all())
 
+        # Batch-fetch first response times (2 queries instead of 2*N)
+        ticket_ids = [t.ticket_id for t in tickets]
+        first_responses = self._batch_first_response_times(db, ticket_ids)
+
         # Initialize counters
         total = len(tickets)
         resolved = 0
@@ -526,19 +697,32 @@ class SLAService:
         response_met = 0
         response_breached = 0
         response_pending = 0
-        response_times = []
+        response_times: list[float] = []
 
         resolution_met = 0
         resolution_breached = 0
         resolution_pending = 0
-        resolution_times = []
+        resolution_times: list[float] = []
 
         by_priority: dict[str, dict[str, Any]] = {}
         by_team: dict[str, dict[str, Any]] = {}
         by_category: dict[str, dict[str, Any]] = {}
 
+        now = datetime.now()
+
         for ticket in tickets:
-            sla_status = self.get_ticket_sla_status(db, ticket)
+            sla_target = self._get_sla_target_from_ticket(ticket)
+            first_response = first_responses.get(ticket.ticket_id)
+
+            # Use timezone-aware now if ticket has tz
+            ticket_now = (
+                datetime.now(ticket.created_at.tzinfo)
+                if ticket.created_at.tzinfo
+                else now
+            )
+            sla_status = self._compute_sla_status(
+                ticket, sla_target, first_response, ticket_now
+            )
 
             # Overall counts
             if ticket.status in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
@@ -702,15 +886,18 @@ class SLAService:
         *,
         date_from: date | None = None,
         date_to: date | None = None,
+        metrics: SLAMetrics | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get performance metrics per team.
 
         Returns list of team stats sorted by compliance rate.
+        Pass pre-computed metrics to avoid redundant queries.
         """
-        metrics = self.get_sla_metrics(
-            db, organization_id, date_from=date_from, date_to=date_to
-        )
+        if metrics is None:
+            metrics = self.get_sla_metrics(
+                db, organization_id, date_from=date_from, date_to=date_to
+            )
 
         results = []
         for team_name, data in metrics.by_team.items():
@@ -753,13 +940,16 @@ class SLAService:
         *,
         date_from: date | None = None,
         date_to: date | None = None,
+        metrics: SLAMetrics | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get performance metrics per category.
+        Pass pre-computed metrics to avoid redundant queries.
         """
-        metrics = self.get_sla_metrics(
-            db, organization_id, date_from=date_from, date_to=date_to
-        )
+        if metrics is None:
+            metrics = self.get_sla_metrics(
+                db, organization_id, date_from=date_from, date_to=date_to
+            )
 
         results = []
         for category_name, data in metrics.by_category.items():

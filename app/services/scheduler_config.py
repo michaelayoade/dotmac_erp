@@ -238,6 +238,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.notifications.process_pending_notification_emails",
             "schedule": timedelta(minutes=1),  # Every minute
         },
+        "notification-nextcloud-dispatch": {
+            "task": "app.tasks.notifications.process_pending_nextcloud_notifications",
+            "schedule": timedelta(minutes=1),  # Every minute
+        },
         "daily-exchange-rate-fetch": {
             "task": "app.tasks.exchange_rates.fetch_daily_exchange_rates",
             "schedule": crontab(hour=14, minute=0),  # 2 PM UTC daily
@@ -314,6 +318,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.data_health.cleanup_old_notifications",
             "schedule": crontab(hour=3, minute=0),  # 3:00 AM daily
             "kwargs": {"read_days": 30, "unread_days": 90},
+        },
+        "feature-flag-archival": {
+            "task": "app.tasks.feature_flags.archive_expired_feature_flags",
+            "schedule": crontab(hour=2, minute=0),  # 2:00 AM daily
         },
         "outbox-stuck-recovery": {
             "task": "app.tasks.data_health.process_stuck_outbox_events",

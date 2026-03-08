@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Leave Balance Report{% endblock %}
@@ -176,6 +176,8 @@
     </div>
     {% endif %}
     </div>
+
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'year': year|default(''), 'department_id': department_id|default('')}) }}
 
     <!-- Quick Links -->
     <div class="flex gap-4">

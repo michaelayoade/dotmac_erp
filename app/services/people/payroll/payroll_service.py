@@ -1557,9 +1557,7 @@ class PayrollService:
             self.db.query(
                 SalarySlip.employee_id,
                 Employee.employee_code,
-                func.concat(Person.first_name, " ", Person.last_name).label(
-                    "employee_name"
-                ),
+                Person.name_expr().label("employee_name"),
                 func.coalesce(Employee.department_id, None).label("department_name"),
                 func.count(SalarySlip.slip_id).label("slip_count"),
                 func.sum(SalarySlip.gross_pay).label("total_gross"),

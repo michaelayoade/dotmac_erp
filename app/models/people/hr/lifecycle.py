@@ -409,6 +409,10 @@ class EmployeeSeparation(Base, AuditMixin, ERPNextSyncMixin):
         back_populates="separation",
         cascade="all, delete-orphan",
     )
+    employee: Mapped[Employee | None] = relationship(
+        "Employee",
+        foreign_keys=[employee_id],
+    )
 
 
 class EmployeeSeparationActivity(Base):
@@ -480,6 +484,10 @@ class EmployeePromotion(Base, AuditMixin, ERPNextSyncMixin):
         back_populates="promotion",
         cascade="all, delete-orphan",
     )
+    employee: Mapped[Employee | None] = relationship(
+        "Employee",
+        foreign_keys=[employee_id],
+    )
 
 
 class EmployeePromotionDetail(Base):
@@ -549,6 +557,10 @@ class EmployeeTransfer(Base, AuditMixin, ERPNextSyncMixin):
         "EmployeeTransferDetail",
         back_populates="transfer",
         cascade="all, delete-orphan",
+    )
+    employee: Mapped[Employee | None] = relationship(
+        "Employee",
+        foreign_keys=[employee_id],
     )
 
 

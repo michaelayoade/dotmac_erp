@@ -170,6 +170,8 @@ class SalesOrderWebService:
         end_date: str | None = None,
         sort: str | None = None,
         sort_dir: str | None = None,
+        page: int = 1,
+        per_page: int = 50,
     ) -> dict:
         """Get context for sales order listing page."""
         logger.debug(
@@ -192,6 +194,7 @@ class SalesOrderWebService:
         parsed_end_date = parse_date(end_date)
 
         # Get orders from service
+        offset = (page - 1) * per_page
         orders = sales_order_service.list_orders(
             db,
             organization_id,
@@ -201,6 +204,8 @@ class SalesOrderWebService:
             end_date=parsed_end_date,
             sort=sort,
             sort_dir=sort_dir,
+            limit=per_page,
+            offset=offset,
         )
 
         # Format for template
@@ -247,6 +252,25 @@ class SalesOrderWebService:
 
         logger.debug("list_context: found %d orders", len(items))
 
+        # Total count for pagination (filtered)
+        count_query = (
+            select(func.count())
+            .select_from(SalesOrder)
+            .where(SalesOrder.organization_id == org_id)
+        )
+        if status_filter:
+            count_query = count_query.where(SalesOrder.status == status_filter)
+        if customer_id:
+            count_query = count_query.where(
+                SalesOrder.customer_id == coerce_uuid(customer_id)
+            )
+        if parsed_start_date:
+            count_query = count_query.where(SalesOrder.order_date >= parsed_start_date)
+        if parsed_end_date:
+            count_query = count_query.where(SalesOrder.order_date <= parsed_end_date)
+        total_count = db.scalar(count_query) or 0
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+
         active_filters = build_active_filters(
             params={
                 "status": status,
@@ -273,6 +297,10 @@ class SalesOrderWebService:
             "active_filters": active_filters,
             "sort": sort or "",
             "sort_dir": sort_dir or "desc",
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
+            "limit": per_page,
         }
 
     @staticmethod
@@ -290,7 +318,7 @@ class SalesOrderWebService:
             return {"order": None, "lines": [], "shipments": []}
 
         reservation_by_line: dict[str, dict] = {}
-        if is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+        if is_feature_enabled(db, org_id, FEATURE_STOCK_RESERVATION):
             try:
                 from app.services.inventory.stock_reservation import (
                     ReservationSourceType,
@@ -603,6 +631,7 @@ class SalesOrderWebService:
         end_date: str | None,
         sort: str | None = None,
         sort_dir: str | None = None,
+        page: int = 1,
     ) -> HTMLResponse:
         """Render sales order list page."""
         start_date, end_date = normalize_date_range_filters(
@@ -621,6 +650,7 @@ class SalesOrderWebService:
                 end_date=end_date,
                 sort=sort,
                 sort_dir=sort_dir,
+                page=page,
             )
         )
         return templates.TemplateResponse(
@@ -745,6 +775,7 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("submit_response: failed")
+            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def approve_response(
@@ -757,6 +788,7 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("approve_response: failed")
+            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def confirm_response(
@@ -769,6 +801,7 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("confirm_response: failed")
+            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def cancel_response(
@@ -790,6 +823,7 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("cancel_response: failed")
+            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def hold_response(
@@ -802,6 +836,7 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("hold_response: failed")
+            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def release_response(
@@ -814,6 +849,7 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("release_response: failed")
+            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def create_invoice_response(

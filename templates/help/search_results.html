@@ -1,0 +1,83 @@
+{% extends "help/base_help.html" %}
+
+{% block page_title %}Search Help{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <li><a href="/help" class="hover:text-teal-600 dark:hover:text-teal-400">Help</a></li>
+        <li>/</li>
+        <li class="text-slate-900 dark:text-white" aria-current="page">Search</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="space-y-8">
+    <div class="card p-8">
+        <form method="get" action="/help/search" class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_200px_220px_auto]">
+            <div>
+                <label for="help-search-q" class="sr-only">Search query</label>
+                <input id="help-search-q" type="search" name="q" value="{{ query }}" placeholder="Search workflows, troubleshooting, module setup..."
+                       class="form-input w-full">
+            </div>
+            <div>
+                <label for="help-search-module" class="sr-only">Module filter</label>
+                <select id="help-search-module" name="module" class="form-input">
+                <option value="">All modules</option>
+                {% for hub in module_hubs %}
+                <option value="{{ hub.module_key }}" {{ 'selected' if selected_module == hub.module_key else '' }}>{{ hub.title }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <div>
+                <label for="help-search-type" class="sr-only">Content type filter</label>
+                <select id="help-search-type" name="content_type" class="form-input">
+                <option value="">All content types</option>
+                {% for value, label in [('quick_start','Quick Start'),('workflow','Workflow'),('troubleshooting','Troubleshooting'),('cross_module_workflow','Cross-Module Workflow')] %}
+                <option value="{{ value }}" {{ 'selected' if selected_content_type == value else '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+    </div>
+
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ result_count }} result{{ '' if result_count == 1 else 's' }}</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                {% if query %}Showing matches for "{{ query }}".{% else %}Showing all available help content.{% endif %}
+            </p>
+        </div>
+        <a href="/help" class="btn btn-secondary">Back to Help</a>
+    </div>
+
+    {% if results %}
+    <div class="space-y-4">
+        {% for article in results %}
+        <a href="{{ article.href }}" class="card block p-6 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+                <span class="rounded-full bg-teal-50 px-2.5 py-1 font-semibold uppercase tracking-wide text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ article.module_title }}</span>
+                <span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ article.content_type_label }}</span>
+                <span class="text-slate-500 dark:text-slate-400">{{ article.estimated_minutes }} min</span>
+            </div>
+            <h3 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">{{ article.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{{ article.summary }}</p>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card p-8">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">No matching help content</h3>
+        <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Try a broader keyword, remove filters, or browse the module hubs to find the nearest workflow guide.
+        </p>
+        <div class="mt-4 flex flex-wrap gap-2">
+            <a href="/help" class="btn btn-secondary">Browse Help Center</a>
+            <a href="/support/dashboard" class="btn btn-secondary">Open Support Workspace</a>
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

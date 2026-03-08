@@ -1,0 +1,141 @@
+{% extends "help/base_help.html" %}
+{% from "components/macros.html" import stats_card, icon_svg, empty_state %}
+
+{% block page_title %}Help Content Health{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <li><a href="/help" class="hover:text-teal-600 dark:hover:text-teal-400">Help</a></li>
+        <li>/</li>
+        <li class="text-slate-900 dark:text-white" aria-current="page">Content Health</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/help/admin/articles" class="btn btn-secondary btn-sm">
+    {{ icon_svg("document", "h-4 w-4 mr-1.5") }}
+    Manage Articles
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    {# ── Stats Cards ── #}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card(
+            label="Published Articles",
+            value=status_counts.get('PUBLISHED', 0),
+            icon="document",
+            color="emerald",
+            href="/help/admin/articles?status=PUBLISHED"
+        ) }}
+        {{ stats_card(
+            label="Draft Articles",
+            value=status_counts.get('DRAFT', 0),
+            icon="edit",
+            color="amber",
+            href="/help/admin/articles?status=DRAFT"
+        ) }}
+        {{ stats_card(
+            label="Helpful Ratings",
+            value=feedback_counts.get('helpful', 0),
+            icon="check-circle",
+            color="teal"
+        ) }}
+        {{ stats_card(
+            label="Total Searches",
+            value=search_count,
+            icon="search",
+            color="blue"
+        ) }}
+    </div>
+
+    <div class="grid gap-6 xl:grid-cols-2">
+        {# ── Engagement Stats ── #}
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Engagement</h2>
+            <div class="mt-4 space-y-4">
+                <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Article Completions</span>
+                    <span class="font-mono text-lg font-semibold text-slate-900 dark:text-white">{{ completion_count }}</span>
+                </div>
+                <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Helpful Ratings</span>
+                    <span class="font-mono text-lg font-semibold text-emerald-600 dark:text-emerald-400">{{ feedback_counts.get('helpful', 0) }}</span>
+                </div>
+                <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Not Helpful Ratings</span>
+                    <span class="font-mono text-lg font-semibold text-rose-600 dark:text-rose-400">{{ feedback_counts.get('not_helpful', 0) }}</span>
+                </div>
+                <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+                    <span class="text-sm text-slate-600 dark:text-slate-400">Archived Articles</span>
+                    <span class="font-mono text-lg font-semibold text-slate-500">{{ status_counts.get('ARCHIVED', 0) }}</span>
+                </div>
+            </div>
+        </div>
+
+        {# ── Popular Searches ── #}
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Popular Searches</h2>
+            {% if popular_searches %}
+            <div class="mt-4">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Query</th>
+                            <th scope="col" class="text-right">Searches</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in popular_searches %}
+                        <tr>
+                            <td class="text-sm text-slate-700 dark:text-slate-300">{{ item.query }}</td>
+                            <td class="text-right font-mono text-sm">{{ item.count }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">No search data yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── Zero-Result Searches ── #}
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Zero-Result Searches</h2>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            These searches returned no results. Consider creating articles for these topics.
+        </p>
+        {% if zero_result_searches %}
+        <div class="mt-4">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Query</th>
+                        <th scope="col" class="text-right">Searches</th>
+                        <th scope="col" class="text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in zero_result_searches %}
+                    <tr>
+                        <td class="text-sm text-slate-700 dark:text-slate-300">{{ item.query }}</td>
+                        <td class="text-right font-mono text-sm">{{ item.count }}</td>
+                        <td class="text-right">
+                            <a href="/help/admin/articles/new?title={{ item.query }}" class="btn btn-secondary btn-sm">Create</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">No zero-result searches recorded yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

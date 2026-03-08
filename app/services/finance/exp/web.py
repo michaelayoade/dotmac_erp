@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_org.business_unit import BusinessUnit
 from app.models.finance.core_org.cost_center import CostCenter
@@ -56,7 +56,11 @@ class ExpenseWebService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = select(ExpenseEntry).where(ExpenseEntry.organization_id == org_id)
+        query = (
+            select(ExpenseEntry)
+            .options(joinedload(ExpenseEntry.expense_account))
+            .where(ExpenseEntry.organization_id == org_id)
+        )
 
         if status:
             query = query.where(ExpenseEntry.status == ExpenseStatus(status))
@@ -78,9 +82,13 @@ class ExpenseWebService:
             )
 
         total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        expenses = db.scalars(
-            query.order_by(ExpenseEntry.expense_date.desc()).offset(offset).limit(limit)
-        ).all()
+        expenses = (
+            db.scalars(
+                query.order_by(ExpenseEntry.expense_date.desc()).offset(offset).limit(limit)
+            )
+            .unique()
+            .all()
+        )
 
         items = []
         for exp in expenses:
@@ -336,9 +344,28 @@ class ExpenseWebService:
     ) -> dict:
         """Get context for expense detail page."""
         org_id = coerce_uuid(organization_id)
-        expense = db.get(ExpenseEntry, coerce_uuid(expense_id))
+        exp_uuid = coerce_uuid(expense_id)
+        expense = (
+            db.scalars(
+                select(ExpenseEntry)
+                .options(
+                    joinedload(ExpenseEntry.expense_account),
+                    joinedload(ExpenseEntry.payment_account),
+                    joinedload(ExpenseEntry.project),
+                    joinedload(ExpenseEntry.cost_center),
+                    joinedload(ExpenseEntry.business_unit),
+                    joinedload(ExpenseEntry.journal_entry),
+                )
+                .where(
+                    ExpenseEntry.expense_id == exp_uuid,
+                    ExpenseEntry.organization_id == org_id,
+                )
+            )
+            .unique()
+            .first()
+        )
 
-        if not expense or expense.organization_id != org_id:
+        if not expense:
             return {"expense": None}
 
         return {

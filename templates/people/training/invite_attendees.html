@@ -1,0 +1,99 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, empty_state %}
+
+{% block page_title %}Invite Attendees{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/events" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training Events</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/events/{{ event.event_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ event.event_name }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Invite Attendees</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl space-y-6">
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="card p-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ event.event_name }}</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Invite active employees who are not already on this event roster.
+                </p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Already invited: {{ already_invited_count }}
+                </p>
+            </div>
+            <form method="get" action="/people/training/events/{{ event.event_id }}/invite" class="flex w-full gap-2 md:max-w-md">
+                <label for="search" class="sr-only">Search employees</label>
+                <input id="search" type="search" name="search" value="{{ search }}" placeholder="Search by name or employee code"
+                       class="form-input w-full">
+                <button type="submit" class="btn btn-secondary">Search</button>
+            </form>
+        </div>
+    </div>
+
+    <form method="post" action="/people/training/events/{{ event.event_id }}/invite" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        {% if employees %}
+        <div class="card overflow-hidden">
+            <div class="table-container">
+                <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-800/50">
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Select</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Employee</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Department</th>
+                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Email</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                        {% for employee in employees %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td class="px-4 py-3 align-top">
+                                <input type="checkbox" name="employee_ids" value="{{ employee.employee_id }}"
+                                       class="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">{{ employee.full_name }}</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">{{ employee.employee_code }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ employee.department.department_name if employee.department else "-" }}
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ employee.work_email or "-" }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3">
+            <a href="/people/training/events/{{ event.event_id }}" class="btn btn-secondary">Back</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+                Invite Selected
+            </button>
+        </div>
+        {% else %}
+        <div class="card p-0">
+            {{ empty_state("No eligible employees found", "Everyone matching this filter is already invited or there are no active employees available.") }}
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

@@ -236,6 +236,85 @@ def cancel_event(
     return training_web_service.cancel_event_response(auth, db, event_id)
 
 
+@router.get("/events/{event_id}/invite", response_class=HTMLResponse)
+def invite_attendees_form(
+    request: Request,
+    event_id: str,
+    search: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Invite attendees to a training event."""
+    return training_web_service.invite_attendees_form_response(
+        request, auth, db, event_id, search
+    )
+
+
+@router.post("/events/{event_id}/invite", response_class=HTMLResponse)
+async def invite_attendees(
+    request: Request,
+    event_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Invite selected attendees to a training event."""
+    return await training_web_service.invite_attendees_response(
+        request, auth, db, event_id
+    )
+
+
+@router.post("/events/{event_id}/attendees/{attendee_id}/confirm", response_class=HTMLResponse)
+def confirm_attendee(
+    event_id: str,
+    attendee_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Confirm attendance for an invited attendee."""
+    return training_web_service.confirm_attendee_response(
+        auth, db, event_id, attendee_id
+    )
+
+
+@router.post("/events/{event_id}/attendees/{attendee_id}/attend", response_class=HTMLResponse)
+def mark_attendee_attended(
+    event_id: str,
+    attendee_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Mark an attendee as attended."""
+    return training_web_service.mark_attended_response(
+        auth, db, event_id, attendee_id
+    )
+
+
+@router.post("/events/{event_id}/attendees/{attendee_id}/certificate", response_class=HTMLResponse)
+def issue_attendee_certificate(
+    event_id: str,
+    attendee_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Issue a certificate to an attendee."""
+    return training_web_service.issue_certificate_response(
+        auth, db, event_id, attendee_id
+    )
+
+
+@router.post("/events/{event_id}/attendees/{attendee_id}/remove", response_class=HTMLResponse)
+def remove_attendee(
+    event_id: str,
+    attendee_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Remove an attendee from an event."""
+    return training_web_service.remove_attendee_response(
+        auth, db, event_id, attendee_id
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Training Reports
 # ─────────────────────────────────────────────────────────────────────────────

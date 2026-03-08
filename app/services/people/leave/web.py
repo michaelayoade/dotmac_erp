@@ -52,7 +52,7 @@ class LeaveWebService:
             return None
         try:
             return cast(UUID, coerce_uuid(value))
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             return None
 
     @staticmethod
@@ -358,6 +358,12 @@ class LeaveWebService:
             is_active=is_active,
             pagination=pagination,
         )
+        active_filters = build_active_filters(
+            params={
+                "is_active": str(is_active) if is_active is not None else None,
+            },
+            labels={"is_active": "Status"},
+        )
         context = base_context(request, auth, "Holiday Lists", "leave", db=db)
         context.update(
             {
@@ -367,8 +373,11 @@ class LeaveWebService:
                 "page": result.page,
                 "total_pages": result.total_pages,
                 "total": result.total,
+                "total_count": result.total,
+                "limit": result.limit,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(
@@ -467,6 +476,7 @@ class LeaveWebService:
             db.commit()
             return RedirectResponse("/people/leave/types", status_code=303)
         except Exception as e:
+            logger.exception("Failed to create leave type: %s", e)
             db.rollback()
             context = base_context(request, auth, "New Leave Type", "leave", db=db)
             context["error"] = str(e)
@@ -566,6 +576,7 @@ class LeaveWebService:
             db.commit()
             return RedirectResponse("/people/leave/types", status_code=303)
         except Exception as e:
+            logger.exception("Failed to update leave type: %s", e)
             db.rollback()
             context = base_context(request, auth, "Edit Leave Type", "leave", db=db)
             context["error"] = str(e)
@@ -659,6 +670,7 @@ class LeaveWebService:
                 request, "people/leave/allocation_form.html", context
             )
         except Exception as e:
+            logger.exception("Failed to create leave allocation: %s", e)
             db.rollback()
             context = base_context(
                 request, auth, "New Leave Allocation", "leave", db=db
@@ -777,6 +789,7 @@ class LeaveWebService:
                 f"/people/leave/allocations/{allocation_id}", status_code=303
             )
         except Exception as e:
+            logger.exception("Failed to update leave allocation: %s", e)
             db.rollback()
             context = base_context(
                 request, auth, "Edit Leave Allocation", "leave", db=db
@@ -857,6 +870,7 @@ class LeaveWebService:
                 allocation.total_leaves_allocated
                 - allocation.leaves_used
                 - allocation.leaves_encashed
+                - allocation.leaves_expired
             )
             threshold = leave_type.encashment_threshold_days or Decimal("0")
             max_encashable = available - threshold
@@ -945,8 +959,8 @@ class LeaveWebService:
         for emp_id in employee_ids:
             try:
                 valid_ids.append(coerce_uuid(emp_id))
-            except Exception:
-                logger.exception("Ignored exception")
+            except (ValueError, TypeError):
+                logger.debug("Skipping invalid employee UUID: %s", emp_id)
 
         if not valid_ids:
             return RedirectResponse(
@@ -977,6 +991,7 @@ class LeaveWebService:
                 url=f"/people/leave/allocations?success={success_msg}", status_code=303
             )
         except Exception as e:
+            logger.exception("Failed to bulk create leave allocations: %s", e)
             db.rollback()
             error_msg = quote(str(e))
             return RedirectResponse(
@@ -1072,6 +1087,7 @@ class LeaveWebService:
                 request, "people/leave/application_form.html", context
             )
         except Exception as e:
+            logger.exception("Failed to create leave application: %s", e)
             db.rollback()
             context = base_context(
                 request, auth, "New Leave Application", "leave", db=db
@@ -1183,6 +1199,7 @@ class LeaveWebService:
                 f"/people/leave/applications/{application_id}", status_code=303
             )
         except Exception as e:
+            logger.exception("Failed to update leave application: %s", e)
             db.rollback()
             context = base_context(
                 request, auth, "Edit Leave Application", "leave", db=db
@@ -1233,6 +1250,7 @@ class LeaveWebService:
                 status_code=303,
             )
         except Exception as exc:
+            logger.exception("Failed to approve leave application %s: %s", application_id, exc)
             db.rollback()
             error_msg = quote(str(exc))
             return RedirectResponse(
@@ -1278,6 +1296,7 @@ class LeaveWebService:
                 status_code=303,
             )
         except Exception as exc:
+            logger.exception("Failed to reject leave application %s: %s", application_id, exc)
             db.rollback()
             error_msg = quote(str(exc))
             return RedirectResponse(
@@ -1382,6 +1401,7 @@ class LeaveWebService:
             db.commit()
             return RedirectResponse("/people/leave/holidays", status_code=303)
         except Exception as e:
+            logger.exception("Failed to create holiday list: %s", e)
             db.rollback()
             context = base_context(request, auth, "New Holiday List", "leave", db=db)
             context["error"] = str(e)
@@ -1486,6 +1506,7 @@ class LeaveWebService:
             db.commit()
             return RedirectResponse("/people/leave/holidays", status_code=303)
         except Exception as e:
+            logger.exception("Failed to update holiday list: %s", e)
             db.rollback()
             context = base_context(request, auth, "Edit Holiday List", "leave", db=db)
             context["error"] = str(e)
@@ -1523,6 +1544,7 @@ class LeaveWebService:
         db: Session,
         year: int | None = None,
         department_id: str | None = None,
+        page: int = 1,
     ) -> HTMLResponse:
         """Leave balance report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -1542,6 +1564,22 @@ class LeaveWebService:
             PaginationParams(limit=200),
         ).items
 
+        # Paginate employees list
+        per_page = 50
+        all_employees = report.get("employees", [])
+        total_count = len(all_employees)
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
+        report["employees"] = all_employees[start : start + per_page]
+
+        active_filters = build_active_filters(
+            params={
+                "year": str(year) if year else None,
+                "department_id": department_id,
+            },
+            labels={"year": "Year", "department_id": "Department"},
+        )
         context = base_context(request, auth, "Leave Balance Report", "leave", db=db)
         context.update(
             {
@@ -1549,6 +1587,11 @@ class LeaveWebService:
                 "departments": departments,
                 "year": year or date.today().year,
                 "department_id": department_id,
+                "page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "limit": per_page,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(
@@ -1675,8 +1718,8 @@ class LeaveWebService:
         for app_id in application_ids:
             try:
                 valid_ids.append(coerce_uuid(app_id))
-            except Exception:
-                logger.exception("Ignored exception")
+            except (ValueError, TypeError):
+                logger.debug("Skipping invalid application UUID: %s", app_id)
 
         if not valid_ids:
             return RedirectResponse(
@@ -1729,8 +1772,8 @@ class LeaveWebService:
         for app_id in application_ids:
             try:
                 valid_ids.append(coerce_uuid(app_id))
-            except Exception:
-                logger.exception("Ignored exception")
+            except (ValueError, TypeError):
+                logger.debug("Skipping invalid application UUID: %s", app_id)
 
         if not valid_ids:
             return RedirectResponse(

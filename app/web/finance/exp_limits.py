@@ -207,12 +207,14 @@ async def update_approver_limit(
 
 @router.get("/limits/approvers/employees/search")
 def approver_employee_search(
-    q: str = Query(..., min_length=1),
+    q: str = Query(default=""),
     limit: int = Query(default=8, ge=1, le=20),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
     """Search active employees for approver limit typeahead."""
+    if not q.strip():
+        return JSONResponse({"items": []})
     payload = expense_limit_web_service.employee_typeahead(
         db=db,
         organization_id=str(auth.organization_id),

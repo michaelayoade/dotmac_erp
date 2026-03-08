@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Attendance by Employee{% endblock %}
@@ -77,7 +77,7 @@
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Period</p>
-                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ report.start_date }} to {{ report.end_date }}</p>
+                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ report.start_date.strftime('%d %b %Y') if report.start_date else '' }} to {{ report.end_date.strftime('%d %b %Y') if report.end_date else '' }}</p>
                 </div>
             </div>
         </div>
@@ -189,6 +189,8 @@
         </div>
     </div>
     {% endif %}
+
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'start_date': start_date|default(''), 'end_date': end_date|default(''), 'department_id': department_id|default('')}) }}
 
     <!-- Quick Links -->
     <div class="flex gap-4">

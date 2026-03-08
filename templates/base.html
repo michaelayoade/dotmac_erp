@@ -50,7 +50,7 @@
     <link rel="alternate icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
 
     <!-- Compiled Tailwind CSS -->
-    <link href="/static/css/app.css?v=20260205a" rel="stylesheet">
+    <link href="/static/css/app.css?v=20260307b" rel="stylesheet">
     <link href="/static/css/font-overrides.css" rel="stylesheet">
 
     <!-- HTMX (local) -->
@@ -181,6 +181,22 @@
         <main id="main-content">
             {% block content %}{% endblock %}
         </main>
+
+        {% if user and contextual_help_url %}
+        <div class="fixed bottom-5 right-5 z-30">
+            <div class="flex flex-col items-end gap-2">
+                <a href="{{ contextual_help_search_url }}"
+                   class="hidden rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-xs font-medium text-slate-600 shadow-lg shadow-slate-900/5 backdrop-blur transition hover:border-teal-200 hover:text-teal-700 dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300 dark:hover:text-teal-300 sm:block">
+                    Search Help
+                </a>
+                <a href="{{ contextual_help_url }}"
+                   class="inline-flex items-center gap-2 rounded-full bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-teal-600/20 transition hover:bg-teal-700">
+                    {{ icon_svg("question-mark-circle", "h-5 w-5") }}
+                    Help For This Page
+                </a>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endblock %}
 

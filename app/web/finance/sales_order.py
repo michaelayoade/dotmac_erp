@@ -29,6 +29,7 @@ def sales_order_list(
     end_date: str | None = None,
     sort: str | None = None,
     sort_dir: str | None = None,
+    page: int = 1,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -43,6 +44,7 @@ def sales_order_list(
         end_date,
         sort,
         sort_dir,
+        page=page,
     )
 
 

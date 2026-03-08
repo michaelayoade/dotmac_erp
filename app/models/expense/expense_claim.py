@@ -32,6 +32,9 @@ from app.models.mixins import AuditMixin, ERPNextSyncMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.project import Project
+    from app.models.expense.expense_claim_approval_step import (
+        ExpenseClaimApprovalStep,
+    )
     from app.models.people.hr.employee import Employee
     from app.models.pm.task import Task
     from app.models.support.ticket import Ticket
@@ -380,6 +383,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     approver: Mapped[Optional["Employee"]] = relationship(
         "Employee",
         foreign_keys=[approver_id],
+    )
+    approval_steps: Mapped[list["ExpenseClaimApprovalStep"]] = relationship(
+        "ExpenseClaimApprovalStep",
+        back_populates="claim",
+        order_by="ExpenseClaimApprovalStep.submission_round, ExpenseClaimApprovalStep.step_number",
     )
     items: Mapped[list["ExpenseClaimItem"]] = relationship(
         "ExpenseClaimItem",

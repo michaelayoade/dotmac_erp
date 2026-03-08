@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Holiday Lists{% endblock %}
@@ -95,6 +95,7 @@
             </table>
         </div>
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
     </div>
 
     {% else %}

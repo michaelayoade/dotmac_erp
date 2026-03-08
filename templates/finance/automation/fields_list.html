@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Custom Fields{% endblock %}
@@ -29,7 +29,7 @@
         {# Filters #}
         {% call(filter_attrs) compact_filters(
             base_url="/finance/automation/fields-list",
-            active_filters=active_filters | default([])
+            active_filters=active_filters if active_filters else []
         ) %}
         <div>
             <select name="entity_type"
@@ -49,6 +49,7 @@
             </select>
         </div>
         {% endcall %}
+    </div>
 
     <div id="results-container">
     <!-- Fields grouped by entity type -->
@@ -131,6 +132,7 @@
         </div>
     </div>
     {% endif %}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'entity_type': filters.entity_type|default(''), 'is_active': (filters.is_active|string|lower) if filters.is_active is not none else ''}) }}
     </div>
 </div>
 {% endblock %}

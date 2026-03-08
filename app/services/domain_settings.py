@@ -602,6 +602,8 @@ settings_settings = DomainSettings(SettingDomain.settings)
 payroll_settings = DomainSettings(SettingDomain.payroll)
 banking_settings = DomainSettings(SettingDomain.banking)
 coach_settings = DomainSettings(SettingDomain.coach)
+notifications_settings = DomainSettings(SettingDomain.notifications)
+expense_settings = DomainSettings(SettingDomain.expense)
 
 
 # =============================================================================

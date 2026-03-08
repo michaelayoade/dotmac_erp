@@ -107,6 +107,7 @@
             </table>
         </div>
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, search=search|default(''), filters={'is_active': is_active|default('')}) }}
     </div>{# /results-container #}
 </div>
 {% endblock %}

@@ -196,6 +196,8 @@ class SupplierPaymentService(ListResponseMixin):
         organization_id: UUID,
         input: SupplierPaymentInput,
         created_by_user_id: UUID,
+        *,
+        auto_commit: bool = True,
     ) -> SupplierPayment:
         """
         Create a new supplier payment.
@@ -337,9 +339,6 @@ class SupplierPaymentService(ListResponseMixin):
             )
             db.add(allocation)
 
-        db.commit()
-        db.refresh(payment)
-
         fire_audit_event(
             db=db,
             organization_id=org_id,
@@ -353,6 +352,12 @@ class SupplierPaymentService(ListResponseMixin):
             },
             user_id=user_id,
         )
+
+        if auto_commit:
+            db.commit()
+            db.refresh(payment)
+        else:
+            db.flush()
 
         return payment
 
@@ -424,9 +429,6 @@ class SupplierPaymentService(ListResponseMixin):
                 e,
             )
 
-        db.commit()
-        db.refresh(payment)
-
         fire_audit_event(
             db=db,
             organization_id=org_id,
@@ -438,6 +440,9 @@ class SupplierPaymentService(ListResponseMixin):
             new_values={"status": "APPROVED"},
             user_id=user_id,
         )
+
+        db.commit()
+        db.refresh(payment)
 
         return payment
 
@@ -689,9 +694,6 @@ class SupplierPaymentService(ListResponseMixin):
         old_status = payment.status.value
         payment.status = APPaymentStatus.VOID
 
-        db.commit()
-        db.refresh(payment)
-
         fire_audit_event(
             db=db,
             organization_id=org_id,
@@ -703,6 +705,9 @@ class SupplierPaymentService(ListResponseMixin):
             new_values={"status": "VOID"},
             user_id=coerce_uuid(voided_by_user_id),
         )
+
+        db.commit()
+        db.refresh(payment)
 
         return payment
 

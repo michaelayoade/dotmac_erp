@@ -9,18 +9,20 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
-from app.models.finance.ap.purchase_order import POStatus
-from app.models.finance.ap.supplier import SupplierType
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
     SupplierInvoiceStatus,
     SupplierInvoiceType,
 )
-from app.models.finance.ap.supplier_payment import APPaymentStatus
+from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
 from app.schemas.finance.ap import (
     APAgingReportRead,
     APInvoiceCreate,
@@ -130,9 +132,16 @@ def list_suppliers(
         limit=limit,
         offset=offset,
     )
+    # Build count query with same filters (excluding limit/offset)
+    count_stmt = select(func.count(Supplier.supplier_id)).where(
+        Supplier.organization_id == organization_id
+    )
+    if is_active is not None:
+        count_stmt = count_stmt.where(Supplier.is_active == is_active)
+    total = db.scalar(count_stmt) or 0
     return ListResponse(
         items=suppliers,
-        count=len(suppliers),
+        count=total,
         limit=limit,
         offset=offset,
     )
@@ -246,9 +255,22 @@ def list_ap_invoices(
         limit=limit,
         offset=offset,
     )
+    # Build count query with same filters (excluding limit/offset)
+    count_stmt = select(func.count(SupplierInvoice.invoice_id)).where(
+        SupplierInvoice.organization_id == organization_id
+    )
+    if supplier_id:
+        count_stmt = count_stmt.where(SupplierInvoice.supplier_id == supplier_id)
+    if status_value:
+        count_stmt = count_stmt.where(SupplierInvoice.status == status_value)
+    if from_date:
+        count_stmt = count_stmt.where(SupplierInvoice.invoice_date >= from_date)
+    if to_date:
+        count_stmt = count_stmt.where(SupplierInvoice.invoice_date <= to_date)
+    total = db.scalar(count_stmt) or 0
     return ListResponse(
         items=invoices,
-        count=len(invoices),
+        count=total,
         limit=limit,
         offset=offset,
     )
@@ -393,9 +415,22 @@ def list_ap_payments(
         limit=limit,
         offset=offset,
     )
+    # Build count query with same filters (excluding limit/offset)
+    count_stmt = select(func.count(SupplierPayment.payment_id)).where(
+        SupplierPayment.organization_id == organization_id
+    )
+    if supplier_id:
+        count_stmt = count_stmt.where(SupplierPayment.supplier_id == supplier_id)
+    if status_value:
+        count_stmt = count_stmt.where(SupplierPayment.status == status_value)
+    if from_date:
+        count_stmt = count_stmt.where(SupplierPayment.payment_date >= from_date)
+    if to_date:
+        count_stmt = count_stmt.where(SupplierPayment.payment_date <= to_date)
+    total = db.scalar(count_stmt) or 0
     return ListResponse(
         items=payments,
-        count=len(payments),
+        count=total,
         limit=limit,
         offset=offset,
     )
@@ -529,7 +564,16 @@ def list_purchase_orders(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=pos, count=len(pos), limit=limit, offset=offset)
+    # Build count query with same filters (excluding limit/offset)
+    count_stmt = select(func.count(PurchaseOrder.po_id)).where(
+        PurchaseOrder.organization_id == organization_id
+    )
+    if supplier_id:
+        count_stmt = count_stmt.where(PurchaseOrder.supplier_id == supplier_id)
+    if status_value:
+        count_stmt = count_stmt.where(PurchaseOrder.status == status_value)
+    total = db.scalar(count_stmt) or 0
+    return ListResponse(items=pos, count=total, limit=limit, offset=offset)
 
 
 @router.post("/purchase-orders/{po_id}/submit", response_model=PORead)
@@ -575,9 +619,13 @@ def cancel_purchase_order(
 # Goods Receipts
 # =============================================================================
 
-from app.models.finance.ap.goods_receipt import ReceiptStatus  # noqa: E402
+from app.models.finance.ap.goods_receipt import (  # noqa: E402
+    GoodsReceipt,
+    ReceiptStatus,
+)
 from app.models.finance.ap.payment_batch import (  # noqa: E402  # pragma: allowlist secret
     APBatchStatus,
+    APPaymentBatch,
 )
 from app.services.finance.ap import (  # noqa: E402
     goods_receipt_service,
@@ -653,7 +701,16 @@ def list_goods_receipts(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=receipts, count=len(receipts), limit=limit, offset=offset)
+    # Build count query with same filters (excluding limit/offset)
+    count_stmt = select(func.count(GoodsReceipt.receipt_id)).where(
+        GoodsReceipt.organization_id == organization_id
+    )
+    if po_id:
+        count_stmt = count_stmt.where(GoodsReceipt.po_id == po_id)
+    if status_value:
+        count_stmt = count_stmt.where(GoodsReceipt.status == status_value)
+    total = db.scalar(count_stmt) or 0
+    return ListResponse(items=receipts, count=total, limit=limit, offset=offset)
 
 
 @router.post("/goods-receipts/{receipt_id}/inspect", response_model=GRRead)
@@ -683,7 +740,6 @@ def accept_goods_receipt(
 # =============================================================================
 
 from app.services.finance.ap import (  # noqa: E402
-    PaymentBatchInput,
     payment_batch_service,
 )
 
@@ -698,20 +754,19 @@ logger = logging.getLogger(__name__)
 def create_payment_batch(
     payload: PaymentBatchCreate,
     organization_id: UUID = Depends(require_organization_id),
-    created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:create")),
     db: Session = Depends(get_db),
 ):
     """Create a new payment batch."""
-    input_data = PaymentBatchInput(
-        batch_date=payload.payment_date,
-        bank_account_id=payload.bank_account_id,
+    return payment_batch_service.create_batch_from_invoice_ids(
+        db=db,
+        organization_id=organization_id,
+        batch_date=payload.batch_date,
         payment_method=payload.payment_method,
-        currency_code=None,  # Resolved by service from bank account
-        payments=[],
-    )
-    return payment_batch_service.create_batch(
-        db, organization_id, input_data, created_by_user_id
+        bank_account_id=payload.bank_account_id,
+        invoice_ids=payload.invoice_ids,
+        created_by_user_id=UUID(auth["person_id"]),
+        currency_code=payload.currency_code,
     )
 
 
@@ -749,7 +804,14 @@ def list_payment_batches(
         limit=limit,
         offset=offset,
     )
-    return ListResponse(items=batches, count=len(batches), limit=limit, offset=offset)
+    # Build count query with same filters (excluding limit/offset)
+    count_stmt = select(func.count(APPaymentBatch.batch_id)).where(
+        APPaymentBatch.organization_id == organization_id
+    )
+    if status_value:
+        count_stmt = count_stmt.where(APPaymentBatch.status == status_value)
+    total = db.scalar(count_stmt) or 0
+    return ListResponse(items=batches, count=total, limit=limit, offset=offset)
 
 
 @router.post(
@@ -808,6 +870,13 @@ def generate_bank_file(
     db: Session = Depends(get_db),
 ):
     """Generate bank file for a payment batch."""
-    return payment_batch_service.generate_bank_file(
+    result = payment_batch_service.generate_bank_file(
         db, organization_id, batch_id, file_format
+    )
+    return BankFileResultRead(
+        success=True,
+        file_format=result["file_format"],
+        file_content=result["content"],
+        payment_count=result["payment_count"],
+        total_amount=result["total_amount"],
     )

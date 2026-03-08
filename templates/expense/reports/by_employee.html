@@ -42,8 +42,6 @@
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div id="results-container">
-
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
@@ -55,8 +53,6 @@
                 </div>
             </div>
         </div>
-        </div>
-
 
         <div class="card p-5">
             <div class="flex items-center gap-4">
@@ -84,6 +80,7 @@
     </div>
 
     <!-- Employee Breakdown Table -->
+    <div id="results-container">
     <div class="card">
         <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Employee Breakdown</h2>
@@ -103,7 +100,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for emp in report.employees %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onclick="window.location='/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&employee_id={{ emp.employee_id }}'">
                         <td class="px-5 py-3">
                             <div class="flex items-center gap-3">
                                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-xs font-semibold text-white">
@@ -158,6 +155,7 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 
     <!-- Top Spenders -->
     {% if report.employees and report.employees | length > 3 %}
@@ -168,7 +166,7 @@
         <div class="p-5">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {% for emp in report.employees[:3] %}
-                <div class="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <a href="/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&employee_id={{ emp.employee_id }}" class="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
                     <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br {% if loop.index == 1 %}from-amber-400 to-amber-600{% elif loop.index == 2 %}from-slate-300 to-slate-500{% else %}from-orange-400 to-orange-600{% endif %} text-white font-bold">
                         #{{ loop.index }}
                     </div>
@@ -177,7 +175,7 @@
                         <div class="text-sm text-slate-500 dark:text-slate-400">{{ emp.department_name }}</div>
                         <div class="text-lg font-semibold font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(emp.claimed_amount) }}</div>
                     </div>
-                </div>
+                </a>
                 {% endfor %}
             </div>
         </div>

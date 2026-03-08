@@ -84,6 +84,8 @@ class OperationsInventoryWebService:
                     start_date=start_date,
                     end_date=end_date,
                     project_id=project_id,
+                    page=page,
+                    per_page=limit,
                 )
             )
         except Exception:

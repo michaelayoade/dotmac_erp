@@ -1,6 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg %}
+{% from "components/macros.html" import empty_state, icon_svg, pagination %}
 {% block title %}Project Templates{% endblock %}
 
 {% block page_title %}Project Templates{% endblock %}
@@ -24,6 +24,8 @@
 {% endblock %}
 
 {% block content %}
+<div class="space-y-4">
+<div id="results-container">
 <div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
         <thead class="bg-slate-50 dark:bg-slate-800/50">
@@ -71,5 +73,8 @@
             {% endif %}
         </tbody>
     </table>
+</div>
+{{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+</div>{# /results-container #}
 </div>
 {% endblock %}

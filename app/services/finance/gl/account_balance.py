@@ -633,6 +633,7 @@ class AccountBalanceService(ListResponseMixin):
                 AccountBalance.fiscal_period_id == FiscalPeriod.fiscal_period_id,
             )
             .where(
+                AccountBalance.organization_id == coerce_uuid(organization_id),
                 AccountBalance.account_id.in_(account_ids),
                 AccountBalance.balance_type == BalanceType.ACTUAL,
                 FiscalPeriod.status.in_(
@@ -708,6 +709,7 @@ class AccountBalanceService(ListResponseMixin):
                 AccountBalance.fiscal_period_id,
                 AccountBalance.net_balance,
             ).where(
+                AccountBalance.organization_id == coerce_uuid(organization_id),
                 AccountBalance.account_id.in_(account_ids),
                 AccountBalance.fiscal_period_id.in_(period_ids),
                 AccountBalance.balance_type == BalanceType.ACTUAL,

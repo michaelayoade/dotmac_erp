@@ -70,8 +70,13 @@ class AttendanceWebService:
             return default
 
     @staticmethod
-    def _parse_time(value: str) -> time:
-        return datetime.strptime(value, "%H:%M").time()
+    def _parse_time(value: str | None) -> time | None:
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%H:%M").time()
+        except ValueError:
+            return None
 
     @staticmethod
     def _parse_bool(value: str | None, default: bool = False) -> bool:
@@ -87,7 +92,7 @@ class AttendanceWebService:
         return str(value).strip()
 
     @staticmethod
-    def _shift_form_context(shift_type: dict | None = None) -> dict:
+    def _shift_form_context(shift_type: dict[str, Any] | None = None) -> dict[str, Any]:
         if not shift_type:
             return {}
         return {
@@ -859,6 +864,7 @@ class AttendanceWebService:
         start_date: str | None,
         end_date: str | None,
         department_id: str | None,
+        page: int = 1,
     ) -> HTMLResponse:
         """Attendance by employee report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -879,6 +885,15 @@ class AttendanceWebService:
             PaginationParams(limit=200),
         ).items
 
+        # Paginate employees list
+        per_page = 50
+        all_employees = report.get("employees", [])
+        total_count = len(all_employees)
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * per_page
+        report["employees"] = all_employees[start_idx : start_idx + per_page]
+
         context = base_context(
             request, auth, "Attendance by Employee", "attendance", db=db
         )
@@ -889,6 +904,10 @@ class AttendanceWebService:
                 "start_date": start_date or report["start_date"].isoformat(),
                 "end_date": end_date or report["end_date"].isoformat(),
                 "department_id": department_id,
+                "page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "limit": per_page,
             }
         )
         return templates.TemplateResponse(

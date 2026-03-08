@@ -2412,12 +2412,13 @@ def vendor_list(
     request: Request,
     status: str | None = None,
     q: str | None = None,
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
     """Vendor registry."""
+    offset = (page - 1) * limit
     context = base_context(request, auth, "Vendor Registry", "procurement", db=db)
     web_service = ProcurementWebService(db)
     context.update(

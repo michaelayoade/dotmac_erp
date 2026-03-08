@@ -285,7 +285,7 @@ class SelfServiceWebService:
         return str(result.file_path)
 
     @staticmethod
-    def _get_tickets_for_dropdown(db: Session, org_id: UUID) -> list:
+    def _get_tickets_for_dropdown(db: Session, org_id: UUID) -> list[dict]:
         """Get open/active support tickets for expense linking."""
         from app.models.support.ticket import Ticket, TicketStatus
 
@@ -315,7 +315,7 @@ class SelfServiceWebService:
         ]
 
     @staticmethod
-    def _get_projects_for_dropdown(db: Session, org_id: UUID) -> list:
+    def _get_projects_for_dropdown(db: Session, org_id: UUID) -> list[dict]:
         """Get active projects for expense linking."""
         try:
             from app.models.finance.core_org.project import Project, ProjectStatus
@@ -374,7 +374,10 @@ class SelfServiceWebService:
         employee = db.scalar(
             select(Employee)
             .options(joinedload(Employee.person))
-            .where(Employee.employee_id == employee_id)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+            )
         )
 
         tax_profile = db.scalar(
@@ -451,7 +454,10 @@ class SelfServiceWebService:
         employee = db.scalar(
             select(Employee)
             .options(joinedload(Employee.person))
-            .where(Employee.employee_id == employee_id)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+            )
         )
         if not employee:
             return RedirectResponse(
@@ -580,7 +586,7 @@ class SelfServiceWebService:
     @staticmethod
     def _get_tasks_for_dropdown(
         db: Session, org_id: UUID, project_id: str | None = None
-    ) -> list:
+    ) -> list[dict]:
         """Get tasks for expense linking."""
         try:
             from app.models.pm.task import Task
@@ -1358,6 +1364,15 @@ class SelfServiceWebService:
         # Get projects for dropdown
         projects = self._get_projects_for_dropdown(db, org_id)
 
+        # Get cost centers for dropdown
+        from app.models.finance.core_org.cost_center import CostCenter
+
+        cost_centers_stmt = select(CostCenter).where(
+            CostCenter.organization_id == org_id,
+            CostCenter.is_active.is_(True),
+        ).order_by(CostCenter.cost_center_code)
+        cost_centers = list(db.scalars(cost_centers_stmt).all())
+
         allowed_banks = OrgBankDirectoryService(db).list_active_banks(org_id)
 
         selected_ticket_id = request.query_params.get("ticket_id")
@@ -1371,6 +1386,7 @@ class SelfServiceWebService:
                 "categories": categories,
                 "tickets": tickets,
                 "projects": projects,
+                "cost_centers": cost_centers,
                 "tasks": tasks,
                 "selected_ticket_id": selected_ticket_id,
                 "selected_project_id": selected_project_id,
@@ -1423,6 +1439,7 @@ class SelfServiceWebService:
         project_id: str | None = None,
         ticket_id: str | None = None,
         task_id: str | None = None,
+        cost_center_id: str | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -1512,6 +1529,7 @@ class SelfServiceWebService:
             project_id=coerce_uuid(project_id) if project_id else None,
             ticket_id=coerce_uuid(ticket_id) if ticket_id else None,
             task_id=coerce_uuid(task_id) if task_id else None,
+            cost_center_id=coerce_uuid(cost_center_id) if cost_center_id else None,
             recipient_bank_code=recipient_bank_code,
             recipient_bank_name=recipient_bank_name,
             recipient_account_number=recipient_account_number,
@@ -1563,6 +1581,16 @@ class SelfServiceWebService:
         tasks = self._get_tasks_for_dropdown(
             db, org_id, str(claim.project_id) if claim.project_id else None
         )
+
+        # Get cost centers for dropdown
+        from app.models.finance.core_org.cost_center import CostCenter
+
+        cost_centers_stmt = select(CostCenter).where(
+            CostCenter.organization_id == org_id,
+            CostCenter.is_active.is_(True),
+        ).order_by(CostCenter.cost_center_code)
+        cost_centers = list(db.scalars(cost_centers_stmt).all())
+
         allowed_banks = OrgBankDirectoryService(db).list_active_banks(org_id)
         allowed_bank_names = {bank.bank_name for bank in allowed_banks}
 
@@ -1578,6 +1606,7 @@ class SelfServiceWebService:
                 "projects": projects,
                 "tickets": tickets,
                 "tasks": tasks,
+                "cost_centers": cost_centers,
                 "allowed_banks": allowed_banks,
                 "allowed_bank_names": allowed_bank_names,
                 "expense_approver_options": self._get_expense_approver_options(
@@ -1659,6 +1688,7 @@ class SelfServiceWebService:
         project_id: UUID | None = None,
         ticket_id: UUID | None = None,
         task_id: UUID | None = None,
+        cost_center_id: UUID | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -1684,6 +1714,7 @@ class SelfServiceWebService:
             project_id=project_id,
             ticket_id=ticket_id,
             task_id=task_id,
+            cost_center_id=cost_center_id,
         )
 
         for item in items:
@@ -1749,9 +1780,16 @@ class SelfServiceWebService:
         if report_ids:
             scope_filters.append(LeaveApplication.employee_id.in_(report_ids))
 
-        query = select(LeaveApplication).where(
-            LeaveApplication.organization_id == org_id,
-            or_(*scope_filters),
+        query = (
+            select(LeaveApplication)
+            .options(
+                joinedload(LeaveApplication.employee).joinedload(Employee.person),
+                joinedload(LeaveApplication.leave_type),
+            )
+            .where(
+                LeaveApplication.organization_id == org_id,
+                or_(*scope_filters),
+            )
         )
         if status:
             try:
@@ -1767,15 +1805,22 @@ class SelfServiceWebService:
         )
 
         total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
+        active_filters = build_active_filters(
+            params={"status": status},
+            labels={"status": "Status"},
+        )
         context = base_context(request, auth, "Team Leave", "self-team-leave", db=db)
         context.update(
             {
                 "applications": items,
                 "status": status,
                 "statuses": [s.value for s in LeaveApplicationStatus],
+                "active_filters": active_filters,
                 "page": page,
                 "total_pages": total_pages,
                 "total": total,
+                "total_count": total,
+                "limit": pagination.limit,
                 "has_prev": page > 1,
                 "has_next": pagination.offset + pagination.limit < total,
             }

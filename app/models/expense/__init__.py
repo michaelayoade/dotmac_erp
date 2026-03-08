@@ -22,6 +22,7 @@ from app.models.expense.expense_claim_action import (
     ExpenseClaimActionStatus,
     ExpenseClaimActionType,
 )
+from app.models.expense.expense_claim_approval_step import ExpenseClaimApprovalStep
 from app.models.expense.limit_rule import (
     ExpenseApproverBudgetAdjustment,
     ExpenseApproverLimit,
@@ -44,6 +45,7 @@ __all__ = [
     "ExpenseClaimAction",
     "ExpenseClaimActionType",
     "ExpenseClaimActionStatus",
+    "ExpenseClaimApprovalStep",
     # Cash Advance
     "CashAdvance",
     "CashAdvanceStatus",

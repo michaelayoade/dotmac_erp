@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg, pagination %}
 
 
 {% block page_title %}Breached Tickets{% endblock %}
@@ -157,6 +157,7 @@
         </div>
         {% endif %}
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'breach_type': breach_type|default('all'), 'include_resolved': 'true' if include_resolved else ''}) }}
     </div>
 </div>
 {% endblock %}

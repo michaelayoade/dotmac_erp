@@ -367,9 +367,9 @@ def onboarding_company_info(
 def onboarding_link_expired(request: Request):
     """Expired link error page."""
     return templates.TemplateResponse(
+        request,
         "onboarding/portal/expired.html",
         {
-            "request": request,
             "brand_name": settings.brand_name,
         },
     )

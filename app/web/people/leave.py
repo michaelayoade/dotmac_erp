@@ -557,6 +557,7 @@ def leave_balance_report(
     request: Request,
     year: int | None = None,
     department_id: str | None = None,
+    page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -567,6 +568,7 @@ def leave_balance_report(
         db=db,
         year=year,
         department_id=department_id,
+        page=page,
     )
 
 

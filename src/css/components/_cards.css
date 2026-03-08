@@ -18,7 +18,7 @@
 
     .card-hover:hover {
         box-shadow: var(--card-shadow-hover), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-        transform: translateY(-2px);
+        transform: translateY(-1px);
     }
 
     .card-header {

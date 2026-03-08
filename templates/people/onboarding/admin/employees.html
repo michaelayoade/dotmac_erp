@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, status_badge %}
+{% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, status_badge, pagination %}
 
 {% block page_title %}Employee Onboardings{% endblock %}
 
@@ -132,6 +132,7 @@
         </p>
     </div>
     {% endif %}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'status': status_filter|default('')}) }}
     </div>
 
 </div>

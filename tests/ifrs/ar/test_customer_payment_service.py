@@ -329,11 +329,11 @@ class TestGetCustomerPayment:
         mock_db.get.return_value = payment
 
         with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            result = CustomerPaymentService.get(mock_db, str(payment.payment_id))
+            result = CustomerPaymentService.get(mock_db, str(payment.payment_id), org_id)
 
         assert result == payment
 
-    def test_get_nonexistent_raises(self, mock_db):
+    def test_get_nonexistent_raises(self, mock_db, org_id):
         """Test getting non-existent payment raises exception."""
         from app.services.common import NotFoundError
         from app.services.finance.ar.customer_payment import CustomerPaymentService
@@ -342,7 +342,20 @@ class TestGetCustomerPayment:
 
         with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
             with pytest.raises(NotFoundError):
-                CustomerPaymentService.get(mock_db, str(uuid4()))
+                CustomerPaymentService.get(mock_db, str(uuid4()), org_id)
+
+    def test_get_wrong_org_raises(self, mock_db, org_id):
+        """Test getting payment from wrong org raises NotFoundError."""
+        from app.services.common import NotFoundError
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
+
+        payment = MockCustomerPayment(organization_id=org_id)
+        mock_db.get.return_value = payment
+        wrong_org = uuid4()
+
+        with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
+            with pytest.raises(NotFoundError):
+                CustomerPaymentService.get(mock_db, str(payment.payment_id), wrong_org)
 
 
 class TestListCustomerPayments:

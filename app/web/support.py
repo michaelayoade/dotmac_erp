@@ -19,9 +19,9 @@ def _manual_ticket_creation_disabled_response(request: Request):
     from app.templates import templates
 
     return templates.TemplateResponse(
+        request,
         "errors/404.html",
         {
-            "request": request,
             "message": "Manual ticket creation is disabled. Tickets are synced from CRM.",
         },
         status_code=404,
@@ -57,6 +57,7 @@ def breached_tickets(
     auth: WebAuthContext = Depends(require_support_access),
     breach_type: str = Query(default="all"),
     include_resolved: bool = Query(default=False),
+    page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
     """Breached tickets report."""
@@ -66,6 +67,7 @@ def breached_tickets(
         db,
         breach_type=breach_type,
         include_resolved=include_resolved,
+        page=page,
     )
 
 

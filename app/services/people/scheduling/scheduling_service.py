@@ -14,6 +14,7 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.people.hr.employee import Employee
 from app.models.people.scheduling import (
     RotationType,
     ScheduleStatus,
@@ -604,7 +605,7 @@ class SchedulingService:
             select(ShiftSchedule)
             .where(ShiftSchedule.organization_id == org_id)
             .options(
-                joinedload(ShiftSchedule.employee),
+                joinedload(ShiftSchedule.employee).joinedload(Employee.person),
                 joinedload(ShiftSchedule.department),
                 joinedload(ShiftSchedule.shift_type),
             )

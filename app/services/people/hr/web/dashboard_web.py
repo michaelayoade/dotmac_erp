@@ -574,8 +574,8 @@ class PeopleDashboardService:
             hires.append(
                 {
                     "id": str(emp.employee_id),
-                    "initials": f"{(person.first_name or '?')[0]}{(person.last_name or '?')[0]}".upper(),
-                    "full_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                    "initials": (person.name[0] if person.name else "?").upper(),
+                    "full_name": person.name,
                     "designation": desig.designation_name if desig else "",
                     "department": dept.department_name if dept else "",
                     "date_of_joining": emp.date_of_joining.strftime("%b %d, %Y")
@@ -594,7 +594,7 @@ class PeopleDashboardService:
 
         # This is simplified - in production you'd want proper date wrapping for year boundaries
         results = db.execute(
-            select(Person.first_name, Person.last_name, Person.date_of_birth)
+            select(Person.name_expr().label("employee_name"), Person.date_of_birth)
             .join(Employee, Employee.person_id == Person.id)
             .where(
                 and_(
@@ -613,10 +613,10 @@ class PeopleDashboardService:
 
         return [
             {
-                "name": f"{first or ''} {last or ''}".strip(),
+                "name": name or "",
                 "date": dob.strftime("%b %d") if dob else "",
             }
-            for first, last, dob in results
+            for name, dob in results
         ]
 
     def _get_upcoming_anniversaries(
@@ -626,7 +626,7 @@ class PeopleDashboardService:
         today = date.today()
 
         results = db.execute(
-            select(Person.first_name, Person.last_name, Employee.date_of_joining)
+            select(Person.name_expr().label("employee_name"), Employee.date_of_joining)
             .join(Employee, Employee.person_id == Person.id)
             .where(
                 and_(
@@ -644,10 +644,10 @@ class PeopleDashboardService:
 
         return [
             {
-                "name": f"{first or ''} {last or ''}".strip(),
+                "name": name or "",
                 "years": today.year - doj.year if doj else 0,
             }
-            for first, last, doj in results
+            for name, doj in results
         ]
 
     def _get_gender_distribution(

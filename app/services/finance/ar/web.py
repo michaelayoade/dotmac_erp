@@ -1306,8 +1306,8 @@ class ARWebService:
         existing_allocations = []
         if receipt_id:
             try:
-                receipt = customer_payment_service.get(db, receipt_id)
-                if receipt and receipt.organization_id == org_id:
+                receipt = customer_payment_service.get(db, receipt_id, org_id)
+                if receipt:
                     # Build receipt view for form pre-population
                     receipt_view = {
                         "payment_id": str(receipt.payment_id),
@@ -1474,11 +1474,11 @@ class ARWebService:
         org_id = coerce_uuid(organization_id)
         receipt = None
         try:
-            receipt = customer_payment_service.get(db, receipt_id)
+            receipt = customer_payment_service.get(db, receipt_id, org_id)
         except Exception:
             receipt = None
 
-        if not receipt or receipt.organization_id != org_id:
+        if not receipt:
             return {"receipt": None, "customer": None, "allocations": []}
 
         customer = None
@@ -3411,8 +3411,8 @@ class ARWebService:
         db: Session,
     ) -> RedirectResponse:
         try:
-            receipt = customer_payment_service.get(db, receipt_id)
-            if not receipt or receipt.organization_id != auth.organization_id:
+            receipt = customer_payment_service.get(db, receipt_id, auth.organization_id)
+            if not receipt:
                 return RedirectResponse(
                     url=f"/ar/receipts/{receipt_id}?error=Receipt+not+found",
                     status_code=303,

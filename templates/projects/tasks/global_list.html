@@ -1,6 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state, compact_filters, icon_svg %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters, icon_svg, pagination %}
 
 {% block title %}Project Tasks{% endblock %}
 
@@ -137,6 +137,7 @@
             </tbody>
         </table>
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'status': status_filter|default(''), 'priority': priority_filter|default(''), 'project_id': project_filter|default('')}) }}
     </div>
 </div>
 {% endblock %}

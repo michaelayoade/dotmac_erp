@@ -989,7 +989,7 @@ class ExpenseLimitService:
                 result_message=final_result.message,
                 context_data={
                     "employee_id": str(employee.employee_id),
-                    "employee_name": f"{employee.first_name} {employee.last_name}",
+                    "employee_name": employee.full_name,
                     "rules_evaluated": len(rules),
                 },
             )
@@ -1145,7 +1145,7 @@ class ExpenseLimitService:
                     eligible.append(
                         EligibleApprover(
                             employee_id=manager.employee_id,
-                            employee_name=f"{manager.first_name} {manager.last_name}",
+                            employee_name=manager.full_name,
                             max_approval_amount=manager_limit,
                             is_direct_manager=True,
                             grade_rank=manager.grade.rank if manager.grade else None,
@@ -1180,7 +1180,7 @@ class ExpenseLimitService:
                 eligible.append(
                     EligibleApprover(
                         employee_id=emp.employee_id,
-                        employee_name=f"{emp.first_name} {emp.last_name}",
+                        employee_name=emp.full_name,
                         max_approval_amount=limit.max_approval_amount,
                         is_direct_manager=False,
                         grade_rank=emp.grade.rank if emp.grade else None,
@@ -1763,7 +1763,7 @@ class ExpenseLimitService:
 
         return {
             "employee_id": str(employee_id),
-            "employee_name": f"{employee.first_name} {employee.last_name}",
+            "employee_name": employee.full_name,
             "current_month_claimed": float(month_claimed),
             "current_month_claim_count": month_count,
             "current_quarter_claimed": float(quarter_claimed),

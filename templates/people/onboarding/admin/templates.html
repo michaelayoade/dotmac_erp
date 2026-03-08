@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, pagination %}
 
 {% block page_title %}Onboarding Templates{% endblock %}
 
@@ -137,6 +137,7 @@
         </a>
     </div>
     {% endif %}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
     </div>{# /results-container #}
 
 </div>

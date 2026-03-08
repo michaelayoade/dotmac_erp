@@ -135,7 +135,7 @@
       {{ icon_svg(icon) }}
     </div>
   </div>
-  <p class="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 dark:text-white font-mono tabular-nums truncate" title="{{ value }}">{{ value }}</p>
+  <p class="text-base sm:text-lg lg:text-2xl font-bold text-slate-900 dark:text-white font-mono tabular-nums break-all leading-tight" title="{{ value }}">{{ value }}</p>
   {% if subtitle %}
   <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 {{ 'group-hover:text-teal-500 transition-colors' if href else '' }}">{{ subtitle }}</p>
   {% endif %}
@@ -1752,7 +1752,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
         </kbd>
       </button>
     </div>
-    <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+    <div class="topbar-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3">
       {{ header_actions_html | safe }}
       <button @click="darkMode = !darkMode"
               class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"

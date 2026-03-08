@@ -11,7 +11,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ap.web import ap_web_service
-from app.web.deps import WebAuthContext, get_db, require_finance_access
+from app.web.deps import (
+    WebAuthContext,
+    get_db,
+    require_finance_access,
+    require_web_permission,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -596,7 +601,7 @@ async def bulk_export_payments(
 @router.get("/payment-batches", response_class=HTMLResponse)
 def list_payment_batches(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payment_batches:read")),
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
@@ -608,11 +613,21 @@ def list_payment_batches(
 @router.get("/payment-batches/new", response_class=HTMLResponse)
 def new_payment_batch_form(
     request: Request,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payment_batches:create")),
     db: Session = Depends(get_db),
 ):
     """New payment batch form page."""
     return ap_web_service.payment_batch_new_form_response(request, auth, db)
+
+
+@router.post("/payment-batches/new")
+async def create_payment_batch(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_permission("ap:payment_batches:create")),
+    db: Session = Depends(get_db),
+):
+    """Handle payment batch form submission."""
+    return await ap_web_service.create_payment_batch_response(request, auth, db)
 
 
 @router.get("/purchase-orders", response_class=HTMLResponse)

@@ -211,8 +211,8 @@ class ReceiptWebService:
         existing_allocations = []
         if receipt_id:
             try:
-                receipt = customer_payment_service.get(db, receipt_id)
-                if receipt and receipt.organization_id == org_id:
+                receipt = customer_payment_service.get(db, receipt_id, org_id)
+                if receipt:
                     receipt_view = {
                         "payment_id": str(receipt.payment_id),
                         "payment_number": receipt.payment_number,
@@ -384,11 +384,11 @@ class ReceiptWebService:
         org_id = coerce_uuid(organization_id)
         receipt = None
         try:
-            receipt = customer_payment_service.get(db, receipt_id)
+            receipt = customer_payment_service.get(db, receipt_id, org_id)
         except Exception:
             receipt = None
 
-        if not receipt or receipt.organization_id != org_id:
+        if not receipt:
             return {"receipt": None, "customer": None, "allocations": []}
 
         customer = None
@@ -898,8 +898,8 @@ class ReceiptWebService:
                 raise HTTPException(status_code=401, detail="Authentication required")
             if user_id is None:
                 raise HTTPException(status_code=401, detail="Authentication required")
-            receipt = customer_payment_service.get(db, receipt_id)
-            if not receipt or receipt.organization_id != auth.organization_id:
+            receipt = customer_payment_service.get(db, receipt_id, org_id)
+            if not receipt:
                 return RedirectResponse(
                     url=f"/ar/receipts/{receipt_id}?error=Receipt+not+found",
                     status_code=303,

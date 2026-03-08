@@ -31,7 +31,7 @@
     <div class="stagger-in expense-stat-grid" style="animation-delay: 0ms;" data-testid="claims-dashboard-stats">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
             <!-- Total Claims -->
-            <div class="stat-hero">
+            <a href="/expense/claims/list" class="stat-hero hover:shadow-lg transition-shadow">
                 <div class="stat-hero-icon stat-hero-icon-expense">
                     {{ icon_svg("document") }}
                 </div>
@@ -40,10 +40,10 @@
                 <span class="stat-hero-trend text-slate-500 dark:text-slate-400">
                     {{ stats.this_period_claims | default(0) }} this period
                 </span>
-            </div>
+            </a>
 
             <!-- Total Amount Claimed -->
-            <div class="stat-hero">
+            <a href="/expense/claims/list" class="stat-hero hover:shadow-lg transition-shadow">
                 <div class="stat-hero-icon stat-hero-icon-expense">
                     {{ icon_svg("currency") }}
                 </div>
@@ -52,10 +52,10 @@
                 <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
                     {{ stats.avg_claim | default(currency_zero) }} avg
                 </span>
-            </div>
+            </a>
 
             <!-- Pending Review -->
-            <div class="stat-hero">
+            <a href="/expense/claims/list?status=SUBMITTED" class="stat-hero hover:shadow-lg transition-shadow">
                 <div class="stat-hero-icon stat-hero-icon-expense">
                     {{ icon_svg("clock") }}
                 </div>
@@ -64,10 +64,10 @@
                 <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
                     {{ stats.pending_amount | default(currency_zero) }} total
                 </span>
-            </div>
+            </a>
 
             <!-- Approved/Paid -->
-            <div class="stat-hero">
+            <a href="/expense/claims/list?status=PAID" class="stat-hero hover:shadow-lg transition-shadow">
                 <div class="stat-hero-icon stat-hero-icon-expense">
                     {{ icon_svg("check-circle") }}
                 </div>
@@ -76,7 +76,7 @@
                 <span class="stat-hero-trend text-emerald-600 dark:text-emerald-400">
                     {{ stats.paid_count | default(0) }} claims paid
                 </span>
-            </div>
+            </a>
         </div>
     </div>
 

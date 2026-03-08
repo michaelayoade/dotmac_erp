@@ -27,9 +27,6 @@ from app.services.formatting_context import (
 )
 from app.services.settings_cache import get_cached_setting
 from app.services.settings_spec import (
-    DOMAIN_SETTINGS_SERVICE,
-    get_spec,
-    list_specs,
     resolve_value,
 )
 
@@ -421,34 +418,39 @@ class AdminSettingsWebService:
     def get_features_context(
         self, db: Session, organization_id: uuid.UUID
     ) -> dict[str, Any]:
-        """Get feature flags for the form."""
-        specs = list_specs(SettingDomain.features)
-        features = []
+        """Get feature flags for the admin UI, grouped by category."""
+        from app.services.feature_flag_service import FeatureFlagService
 
-        feature_descriptions = {
-            "enable_multi_currency": "Support multiple currencies in transactions and reporting",
-            "enable_budgeting": "Budget planning and variance analysis",
-            "enable_project_accounting": "Track costs and revenue by project",
-            "enable_bank_reconciliation": "Match bank statements with ledger entries",
-            "enable_recurring_transactions": "Automatically generate invoices, bills, and journal entries",
-            "enable_inventory": "Track inventory items and stock levels",
-            "enable_fixed_assets": "Manage fixed assets and depreciation",
-            "enable_leases": "IFRS 16 lease accounting and right-of-use assets",
-        }
+        service = FeatureFlagService(db)
+        flags = service.get_all_flags(organization_id)
 
-        for spec in specs:
-            value = resolve_value(db, SettingDomain.features, spec.key)
-            features.append(
+        # Group by category for the template
+        categories: dict[str, list[dict[str, Any]]] = {}
+        for flag in flags:
+            cat_label = flag.category.value.replace("_", " ").title()
+            cat_list = categories.setdefault(cat_label, [])
+            cat_list.append(
                 {
-                    "key": spec.key,
-                    "label": spec.key.replace("enable_", "").replace("_", " ").title(),
-                    "description": feature_descriptions.get(spec.key, ""),
-                    "enabled": bool(value),
-                    "default": spec.default,
+                    "key": flag.flag_key,
+                    "label": flag.label,
+                    "description": flag.description,
+                    "enabled": flag.enabled,
+                    "default_enabled": flag.default_enabled,
+                    "is_org_override": flag.is_org_override,
+                    "status": flag.status.value,
+                    "owner": flag.owner,
+                    "expires_at": flag.expires_at,
+                    "category": flag.category.value,
                 }
             )
 
-        return {"features": features}
+        # Flat list for backward compatibility
+        all_features = [item for group in categories.values() for item in group]
+
+        return {
+            "features": all_features,
+            "categories": categories,
+        }
 
     def toggle_feature(
         self,
@@ -456,23 +458,21 @@ class AdminSettingsWebService:
         organization_id: uuid.UUID,
         key: str,
         enabled: bool,
+        *,
+        changed_by_id: uuid.UUID | None = None,
     ) -> tuple[bool, str | None]:
-        """Toggle a feature flag."""
-        spec = get_spec(SettingDomain.features, key)
-        if not spec:
-            return False, f"Unknown feature: {key}"
+        """Toggle a feature flag for an organization."""
+        from app.services.feature_flag_service import FeatureFlagService
 
-        service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.features)
-        if not service:
-            return False, "Features settings service not found"
-
-        payload = DomainSettingUpdate(
-            value_type=spec.value_type,
-            value_text="true" if enabled else "false",
-        )
-        service.upsert_by_key(db, key, payload)
-        db.commit()
-        return True, None
+        service = FeatureFlagService(db)
+        try:
+            service.toggle(
+                organization_id, key, enabled, changed_by_id=changed_by_id
+            )
+            db.commit()
+            return True, None
+        except ValueError as e:
+            return False, str(e)
 
     # ========== Payments Settings ==========
 

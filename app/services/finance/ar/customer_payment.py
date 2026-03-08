@@ -904,10 +904,21 @@ class CustomerPaymentService(ListResponseMixin):
     def get(
         db: Session,
         payment_id: str,
+        organization_id: str | UUID | None = None,
     ) -> CustomerPayment:
-        """Get a payment by ID."""
+        """Get a payment by ID.
+
+        Args:
+            db: Database session.
+            payment_id: The payment UUID.
+            organization_id: Organization UUID for tenant isolation.
+        """
         payment = db.get(CustomerPayment, coerce_uuid(payment_id))
         if not payment:
+            raise NotFoundError("Payment not found")
+        if organization_id is not None and str(payment.organization_id) != str(
+            coerce_uuid(organization_id)
+        ):
             raise NotFoundError("Payment not found")
         return payment
 

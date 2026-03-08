@@ -536,7 +536,10 @@ class TaxReturnService(ListResponseMixin):
 
         # Update tax period status
         period = db.scalar(
-            select(TaxPeriod).where(TaxPeriod.period_id == tax_return.tax_period_id)
+            select(TaxPeriod).where(
+                TaxPeriod.period_id == tax_return.tax_period_id,
+                TaxPeriod.organization_id == org_id,
+            )
         )
         if period:
             period.status = TaxPeriodStatus.FILED
@@ -608,7 +611,10 @@ class TaxReturnService(ListResponseMixin):
 
         # Update tax period status
         period = db.scalar(
-            select(TaxPeriod).where(TaxPeriod.period_id == tax_return.tax_period_id)
+            select(TaxPeriod).where(
+                TaxPeriod.period_id == tax_return.tax_period_id,
+                TaxPeriod.organization_id == org_id,
+            )
         )
         if period:
             period.status = TaxPeriodStatus.PAID
@@ -768,7 +774,10 @@ class TaxReturnService(ListResponseMixin):
 
         # Get fiscal period for this tax period
         period = db.scalar(
-            select(TaxPeriod).where(TaxPeriod.period_id == tax_return.tax_period_id)
+            select(TaxPeriod).where(
+                TaxPeriod.period_id == tax_return.tax_period_id,
+                TaxPeriod.organization_id == org_id,
+            )
         )
 
         if not period:
@@ -832,7 +841,10 @@ class TaxReturnService(ListResponseMixin):
 
         # Get fiscal period
         period = db.scalar(
-            select(TaxPeriod).where(TaxPeriod.period_id == tax_return.tax_period_id)
+            select(TaxPeriod).where(
+                TaxPeriod.period_id == tax_return.tax_period_id,
+                TaxPeriod.organization_id == org_id,
+            )
         )
 
         if not period:

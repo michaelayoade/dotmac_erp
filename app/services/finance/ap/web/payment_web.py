@@ -22,6 +22,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_payment import (
     APPaymentMethod,
+    APPaymentStatus,
     SupplierPayment,
 )
 from app.models.finance.banking.bank_account import BankAccountStatus
@@ -746,6 +747,86 @@ class PaymentWebService:
             url="/finance/ap/payments?success=Record+deleted+successfully",
             status_code=303,
         )
+
+    def payment_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Render the edit form for draft payments."""
+        org_id = coerce_uuid(auth.organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            return RedirectResponse(
+                url="/finance/ap/payments?success=Record+updated+successfully",
+                status_code=303,
+            )
+
+        if payment.status != APPaymentStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error=Only+draft+payments+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit AP Payment", "ap")
+        context.update(self.payment_form_context(db, str(auth.organization_id)))
+        context["payment"] = {
+            "payment_id": payment.payment_id,
+            "payment_number": payment.payment_number,
+            "supplier_id": payment.supplier_id,
+            "payment_date": payment.payment_date,
+            "payment_method": payment.payment_method.value
+            if payment.payment_method
+            else "",
+            "currency_code": payment.currency_code,
+            "amount": payment.amount,
+            "reference": payment.reference,
+            "description": payment.description,
+            "bank_account_id": payment.bank_account_id,
+        }
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_form.html", context
+        )
+
+    async def update_payment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payment_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Handle payment update form submission."""
+        content_type = request.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            return RedirectResponse(
+                url=f"/finance/ap/payments/{payment_id}?error=Payment+update+not+yet+implemented",
+                status_code=303,
+            )
+        except Exception as e:
+            if "application/json" in content_type:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": str(e)},
+                )
+
+            context = base_context(request, auth, "Edit AP Payment", "ap")
+            context.update(self.payment_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_form.html", context
+            )
 
     def aging_report_response(
         self,

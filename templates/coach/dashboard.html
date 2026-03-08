@@ -1,11 +1,11 @@
 {% extends "coach/base_coach.html" %}
 {% from "components/macros.html" import topbar, stats_card, empty_state, icon_svg, status_badge %}
 
-{% block content %}
-{{ topbar("Coach Dashboard", accent="teal") }}
+{% block page_title %}Coach Dashboard{% endblock %}
 
+{% block content %}
 {# ── Stat cards ──────────────────────────────────────────────── #}
-<div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
   {{ stats_card(
       label="Total Insights",
       value=total_insights,

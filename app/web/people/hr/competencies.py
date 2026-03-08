@@ -27,15 +27,21 @@ def list_competencies(
     search: str | None = None,
     success: str | None = None,
     error: str | None = None,
+    page: int = 1,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Competency catalog page."""
+    from app.services.common import PaginationParams
+
     org_id = coerce_uuid(auth.organization_id)
     comp_svc = CompetencyService(db, org_id)
 
     cat = CompetencyCategory(category) if category else None
-    result = comp_svc.list_competencies(category=cat, is_active=None, search=search)
+    result = comp_svc.list_competencies(
+        category=cat, is_active=None, search=search,
+        pagination=PaginationParams.from_page(max(1, page)),
+    )
 
     context = base_context(request, auth, "Competencies", "competencies", db=db)
     context.update(
@@ -46,6 +52,10 @@ def list_competencies(
             "search": search,
             "success": success,
             "error": error,
+            "page": result.page,
+            "total_pages": result.total_pages,
+            "total_count": result.total,
+            "limit": result.limit,
         }
     )
     return templates.TemplateResponse(request, "people/hr/competencies.html", context)

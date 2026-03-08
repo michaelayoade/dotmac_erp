@@ -17,10 +17,27 @@
 <div class="max-w-2xl">
     {# Error alert #}
     {% if error %}
-    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
-        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+        <div class="flex items-center gap-2 text-rose-700 dark:text-rose-400">
             {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0") }}
             <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Validation error summary #}
+    {% if errors %}
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+        <div class="flex items-start gap-2 text-rose-700 dark:text-rose-400">
+            {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0 mt-0.5") }}
+            <div>
+                <p class="font-medium">Please fix {{ errors | length }} error{{ 's' if errors | length > 1 else '' }} below</p>
+                <ul class="mt-1 list-disc list-inside text-sm">
+                    {% for field, msg in errors.items() %}
+                    <li>{{ field | replace('_', ' ') | title }}: {{ msg }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -471,6 +488,12 @@
         btn.addEventListener("click", async function(event) {
             event.preventDefault();
 
+            // Let the browser enforce required fields first.
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
             // Disable button to prevent double-submit
             btn.disabled = true;
             btn.textContent = 'Saving...';
@@ -490,13 +513,24 @@
                     redirect: "follow",
                 });
 
-                // Success - redirect to detail page with success indicator
-                if (response.ok || response.redirected) {
-                    const targetUrl = response.redirected ? response.url : form.action.replace(/\/edit$/, "");
-                    // Add success query param if not already present
-                    const url = new URL(targetUrl, window.location.origin);
-                    url.searchParams.set('saved', '1');
-                    window.location.href = url.toString();
+                // Success only when backend redirects to employee detail page.
+                if (response.redirected) {
+                    const url = new URL(response.url, window.location.origin);
+                    const createdOrUpdated = /^\/people\/hr\/employees\/[0-9a-fA-F-]+$/.test(url.pathname);
+                    if (createdOrUpdated) {
+                        url.searchParams.set('saved', '1');
+                        window.location.href = url.toString();
+                        return;
+                    }
+                }
+
+                // For server-rendered validation responses, render returned HTML.
+                const contentType = response.headers.get("content-type") || "";
+                if (response.ok && contentType.includes("text/html")) {
+                    const html = await response.text();
+                    document.open();
+                    document.write(html);
+                    document.close();
                     return;
                 }
 

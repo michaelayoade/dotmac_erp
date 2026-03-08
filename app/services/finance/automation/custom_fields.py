@@ -177,6 +177,7 @@ class CustomFieldsService:
         db: Session,
         organization_id: UUID,
         is_active: bool | None = None,
+        entity_type: CustomFieldEntityType | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[CustomFieldDefinition]:
@@ -187,6 +188,9 @@ class CustomFieldsService:
 
         if is_active is not None:
             query = query.where(CustomFieldDefinition.is_active == is_active)
+
+        if entity_type is not None:
+            query = query.where(CustomFieldDefinition.entity_type == entity_type)
 
         query = query.order_by(
             CustomFieldDefinition.entity_type,

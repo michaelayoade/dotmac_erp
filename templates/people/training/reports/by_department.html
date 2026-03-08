@@ -74,12 +74,12 @@
 
         <div class="card p-5">
             <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-green-100 dark:bg-green-900/30">
-                    {{ icon_svg("check-circle", "h-6 w-6 text-green-600 dark:text-green-400") }}
+                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                    {{ icon_svg("check-circle", "h-6 w-6 text-emerald-600 dark:text-emerald-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Attended</p>
-                    <p class="text-2xl font-semibold text-green-600 dark:text-green-400">{{ report.total_attended }}</p>
+                    <p class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{{ report.total_attended }}</p>
                 </div>
             </div>
         </div>
@@ -152,12 +152,12 @@
                             <div class="font-medium text-slate-900 dark:text-white">{{ dept.department_name }}</div>
                         </td>
                         <td class="px-5 py-3 text-right text-sm text-slate-700 dark:text-slate-300">{{ dept.total_enrolled }}</td>
-                        <td class="px-5 py-3 text-right text-sm font-medium text-green-600 dark:text-green-400">{{ dept.total_attended }}</td>
+                        <td class="px-5 py-3 text-right text-sm font-medium text-emerald-600 dark:text-emerald-400">{{ dept.total_attended }}</td>
                         <td class="px-5 py-3 text-right">
                             <div class="flex items-center justify-end gap-2">
                                 <div class="w-12 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                                     <div class="h-full rounded-full transition-all
-                                        {% if dept.attendance_rate >= 90 %}bg-green-500
+                                        {% if dept.attendance_rate >= 90 %}bg-emerald-500
                                         {% elif dept.attendance_rate >= 70 %}bg-teal-500
                                         {% elif dept.attendance_rate >= 50 %}bg-amber-500
                                         {% else %}bg-rose-500{% endif %}"
@@ -194,7 +194,7 @@
                     <tr class="bg-slate-50 dark:bg-slate-800/50 font-semibold">
                         <td class="px-5 py-3 text-slate-900 dark:text-white">Total</td>
                         <td class="px-5 py-3 text-right text-slate-900 dark:text-white">{{ report.total_enrolled }}</td>
-                        <td class="px-5 py-3 text-right text-green-600 dark:text-green-400">{{ report.total_attended }}</td>
+                        <td class="px-5 py-3 text-right text-emerald-600 dark:text-emerald-400">{{ report.total_attended }}</td>
                         <td class="px-5 py-3 text-right text-slate-900 dark:text-white">{{ report.overall_attendance_rate }}%</td>
                         <td class="px-5 py-3 text-right text-slate-900 dark:text-white">{{ report.departments | sum(attribute='certificates_issued') }}</td>
                         <td class="px-5 py-3"></td>

@@ -15,6 +15,7 @@ from starlette.routing import Match
 from app.web.deps import WebAuthContext, require_web_auth
 from app.web.deps import get_db as web_get_db
 from app.web.finance import router as finance_web_router
+from app.web.help import router as help_web_router
 from app.web_home import router as web_home_router
 
 # =============================================================================
@@ -43,6 +44,7 @@ def web_client(db_session):
     """Create a test client for web routes with mocked IFRS services."""
     app = FastAPI()
     app.include_router(web_home_router)
+    app.include_router(help_web_router)
     app.include_router(finance_web_router, prefix="/finance")
 
     # Override authentication dependency
@@ -129,6 +131,26 @@ class TestDashboardRoutes:
     def test_legacy_finance_help_route_exists(self, web_client):
         """Test that legacy finance help route still exists."""
         response = web_client.get("/finance/help")
+        assert_route_exists(response)
+
+    def test_help_search_route_exists(self, web_client):
+        """Test that help search route exists."""
+        response = web_client.get("/help/search?q=payroll")
+        assert_route_exists(response)
+
+    def test_help_article_route_exists(self, web_client):
+        """Test that help article detail route exists."""
+        response = web_client.get("/help/articles/finance-month-end-close")
+        assert_route_exists(response)
+
+    def test_help_module_route_exists(self, web_client):
+        """Test that help module hub route exists."""
+        response = web_client.get("/help/module/finance")
+        assert_route_exists(response)
+
+    def test_help_tracks_route_exists(self, web_client):
+        """Test that help tracks route exists."""
+        response = web_client.get("/help/tracks")
         assert_route_exists(response)
 
 
@@ -270,6 +292,11 @@ class TestAPRoutes:
     def test_payments_new_form_route_exists(self, web_client):
         """Test that new AP payment form route exists."""
         response = web_client.get("/finance/ap/payments/new")
+        assert_route_exists(response)
+
+    def test_payment_batches_create_route_exists(self, web_client):
+        """Test that AP payment batch submission route exists."""
+        response = web_client.post("/finance/ap/payment-batches/new")
         assert_route_exists(response)
 
     def test_payment_detail_route_exists(self, web_client):

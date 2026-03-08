@@ -1,0 +1,2953 @@
+{
+  "total_pages": 497,
+  "total_issues": 173,
+  "pass_rate": 65.2,
+  "issues": [
+    {
+      "path": "_other/change-password.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "96% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1039,
+        "white_ratio": 0.963,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.47,
+        "color_std": 15.48
+      }
+    },
+    {
+      "path": "_other/help.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 5657,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.49,
+        "color_std": 21.71
+      }
+    },
+    {
+      "path": "_other/onboarding__expired.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.978,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.0,
+        "color_std": 15.99
+      }
+    },
+    {
+      "path": "_other/payroll.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1550,
+        "white_ratio": 0.878,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 29.84
+      }
+    },
+    {
+      "path": "_other/payroll__assignments.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1604,
+        "white_ratio": 0.902,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 25.61
+      }
+    },
+    {
+      "path": "_other/payroll__assignments__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 974,
+        "white_ratio": 0.814,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 23.51
+      }
+    },
+    {
+      "path": "_other/payroll__components.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 949,
+        "white_ratio": 0.846,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 31.7
+      }
+    },
+    {
+      "path": "_other/payroll__components__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1110,
+        "white_ratio": 0.882,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 22.8
+      }
+    },
+    {
+      "path": "_other/payroll__loan.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.914,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 21.22
+      }
+    },
+    {
+      "path": "_other/payroll__loans.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.914,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 21.22
+      }
+    },
+    {
+      "path": "_other/payroll__loans__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1009,
+        "white_ratio": 0.879,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 23.43
+      }
+    },
+    {
+      "path": "_other/payroll__loans__types.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "_other/payroll__structures.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.909,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 24.02
+      }
+    },
+    {
+      "path": "_other/payroll__structures__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1001,
+        "white_ratio": 0.799,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 22.97
+      }
+    },
+    {
+      "path": "_other/profile.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1478,
+        "white_ratio": 0.947,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.07,
+        "color_std": 20.76
+      }
+    },
+    {
+      "path": "_other/reset-password.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "account/account__sessions.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1628,
+        "white_ratio": 0.955,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.99,
+        "color_std": 16.01
+      }
+    },
+    {
+      "path": "account/account__two-factor.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.954,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 24.15
+      }
+    },
+    {
+      "path": "admin/admin__roles__new.png",
+      "issues": [
+        [
+          "TALL_PAGE",
+          "Height 21715px \u2014 possibly unpaginated or runaway"
+        ],
+        [
+          "BLANK_PAGE",
+          "94% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 21715,
+        "white_ratio": 0.938,
+        "dark_ratio": 0.0,
+        "sidebar_std": 33.71,
+        "color_std": 27.93
+      }
+    },
+    {
+      "path": "admin/admin__settings__email.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 4741,
+        "white_ratio": 0.935,
+        "dark_ratio": 0.0,
+        "sidebar_std": 34.66,
+        "color_std": 43.03
+      }
+    },
+    {
+      "path": "admin/admin__sync__crm__entities.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "admin/notifications.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2287,
+        "white_ratio": 0.946,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.0,
+        "color_std": 20.38
+      }
+    },
+    {
+      "path": "admin/notifications__context.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ],
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=63.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.931,
+        "dark_ratio": 0.01,
+        "sidebar_std": 63.84,
+        "color_std": 35.28
+      }
+    },
+    {
+      "path": "admin/settings__email.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 4741,
+        "white_ratio": 0.935,
+        "dark_ratio": 0.0,
+        "sidebar_std": 34.66,
+        "color_std": 43.03
+      }
+    },
+    {
+      "path": "automation/automation__fields.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.945,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 16.25
+      }
+    },
+    {
+      "path": "automation/automation__recurring.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "94% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.939,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 17.13
+      }
+    },
+    {
+      "path": "automation/automation__workflows__monitoring.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1524,
+        "white_ratio": 0.923,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 18.91
+      }
+    },
+    {
+      "path": "coach/coach__reports.png",
+      "issues": [
+        [
+          "UNIFORM_COLOR",
+          "Very low color variance (14.6) \u2014 possibly blank/broken"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.886,
+        "dark_ratio": 0.0,
+        "sidebar_std": 37.67,
+        "color_std": 14.57
+      }
+    },
+    {
+      "path": "expense/expense.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2576,
+        "white_ratio": 0.826,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 25.27
+      }
+    },
+    {
+      "path": "expense/expense__advances.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1047,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.91,
+        "color_std": 25.84
+      }
+    },
+    {
+      "path": "expense/expense__advances__list.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.885,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.91,
+        "color_std": 22.82
+      }
+    },
+    {
+      "path": "expense/expense__cards.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=42.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1047,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 42.58,
+        "color_std": 25.85
+      }
+    },
+    {
+      "path": "expense/expense__categories.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=42.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1988,
+        "white_ratio": 0.903,
+        "dark_ratio": 0.0,
+        "sidebar_std": 42.62,
+        "color_std": 21.49
+      }
+    },
+    {
+      "path": "expense/expense__categories__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=42.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.874,
+        "dark_ratio": 0.0,
+        "sidebar_std": 42.62,
+        "color_std": 23.08
+      }
+    },
+    {
+      "path": "expense/expense__claims.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2326,
+        "white_ratio": 0.805,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.6,
+        "color_std": 25.95
+      }
+    },
+    {
+      "path": "expense/expense__claims__list.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2744,
+        "white_ratio": 0.906,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.6,
+        "color_std": 19.3
+      }
+    },
+    {
+      "path": "expense/expense__dashboard.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2576,
+        "white_ratio": 0.827,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 25.27
+      }
+    },
+    {
+      "path": "expense/expense__limits.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 971,
+        "white_ratio": 0.861,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 25.04
+      }
+    },
+    {
+      "path": "expense/expense__limits__approvers.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 974,
+        "white_ratio": 0.77,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 28.57
+      }
+    },
+    {
+      "path": "expense/expense__limits__approvers__employees__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "expense/expense__limits__approvers__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 953,
+        "white_ratio": 0.876,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 26.14
+      }
+    },
+    {
+      "path": "expense/expense__limits__evaluations.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 946,
+        "white_ratio": 0.874,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 19.76
+      }
+    },
+    {
+      "path": "expense/expense__limits__reviewer__approvers.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1306,
+        "white_ratio": 0.879,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.63,
+        "color_std": 26.03
+      }
+    },
+    {
+      "path": "expense/expense__limits__rules.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 971,
+        "white_ratio": 0.861,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 25.04
+      }
+    },
+    {
+      "path": "expense/expense__limits__rules__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1333,
+        "white_ratio": 0.891,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 21.5
+      }
+    },
+    {
+      "path": "expense/expense__limits__usage.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.8 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.898,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.79,
+        "color_std": 17.87
+      }
+    },
+    {
+      "path": "expense/expense__list.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1047,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 25.82
+      }
+    },
+    {
+      "path": "expense/expense__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=40.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 999,
+        "white_ratio": 0.889,
+        "dark_ratio": 0.0,
+        "sidebar_std": 40.87,
+        "color_std": 22.69
+      }
+    },
+    {
+      "path": "expense/expense__reports__by-category.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2094,
+        "white_ratio": 0.895,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 22.81
+      }
+    },
+    {
+      "path": "expense/expense__reports__by-employee.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2996,
+        "white_ratio": 0.907,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 23.92
+      }
+    },
+    {
+      "path": "expense/expense__reports__my-approvals.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=40.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.894,
+        "dark_ratio": 0.0,
+        "sidebar_std": 40.87,
+        "color_std": 18.36
+      }
+    },
+    {
+      "path": "expense/expense__reports__summary.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 927,
+        "white_ratio": 0.853,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 22.93
+      }
+    },
+    {
+      "path": "expense/expense__reports__trends.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1635,
+        "white_ratio": 0.891,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 23.49
+      }
+    },
+    {
+      "path": "finance/finance__ap__people__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "finance/finance__ap__suppliers__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "finance/finance__ar__aging.png",
+      "issues": [
+        [
+          "CORRUPT",
+          "Cannot open image: Image size (191566080 pixels) exceeds limit of 178956970 pixels, could be decompression bomb DOS attack."
+        ]
+      ],
+      "stats": {}
+    },
+    {
+      "path": "finance/finance__ar__customers.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 4940,
+        "white_ratio": 0.927,
+        "dark_ratio": 0.0,
+        "sidebar_std": 25.79,
+        "color_std": 22.26
+      }
+    },
+    {
+      "path": "finance/finance__automation__fields.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.945,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 16.25
+      }
+    },
+    {
+      "path": "finance/finance__automation__recurring.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "94% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.939,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 17.14
+      }
+    },
+    {
+      "path": "finance/finance__automation__workflows__monitoring.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1524,
+        "white_ratio": 0.923,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 18.91
+      }
+    },
+    {
+      "path": "finance/finance__banking__rules__duplicate__bulk.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.978,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.51
+      }
+    },
+    {
+      "path": "finance/finance__banking__statements__imports.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2827,
+        "white_ratio": 0.923,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.72,
+        "color_std": 26.22
+      }
+    },
+    {
+      "path": "finance/finance__expense.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2576,
+        "white_ratio": 0.827,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 25.27
+      }
+    },
+    {
+      "path": "finance/finance__expense__advances.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1047,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.63,
+        "color_std": 25.83
+      }
+    },
+    {
+      "path": "finance/finance__expense__advances__list.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.6 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.885,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.63,
+        "color_std": 22.81
+      }
+    },
+    {
+      "path": "finance/finance__expense__cards.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1047,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.87,
+        "color_std": 25.84
+      }
+    },
+    {
+      "path": "finance/finance__expense__categories.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=42.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1988,
+        "white_ratio": 0.903,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.98,
+        "color_std": 21.49
+      }
+    },
+    {
+      "path": "finance/finance__expense__categories__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=42.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.874,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.98,
+        "color_std": 23.08
+      }
+    },
+    {
+      "path": "finance/finance__expense__claims.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.4 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2326,
+        "white_ratio": 0.805,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.42,
+        "color_std": 25.94
+      }
+    },
+    {
+      "path": "finance/finance__expense__claims__list.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.4 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2744,
+        "white_ratio": 0.906,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.42,
+        "color_std": 19.3
+      }
+    },
+    {
+      "path": "finance/finance__expense__dashboard.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2576,
+        "white_ratio": 0.827,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 25.27
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 971,
+        "white_ratio": 0.861,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 25.03
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__approvers.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 974,
+        "white_ratio": 0.77,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 28.56
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__approvers__employees__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__approvers__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 953,
+        "white_ratio": 0.876,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 26.13
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__evaluations.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 946,
+        "white_ratio": 0.874,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 19.75
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__reviewer__approvers.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=40.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1306,
+        "white_ratio": 0.884,
+        "dark_ratio": 0.0,
+        "sidebar_std": 40.95,
+        "color_std": 25.99
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__rules.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 971,
+        "white_ratio": 0.861,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 25.03
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__rules__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1333,
+        "white_ratio": 0.891,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 21.49
+      }
+    },
+    {
+      "path": "finance/finance__expense__limits__usage.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.5 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.898,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.54,
+        "color_std": 17.85
+      }
+    },
+    {
+      "path": "finance/finance__expense__list.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1047,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 25.82
+      }
+    },
+    {
+      "path": "finance/finance__expense__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=40.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 999,
+        "white_ratio": 0.889,
+        "dark_ratio": 0.0,
+        "sidebar_std": 40.87,
+        "color_std": 22.69
+      }
+    },
+    {
+      "path": "finance/finance__expense__reports__by-category.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2094,
+        "white_ratio": 0.898,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 22.79
+      }
+    },
+    {
+      "path": "finance/finance__expense__reports__by-employee.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2996,
+        "white_ratio": 0.91,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 23.91
+      }
+    },
+    {
+      "path": "finance/finance__expense__reports__my-approvals.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=40.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.894,
+        "dark_ratio": 0.0,
+        "sidebar_std": 40.87,
+        "color_std": 18.36
+      }
+    },
+    {
+      "path": "finance/finance__expense__reports__summary.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 927,
+        "white_ratio": 0.861,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 22.9
+      }
+    },
+    {
+      "path": "finance/finance__expense__reports__trends.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=41.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1635,
+        "white_ratio": 0.891,
+        "dark_ratio": 0.0,
+        "sidebar_std": 41.31,
+        "color_std": 23.49
+      }
+    },
+    {
+      "path": "finance/finance__gl__ledger.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 6074,
+        "white_ratio": 0.946,
+        "dark_ratio": 0.0,
+        "sidebar_std": 33.85,
+        "color_std": 20.65
+      }
+    },
+    {
+      "path": "finance/finance__gl__period-close.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.952,
+        "dark_ratio": 0.0,
+        "sidebar_std": 34.73,
+        "color_std": 17.19
+      }
+    },
+    {
+      "path": "finance/finance__help.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 5657,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.49,
+        "color_std": 21.71
+      }
+    },
+    {
+      "path": "finance/finance__remita__source-search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "finance/finance__reports__analysis.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.925,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 20.07
+      }
+    },
+    {
+      "path": "finance/finance__reports__general-ledger.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.923,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.71,
+        "color_std": 15.56
+      }
+    },
+    {
+      "path": "finance/finance__settings__email.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 4741,
+        "white_ratio": 0.935,
+        "dark_ratio": 0.0,
+        "sidebar_std": 34.66,
+        "color_std": 43.03
+      }
+    },
+    {
+      "path": "finance/finance__tax__deferred.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.951,
+        "dark_ratio": 0.0,
+        "sidebar_std": 22.2,
+        "color_std": 16.16
+      }
+    },
+    {
+      "path": "finance/finance__tax__jurisdictions.png",
+      "issues": [
+        [
+          "UNIFORM_COLOR",
+          "Very low color variance (14.9) \u2014 possibly blank/broken"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.882,
+        "dark_ratio": 0.0,
+        "sidebar_std": 20.65,
+        "color_std": 14.86
+      }
+    },
+    {
+      "path": "finance/finance__tax__liability-summary.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "finance/finance__tax__returns.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "finance/fixed-assets__assets.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=43.2 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 994,
+        "white_ratio": 0.853,
+        "dark_ratio": 0.0,
+        "sidebar_std": 43.25,
+        "color_std": 24.41
+      }
+    },
+    {
+      "path": "finance/fixed-assets__assets__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=43.2 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1117,
+        "white_ratio": 0.883,
+        "dark_ratio": 0.0,
+        "sidebar_std": 43.25,
+        "color_std": 19.58
+      }
+    },
+    {
+      "path": "finance/fixed-assets__categories.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=45.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.85,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.96,
+        "color_std": 25.35
+      }
+    },
+    {
+      "path": "finance/fixed-assets__categories__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=45.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1577,
+        "white_ratio": 0.894,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.96,
+        "color_std": 19.1
+      }
+    },
+    {
+      "path": "finance/fixed-assets__depreciation.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=45.3 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.909,
+        "dark_ratio": 0.0,
+        "sidebar_std": 45.35,
+        "color_std": 22.35
+      }
+    },
+    {
+      "path": "fleet/fleet__expense-claims__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "inventory/inventory__material-requests__requested-by__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "inventory/inventory__transactions.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 4070,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 32.52,
+        "color_std": 27.92
+      }
+    },
+    {
+      "path": "people/people__attendance__reports__by-employee.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 6925,
+        "white_ratio": 0.929,
+        "dark_ratio": 0.0,
+        "sidebar_std": 28.24,
+        "color_std": 23.41
+      }
+    },
+    {
+      "path": "people/people__hr__departments__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.17,
+        "color_std": 21.45
+      }
+    },
+    {
+      "path": "people/people__hr__designations__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.928,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.73,
+        "color_std": 20.66
+      }
+    },
+    {
+      "path": "people/people__hr__discipline__employees__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "people/people__hr__employees__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 2058,
+        "white_ratio": 0.933,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.38,
+        "color_std": 18.11
+      }
+    },
+    {
+      "path": "people/people__hr__employees__org-chart.png",
+      "issues": [
+        [
+          "TALL_PAGE",
+          "Height 36287px \u2014 possibly unpaginated or runaway"
+        ],
+        [
+          "BLANK_PAGE",
+          "96% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 36287,
+        "white_ratio": 0.96,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.38,
+        "color_std": 14.57
+      }
+    },
+    {
+      "path": "people/people__hr__employees__stats.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.0,
+        "color_std": 6.87
+      }
+    },
+    {
+      "path": "people/people__hr__employment-types__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.926,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.38,
+        "color_std": 22.18
+      }
+    },
+    {
+      "path": "people/people__hr__grades__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.927,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.38,
+        "color_std": 19.61
+      }
+    },
+    {
+      "path": "people/people__hr__job-descriptions__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1763,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.78,
+        "color_std": 18.31
+      }
+    },
+    {
+      "path": "people/people__hr__onboarding__employees.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "people/people__hr__people__search.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "96% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.963,
+        "dark_ratio": 0.004,
+        "sidebar_std": 0.0,
+        "color_std": 20.69
+      }
+    },
+    {
+      "path": "people/people__hr__promotions.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "people/people__hr__skills__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.928,
+        "dark_ratio": 0.0,
+        "sidebar_std": 27.77,
+        "color_std": 18.21
+      }
+    },
+    {
+      "path": "people/people__hr__transfers.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "people/people__leave__reports__balance.png",
+      "issues": [
+        [
+          "TALL_PAGE",
+          "Height 44115px \u2014 possibly unpaginated or runaway"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 44115,
+        "white_ratio": 0.869,
+        "dark_ratio": 0.0,
+        "sidebar_std": 32.82,
+        "color_std": 20.98
+      }
+    },
+    {
+      "path": "people/people__payroll__assignments.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1604,
+        "white_ratio": 0.902,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 25.61
+      }
+    },
+    {
+      "path": "people/people__payroll__assignments__bulk.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 922,
+        "white_ratio": 0.819,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 24.21
+      }
+    },
+    {
+      "path": "people/people__payroll__assignments__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 974,
+        "white_ratio": 0.814,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 23.51
+      }
+    },
+    {
+      "path": "people/people__payroll__components.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 949,
+        "white_ratio": 0.846,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 31.7
+      }
+    },
+    {
+      "path": "people/people__payroll__components__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1110,
+        "white_ratio": 0.882,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 22.8
+      }
+    },
+    {
+      "path": "people/people__payroll__dashboard.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1263,
+        "white_ratio": 0.776,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 23.43
+      }
+    },
+    {
+      "path": "people/people__payroll__loan.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.914,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 21.22
+      }
+    },
+    {
+      "path": "people/people__payroll__loans.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.914,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 21.22
+      }
+    },
+    {
+      "path": "people/people__payroll__loans__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1009,
+        "white_ratio": 0.879,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 23.43
+      }
+    },
+    {
+      "path": "people/people__payroll__loans__types.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "people/people__payroll__loans__types__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1433,
+        "white_ratio": 0.895,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.69,
+        "color_std": 19.34
+      }
+    },
+    {
+      "path": "people/people__payroll__reports__by-department.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.88,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 19.57
+      }
+    },
+    {
+      "path": "people/people__payroll__reports__summary.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 905,
+        "white_ratio": 0.832,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 33.07
+      }
+    },
+    {
+      "path": "people/people__payroll__reports__tax-summary.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.869,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 20.78
+      }
+    },
+    {
+      "path": "people/people__payroll__reports__trends.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1635,
+        "white_ratio": 0.889,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 23.17
+      }
+    },
+    {
+      "path": "people/people__payroll__runs.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.854,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.68,
+        "color_std": 25.23
+      }
+    },
+    {
+      "path": "people/people__payroll__runs__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=44.7 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1518,
+        "white_ratio": 0.866,
+        "dark_ratio": 0.0,
+        "sidebar_std": 44.68,
+        "color_std": 20.75
+      }
+    },
+    {
+      "path": "people/people__payroll__slips.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1550,
+        "white_ratio": 0.878,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 29.84
+      }
+    },
+    {
+      "path": "people/people__payroll__slips__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.881,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 22.64
+      }
+    },
+    {
+      "path": "people/people__payroll__structures.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.909,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 24.02
+      }
+    },
+    {
+      "path": "people/people__payroll__structures__new.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=46.9 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1001,
+        "white_ratio": 0.799,
+        "dark_ratio": 0.0,
+        "sidebar_std": 46.93,
+        "color_std": 22.97
+      }
+    },
+    {
+      "path": "people/people__payroll__tax__bands.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1015,
+        "white_ratio": 0.814,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 29.48
+      }
+    },
+    {
+      "path": "people/people__payroll__tax__calculator.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "people/people__payroll__tax__profiles.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=48.0 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1763,
+        "white_ratio": 0.914,
+        "dark_ratio": 0.0,
+        "sidebar_std": 48.04,
+        "color_std": 25.66
+      }
+    },
+    {
+      "path": "people/people__payroll__tax__profiles__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.03
+      }
+    },
+    {
+      "path": "people/people__perf__feedback.png",
+      "issues": [
+        [
+          "UNIFORM_COLOR",
+          "Very low color variance (14.9) \u2014 possibly blank/broken"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.909,
+        "dark_ratio": 0.0,
+        "sidebar_std": 28.34,
+        "color_std": 14.89
+      }
+    },
+    {
+      "path": "people/people__perf__feedback__request.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.977,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 21.61
+      }
+    },
+    {
+      "path": "people/people__perf__goals__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1354,
+        "white_ratio": 0.925,
+        "dark_ratio": 0.0,
+        "sidebar_std": 28.34,
+        "color_std": 17.69
+      }
+    },
+    {
+      "path": "people/people__recruit__jobs__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1854,
+        "white_ratio": 0.927,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.21,
+        "color_std": 17.46
+      }
+    },
+    {
+      "path": "people/people__scheduling__schedules.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 6480,
+        "white_ratio": 0.929,
+        "dark_ratio": 0.0,
+        "sidebar_std": 28.34,
+        "color_std": 20.0
+      }
+    },
+    {
+      "path": "people/people__training__events__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1629,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.61,
+        "color_std": 17.38
+      }
+    },
+    {
+      "path": "people/people__training__programs__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1699,
+        "white_ratio": 0.922,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.42,
+        "color_std": 17.27
+      }
+    },
+    {
+      "path": "procurement/procurement__requisitions__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.92,
+        "dark_ratio": 0.0,
+        "sidebar_std": 34.34,
+        "color_std": 21.3
+      }
+    },
+    {
+      "path": "projects/projects.png",
+      "issues": [
+        [
+          "NO_SIDEBAR",
+          "Sidebar column variance=40.1 \u2014 may be missing sidebar"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 1921,
+        "white_ratio": 0.897,
+        "dark_ratio": 0.0,
+        "sidebar_std": 40.11,
+        "color_std": 21.35
+      }
+    },
+    {
+      "path": "projects/projects__import.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.978,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.45
+      }
+    },
+    {
+      "path": "projects/projects__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.83
+      }
+    },
+    {
+      "path": "projects/projects__tasks.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 4624,
+        "white_ratio": 0.928,
+        "dark_ratio": 0.0,
+        "sidebar_std": 32.43,
+        "color_std": 23.67
+      }
+    },
+    {
+      "path": "projects/projects__templates.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "95% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.951,
+        "dark_ratio": 0.0,
+        "sidebar_std": 28.59,
+        "color_std": 18.93
+      }
+    },
+    {
+      "path": "projects/projects__timesheet.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.978,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.45
+      }
+    },
+    {
+      "path": "projects/tasks.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "99% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.992,
+        "dark_ratio": 0.0,
+        "sidebar_std": 0.0,
+        "color_std": 7.32
+      }
+    },
+    {
+      "path": "public-sector/public-sector__appropriations.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.929,
+        "dark_ratio": 0.0,
+        "sidebar_std": 32.33,
+        "color_std": 17.16
+      }
+    },
+    {
+      "path": "public-sector/public-sector__budget-comparison.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.933,
+        "dark_ratio": 0.0,
+        "sidebar_std": 37.93,
+        "color_std": 17.82
+      }
+    },
+    {
+      "path": "public-sector/public-sector__commitments.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.928,
+        "dark_ratio": 0.0,
+        "sidebar_std": 33.24,
+        "color_std": 17.71
+      }
+    },
+    {
+      "path": "public-sector/public-sector__funds.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.932,
+        "dark_ratio": 0.0,
+        "sidebar_std": 31.12,
+        "color_std": 15.81
+      }
+    },
+    {
+      "path": "public-sector/public-sector__virements.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.93,
+        "dark_ratio": 0.0,
+        "sidebar_std": 34.11,
+        "color_std": 16.37
+      }
+    },
+    {
+      "path": "support/support__categories__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "92% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.925,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.48,
+        "color_std": 22.25
+      }
+    },
+    {
+      "path": "support/support__reports__aging.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 12746,
+        "white_ratio": 0.935,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.48,
+        "color_std": 17.44
+      }
+    },
+    {
+      "path": "support/support__reports__breaches.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 5370,
+        "white_ratio": 0.925,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.48,
+        "color_std": 19.29
+      }
+    },
+    {
+      "path": "support/support__teams.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.929,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.48,
+        "color_std": 24.1
+      }
+    },
+    {
+      "path": "support/support__teams__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "93% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 901,
+        "white_ratio": 0.934,
+        "dark_ratio": 0.0,
+        "sidebar_std": 29.48,
+        "color_std": 20.94
+      }
+    },
+    {
+      "path": "support/support__tickets__new.png",
+      "issues": [
+        [
+          "BLANK_PAGE",
+          "98% white pixels"
+        ]
+      ],
+      "stats": {
+        "width": 1440,
+        "height": 900,
+        "white_ratio": 0.976,
+        "dark_ratio": 0.0,
+        "sidebar_std": 1.56,
+        "color_std": 22.8
+      }
+    }
+  ]
+}

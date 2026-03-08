@@ -450,7 +450,7 @@ class TeamWebService:
             {
                 "employee_id": str(emp.employee_id),
                 "employee_code": emp.employee_code,
-                "full_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                "full_name": person.name,
             }
             for emp, person in results
         ]
@@ -489,7 +489,7 @@ class TeamWebService:
             {
                 "employee_id": str(emp.employee_id),
                 "employee_code": emp.employee_code,
-                "full_name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                "full_name": person.name,
             }
             for emp, person in results
             if emp.employee_id not in member_ids

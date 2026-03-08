@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination, icon_svg, status_badge %}
 
 {% block page_title %}Training Programs{% endblock %}
 
@@ -42,7 +42,7 @@
 <div class="space-y-6">
     {% call(filter_attrs) compact_filters(
         base_url="/people/training/programs",
-        active_filters=active_filters | default([]),
+        active_filters=active_filters if active_filters else [],
         show_search=true,
         search=search,
         search_placeholder="Search training programs..."
@@ -83,15 +83,7 @@
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ program.category or '-' }}</td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ program.duration_hours or 0 }}</td>
                         <td class="px-4 py-3 text-sm">
-                            {% set status_colors = {
-                                'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-                                'ACTIVE': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-                                'RETIRED': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-                                'ARCHIVED': 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                            } %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ status_colors.get(program.status.value, 'bg-slate-100 text-slate-700') }}">
-                                {{ program.status.value | replace('_', ' ') | title }}
-                            </span>
+                            {{ status_badge(program.status.value, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/training/programs/{{ program.program_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View" aria-label="View">

@@ -38,9 +38,8 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th scope="col">Code</th>
-                        <th scope="col">Name</th>
-                        <th scope="col">Expense Account</th>
+                        <th scope="col">Category</th>
+                        <th scope="col" class="hidden sm:table-cell">Expense Account</th>
                         <th scope="col" class="text-right">Max per Claim</th>
                         <th scope="col">Receipt Required</th>
                         <th scope="col">Status</th>
@@ -50,10 +49,14 @@
                 <tbody>
                     {% for category in categories %}
                     <tr>
-                        <td class="font-mono text-slate-900 dark:text-white">{{ category.category_code }}</td>
-                        <td class="text-slate-700 dark:text-slate-300">{{ category.category_name }}</td>
-                        <td class="text-slate-500">
-                            {{ category.expense_account_id if category.expense_account_id else '—' }}
+                        <td>
+                            <a href="/expense/categories/{{ category.category_id }}/edit" class="font-medium text-slate-900 dark:text-white hover:text-amber-600 dark:hover:text-amber-400">
+                                {{ category.category_name }}
+                            </a>
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ category.category_code | replace('_', ' ') | title }}</p>
+                        </td>
+                        <td class="hidden sm:table-cell text-slate-500 text-xs">
+                            {{ category.expense_account_name if category.expense_account_name is defined and category.expense_account_name else ('Linked' if category.expense_account_id else '—') }}
                         </td>
                         <td class="text-right font-mono text-slate-700 dark:text-slate-300">
                             {{ category.max_amount_per_claim if category.max_amount_per_claim is not none else '—' }}

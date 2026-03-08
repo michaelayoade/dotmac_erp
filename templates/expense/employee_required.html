@@ -1,0 +1,43 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Employee Profile Required{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/expense" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Expense</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/expense/claims" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Claims</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">New Claim</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto py-12">
+    <div class="card p-6 text-center space-y-5">
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20">
+            {{ icon_svg("users", "h-7 w-7 text-amber-600 dark:text-amber-400") }}
+        </div>
+
+        <div class="space-y-2">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Employee Profile Required</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                {{ error_detail if error_detail else 'An employee profile linked to your account is required to submit expense claims.' }}
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-3">
+            <a href="{{ back_url if back_url else '/expense/claims' }}" class="btn btn-secondary">
+                {{ back_label if back_label else 'Back to Claims' }}
+            </a>
+            {% if help_links %}
+            {% for link in help_links %}
+            <a href="{{ link.url }}" class="btn btn-ghost">{{ link.label }}</a>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

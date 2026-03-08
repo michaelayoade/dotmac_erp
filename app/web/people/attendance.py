@@ -216,6 +216,7 @@ def attendance_by_employee_report(
     start_date: str | None = None,
     end_date: str | None = None,
     department_id: str | None = None,
+    page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -227,6 +228,7 @@ def attendance_by_employee_report(
         start_date=start_date,
         end_date=end_date,
         department_id=department_id,
+        page=page,
     )
 
 

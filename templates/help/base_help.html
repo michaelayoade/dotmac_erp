@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% from "components/macros.html" import topbar, success_banner, icon_svg %}
+
+{% block head %}
+<meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
+{% include "partials/_org_branding_head.html" %}
+{% endblock %}
+
+{% block body %}
+{% include "partials/_brand_context.html" %}
+<div class="app-shell"
+     style="display: flex !important; flex-direction: row !important;"
+     x-data="{
+        sidebarOpen: false,
+        sidebarCollapsed: false,
+        sidebarCollapsedStored: localStorage.getItem('appSidebarCollapsed') === 'true',
+        activeModule: '{{ active_module | default('help') }}',
+        isDesktop: false,
+        viewportWidth: 0,
+        helpSections: {
+            modules: localStorage.getItem('helpSidebarModules') !== 'false',
+            tracks: localStorage.getItem('helpSidebarTracks') !== 'false',
+            troubleshoot: localStorage.getItem('helpSidebarTroubleshoot') !== 'false'
+        },
+        init() {
+            this.updateViewport();
+            window.addEventListener('resize', () => this.updateViewport());
+            this.$watch('sidebarOpen', (open) => {
+                if (!this.isDesktop) {
+                    document.body.style.overflow = open ? 'hidden' : '';
+                }
+            });
+            this.$nextTick(() => {
+                const path = window.location.pathname;
+                this.$el.querySelectorAll('.help-nav-link[href]').forEach(link => {
+                    const href = (link.getAttribute('href') || '').split('?')[0];
+                    if (!href) return;
+                    if (path === href || path.startsWith(href + '/')) {
+                        link.classList.remove('text-slate-600', 'dark:text-slate-400');
+                        link.classList.add('text-teal-800', 'bg-teal-50/50', 'font-medium', 'dark:text-teal-200', 'dark:bg-teal-900/20');
+                        link.setAttribute('aria-current', 'page');
+                    }
+                });
+            });
+        },
+        updateViewport() {
+            this.viewportWidth = window.innerWidth;
+            this.isDesktop = this.viewportWidth >= 1024;
+            this.sidebarCollapsed = this.isDesktop ? this.sidebarCollapsedStored : false;
+            if (!this.isDesktop) {
+                this.sidebarOpen = false;
+            } else {
+                document.body.style.overflow = '';
+            }
+        },
+        toggleSidebar() {
+            if (this.isDesktop) {
+                this.sidebarCollapsed = !this.sidebarCollapsed;
+                this.sidebarCollapsedStored = this.sidebarCollapsed;
+                localStorage.setItem('appSidebarCollapsed', this.sidebarCollapsed);
+            } else {
+                this.sidebarOpen = !this.sidebarOpen;
+            }
+        },
+        closeSidebar() {
+            this.sidebarOpen = false;
+        },
+        toggleSection(key) {
+            this.helpSections[key] = !this.helpSections[key];
+            localStorage.setItem('helpSidebar' + key.charAt(0).toUpperCase() + key.slice(1), this.helpSections[key]);
+        }
+     }"
+     :class="{
+        'app-sidebar-open': sidebarOpen && !isDesktop,
+        'app-sidebar-collapsed': isDesktop && sidebarCollapsed
+     }">
+
+    <div
+        x-show="sidebarOpen && !isDesktop"
+        @click="closeSidebar()"
+        x-transition:enter="transition-opacity ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition-opacity ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        class="app-overlay"
+        x-cloak>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <aside
+           class="app-sidebar flex flex-col overflow-hidden border-r transition-all duration-300 ease-in-out"
+           :class="darkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-white'"
+           data-testid="sidebar-nav">
+
+        <!-- Logo/Brand -->
+        {% with
+            brand_href="/help",
+            module_label="Help",
+            module_pill_class="border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
+            module_logo_bg="from-teal-500 to-emerald-600",
+            module_logo_shadow="shadow-teal-500/25"
+        %}
+            {% include "partials/_sidebar_header.html" %}
+        {% endwith %}
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto sidebar-scroll py-4 px-3" aria-label="Help navigation">
+            <!-- Home -->
+            <a href="/help"
+               class="help-nav-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
+                {{ icon_svg("home", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Help Home</span>
+            </a>
+
+            <!-- Search -->
+            <a href="/help/search"
+               class="help-nav-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
+                {{ icon_svg("search", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Search</span>
+            </a>
+
+            <!-- Section: Browse by Module -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <button @click="toggleSection('modules')" class="flex w-full items-center justify-between px-3">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Browse by Module</span>
+                    <svg class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="helpSections.modules ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="helpSections.modules && !sidebarCollapsed" x-collapse x-cloak class="space-y-0.5">
+                {% set help_modules = [
+                    ("finance", "Finance", "teal"),
+                    ("people", "People & HR", "violet"),
+                    ("inventory", "Inventory", "amber"),
+                    ("procurement", "Procurement", "blue"),
+                    ("support", "Support", "rose"),
+                    ("projects", "Projects", "indigo"),
+                    ("expense", "Expenses", "amber"),
+                    ("fleet", "Fleet", "orange"),
+                    ("public_sector", "Public Sector", "cyan"),
+                    ("coach", "Coach", "teal"),
+                    ("settings", "Settings", "slate"),
+                    ("self_service", "Self Service", "violet"),
+                ] %}
+                {% for module_key, module_label, module_color in help_modules %}
+                {% if module_key in accessible_modules %}
+                <a href="/help/module/{{ module_key }}"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    {{ module_label }}
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Section: Training Tracks -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <button @click="toggleSection('tracks')" class="flex w-full items-center justify-between px-3">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Training</span>
+                    <svg class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="helpSections.tracks ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="helpSections.tracks && !sidebarCollapsed" x-collapse x-cloak class="space-y-0.5">
+                <a href="/help/tracks"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    All Training Tracks
+                </a>
+                {% if help_tracks is defined %}
+                {% for track in help_tracks %}
+                <a href="/help/tracks/{{ track.slug }}"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    {{ track.title }}
+                </a>
+                {% endfor %}
+                {% endif %}
+            </div>
+
+            <!-- Section: Troubleshooting -->
+            <div class="pt-4 pb-2" x-show="!sidebarCollapsed" x-cloak>
+                <button @click="toggleSection('troubleshoot')" class="flex w-full items-center justify-between px-3">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Quick Links</span>
+                    <svg class="h-3.5 w-3.5 text-slate-400 transition-transform duration-200" :class="helpSections.troubleshoot ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div x-show="helpSections.troubleshoot && !sidebarCollapsed" x-collapse x-cloak class="space-y-0.5">
+                <a href="/help/search?content_type=troubleshooting"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    Troubleshooting
+                </a>
+                <a href="/help/search?content_type=cross_module_workflow"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    Cross-Module Workflows
+                </a>
+                <a href="/help/search?content_type=quick_start"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    Quick Start Guides
+                </a>
+                <a href="/help/glossary"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    Glossary
+                </a>
+                <a href="/help/release-notes"
+                   class="help-nav-link block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white transition-colors ml-2">
+                    Release Notes
+                </a>
+            </div>
+
+            {% with current_module="help" %}
+                {% include "partials/_module_switcher.html" %}
+            {% endwith %}
+
+        </nav>
+
+        {% with module_accent="teal", show_settings=true %}
+            {% include "partials/_sidebar_footer.html" %}
+        {% endwith %}
+    </aside>
+
+    <!-- Main Content -->
+    <div class="app-main">
+
+        {% set back_fallback_url %}{% block back_fallback %}/help{% endblock %}{% endset %}
+        {% set page_title_html %}{% block page_title %}{{ page_title | default("Help & Training") }}{% endblock %}{% endset %}
+        {% set breadcrumbs_html %}{% block breadcrumbs %}{% endblock %}{% endset %}
+        {% set header_actions_html %}{% block header_actions %}{% endblock %}{% endset %}
+        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="teal", back_fallback=(back_fallback_url | trim)) }}
+
+        <!-- Page Content -->
+        <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-main-gradient">
+            <div class="app-page">
+                {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

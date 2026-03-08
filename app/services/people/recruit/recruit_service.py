@@ -196,7 +196,11 @@ class RecruitmentService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[JobOpening]:
         """List job openings."""
-        query = select(JobOpening).where(JobOpening.organization_id == org_id)
+        query = (
+            select(JobOpening)
+            .where(JobOpening.organization_id == org_id)
+            .options(joinedload(JobOpening.department))
+        )
 
         if status:
             query = query.where(JobOpening.status == status)

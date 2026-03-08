@@ -14,7 +14,7 @@
         </a>
     </div>
 
-    <form action="{{ '/admin/users/' ~ user_data.id ~ '/edit' if user_data else '/admin/users/new' }}" method="POST" class="space-y-6" x-data="userForm()" {% if user_data %}x-init="password=''; passwordConfirm=''"{% endif %}>
+    <form action="{{ '/admin/users/' ~ user_data.id ~ '/edit' if user_data else '/admin/users/new' }}" method="POST" class="space-y-6" x-data="userForm({{ 'true' if user_data else 'false' }})" {% if user_data %}x-init="password=''; passwordConfirm=''"{% endif %}>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <!-- Error Alert -->
         {% if error %}
@@ -122,6 +122,8 @@
                         name="email"
                         value="{{ user_data.email if user_data else '' }}"
                         required
+                        x-model="email"
+                        @input="syncUsername()"
                         class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                         placeholder="user@example.com"
                     />
@@ -139,6 +141,8 @@
                         value="{{ user_data.username if user_data else '' }}"
                         required
                         autocomplete="off"
+                        x-model="username"
+                        @input="autoUsername = false"
                         class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                         placeholder="Enter username"
                     />
@@ -191,7 +195,7 @@
             {% if user_data %}
             <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Leave blank to keep the current password</p>
             {% else %}
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Set the initial password for this user</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Leave blank to use the default temporary password (Dotmac@123)</p>
             {% endif %}
 
             <div class="grid gap-6 sm:grid-cols-2">
@@ -205,11 +209,10 @@
                             :type="showPassword ? 'text' : 'password'"
                             id="password"
                             name="password"
-                            {% if not user_data %}required{% endif %}
                             minlength="8"
                             autocomplete="new-password"
                             class="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                            placeholder="{{ 'Enter new password' if user_data else 'Enter password' }}"
+                            placeholder="{{ 'Enter new password' if user_data else 'Leave blank for default' }}"
                             x-model="password"
                         />
                         <button
@@ -240,11 +243,10 @@
                             :type="showPassword ? 'text' : 'password'"
                             id="password_confirm"
                             name="password_confirm"
-                            {% if not user_data %}required{% endif %}
                             autocomplete="new-password"
                             class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
                             :class="{ 'border-red-500 focus:border-red-500 focus:ring-red-500/20': password && passwordConfirm && password !== passwordConfirm }"
-                            placeholder="Confirm password"
+                            placeholder="{{ 'Confirm new password' if user_data else 'Leave blank for default' }}"
                             x-model="passwordConfirm"
                         />
                     </div>
@@ -261,7 +263,7 @@
                         type="checkbox"
                         name="must_change_password"
                         value="1"
-                        {{ 'checked' if user_data and user_data.must_change_password else '' }}
+                        {{ 'checked' if (not user_data) or user_data.must_change_password else '' }}
                         class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800"
                     />
                     <span class="text-sm text-slate-700 dark:text-slate-300">Require password change on next login</span>
@@ -361,11 +363,18 @@
 
 {% block scripts %}
 <script>
-function userForm() {
+function userForm(isEdit) {
     return {
         password: '',
         passwordConfirm: '',
         showPassword: false,
+        email: {{ (user_data.email if user_data else '') | tojson }},
+        username: {{ (user_data.username if user_data else '') | tojson }},
+        autoUsername: !isEdit,
+        syncUsername() {
+            if (!this.autoUsername) return
+            this.username = (this.email || '').trim().toLowerCase()
+        },
     }
 }
 </script>

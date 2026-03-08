@@ -60,8 +60,8 @@
             <tbody>
                 {% for line in income_statement_lines %}
                 <tr class="border-b border-slate-100 dark:border-slate-800">
-                    <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ line.name }}</td>
-                    <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white">{{ line.amount }}</td>
+                    <td class="py-2 px-2 text-slate-900 dark:text-white">{{ line.name }}</td>
+                    <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ line.amount }}</td>
                 </tr>
                 {% else %}
                 <tr>
@@ -82,9 +82,9 @@
                     <tbody>
                         {% for item in revenue_items %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                            <td class="py-2 px-2 font-mono text-xs text-slate-500 w-24">{{ item.account_code }}</td>
-                            <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
-                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-32">{{ item.amount }}</td>
+                            <td class="py-2 px-2 font-mono text-xs text-slate-600 dark:text-slate-400 w-24">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-32">{{ item.amount }}</td>
                         </tr>
                         {% else %}
                         <tr>
@@ -115,9 +115,9 @@
                     <tbody>
                         {% for item in expense_items %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                            <td class="py-2 px-2 font-mono text-xs text-slate-500 w-24">{{ item.account_code }}</td>
-                            <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
-                            <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-32">{{ item.amount }}</td>
+                            <td class="py-2 px-2 font-mono text-xs text-slate-600 dark:text-slate-400 w-24">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-32">{{ item.amount }}</td>
                         </tr>
                         {% else %}
                         <tr>

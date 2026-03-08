@@ -24,6 +24,7 @@ def info_change_requests(
     status: str | None = Query(default="PENDING"),
     change_type: str | None = Query(default=None),
     employee_id: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -51,24 +52,47 @@ def info_change_requests(
     parsed_employee_id = UUID(employee_id) if employee_id else None
 
     svc = InfoChangeService(db)
-    requests = svc.list_requests(
+    offset = (page - 1) * limit
+    requests_list = svc.list_requests(
         org_id,
         status=parsed_status,
         change_type=parsed_change_type,
         employee_id=parsed_employee_id,
-        limit=limit,
+        limit=limit + 1,
+        offset=offset,
     )
+    has_more = len(requests_list) > limit
+    requests_list = requests_list[:limit]
+    # Compute total from count query
+    from sqlalchemy import func, select as sa_select
+
+    from app.models.people.hr.info_change_request import EmployeeInfoChangeRequest
+
+    count_stmt = sa_select(func.count()).select_from(EmployeeInfoChangeRequest).where(
+        EmployeeInfoChangeRequest.organization_id == org_id
+    )
+    if parsed_status:
+        count_stmt = count_stmt.where(EmployeeInfoChangeRequest.status == parsed_status)
+    if parsed_change_type:
+        count_stmt = count_stmt.where(EmployeeInfoChangeRequest.change_type == parsed_change_type)
+    if parsed_employee_id:
+        count_stmt = count_stmt.where(EmployeeInfoChangeRequest.employee_id == parsed_employee_id)
+    total_count = db.scalar(count_stmt) or 0
+    total_pages = max(1, (total_count + limit - 1) // limit)
 
     context = base_context(request, auth, "Info Change Requests", "info-changes", db=db)
     context.update(
         {
-            "requests": requests,
+            "requests": requests_list,
             "statuses": [s.value for s in InfoChangeStatus],
             "types": [t.value for t in InfoChangeType],
             "status": parsed_status.value if parsed_status else "",
             "change_type": parsed_change_type.value if parsed_change_type else "",
             "employee_id": employee_id or "",
             "limit": limit,
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": total_count,
         }
     )
     return templates.TemplateResponse(

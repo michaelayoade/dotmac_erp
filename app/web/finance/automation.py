@@ -1185,6 +1185,7 @@ async def update_template(
             template_id=UUID(template_id),
             user_id=auth.user_id,
             data=data,
+            organization_id=auth.organization_id,
         )
 
         if "application/json" in content_type:
@@ -1224,7 +1225,7 @@ def delete_template(
 ):
     """Delete a document template."""
     try:
-        automation_web_service.delete_template(db, UUID(template_id))
+        automation_web_service.delete_template(db, UUID(template_id), organization_id=auth.organization_id)
         return RedirectResponse(
             url="/automation/templates?success=Template+deleted",
             status_code=303,

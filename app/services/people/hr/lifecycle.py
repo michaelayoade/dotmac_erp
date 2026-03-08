@@ -76,7 +76,10 @@ class LifecycleService:
         if status:
             query = query.where(EmployeeOnboarding.status == status)
 
-        query = query.options(joinedload(EmployeeOnboarding.activities))
+        query = query.options(
+            joinedload(EmployeeOnboarding.activities),
+            joinedload(EmployeeOnboarding.employee).joinedload(Employee.person),
+        )
         query = query.order_by(EmployeeOnboarding.created_at.desc())
 
         count_subq = (
@@ -278,7 +281,10 @@ class LifecycleService:
         if status:
             query = query.where(EmployeeSeparation.status == status)
 
-        query = query.options(joinedload(EmployeeSeparation.activities))
+        query = query.options(
+            joinedload(EmployeeSeparation.activities),
+            joinedload(EmployeeSeparation.employee).joinedload(Employee.person),
+        )
         query = query.order_by(EmployeeSeparation.created_at.desc())
 
         count_subq = (
@@ -437,7 +443,10 @@ class LifecycleService:
         if employee_id:
             query = query.where(EmployeePromotion.employee_id == employee_id)
 
-        query = query.options(joinedload(EmployeePromotion.details))
+        query = query.options(
+            joinedload(EmployeePromotion.details),
+            joinedload(EmployeePromotion.employee).joinedload(Employee.person),
+        )
         query = query.order_by(EmployeePromotion.promotion_date.desc())
 
         count_subq = (
@@ -556,7 +565,10 @@ class LifecycleService:
         if employee_id:
             query = query.where(EmployeeTransfer.employee_id == employee_id)
 
-        query = query.options(joinedload(EmployeeTransfer.details))
+        query = query.options(
+            joinedload(EmployeeTransfer.details),
+            joinedload(EmployeeTransfer.employee).joinedload(Employee.person),
+        )
         query = query.order_by(EmployeeTransfer.transfer_date.desc())
 
         count_subq = (

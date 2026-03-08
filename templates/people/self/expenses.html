@@ -275,6 +275,18 @@
                         <p class="mt-1 text-xs text-slate-400">You can select multiple files.</p>
                     </div>
                     <div>
+                        <label for="cost_center_id" class="form-label">Cost Center (Optional)</label>
+                        <select name="cost_center_id" id="cost_center_id" class="form-select w-full">
+                            <option value="">No cost center</option>
+                            {% for cc in cost_centers %}
+                            <option value="{{ cc.cost_center_id }}">
+                                {{ cc.cost_center_code }} - {{ cc.cost_center_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-xs text-slate-400">Allocate expense to a cost center</p>
+                    </div>
+                    <div>
                         <label for="project_search" class="form-label">Project (Optional)</label>
                         <input type="hidden" name="project_id" id="project_id" value="{{ selected_project_id or '' }}">
                         <input type="text"

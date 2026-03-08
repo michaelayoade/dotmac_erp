@@ -40,6 +40,7 @@ from app.web.deps import WebAuthContext, resolve_brand_context
 logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
+DEFAULT_NEW_LOCAL_PASSWORD = "Dotmac@123"  # noqa: S105  # nosec B105
 _ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _UUID_SEGMENT_PATTERN = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
@@ -710,7 +711,19 @@ class AdminWebService:
         role_ids = role_ids or []
         if isinstance(role_ids, str):
             role_ids = [role_ids]
-        must_change_password = _parse_flag(must_change_password)
+        email = (email or "").strip()
+        username = ((username or "").strip() or email.lower()).strip()
+        password = password or ""
+        password_confirm = password_confirm or ""
+
+        if not password and not password_confirm:
+            password = DEFAULT_NEW_LOCAL_PASSWORD
+            password_confirm = DEFAULT_NEW_LOCAL_PASSWORD
+        elif bool(password) != bool(password_confirm):
+            return None, "Both password fields are required when setting a custom password"
+
+        # New local accounts must reset password after first login.
+        must_change_password = True
 
         # Validate passwords
         if password != password_confirm:

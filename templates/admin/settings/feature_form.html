@@ -1,0 +1,99 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{{ 'Edit' if form_data.get('flag_id') else 'New' }} Feature Flag{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Breadcrumb -->
+    <nav aria-label="Breadcrumb" class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <a href="/admin/settings/hub" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Settings</a>
+        {{ icon_svg("chevron-right", "h-4 w-4") }}
+        <a href="/admin/settings/features" class="hover:text-accent-600 dark:hover:text-accent-400 transition-colors">Feature Flags</a>
+        {{ icon_svg("chevron-right", "h-4 w-4") }}
+        <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New Flag</span>
+    </nav>
+
+    <!-- Error -->
+    {% if error %}
+    <div class="rounded-lg bg-rose-50 border border-rose-200 p-4 dark:bg-rose-900/20 dark:border-rose-800">
+        <div class="flex items-center gap-3">
+            {{ icon_svg("warning", "h-5 w-5 text-rose-600 dark:text-rose-400") }}
+            <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Register Feature Flag</h2>
+        </div>
+
+        <form method="POST" action="/admin/settings/features/create" class="p-6 space-y-5">
+            {{ request.state.csrf_form | safe }}
+
+            <div>
+                <label class="form-label" for="flag_key">Flag Key <span class="text-rose-500">*</span></label>
+                <input type="text" id="flag_key" name="flag_key" class="form-input font-mono"
+                       value="{{ form_data.get('flag_key', '') }}"
+                       placeholder="enable_something" required
+                       pattern="[a-z][a-z0-9_]*"
+                       title="Lowercase letters, numbers, and underscores">
+                <span class="form-hint">Unique identifier. Use snake_case, e.g. <code class="font-mono text-xs">enable_my_feature</code></span>
+            </div>
+
+            <div>
+                <label class="form-label" for="label">Label <span class="text-rose-500">*</span></label>
+                <input type="text" id="label" name="label" class="form-input"
+                       value="{{ form_data.get('label', '') }}"
+                       placeholder="My Feature" required>
+                <span class="form-hint">Human-readable name shown in the admin UI</span>
+            </div>
+
+            <div>
+                <label class="form-label" for="description">Description</label>
+                <textarea id="description" name="description" class="form-input" rows="3"
+                          placeholder="What does this flag control?">{{ form_data.get('description', '') }}</textarea>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label" for="category">Category</label>
+                    <select id="category" name="category" class="form-select">
+                        {% for cat in categories %}
+                        <option value="{{ cat }}" {{ 'selected' if form_data.get('category') == cat }}>
+                            {{ cat | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label" for="owner">Owner</label>
+                    <input type="text" id="owner" name="owner" class="form-input"
+                           value="{{ form_data.get('owner', '') }}"
+                           placeholder="Team or person">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <input type="hidden" name="default_enabled" value="false">
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="default_enabled" value="true" class="sr-only peer"
+                           {{ 'checked' if form_data.get('default_enabled') == 'true' }}>
+                    <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:ring-2 peer-focus:ring-teal-500 rounded-full
+                                peer-checked:bg-teal-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px]
+                                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all
+                                peer-checked:after:translate-x-full"></div>
+                </label>
+                <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled by default</span>
+            </div>
+
+            <div class="flex gap-3 justify-end pt-4 border-t border-slate-200 dark:border-slate-700">
+                <a href="/admin/settings/features" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Register Flag</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

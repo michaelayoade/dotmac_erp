@@ -265,11 +265,7 @@ class ExpenseAPAdapter:
         # Create new internal supplier
         # Get employee's name from related person
         person = employee.person
-        supplier_name = (
-            f"{person.first_name} {person.last_name}"
-            if person
-            else employee.employee_code
-        )
+        supplier_name = person.name if person else employee.employee_code
 
         supplier_input = SupplierInput(
             supplier_code=supplier_code,

@@ -17,8 +17,8 @@
 {% block content %}
 <div class="max-w-3xl">
     {% if error %}
-    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
-        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+        <div class="flex items-center gap-2 text-rose-700 dark:text-rose-400">
             {{ icon_svg("exclamation-circle", "w-5 h-5 flex-shrink-0") }}
             <span>{{ error }}</span>
         </div>
@@ -26,7 +26,7 @@
     {% endif %}
 
     <form method="post" action="/people/training/programs/{% if program %}{{ program.program_id }}/edit{% else %}new{% endif %}" class="space-y-6">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ request.state.csrf_form | safe }}
 
         {# Basic Information #}
         <div class="card">
@@ -34,18 +34,19 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
             </div>
             <div class="card-body space-y-4">
+                {% set fd = form_data if form_data else {} %}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="program_code" class="form-label required">Program Code</label>
                         <input type="text" name="program_code" id="program_code"
-                            value="{{ program.program_code if program else form_data.program_code | default('', true) }}"
+                            value="{{ fd.get('program_code', '') if fd else (program.program_code if program else '') }}"
                             required class="form-input w-full"
                             placeholder="TRN-001">
                     </div>
                     <div>
                         <label for="program_name" class="form-label required">Program Name</label>
                         <input type="text" name="program_name" id="program_name"
-                            value="{{ program.program_name if program else form_data.program_name | default('', true) }}"
+                            value="{{ fd.get('program_name', '') if fd else (program.program_name if program else '') }}"
                             required class="form-input w-full"
                             placeholder="Leadership Development">
                     </div>
@@ -54,8 +55,9 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="training_type" class="form-label required">Training Type</label>
+                        {% set current_type = fd.get('training_type', '') if fd else (program.training_type if program else 'INTERNAL') %}
+                        {% set current_type = current_type if current_type else 'INTERNAL' %}
                         <select name="training_type" id="training_type" required class="form-input w-full">
-                            {% set current_type = program.training_type if program else form_data.training_type | default('INTERNAL', true) %}
                             <option value="INTERNAL" {{ 'selected' if current_type == 'INTERNAL' }}>Internal</option>
                             <option value="EXTERNAL" {{ 'selected' if current_type == 'EXTERNAL' }}>External</option>
                             <option value="ONLINE" {{ 'selected' if current_type == 'ONLINE' }}>Online</option>
@@ -64,9 +66,9 @@
                     </div>
                     <div>
                         <label for="category" class="form-label">Category</label>
+                        {% set current_category = fd.get('category', '') if fd else (program.category if program and program.category else '') %}
                         <select name="category" id="category" class="form-input w-full">
                             <option value="">Select Category</option>
-                            {% set current_category = program.category if program else form_data.category | default('', true) %}
                             <option value="TECHNICAL" {{ 'selected' if current_category == 'TECHNICAL' }}>Technical</option>
                             <option value="SOFT_SKILLS" {{ 'selected' if current_category == 'SOFT_SKILLS' }}>Soft Skills</option>
                             <option value="COMPLIANCE" {{ 'selected' if current_category == 'COMPLIANCE' }}>Compliance</option>
@@ -80,11 +82,12 @@
 
                 <div>
                     <label for="department_id" class="form-label">Department</label>
+                    {% set sel_dept = fd.get('department_id', '') if fd else (program.department_id | string if program and program.department_id else '') %}
                     <select name="department_id" id="department_id" class="form-input w-full">
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}"
-                            {{ 'selected' if (program and program.department_id == dept.department_id) or (form_data and form_data.department_id == dept.department_id | string) }}>
+                            {{ 'selected' if sel_dept == dept.department_id | string }}>
                             {{ dept.department_name }}
                         </option>
                         {% endfor %}
@@ -95,7 +98,7 @@
                 <div>
                     <label for="description" class="form-label">Description</label>
                     <textarea name="description" id="description" rows="3" class="form-input w-full"
-                        placeholder="Brief description of the training program">{{ program.description if program else form_data.description | default('', true) }}</textarea>
+                        placeholder="Brief description of the training program">{{ fd.get('description', '') if fd else (program.description if program and program.description else '') }}</textarea>
                 </div>
             </div>
         </div>
@@ -110,14 +113,14 @@
                     <div>
                         <label for="duration_hours" class="form-label">Duration (Hours)</label>
                         <input type="number" name="duration_hours" id="duration_hours" min="0"
-                            value="{{ program.duration_hours if program else form_data.duration_hours | default('', true) }}"
+                            value="{{ fd.get('duration_hours', '') if fd else (program.duration_hours if program and program.duration_hours else '') }}"
                             class="form-input w-full"
                             placeholder="8">
                     </div>
                     <div>
                         <label for="duration_days" class="form-label">Duration (Days)</label>
                         <input type="number" name="duration_days" id="duration_days" min="0"
-                            value="{{ program.duration_days if program else form_data.duration_days | default('', true) }}"
+                            value="{{ fd.get('duration_days', '') if fd else (program.duration_days if program and program.duration_days else '') }}"
                             class="form-input w-full"
                             placeholder="1">
                     </div>
@@ -134,8 +137,9 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="currency_code" class="form-label">Currency</label>
+                        {% set current_currency = fd.get('currency_code', '') if fd else (program.currency_code if program else 'NGN') %}
+                        {% set current_currency = current_currency if current_currency else 'NGN' %}
                         <select name="currency_code" id="currency_code" class="form-input w-full">
-                            {% set current_currency = program.currency_code if program else form_data.currency_code | default('NGN', true) %}
                             <option value="NGN" {{ 'selected' if current_currency == 'NGN' }}>NGN</option>
                             <option value="USD" {{ 'selected' if current_currency == 'USD' }}>USD</option>
                             <option value="GBP" {{ 'selected' if current_currency == 'GBP' }}>GBP</option>
@@ -145,7 +149,7 @@
                     <div>
                         <label for="cost_per_attendee" class="form-label">Cost per Attendee</label>
                         <input type="number" name="cost_per_attendee" id="cost_per_attendee" step="0.01" min="0"
-                            value="{{ program.cost_per_attendee if program else form_data.cost_per_attendee | default('', true) }}"
+                            value="{{ fd.get('cost_per_attendee', '') if fd else (program.cost_per_attendee if program and program.cost_per_attendee else '') }}"
                             class="form-input w-full"
                             placeholder="0.00">
                     </div>
@@ -164,14 +168,14 @@
                     <div>
                         <label for="provider_name" class="form-label">Provider Name</label>
                         <input type="text" name="provider_name" id="provider_name"
-                            value="{{ program.provider_name if program else form_data.provider_name | default('', true) }}"
+                            value="{{ fd.get('provider_name', '') if fd else (program.provider_name if program and program.provider_name else '') }}"
                             class="form-input w-full"
                             placeholder="Training Company Ltd">
                     </div>
                     <div>
                         <label for="provider_contact" class="form-label">Provider Contact</label>
                         <input type="text" name="provider_contact" id="provider_contact"
-                            value="{{ program.provider_contact if program else form_data.provider_contact | default('', true) }}"
+                            value="{{ fd.get('provider_contact', '') if fd else (program.provider_contact if program and program.provider_contact else '') }}"
                             class="form-input w-full"
                             placeholder="contact@provider.com">
                     </div>
@@ -188,19 +192,19 @@
                 <div>
                     <label for="objectives" class="form-label">Objectives</label>
                     <textarea name="objectives" id="objectives" rows="3" class="form-input w-full"
-                        placeholder="What participants will learn or achieve">{{ program.objectives if program else form_data.objectives | default('', true) }}</textarea>
+                        placeholder="What participants will learn or achieve">{{ fd.get('objectives', '') if fd else (program.objectives if program and program.objectives else '') }}</textarea>
                 </div>
 
                 <div>
                     <label for="prerequisites" class="form-label">Prerequisites</label>
                     <textarea name="prerequisites" id="prerequisites" rows="2" class="form-input w-full"
-                        placeholder="Required knowledge or experience">{{ program.prerequisites if program else form_data.prerequisites | default('', true) }}</textarea>
+                        placeholder="Required knowledge or experience">{{ fd.get('prerequisites', '') if fd else (program.prerequisites if program and program.prerequisites else '') }}</textarea>
                 </div>
 
                 <div>
                     <label for="syllabus" class="form-label">Syllabus</label>
                     <textarea name="syllabus" id="syllabus" rows="6" class="form-input w-full"
-                        placeholder="Course outline and topics covered">{{ program.syllabus if program else form_data.syllabus | default('', true) }}</textarea>
+                        placeholder="Course outline and topics covered">{{ fd.get('syllabus', '') if fd else (program.syllabus if program and program.syllabus else '') }}</textarea>
                 </div>
             </div>
         </div>

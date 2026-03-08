@@ -277,11 +277,61 @@ def list_features_settings_response(
 
 
 def upsert_features_setting(db: Session, key: str, payload: DomainSettingUpdate):
-    return _upsert_domain_setting(db, SettingDomain.features, key, payload)
+    """Upsert a feature flag setting.
+
+    Feature flags are managed via feature_flag_registry (not settings specs),
+    so we validate against the registry instead of the spec system.
+    """
+    from app.services.feature_flag_service import FeatureFlagService
+
+    ff_service = FeatureFlagService(db)
+    registry = ff_service.get_registry_entry(key)
+    if not registry:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown feature flag: {key}. Register it first.",
+        )
+
+    # Determine the boolean value from payload
+    value = payload.value_text if payload.value_text is not None else payload.value_json
+    if value is None:
+        raise HTTPException(status_code=400, detail="Value required")
+    enabled = str(value).lower() in ("true", "1", "yes", "on")
+
+    # Use the features domain service to upsert the domain_settings row
+    service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(SettingDomain.features)
+    if not service:
+        raise HTTPException(status_code=400, detail="Unknown settings domain")
+
+    # Build a normalized payload
+    normalized = DomainSettingUpdate(
+        domain=SettingDomain.features,
+        key=key,
+        value_type=SettingValueType.boolean,
+        value_text="true" if enabled else "false",
+        is_active=True,
+    )
+    return service.upsert_by_key(db, key, normalized)
 
 
 def get_features_setting(db: Session, key: str):
-    return _get_domain_setting(db, SettingDomain.features, key)
+    """Get a feature flag setting by key.
+
+    Validates against the feature flag registry instead of settings specs.
+    """
+    from app.services.feature_flag_service import FeatureFlagService
+
+    ff_service = FeatureFlagService(db)
+    registry = ff_service.get_registry_entry(key)
+    if not registry:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown feature flag: {key}",
+        )
+    service = settings_spec.DOMAIN_SETTINGS_SERVICE.get(SettingDomain.features)
+    if not service:
+        raise HTTPException(status_code=400, detail="Unknown settings domain")
+    return service.get_by_key(db, key)
 
 
 def list_automation_settings_response(

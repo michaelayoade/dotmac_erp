@@ -16,7 +16,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, literal_column, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_org.location import Location
 from app.models.finance.core_org.organization import Organization
@@ -597,7 +597,9 @@ class AttendanceService:
                 status_value = AttendanceStatus(status)
             query = query.where(Attendance.status == status_value)
 
-        query = query.order_by(Attendance.attendance_date.desc())
+        query = query.options(
+            joinedload(Attendance.employee).joinedload(Employee.person),
+        ).order_by(Attendance.attendance_date.desc())
 
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -607,7 +609,7 @@ class AttendanceService:
         if pagination:
             query = query.offset(pagination.offset).limit(pagination.limit)
 
-        items = list(self.db.scalars(query).all())
+        items = list(self.db.scalars(query).unique().all())
 
         return PaginatedResult(
             items=items,
@@ -1546,8 +1548,7 @@ class AttendanceService:
         query = (
             select(
                 Employee.employee_id,
-                Person.first_name,
-                Person.last_name,
+                Person.name_expr().label("employee_name"),
                 Department.department_name.label("department_name"),
                 func.count(Attendance.attendance_id).label("total_days"),
                 func.count(
@@ -1581,6 +1582,7 @@ class AttendanceService:
         results = self.db.execute(
             query.group_by(
                 Employee.employee_id,
+                Person.display_name,
                 Person.first_name,
                 Person.last_name,
                 Department.department_name,
@@ -1595,7 +1597,7 @@ class AttendanceService:
             employees.append(
                 {
                     "employee_id": str(row.employee_id),
-                    "employee_name": f"{row.first_name} {row.last_name}",
+                    "employee_name": row.employee_name,
                     "department_name": row.department_name or "No Department",
                     "total_days": total_days,
                     "present": present,
@@ -1644,8 +1646,7 @@ class AttendanceService:
         query = (
             select(
                 Attendance,
-                Person.first_name,
-                Person.last_name,
+                Person.name_expr().label("employee_name"),
                 Department.department_name.label("department_name"),
             )
             .join(Employee, Employee.employee_id == Attendance.employee_id)
@@ -1669,10 +1670,10 @@ class AttendanceService:
         late_entries = []
         early_exits = []
 
-        for attendance, first_name, last_name, dept_name in results:
+        for attendance, employee_name, dept_name in results:
             record = {
                 "attendance_id": str(attendance.attendance_id),
-                "employee_name": f"{first_name} {last_name}",
+                "employee_name": employee_name,
                 "department_name": dept_name or "No Department",
                 "date": attendance.attendance_date.isoformat(),
                 "check_in": attendance.check_in.strftime("%H:%M")

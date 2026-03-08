@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import builtins
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -18,9 +19,15 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.payment_batch import APBatchStatus, APPaymentBatch
 from app.models.finance.ap.supplier import Supplier
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+)
 from app.models.finance.ap.supplier_payment import (
+    APPaymentMethod,
     APPaymentStatus,
     SupplierPayment,
 )
@@ -67,6 +74,8 @@ class PaymentBatchService(ListResponseMixin):
         organization_id: UUID,
         input: PaymentBatchInput,
         created_by_user_id: UUID,
+        *,
+        auto_commit: bool = True,
     ) -> APPaymentBatch:
         """
         Create a new payment batch.
@@ -131,10 +140,204 @@ class PaymentBatchService(ListResponseMixin):
         db.add(batch)
         db.flush()
 
-        db.commit()
-        db.refresh(batch)
+        if auto_commit:
+            db.commit()
+            db.refresh(batch)
+        else:
+            db.flush()
 
         return batch
+
+    @staticmethod
+    def create_batch_from_invoice_ids(
+        db: Session,
+        organization_id: UUID,
+        batch_date: date,
+        payment_method: str,
+        bank_account_id: UUID,
+        invoice_ids: list[UUID],
+        created_by_user_id: UUID,
+        currency_code: str | None = None,
+    ) -> APPaymentBatch:
+        """Create a payment batch and grouped draft payments from selected invoices."""
+        from app.services.finance.ap.supplier_payment import (
+            PaymentAllocationInput,
+            SupplierPaymentInput,
+            supplier_payment_service,
+        )
+
+        org_id = coerce_uuid(organization_id)
+        user_id = coerce_uuid(created_by_user_id)
+        bank_id = coerce_uuid(bank_account_id)
+        normalized_invoice_ids = [coerce_uuid(invoice_id) for invoice_id in invoice_ids]
+        deduped_invoice_ids = list(dict.fromkeys(normalized_invoice_ids))
+
+        if not deduped_invoice_ids:
+            raise HTTPException(status_code=400, detail="Select at least one invoice")
+
+        try:
+            payment_method_enum = APPaymentMethod(payment_method)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid payment method: {payment_method}",
+            ) from exc
+
+        batch_input = PaymentBatchInput(
+            batch_date=batch_date,
+            payment_method=payment_method_enum.value,
+            bank_account_id=bank_id,
+            currency_code=currency_code.strip().upper() if currency_code else None,
+            payments=[],
+        )
+
+        resolved_currency = batch_input.currency_code
+        if not resolved_currency:
+            from app.models.finance.banking.bank_account import BankAccount
+
+            bank_account = db.get(BankAccount, bank_id)
+            if not bank_account or bank_account.organization_id != org_id:
+                raise HTTPException(status_code=404, detail="Bank account not found")
+            resolved_currency = bank_account.currency_code
+        if not resolved_currency:
+            raise HTTPException(status_code=400, detail="Currency could not be resolved")
+        resolved_currency = resolved_currency.upper()
+
+        invoices = db.scalars(
+            select(SupplierInvoice).where(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.invoice_id.in_(deduped_invoice_ids),
+            )
+        ).all()
+        invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
+        missing_ids = [
+            str(invoice_id)
+            for invoice_id in deduped_invoice_ids
+            if invoice_id not in invoice_map
+        ]
+        if missing_ids:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Invoices not found: {', '.join(missing_ids)}",
+            )
+
+        in_flight_invoice_ids = set(
+            db.scalars(
+                select(APPaymentAllocation.invoice_id)
+                .join(
+                    SupplierPayment,
+                    SupplierPayment.payment_id == APPaymentAllocation.payment_id,
+                )
+                .where(
+                    SupplierPayment.organization_id == org_id,
+                    APPaymentAllocation.invoice_id.in_(deduped_invoice_ids),
+                    SupplierPayment.status.not_in(APPaymentStatus.terminal()),
+                )
+            ).all()
+        )
+        if in_flight_invoice_ids:
+            blocked_numbers = [
+                invoice_map[invoice_id].invoice_number
+                for invoice_id in deduped_invoice_ids
+                if invoice_id in in_flight_invoice_ids
+            ]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Some selected invoices already have in-flight payments: "
+                    + ", ".join(blocked_numbers)
+                ),
+            )
+
+        allocations_by_supplier: dict[UUID, list[PaymentAllocationInput]] = defaultdict(
+            list
+        )
+        payment_items: list[BatchPaymentItem] = []
+
+        for invoice_id in deduped_invoice_ids:
+            invoice = invoice_map[invoice_id]
+            if invoice.status not in {
+                SupplierInvoiceStatus.POSTED,
+                SupplierInvoiceStatus.PARTIALLY_PAID,
+            }:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invoice {invoice.invoice_number} is not payable",
+                )
+            if invoice.currency_code.upper() != resolved_currency:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Invoice {invoice.invoice_number} currency "
+                        f"{invoice.currency_code} does not match batch currency "
+                        f"{resolved_currency}"
+                    ),
+                )
+            if invoice.balance_due <= Decimal("0"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invoice {invoice.invoice_number} has no outstanding balance",
+                )
+            allocations_by_supplier[invoice.supplier_id].append(
+                PaymentAllocationInput(
+                    invoice_id=invoice.invoice_id,
+                    amount=invoice.balance_due,
+                )
+            )
+
+        for supplier_id, allocations in allocations_by_supplier.items():
+            payment_items.append(
+                BatchPaymentItem(
+                    supplier_id=supplier_id,
+                    amount=sum(
+                        (allocation.amount for allocation in allocations), Decimal("0")
+                    ),
+                    invoice_ids=[allocation.invoice_id for allocation in allocations],
+                )
+            )
+
+        batch_input.payments = payment_items
+        payments: list[SupplierPayment] = []
+
+        try:
+            for supplier_id, allocations in allocations_by_supplier.items():
+                payment = supplier_payment_service.create_payment(
+                    db=db,
+                    organization_id=org_id,
+                    input=SupplierPaymentInput(
+                        supplier_id=supplier_id,
+                        payment_date=batch_date,
+                        payment_method=payment_method_enum,
+                        currency_code=resolved_currency,
+                        amount=sum(
+                            (allocation.amount for allocation in allocations),
+                            Decimal("0"),
+                        ),
+                        bank_account_id=bank_id,
+                        allocations=allocations,
+                    ),
+                    created_by_user_id=user_id,
+                    auto_commit=False,
+                )
+                payments.append(payment)
+
+            batch = PaymentBatchService.create_batch(
+                db=db,
+                organization_id=org_id,
+                input=batch_input,
+                created_by_user_id=user_id,
+                auto_commit=False,
+            )
+
+            for payment in payments:
+                payment.payment_batch_id = batch.batch_id
+
+            db.commit()
+            db.refresh(batch)
+            return batch
+        except Exception:
+            db.rollback()
+            raise
 
     @staticmethod
     def add_payment_to_batch(
@@ -251,6 +454,7 @@ class PaymentBatchService(ListResponseMixin):
             select(SupplierPayment).where(
                 SupplierPayment.payment_id == payment_id,
                 SupplierPayment.payment_batch_id == batch_id,
+                SupplierPayment.organization_id == org_id,
             )
         ).first()
 
@@ -321,7 +525,10 @@ class PaymentBatchService(ListResponseMixin):
         payment_count = db.scalar(
             select(func.count())
             .select_from(SupplierPayment)
-            .where(SupplierPayment.payment_batch_id == batch_id)
+            .where(
+                SupplierPayment.payment_batch_id == batch_id,
+                SupplierPayment.organization_id == org_id,
+            )
         )
 
         if payment_count == 0:
@@ -335,7 +542,8 @@ class PaymentBatchService(ListResponseMixin):
         payments = list(
             db.scalars(
                 select(SupplierPayment).where(
-                    SupplierPayment.payment_batch_id == batch_id
+                    SupplierPayment.payment_batch_id == batch_id,
+                    SupplierPayment.organization_id == org_id,
                 )
             ).all()
         )
@@ -399,6 +607,7 @@ class PaymentBatchService(ListResponseMixin):
             db.scalars(
                 select(SupplierPayment).where(
                     SupplierPayment.payment_batch_id == batch_id,
+                    SupplierPayment.organization_id == org_id,
                     SupplierPayment.status == APPaymentStatus.APPROVED,
                 )
             ).all()
@@ -469,7 +678,8 @@ class PaymentBatchService(ListResponseMixin):
         payments = list(
             db.scalars(
                 select(SupplierPayment).where(
-                    SupplierPayment.payment_batch_id == batch_id
+                    SupplierPayment.payment_batch_id == batch_id,
+                    SupplierPayment.organization_id == org_id,
                 )
             ).all()
         )
@@ -484,7 +694,10 @@ class PaymentBatchService(ListResponseMixin):
 
         for payment in payments:
             supplier = db.scalars(
-                select(Supplier).where(Supplier.supplier_id == payment.supplier_id)
+                select(Supplier).where(
+                    Supplier.supplier_id == payment.supplier_id,
+                    Supplier.organization_id == org_id,
+                )
             ).first()
             if supplier:
                 supplier_name = supplier.trading_name or supplier.legal_name

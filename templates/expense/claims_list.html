@@ -79,7 +79,7 @@
                         <td class="text-slate-600 dark:text-slate-300">
                             {{ claim.employee.full_name if claim.employee else '-' }}
                         </td>
-                        <td class="hidden sm:table-cell text-slate-500">{{ claim.claim_date }}</td>
+                        <td class="hidden sm:table-cell text-slate-500">{{ claim.claim_date.strftime('%d %b %Y') if claim.claim_date else '—' }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ claim.total_claimed_amount }}</td>
                         <td>
                             {{ status_badge(claim.status.value if claim.status else 'DRAFT', 'sm') }}
@@ -91,7 +91,7 @@
                                 </a>
                                 {% if can_delete_claim and claim.status and claim.status.value == 'DRAFT' %}
                                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/delete" onsubmit="return confirm('Delete this draft claim permanently? This cannot be undone.');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    {{ request.state.csrf_form | safe }}
                                     <button type="submit" class="table-action-btn text-rose-600 hover:text-rose-700" title="Delete draft" aria-label="Delete draft">
                                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-7 0l1 12h4l1-12"/>

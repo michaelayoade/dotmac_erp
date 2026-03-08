@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.services.expense.dashboard_web import expense_dashboard_service
@@ -92,12 +93,13 @@ def expense_list(
     start_date: str | None = None,
     end_date: str | None = None,
     search: str | None = None,
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
     """Expense list page."""
+    offset = (page - 1) * limit
     context = base_context(request, auth, "Expenses", "expense")
     context.update(
         expense_web_service.list_context(
@@ -111,6 +113,11 @@ def expense_list(
             limit=limit,
         )
     )
+    # Add page-based pagination vars
+    total = context.get("total", 0)
+    context["page"] = page
+    context["total_count"] = total
+    context["total_pages"] = max(1, (total + limit - 1) // limit)
     return templates.TemplateResponse(request, "expense/list.html", context)
 
 
@@ -131,9 +138,41 @@ def expense_claims_dashboard(
 def expense_claim_new_redirect(
     request: Request,
     auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
 ):
-    """Redirect expense claim creation to self-service claims form."""
-    return RedirectResponse("/people/self/expenses", status_code=302)
+    """Redirect expense claim creation to self-service claims form.
+
+    Verifies the user has an employee profile before redirecting.
+    If not, renders a helpful message within the expense module layout.
+    """
+    from app.models.people.hr.employee import Employee
+
+    employee = db.scalar(
+        select(Employee).where(
+            Employee.organization_id == auth.organization_id,
+            Employee.person_id == auth.person_id,
+        )
+    )
+    if employee:
+        return RedirectResponse("/people/self/expenses", status_code=302)
+
+    # No employee profile — show guidance within the expense module
+    context = base_context(request, auth, "New Expense Claim", "expense", db=db)
+    context["error"] = "Employee profile not found"
+    context["error_detail"] = (
+        "Expense claims are submitted through Self Service, which requires "
+        "an employee profile linked to your account. Ask your HR administrator "
+        "to create or link your employee record, then try again."
+    )
+    context["back_url"] = "/expense/claims"
+    context["back_label"] = "Back to Claims"
+    context["help_links"] = [
+        {"label": "Go to Self Service", "url": "/people/self/attendance"},
+        {"label": "Contact HR", "url": "/people/hr/employees"},
+    ]
+    return templates.TemplateResponse(
+        request, "expense/employee_required.html", context
+    )
 
 
 @router.get("/claims/list", response_class=HTMLResponse)
@@ -144,6 +183,7 @@ def expense_claims_list(
     start_date: str | None = None,
     end_date: str | None = None,
     search: str | None = None,
+    employee_id: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_expense_access),
@@ -159,6 +199,7 @@ def expense_claims_list(
         start_date=start_date,
         end_date=end_date,
         search=search,
+        employee_id=employee_id,
         offset=offset,
         limit=limit,
     )
@@ -223,11 +264,13 @@ def submit_expense_claim(
     db: Session = Depends(get_db),
 ):
     """Submit an expense claim for approval."""
-    return expense_claims_web_service.submit_claim_response(
+    response = expense_claims_web_service.submit_claim_response(
         claim_id=claim_id,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.post("/claims/{claim_id}/comments")
@@ -238,12 +281,14 @@ def add_expense_claim_comment(
     db: Session = Depends(get_db),
 ):
     """Add a comment to an expense claim."""
-    return expense_claims_web_service.add_claim_comment_response(
+    response = expense_claims_web_service.add_claim_comment_response(
         claim_id=claim_id,
         content=content,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.post("/claims/{claim_id}/approve")
@@ -255,12 +300,14 @@ async def approve_expense_claim(
 ):
     """Approve an expense claim, optionally with per-item corrections."""
     form_data = await request.form()
-    return expense_claims_web_service.approve_claim_response(
+    response = expense_claims_web_service.approve_claim_response(
         claim_id=claim_id,
         auth=auth,
         db=db,
         form_data=form_data,
     )
+    db.commit()
+    return response
 
 
 @router.post("/claims/{claim_id}/reject")
@@ -271,12 +318,14 @@ def reject_expense_claim(
     db: Session = Depends(get_db),
 ):
     """Reject an expense claim."""
-    return expense_claims_web_service.reject_claim_response(
+    response = expense_claims_web_service.reject_claim_response(
         claim_id=claim_id,
         reason=reason,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.post("/claims/{claim_id}/cancel")
@@ -287,12 +336,14 @@ def cancel_expense_claim(
     db: Session = Depends(get_db),
 ):
     """Cancel an expense claim."""
-    return expense_claims_web_service.cancel_claim_response(
+    response = expense_claims_web_service.cancel_claim_response(
         claim_id=claim_id,
         reason=reason,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.post("/claims/{claim_id}/resubmit")
@@ -302,11 +353,13 @@ def resubmit_expense_claim(
     db: Session = Depends(get_db),
 ):
     """Resubmit a rejected expense claim."""
-    return expense_claims_web_service.resubmit_claim_response(
+    response = expense_claims_web_service.resubmit_claim_response(
         claim_id=claim_id,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.post("/claims/{claim_id}/delete")
@@ -316,11 +369,13 @@ def delete_expense_claim(
     db: Session = Depends(get_db),
 ):
     """Delete an expense claim (DRAFT only)."""
-    return expense_claims_web_service.delete_claim_response(
+    response = expense_claims_web_service.delete_claim_response(
         claim_id=claim_id,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.get("/advances", response_class=HTMLResponse)
@@ -410,11 +465,13 @@ async def create_expense_category(
     db: Session = Depends(get_db),
 ):
     """Create new expense category."""
-    return await expense_claims_web_service.create_category_response(
+    response = await expense_claims_web_service.create_category_response(
         request=request,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.get("/categories/{category_id}/edit", response_class=HTMLResponse)
@@ -441,12 +498,14 @@ async def update_expense_category(
     db: Session = Depends(get_db),
 ):
     """Update expense category."""
-    return await expense_claims_web_service.update_category_response(
+    response = await expense_claims_web_service.update_category_response(
         request=request,
         auth=auth,
         db=db,
         category_id=category_id,
     )
+    db.commit()
+    return response
 
 
 @router.post("/categories/{category_id}/delete", response_class=HTMLResponse)
@@ -457,11 +516,13 @@ def delete_expense_category(
     db: Session = Depends(get_db),
 ):
     """Soft delete (deactivate) an expense category."""
-    return expense_claims_web_service.delete_category_response(
+    response = expense_claims_web_service.delete_category_response(
         category_id=category_id,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 # =============================================================================
@@ -606,6 +667,8 @@ def submit_expense(
         expense_service.submit(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
+    except ValueError as e:
+        logger.warning("Failed to submit expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to submit expense %s", expense_id)
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
@@ -623,6 +686,8 @@ def approve_expense(
         expense_service.approve(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
+    except ValueError as e:
+        logger.warning("Failed to approve expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to approve expense %s", expense_id)
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
@@ -640,6 +705,8 @@ def reject_expense(
         expense_service.reject(
             db, str(auth.organization_id), expense_id, str(auth.user_id)
         )
+    except ValueError as e:
+        logger.warning("Failed to reject expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to reject expense %s", expense_id)
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
@@ -662,6 +729,8 @@ def post_expense(
             str(auth.user_id),
             fiscal_period_id,
         )
+    except ValueError as e:
+        logger.warning("Failed to post expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to post expense %s", expense_id)
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
@@ -679,6 +748,8 @@ def void_expense(
         expense_service.void(
             db, expense_id, str(auth.user_id), organization_id=str(auth.organization_id)
         )
+    except ValueError as e:
+        logger.warning("Failed to void expense %s: %s", expense_id, e)
     except Exception:
         logger.exception("Failed to void expense %s", expense_id)
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
@@ -829,7 +900,7 @@ def disburse_cash_advance(
     db: Session = Depends(get_db),
 ):
     """Disburse cash advance with GL posting."""
-    return expense_claims_web_service.disburse_cash_advance_response(
+    response = expense_claims_web_service.disburse_cash_advance_response(
         advance_id=advance_id,
         bank_account_id=bank_account_id,
         payment_mode=payment_mode,
@@ -837,6 +908,8 @@ def disburse_cash_advance(
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response
 
 
 @router.post("/advances/{advance_id}/settle", response_class=HTMLResponse)
@@ -849,10 +922,12 @@ def settle_cash_advance(
     db: Session = Depends(get_db),
 ):
     """Settle cash advance against expense claim."""
-    return expense_claims_web_service.settle_cash_advance_response(
+    response = expense_claims_web_service.settle_cash_advance_response(
         advance_id=advance_id,
         claim_id=claim_id,
         settlement_amount=settlement_amount,
         auth=auth,
         db=db,
     )
+    db.commit()
+    return response

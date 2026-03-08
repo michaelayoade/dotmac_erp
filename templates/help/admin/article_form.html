@@ -1,0 +1,83 @@
+{% extends "help/base_help.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{{ 'Edit Article' if is_edit else 'New Article' }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <li><a href="/help" class="hover:text-teal-600 dark:hover:text-teal-400">Help</a></li>
+        <li>/</li>
+        <li><a href="/help/admin/articles" class="hover:text-teal-600 dark:hover:text-teal-400">Admin Articles</a></li>
+        <li>/</li>
+        <li class="text-slate-900 dark:text-white" aria-current="page">{{ 'Edit' if is_edit else 'New' }}</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+    {% if error %}
+    <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-900/20">
+        <p class="text-sm font-medium text-rose-700 dark:text-rose-400">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="POST" class="card space-y-6 p-8">
+        {{ request.state.csrf_form | safe }}
+
+        <div>
+            <label class="form-label" for="title">Title <span class="text-rose-500">*</span></label>
+            <input type="text" id="title" name="title" class="form-input" required
+                   value="{{ article.title if article else (form_data.title if form_data else '') }}">
+        </div>
+
+        <div>
+            <label class="form-label" for="slug">Slug <span class="text-rose-500">*</span></label>
+            <input type="text" id="slug" name="slug" class="form-input font-mono" required
+                   pattern="[a-z0-9\-]+"
+                   value="{{ article.slug if article else (form_data.slug if form_data else '') }}">
+            <span class="form-hint">URL-safe identifier (lowercase, hyphens only). Example: finance-bank-reconciliation</span>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <label class="form-label" for="module_key">Module <span class="text-rose-500">*</span></label>
+                <select id="module_key" name="module_key" class="form-select" required>
+                    <option value="">Choose module...</option>
+                    {% for val, label in module_choices %}
+                    <option value="{{ val }}"
+                            {{ 'selected' if (article and article.module_key == val) or (form_data and form_data.module_key == val) else '' }}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="content_type">Content Type <span class="text-rose-500">*</span></label>
+                <select id="content_type" name="content_type" class="form-select" required>
+                    {% for val, label in content_type_choices %}
+                    <option value="{{ val }}"
+                            {{ 'selected' if (article and article.content_type == val) or (form_data and form_data.content_type == val) else '' }}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label" for="summary">Summary</label>
+            <textarea id="summary" name="summary" class="form-input" rows="3">{{ article.summary if article else (form_data.summary if form_data else '') }}</textarea>
+            <span class="form-hint">Brief description shown in search results and article cards.</span>
+        </div>
+
+        <div class="flex gap-3 justify-end">
+            <a href="/help/admin/articles" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ 'Update Article' if is_edit else 'Create Article' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

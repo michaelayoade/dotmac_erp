@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session, load_only
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
-from app.models.finance.ap.payment_batch import APBatchStatus
+from app.models.finance.ap.payment_batch import APBatchStatus, APPaymentBatch
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier, SupplierType
@@ -3142,25 +3142,21 @@ class APWebService:
                 select(Person).where(Person.organization_id == org_id)
             ).all()
             for person in org_people:
-                candidate_names = {
-                    (person.display_name or "").strip(),
-                    f"{person.first_name} {person.last_name}".strip(),
-                }
-                for candidate in candidate_names:
-                    if not candidate:
-                        continue
-                    candidate_norm = " ".join(candidate.lower().split())
-                    needle = f"@{candidate_norm}"
-                    pos = normalized_comment.find(needle)
-                    while pos != -1:
-                        end_pos = pos + len(needle)
-                        if (
-                            end_pos == len(normalized_comment)
-                            or not normalized_comment[end_pos].isalnum()
-                        ):
-                            mentioned_person_ids.add(person.id)
-                            break
-                        pos = normalized_comment.find(needle, pos + 1)
+                candidate_name = person.name
+                if not candidate_name:
+                    continue
+                candidate_norm = " ".join(candidate_name.lower().split())
+                needle = f"@{candidate_norm}"
+                pos = normalized_comment.find(needle)
+                while pos != -1:
+                    end_pos = pos + len(needle)
+                    if (
+                        end_pos == len(normalized_comment)
+                        or not normalized_comment[end_pos].isalnum()
+                    ):
+                        mentioned_person_ids.add(person.id)
+                        break
+                    pos = normalized_comment.find(needle, pos + 1)
 
         if mentioned_person_ids:
             actor_id = coerce_uuid(user_id)
@@ -3522,12 +3518,31 @@ class APWebService:
             offset=offset,
         )
 
+        # Count total for pagination
+        count_stmt = select(func.count()).select_from(
+            select(APPaymentBatch.batch_id)
+            .where(APPaymentBatch.organization_id == auth.organization_id)
+        )
+        if status_value:
+            count_stmt = select(func.count()).select_from(
+                select(APPaymentBatch.batch_id)
+                .where(
+                    APPaymentBatch.organization_id == auth.organization_id,
+                    APPaymentBatch.status == status_value,
+                )
+            )
+        total_count = db.scalar(count_stmt) or 0
+        total_pages = max(1, (total_count + limit - 1) // limit)
+
         context = base_context(request, auth, "Payment Batches", "ap")
         context.update(
             {
                 "batches": batches,
                 "status": status or "",
                 "page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "limit": limit,
             }
         )
         return templates.TemplateResponse(
@@ -3540,17 +3555,45 @@ class APWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
+        context = base_context(request, auth, "New Payment Batch", "ap")
+        context.update(self.payment_batch_new_form_context(db, auth.organization_id))
+        return templates.TemplateResponse(
+            request, "finance/ap/payment_batch_form.html", context
+        )
+
+    def payment_batch_new_form_context(
+        self,
+        db: Session,
+        organization_id: UUID,
+    ) -> dict[str, Any]:
         bank_accounts = bank_account_service.list(
             db=db,
-            organization_id=auth.organization_id,
+            organization_id=organization_id,
             status=BankAccountStatus.active,
             limit=200,
+        )
+        active_payment_invoice_ids = select(APPaymentAllocation.invoice_id).join(
+            SupplierPayment,
+            SupplierPayment.payment_id == APPaymentAllocation.payment_id,
+        ).where(
+            SupplierPayment.organization_id == organization_id,
+            SupplierPayment.status.not_in(APPaymentStatus.terminal()),
         )
         invoices = db.execute(
             select(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .where(SupplierInvoice.organization_id == auth.organization_id)
-            .order_by(SupplierInvoice.invoice_date.desc())
+            .where(
+                SupplierInvoice.organization_id == organization_id,
+                SupplierInvoice.status.in_(
+                    [
+                        SupplierInvoiceStatus.POSTED,
+                        SupplierInvoiceStatus.PARTIALLY_PAID,
+                    ]
+                ),
+                SupplierInvoice.total_amount > SupplierInvoice.amount_paid,
+                SupplierInvoice.invoice_id.not_in(active_payment_invoice_ids),
+            )
+            .order_by(SupplierInvoice.due_date.asc(), SupplierInvoice.invoice_date.desc())
             .limit(50)
         ).all()
         invoices_view = [
@@ -3559,24 +3602,73 @@ class APWebService:
                 "invoice_number": invoice.invoice_number,
                 "supplier_name": supplier.trading_name or supplier.legal_name,
                 "due_date": invoice.due_date,
-                "amount": invoice.total_amount,
+                "amount": invoice.balance_due,
                 "currency_code": invoice.currency_code,
+                "status": invoice.status.value,
             }
             for invoice, supplier in invoices
         ]
 
-        context = base_context(request, auth, "New Payment Batch", "ap")
-        context.update(
-            {
-                "bank_accounts": bank_accounts,
-                "invoices": invoices_view,
-                "payment_methods": [method.value for method in APPaymentMethod],
-            }
-        )
-        context.update(get_currency_context(db, str(auth.organization_id)))
-        return templates.TemplateResponse(
-            request, "finance/ap/payment_batch_form.html", context
-        )
+        context = {
+            "bank_accounts": bank_accounts,
+            "invoices": invoices_view,
+            "payment_methods": [method.value for method in APPaymentMethod],
+            "form_data": {},
+        }
+        context.update(get_currency_context(db, str(organization_id)))
+        return context
+
+    async def create_payment_batch_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        form_data = await request.form()
+        data = dict(form_data)
+        invoice_ids = form_data.getlist("invoice_ids")
+
+        try:
+            batch_date = parse_date((data.get("batch_date") or "").strip())
+            bank_account_id = (data.get("bank_account_id") or "").strip()
+            payment_method = (data.get("payment_method") or "BANK_TRANSFER").strip()
+            currency_code = (data.get("currency_code") or "").strip().upper() or None
+
+            if batch_date is None:
+                raise ValueError("Batch date is required")
+            if not bank_account_id:
+                raise ValueError("Bank account is required")
+            if not invoice_ids:
+                raise ValueError("Select at least one invoice")
+            if auth.person_id is None:
+                raise ValueError("Authenticated person is required")
+
+            batch = payment_batch_service.create_batch_from_invoice_ids(
+                db=db,
+                organization_id=auth.organization_id,
+                batch_date=batch_date,
+                payment_method=payment_method,
+                bank_account_id=coerce_uuid(bank_account_id),
+                invoice_ids=[coerce_uuid(invoice_id) for invoice_id in invoice_ids],
+                created_by_user_id=coerce_uuid(auth.person_id),
+                currency_code=currency_code,
+            )
+            return RedirectResponse(
+                url=(
+                    "/finance/ap/payment-batches"
+                    f"?success=Batch+{batch.batch_number}+created+successfully"
+                ),
+                status_code=303,
+            )
+        except Exception as e:
+            context = base_context(request, auth, "New Payment Batch", "ap")
+            context.update(self.payment_batch_new_form_context(db, auth.organization_id))
+            data["invoice_ids"] = invoice_ids
+            context["form_data"] = data
+            context["error"] = str(e)
+            return templates.TemplateResponse(
+                request, "finance/ap/payment_batch_form.html", context
+            )
 
     def list_purchase_orders_response(
         self,

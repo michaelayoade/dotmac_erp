@@ -12,7 +12,6 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.people.hr.employee import EmployeeStatus
 from app.models.people.recruit import JobOpeningStatus
 from app.services.common import PaginationParams, coerce_uuid
@@ -82,6 +81,8 @@ class JobOpeningWebService:
             "page": result.page,
             "total_pages": result.total_pages,
             "total": result.total,
+            "total_count": result.total,
+            "limit": result.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -205,8 +206,8 @@ class JobOpeningWebService:
             public_identifier = getattr(organization, "slug", None) or str(
                 organization.organization_id
             )
-            app_url = settings.app_url.rstrip("/")
-            context["careers_portal_short_url"] = f"{app_url}/c/{public_identifier}"
+            base_url = str(request.base_url).rstrip("/")
+            context["careers_portal_short_url"] = f"{base_url}/c/{public_identifier}"
         context.update(
             self.list_job_openings_context(
                 db,

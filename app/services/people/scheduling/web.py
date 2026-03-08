@@ -822,6 +822,9 @@ class SchedulingWebService:
                 "year_month": year_month,
                 "schedule_status": schedule_status.value if schedule_status else None,
                 "page": page,
+                "total_pages": result.total_pages,
+                "total_count": result.total,
+                "limit": result.limit,
             }
         )
 

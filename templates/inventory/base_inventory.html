@@ -8,10 +8,6 @@
 
 {% block body %}
 {% include "partials/_brand_context.html" %}
-<a href="#main-content"
-   class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-teal-600 focus:text-white focus:text-sm focus:font-semibold focus:shadow-lg focus:outline-none">
-    Skip to main content
-</a>
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
      x-data="{
@@ -37,7 +33,7 @@
                     const segments = href.split('/').filter(Boolean);
                     if (path === href || (segments.length >= 2 && path.startsWith(href + '/'))) {
                         link.classList.remove('text-slate-600', 'dark:text-slate-400');
-                        link.classList.add('text-amber-800', 'bg-amber-50/50', 'font-medium', 'dark:text-amber-200', 'dark:bg-amber-900/20');
+                        link.classList.add('text-emerald-800', 'bg-emerald-50/50', 'font-medium', 'dark:text-emerald-200', 'dark:bg-emerald-900/20');
                         link.setAttribute('aria-current', 'page');
                     }
                 });
@@ -92,9 +88,9 @@
         {% with
             brand_href="/inventory/items",
             module_label="Inventory",
-            module_pill_class="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-            module_logo_bg="from-amber-500 to-orange-600",
-            module_logo_shadow="shadow-amber-500/25"
+            module_pill_class="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+            module_logo_bg="from-emerald-500 to-teal-600",
+            module_logo_shadow="shadow-emerald-500/25"
         %}
             {% include "partials/_sidebar_header.html" %}
         {% endwith %}
@@ -104,7 +100,7 @@
             <!-- Dashboard -->
             <a href="/"
                :aria-current="activeModule === 'dashboard' ? 'page' : false"
-               :class="activeModule === 'dashboard' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               :class="activeModule === 'dashboard' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 {{ icon_svg("home", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Dashboard</span>
@@ -119,7 +115,7 @@
             <div x-data="{ open: ['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) }">
                 <button @click="open = !open"
                         :aria-current="['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) ? 'true' : false"
-                        :class="['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        :class="['items','categories','warehouses','transactions','material_requests','counts','boms','price_lists','lots','inv_reports'].includes(activeModule) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     {{ icon_svg("box", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Inventory</span>
@@ -145,7 +141,7 @@
             <div x-data="{ open: activeModule === 'inv-transactions' }">
                 <button @click="open = !open"
                         :aria-current="activeModule === 'inv-transactions' ? 'true' : false"
-                        :class="activeModule === 'inv-transactions' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        :class="activeModule === 'inv-transactions' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     {{ icon_svg("switch-horizontal", "h-5 w-5 flex-shrink-0 text-emerald-500") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Quick Entry</span>
@@ -170,7 +166,7 @@
             <div x-data="{ open: ['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) }">
                 <button @click="open = !open"
                         :aria-current="['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) ? 'true' : false"
-                        :class="['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+                        :class="['fa','fa_assets','fa_categories','fa_depreciation'].includes(activeModule) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                         class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                     {{ icon_svg("building", "h-5 w-5 flex-shrink-0") }}
                     <span x-show="!sidebarCollapsed" class="flex-1 truncate text-left" x-cloak>Fixed Assets</span>
@@ -193,7 +189,7 @@
         </nav>
 
 
-        {% with module_accent="amber" %}
+        {% with module_accent="emerald" %}
             {% include "partials/_sidebar_footer.html" %}
         {% endwith %}
     </aside>
@@ -203,7 +199,7 @@
         {% set page_title_html %}{% block page_title %}{{ page_title | default("Inventory") }}{% endblock %}{% endset %}
         {% set breadcrumbs_html %}{% block breadcrumbs %}{% endblock %}{% endset %}
         {% set header_actions_html %}{% block header_actions %}{% endblock %}{% endset %}
-        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="amber") }}
+        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="emerald") }}
 
         <!-- Page Content -->
         <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">

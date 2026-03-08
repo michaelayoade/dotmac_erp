@@ -342,55 +342,23 @@ def seed_automation_settings(db: Session) -> None:
 
 
 def seed_features_settings(db: Session) -> None:
-    """Seed feature flags with default values."""
-    features_settings.ensure_by_key(
-        db,
-        key="enable_multi_currency",
-        value_type=SettingValueType.boolean,
-        value_json=True,
+    """Seed feature flag global defaults from the registry table."""
+    from app.models.feature_flag import FeatureFlagRegistry, FeatureFlagStatus
+
+    flags = list(
+        db.scalars(
+            select(FeatureFlagRegistry).where(
+                FeatureFlagRegistry.status != FeatureFlagStatus.ARCHIVED
+            )
+        ).all()
     )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_budgeting",
-        value_type=SettingValueType.boolean,
-        value_json=False,
-    )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_project_accounting",
-        value_type=SettingValueType.boolean,
-        value_json=False,
-    )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_bank_reconciliation",
-        value_type=SettingValueType.boolean,
-        value_json=True,
-    )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_recurring_transactions",
-        value_type=SettingValueType.boolean,
-        value_json=True,
-    )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_inventory",
-        value_type=SettingValueType.boolean,
-        value_json=True,
-    )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_fixed_assets",
-        value_type=SettingValueType.boolean,
-        value_json=True,
-    )
-    features_settings.ensure_by_key(
-        db,
-        key="enable_leases",
-        value_type=SettingValueType.boolean,
-        value_json=False,
-    )
+    for flag in flags:
+        features_settings.ensure_by_key(
+            db,
+            key=flag.flag_key,
+            value_type=SettingValueType.boolean,
+            value_json=flag.default_enabled,
+        )
 
 
 def seed_reporting_settings(db: Session) -> None:

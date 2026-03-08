@@ -375,98 +375,8 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.boolean,
         default=False,
     ),
-    # Features Domain Settings (Feature Flags)
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_multi_currency",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=True,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_budgeting",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_project_accounting",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_bank_reconciliation",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=True,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_recurring_transactions",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=True,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_inventory",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=True,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_fixed_assets",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=True,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_leases",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_procurement",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=True,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_ipsas",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_fund_accounting",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_stock_reservation",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
-    SettingSpec(
-        domain=SettingDomain.features,
-        key="enable_service_hooks",
-        env_var=None,
-        value_type=SettingValueType.boolean,
-        default=False,
-    ),
+    # Feature flags are now managed dynamically via feature_flag_registry table.
+    # See app/services/feature_flag_service.py and app/models/feature_flag.py.
     # Reporting Domain Settings
     SettingSpec(
         domain=SettingDomain.reporting,
@@ -817,6 +727,16 @@ SETTINGS_SPECS: list[SettingSpec] = [
         label="Ministerial Threshold (NGN)",
         description="Maximum value for Ministerial Tenders Board (PPA 2007 default: 1,000,000,000)",
     ),
+    # Module Settings: Expense
+    SettingSpec(
+        domain=SettingDomain.expense,
+        key="expense_route_to_ap",
+        env_var=None,
+        value_type=SettingValueType.boolean,
+        default=False,
+        label="Route Reimbursements through AP",
+        description="Automatically create a supplier invoice in Accounts Payable when an expense claim is approved",
+    ),
     # Settings Domain: App-level configuration content
     SettingSpec(
         domain=SettingDomain.settings,
@@ -1086,6 +1006,48 @@ SETTINGS_SPECS: list[SettingSpec] = [
         label="LLM Max Retries",
         description="Number of repair retries for invalid structured output",
     ),
+    # =========================================================================
+    # Notifications — Nextcloud Talk
+    # =========================================================================
+    SettingSpec(
+        domain=SettingDomain.notifications,
+        key="nextcloud_server_url",
+        env_var="NEXTCLOUD_SERVER_URL",
+        value_type=SettingValueType.string,
+        default="",
+        label="Nextcloud Server URL",
+        description="Base URL of the Nextcloud server (e.g. https://cloud.example.com)",
+    ),
+    SettingSpec(
+        domain=SettingDomain.notifications,
+        key="nextcloud_username",
+        env_var="NEXTCLOUD_USERNAME",
+        value_type=SettingValueType.string,
+        default="",
+        label="Nextcloud Username",
+        description="Bot account username for sending Talk notifications",
+    ),
+    SettingSpec(
+        domain=SettingDomain.notifications,
+        key="nextcloud_password",
+        env_var="NEXTCLOUD_PASSWORD",
+        value_type=SettingValueType.string,
+        default="",
+        is_secret=True,
+        label="Nextcloud Password",
+        description="App password for the bot account (generate in Nextcloud → Security)",
+    ),
+    SettingSpec(
+        domain=SettingDomain.notifications,
+        key="nextcloud_request_timeout",
+        env_var="NEXTCLOUD_REQUEST_TIMEOUT",
+        value_type=SettingValueType.integer,
+        default=30,
+        min_value=5,
+        max_value=120,
+        label="Request Timeout (seconds)",
+        description="HTTP timeout for Nextcloud API calls",
+    ),
 ]
 
 DOMAIN_SETTINGS_SERVICE = {
@@ -1106,6 +1068,8 @@ DOMAIN_SETTINGS_SERVICE = {
     SettingDomain.payroll: settings_service.payroll_settings,
     SettingDomain.banking: settings_service.banking_settings,
     SettingDomain.coach: settings_service.coach_settings,
+    SettingDomain.notifications: settings_service.notifications_settings,
+    SettingDomain.expense: settings_service.expense_settings,
 }
 
 

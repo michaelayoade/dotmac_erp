@@ -100,6 +100,7 @@ class FiscalPositionWebService:
         db: Session,
         search: str | None = None,
         is_active: str | None = None,
+        page: int = 1,
     ) -> HTMLResponse:
         """Fiscal positions list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -118,6 +119,11 @@ class FiscalPositionWebService:
         )
 
         formatted = [_fp_list_view(fp) for fp in positions]
+        total_count = len(formatted)
+        per_page = 50
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        start = (page - 1) * per_page
+        paginated = formatted[start : start + per_page]
 
         context = base_context(request, auth, "Fiscal Positions", "tax")
         active_filters = build_active_filters(
@@ -128,12 +134,15 @@ class FiscalPositionWebService:
         )
         context.update(
             {
-                "positions": formatted,
+                "positions": paginated,
                 "search": search or "",
                 "is_active": is_active or "",
                 "active_filters": active_filters,
-                "total_count": len(formatted),
+                "total_count": total_count,
                 "active_count": sum(1 for p in positions if p.is_active),
+                "page": page,
+                "total_pages": total_pages,
+                "limit": per_page,
             }
         )
         return templates.TemplateResponse(

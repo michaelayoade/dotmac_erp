@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters %}
+{% from "components/macros.html" import status_badge, compact_filters, pagination %}
 
 {% block page_title %}Shift Schedules{% endblock %}
 
@@ -122,6 +122,7 @@
                 </tbody>
             </table>
         </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
     </div>
     {% elif department_id %}
     <div class="card p-8 text-center">

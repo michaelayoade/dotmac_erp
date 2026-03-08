@@ -1,188 +1,176 @@
-{% extends "base.html" %}
+{% extends "help/base_help.html" %}
 {% from "components/macros.html" import icon_svg %}
 
-{% block title %}Help & Training{% endblock %}
+{% block page_title %}Help & Training{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2 text-sm">
+        <li class="text-slate-900 dark:text-white" aria-current="page">Help Home</li>
+    </ol>
+</nav>
+{% endblock %}
 
 {% block content %}
-<section x-data="{ query: '' }" class="mx-auto max-w-7xl px-6 py-10 space-y-8">
-    <div class="card p-6 md:p-8 space-y-4">
-        <div class="flex items-start justify-between gap-4">
-            <div class="space-y-2">
-                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Help & Training Center</h1>
-                <p class="text-sm text-slate-600 dark:text-slate-300">
-                    Comprehensive manuals, journeys, and troubleshooting for your enabled modules.
-                </p>
+<section class="space-y-8">
+    <div class="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 p-8 text-white shadow-2xl shadow-slate-900/10">
+        <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
+            <div class="space-y-4">
+                <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-teal-100">
+                    Help & Training Center
+                </div>
+                <div class="space-y-3">
+                    <h1 class="max-w-3xl text-3xl font-semibold tracking-tight font-display sm:text-4xl">
+                        Learn the workflow before you leave the page.
+                    </h1>
+                    <p class="max-w-2xl text-sm leading-6 text-slate-200">
+                        Search walkthroughs, open module guides, diagnose common issues, and follow role-based training tracks built for your enabled modules.
+                    </p>
+                </div>
                 <div class="flex flex-wrap gap-2 text-xs">
                     {% for module_key in coverage_modules %}
-                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ module_key.replace("_", " ").title() }}</span>
+                    <a href="/help/module/{{ module_key }}" class="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-slate-100 transition hover:bg-white/20">
+                        {{ module_key.replace("_", " ").title() }}
+                    </a>
                     {% endfor %}
                 </div>
             </div>
-            <a href="/" class="btn btn-secondary">Open Modules</a>
-        </div>
-        <div>
-            <label for="help-search" class="sr-only">Search help content</label>
-            <input id="help-search" x-model.trim="query" type="search" placeholder="Search manuals, journeys, troubleshooting..."
-                   class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-primary-600 dark:focus:ring-primary-900/40">
-        </div>
-        {% if user and user.is_admin %}
-        <p class="text-xs text-slate-500 dark:text-slate-400">
-            Admin tip: edit <code>settings/help_center_content_json</code> in
-            <a href="/admin/settings" class="underline hover:text-slate-700 dark:hover:text-slate-300">Admin Settings</a>
-            to override this content without code changes.
-        </p>
-        {% endif %}
-    </div>
-
-    <div class="grid gap-6 xl:grid-cols-3">
-        <div class="card p-6">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Role Playbooks</h2>
-            {% if role_playbooks %}
-            <div class="mt-4 space-y-3">
-                {% for playbook in role_playbooks %}
-                <article x-show="!query || '{{ playbook.search_blob }}'.includes(query.toLowerCase())"
-                         class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">{{ playbook.title }}</h3>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        {% for journey in playbook.journeys %}
-                        <a href="{{ journey.href }}" class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                            {{ icon_svg("arrow-right", "h-3.5 w-3.5") }}
-                            {{ journey.label }}
-                        </a>
-                        {% endfor %}
-                    </div>
-                </article>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                No role-specific playbooks are available for your access scope.
-            </p>
-            {% endif %}
-        </div>
-
-        <div class="card p-6 xl:col-span-2">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-white">User Manuals</h2>
-            {% if manuals %}
-            <div class="mt-4 grid gap-3 md:grid-cols-2">
-                {% for manual in manuals %}
-                <article x-show="!query || '{{ manual.search_blob }}'.includes(query.toLowerCase())"
-                         class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">{{ manual.title }}</h3>
-                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ manual.summary }}</p>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        {% for link in manual.links %}
-                        <a href="{{ link.href }}" class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                            {{ icon_svg("book-open", "h-3.5 w-3.5") }}
-                            {{ link.label }}
-                        </a>
-                        {% endfor %}
-                    </div>
-                </article>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                No module manuals are available for your current access.
-            </p>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="card p-6">
-        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Operational Journeys</h2>
-        {% if journeys %}
-        <div class="mt-4 grid gap-3 md:grid-cols-2">
-            {% for journey in journeys %}
-            <article x-show="!query || '{{ journey.search_blob }}'.includes(query.toLowerCase())"
-                     class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                <div class="flex items-start justify-between gap-3">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ journey.module_title }}</p>
-                        <h3 class="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{{ journey.title }}</h3>
-                        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ journey.outcome }}</p>
-                        <ol class="mt-3 list-decimal space-y-1 pl-4 text-xs text-slate-700 dark:text-slate-300">
-                            {% for step in journey.steps %}
-                            <li>{{ step }}</li>
-                            {% endfor %}
-                        </ol>
-                    </div>
-                    <a href="{{ journey.href }}" class="btn btn-secondary btn-sm whitespace-nowrap">Open</a>
+            <div class="rounded-2xl border border-white/10 bg-white/10 p-5 backdrop-blur">
+                <form method="get" action="{{ search_action }}" class="space-y-3">
+                    <label for="help-query" class="block text-xs font-semibold uppercase tracking-[0.2em] text-teal-100">Search The Knowledge Base</label>
+                    <input id="help-query" name="q" type="search" placeholder="Search payroll, tickets, procurement, onboarding..."
+                           class="w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500/30">
+                    <button type="submit" class="btn btn-primary w-full justify-center">
+                        {{ icon_svg("search", "h-4 w-4 mr-1.5") }}
+                        Search Help
+                    </button>
+                </form>
+                <div class="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-200">
+                    <a href="/help/tracks" class="rounded-xl border border-white/10 bg-black/10 px-3 py-2 transition hover:bg-white/10">Training Tracks</a>
+                    <a href="/help/search?content_type=troubleshooting" class="rounded-xl border border-white/10 bg-black/10 px-3 py-2 transition hover:bg-white/10">Troubleshooting</a>
                 </div>
-            </article>
-            {% endfor %}
+            </div>
         </div>
-        {% else %}
-        <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-            No operational journeys are available yet.
-        </p>
-        {% endif %}
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-2">
-        <div class="card p-6">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Cross-Module Workflows</h2>
-            {% if cross_module_workflows %}
-            <div class="mt-4 space-y-3">
-                {% for workflow in cross_module_workflows %}
-                <article x-show="!query || '{{ workflow.search_blob }}'.includes(query.toLowerCase())"
-                         class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">{{ workflow.title }}</h3>
-                    <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                        {% for module_key in workflow.modules %}
-                        <span class="rounded-full bg-primary-50 px-2.5 py-1 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">{{ module_key.replace("_", " ").title() }}</span>
-                        {% endfor %}
-                    </div>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        {% for step in workflow.steps %}
-                        <a href="{{ step.href }}" class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
-                            {{ icon_svg("arrow-right", "h-3.5 w-3.5") }}
-                            {{ step.label }}
-                        </a>
-                        {% endfor %}
-                    </div>
-                </article>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                Cross-module workflows require access to all modules in each flow.
-            </p>
-            {% endif %}
-        </div>
-
-        <div class="card p-6">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Troubleshooting</h2>
-            {% if troubleshooting %}
-            <div class="mt-4 space-y-3">
-                {% for issue in troubleshooting %}
-                <article x-show="!query || '{{ issue.search_blob }}'.includes(query.toLowerCase())"
-                         class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div class="space-y-6">
+            <div class="card p-6">
+                <div class="flex items-center justify-between gap-4">
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ issue.module_title }}</p>
-                        <h3 class="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{{ issue.symptom }}</h3>
-                        <ul class="mt-2 list-disc space-y-1 pl-4 text-xs text-slate-700 dark:text-slate-300">
-                            {% for check in issue.checks %}
-                            <li>{{ check }}</li>
-                            {% endfor %}
-                        </ul>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Featured Workflow Guides</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            Start with the highest-value workflows for your current access.
+                        </p>
                     </div>
-                </article>
-                {% endfor %}
+                    <a href="/help/search" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">Browse all articles</a>
+                </div>
+                <div class="mt-5 grid gap-4 md:grid-cols-2">
+                    {% for article in featured_articles %}
+                    <a href="{{ article.href }}" class="group rounded-2xl border border-slate-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-lg hover:shadow-teal-500/10 dark:border-slate-800 dark:bg-slate-900/60">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                {{ article.module_title }}
+                            </span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">{{ article.estimated_minutes }} min</span>
+                        </div>
+                        <h3 class="mt-4 text-base font-semibold text-slate-900 transition group-hover:text-teal-700 dark:text-white dark:group-hover:text-teal-300">
+                            {{ article.title }}
+                        </h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{{ article.summary }}</p>
+                        <div class="mt-4 flex items-center justify-between text-sm font-medium text-teal-600 dark:text-teal-400">
+                            Open Guide
+                            {{ icon_svg("arrow-right", "h-4 w-4 transition group-hover:translate-x-1") }}
+                        </div>
+                    </a>
+                    {% else %}
+                    <div class="col-span-full rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center dark:border-slate-800 dark:bg-slate-900/40">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">No featured guides available for your current module access.</p>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
-            {% else %}
-            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                Troubleshooting notes are not available for your modules.
-            </p>
-            {% endif %}
-        </div>
-    </div>
 
-    <div class="card p-6">
-        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Need More Help?</h2>
-        <div class="mt-4 flex flex-wrap gap-2">
-            <a href="/support/dashboard" class="btn btn-secondary">Open Support Workspace</a>
-            <a href="/help" class="btn btn-secondary">Reset Filters</a>
+            <div class="card p-6">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Module Hubs</h2>
+                        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            Each hub bundles quick starts, workflows, and troubleshooting for a module.
+                        </p>
+                    </div>
+                    <a href="/" class="btn btn-secondary">Open Modules</a>
+                </div>
+                <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {% for hub in module_hubs %}
+                    <a href="{{ hub.href }}" class="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 transition hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900/40 dark:hover:bg-slate-900">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">{{ hub.title }}</h3>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">{{ hub.article_count }} articles</span>
+                        </div>
+                        <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{{ hub.summary }}</p>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            {% for link in hub.quick_links[:2] %}
+                            <span class="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">{{ link.label }}</span>
+                            {% endfor %}
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="card p-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Training Tracks</h2>
+                    <a href="/help/tracks" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">See all</a>
+                </div>
+                {% if tracks %}
+                <div class="mt-4 space-y-3">
+                    {% for track in tracks %}
+                    <a href="/help/tracks/{{ track.slug }}" class="block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-teal-200 dark:border-slate-800 dark:bg-slate-900/50">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">{{ track.title }}</h3>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">{{ track.step_count }} lessons</span>
+                        </div>
+                        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{{ track.summary }}</p>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">No training tracks are available for your current access.</p>
+                {% endif %}
+            </div>
+
+            <div class="card p-6">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Troubleshooting</h2>
+                    <a href="/help/search?content_type=troubleshooting" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">Browse issues</a>
+                </div>
+                <div class="mt-4 space-y-3">
+                    {% for article in articles if article.content_type == 'troubleshooting' %}
+                    {% if loop.index <= 4 %}
+                    <a href="{{ article.href }}" class="block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-amber-200 dark:border-slate-800 dark:bg-slate-900/50">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ article.module_title }}</p>
+                        <h3 class="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{{ article.title }}</h3>
+                        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">{{ article.summary }}</p>
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Still Need Help?</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                    If the guide does not unblock you, open the support workspace with the affected module and record reference.
+                </p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <a href="/support/dashboard" class="btn btn-secondary">Open Support Workspace</a>
+                    <a href="/help/search" class="btn btn-secondary">Search Again</a>
+                </div>
+            </div>
         </div>
     </div>
 </section>

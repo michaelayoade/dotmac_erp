@@ -201,6 +201,7 @@ class PerfWebService:
         db: Session,
         appraisal_id: str,
         success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render appraisal detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -223,7 +224,7 @@ class PerfWebService:
             {
                 "appraisal": appraisal,
                 "success": success,
-                "error": None,
+                "error": error,
             }
         )
         return templates.TemplateResponse(

@@ -81,7 +81,9 @@ class NotificationChannel(str, enum.Enum):
 
     IN_APP = "IN_APP"
     EMAIL = "EMAIL"
-    BOTH = "BOTH"
+    BOTH = "BOTH"  # IN_APP + EMAIL
+    NEXTCLOUD = "NEXTCLOUD"
+    ALL = "ALL"  # IN_APP + EMAIL + NEXTCLOUD
 
 
 class Notification(Base):
@@ -160,6 +162,12 @@ class Notification(Base):
     # Email status
     email_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Nextcloud Talk status
+    nextcloud_sent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    nextcloud_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Actor who triggered the notification (optional)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(

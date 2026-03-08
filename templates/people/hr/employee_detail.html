@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge, icon_svg %}
+{% from "components/macros.html" import status_badge, icon_svg, empty_state %}
 {% block page_title %}{{ person.first_name }} {{ person.last_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -20,7 +20,7 @@
 </a>
 {% if user and user.is_admin %}
 <form method="post" action="/people/hr/employees/bulk-delete" class="inline-block">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ request.state.csrf_form | safe }}
     <input type="hidden" name="employee_ids" value="{{ employee.employee_id }}">
     <button type="submit" class="btn btn-danger" onclick="return confirm('Delete this employee? This will archive the record.');">
         Delete
@@ -47,15 +47,6 @@
                 <p class="text-sm text-slate-400 dark:text-slate-500">{{ employee.employee_code }}</p>
             </div>
             <div>
-                {% set status_colors = {
-                    'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-                    'ACTIVE': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-                    'ON_LEAVE': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-                    'SUSPENDED': 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-                    'RESIGNED': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-                    'TERMINATED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-                    'RETIRED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
-                } %}
                 {{ status_badge(employee.status.value) }}
             </div>
         </div>
@@ -227,8 +218,8 @@
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/user-credentials" class="space-y-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <label class="form-label">Create Local Login</label>
-                    <input type="text" name="username" placeholder="Username or email" class="form-input w-full">
-                    <input type="password" name="password" placeholder="Temporary password" class="form-input w-full">
+                    <input type="text" name="username" placeholder="Leave blank to use employee email" class="form-input w-full">
+                    <input type="password" name="password" placeholder="Leave blank to use default (Dotmac@123)" class="form-input w-full">
                     <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                         <input type="checkbox" name="must_change_password" checked>
                         Require password change on first login
@@ -351,10 +342,11 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="text-center py-6">
-                {{ icon_svg("clipboard-check", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600") }}
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No activities defined</p>
-            </div>
+            {{ empty_state(
+                title="No activities defined",
+                description="No onboarding activities have been configured for this checklist.",
+                icon="clipboard-check"
+            ) }}
             {% endif %}
 
             {% if onboarding.status.value == 'IN_PROGRESS' and completed == total and total > 0 %}
@@ -670,11 +662,13 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="text-center py-6">
-                {{ icon_svg("currency", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600") }}
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No salary structure assigned</p>
-                <p class="text-xs text-slate-400 dark:text-slate-500">Assign a structure to enable payroll processing</p>
-            </div>
+            {{ empty_state(
+                title="No salary structure assigned",
+                description="Assign a structure to enable payroll processing",
+                icon="currency",
+                cta_text="Assign Structure",
+                cta_href="/people/payroll/assignments/new?employee_id=" ~ employee.employee_id
+            ) }}
             {% endif %}
         </div>
     </div>
@@ -738,11 +732,13 @@
                 {% endif %}
             </dl>
             {% else %}
-            <div class="text-center py-6">
-                {{ icon_svg("receipt", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600") }}
-                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No tax profile configured</p>
-                <p class="text-xs text-slate-400 dark:text-slate-500">Set up a tax profile for PAYE calculation</p>
-            </div>
+            {{ empty_state(
+                title="No tax profile configured",
+                description="Set up a tax profile for PAYE calculation",
+                icon="receipt",
+                cta_text="Set Up Tax Profile",
+                cta_href="/people/payroll/tax/profiles/new?employee_id=" ~ employee.employee_id
+            ) }}
             {% endif %}
         </div>
     </div>

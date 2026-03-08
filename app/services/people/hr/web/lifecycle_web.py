@@ -209,7 +209,7 @@ class LifecycleWebService:
         password = LifecycleWebService._form_str(form, "password")
         must_change = LifecycleWebService._parse_bool(
             LifecycleWebService._form_str(form, "must_change_password"),
-            False,
+            True,
         )
 
         org_id = coerce_uuid(auth.organization_id)
@@ -321,7 +321,7 @@ class LifecycleWebService:
         payload = [
             {
                 "id": str(person.id),
-                "name": f"{person.first_name or ''} {person.last_name or ''}".strip(),
+                "name": person.name,
                 "email": person.email,
             }
             for person in results

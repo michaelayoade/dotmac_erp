@@ -57,7 +57,7 @@
         </div>
 
         <!-- Aging Buckets Accordion -->
-        <div class="space-y-4" x-data="{ openBucket: 'over_90' }">
+        <div class="space-y-4" x-data="{ openBucket: '', showAll_over_90: false, showAll_61_90: false, showAll_31_60: false, showAll_1_30: false, showAll_current: false }">
             <!-- Over 90 Days -->
             {% if over_90 %}
             <div class="border border-rose-200 dark:border-rose-800 rounded-xl overflow-hidden">
@@ -84,20 +84,29 @@
                         </thead>
                         <tbody>
                             {% for inv in over_90 %}
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                            <tr class="border-t border-slate-100 dark:border-slate-800" {% if loop.index > 25 %}x-show="showAll_over_90"{% endif %}>
                                 <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
                                 <td class="py-2 px-4">{{ inv.customer_name }}</td>
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-rose-600 dark:text-rose-400 font-medium">{{ inv.days_overdue }}</td>
-                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                                <td class="py-2 px-4 text-right font-mono tabular-nums">{{ inv.amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
                                 <td colspan="99" class="p-0">
-                                    {{ empty_state("No over_90 found", "There are no over_90 to display.") }}
+                                    {{ empty_state("No invoices found", "No invoices over 90 days overdue.") }}
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% if over_90 | length > 25 %}
+                            <tr x-show="!showAll_over_90">
+                                <td colspan="5" class="py-3 px-4 text-center">
+                                    <button @click="showAll_over_90 = true" class="text-sm text-teal-600 dark:text-teal-400 hover:underline font-medium">
+                                        Show all {{ over_90 | length }} invoices
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -130,20 +139,29 @@
                         </thead>
                         <tbody>
                             {% for inv in days_61_90 %}
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                            <tr class="border-t border-slate-100 dark:border-slate-800" {% if loop.index > 25 %}x-show="showAll_61_90"{% endif %}>
                                 <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
                                 <td class="py-2 px-4">{{ inv.customer_name }}</td>
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-amber-600 dark:text-amber-400 font-medium">{{ inv.days_overdue }}</td>
-                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                                <td class="py-2 px-4 text-right font-mono tabular-nums">{{ inv.amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
                                 <td colspan="99" class="p-0">
-                                    {{ empty_state("No days_61_90 found", "There are no days_61_90 to display.") }}
+                                    {{ empty_state("No invoices found", "No invoices 61-90 days overdue.") }}
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% if days_61_90 | length > 25 %}
+                            <tr x-show="!showAll_61_90">
+                                <td colspan="5" class="py-3 px-4 text-center">
+                                    <button @click="showAll_61_90 = true" class="text-sm text-teal-600 dark:text-teal-400 hover:underline font-medium">
+                                        Show all {{ days_61_90 | length }} invoices
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -176,20 +194,29 @@
                         </thead>
                         <tbody>
                             {% for inv in days_31_60 %}
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                            <tr class="border-t border-slate-100 dark:border-slate-800" {% if loop.index > 25 %}x-show="showAll_31_60"{% endif %}>
                                 <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
                                 <td class="py-2 px-4">{{ inv.customer_name }}</td>
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-yellow-600 dark:text-yellow-400 font-medium">{{ inv.days_overdue }}</td>
-                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                                <td class="py-2 px-4 text-right font-mono tabular-nums">{{ inv.amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
                                 <td colspan="99" class="p-0">
-                                    {{ empty_state("No days_31_60 found", "There are no days_31_60 to display.") }}
+                                    {{ empty_state("No invoices found", "No invoices 31-60 days overdue.") }}
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% if days_31_60 | length > 25 %}
+                            <tr x-show="!showAll_31_60">
+                                <td colspan="5" class="py-3 px-4 text-center">
+                                    <button @click="showAll_31_60 = true" class="text-sm text-teal-600 dark:text-teal-400 hover:underline font-medium">
+                                        Show all {{ days_31_60 | length }} invoices
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -222,20 +249,29 @@
                         </thead>
                         <tbody>
                             {% for inv in days_1_30 %}
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                            <tr class="border-t border-slate-100 dark:border-slate-800" {% if loop.index > 25 %}x-show="showAll_1_30"{% endif %}>
                                 <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
                                 <td class="py-2 px-4">{{ inv.customer_name }}</td>
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center font-medium">{{ inv.days_overdue }}</td>
-                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                                <td class="py-2 px-4 text-right font-mono tabular-nums">{{ inv.amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
                                 <td colspan="99" class="p-0">
-                                    {{ empty_state("No days_1_30 found", "There are no days_1_30 to display.") }}
+                                    {{ empty_state("No invoices found", "No invoices 1-30 days overdue.") }}
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% if days_1_30 | length > 25 %}
+                            <tr x-show="!showAll_1_30">
+                                <td colspan="5" class="py-3 px-4 text-center">
+                                    <button @click="showAll_1_30 = true" class="text-sm text-teal-600 dark:text-teal-400 hover:underline font-medium">
+                                        Show all {{ days_1_30 | length }} invoices
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -268,20 +304,29 @@
                         </thead>
                         <tbody>
                             {% for inv in current %}
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                            <tr class="border-t border-slate-100 dark:border-slate-800" {% if loop.index > 25 %}x-show="showAll_current"{% endif %}>
                                 <td class="py-2 px-4 font-mono text-xs">{{ inv.invoice_number }}</td>
                                 <td class="py-2 px-4">{{ inv.customer_name }}</td>
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-emerald-600 dark:text-emerald-400 font-medium">-</td>
-                                <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                                <td class="py-2 px-4 text-right font-mono tabular-nums">{{ inv.amount }}</td>
                             </tr>
                             {% else %}
                             <tr>
                                 <td colspan="99" class="p-0">
-                                    {{ empty_state("No current found", "There are no current to display.") }}
+                                    {{ empty_state("No invoices found", "No current invoices outstanding.") }}
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% if current | length > 25 %}
+                            <tr x-show="!showAll_current">
+                                <td colspan="5" class="py-3 px-4 text-center">
+                                    <button @click="showAll_current = true" class="text-sm text-teal-600 dark:text-teal-400 hover:underline font-medium">
+                                        Show all {{ current | length }} invoices
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>

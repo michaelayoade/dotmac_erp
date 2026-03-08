@@ -44,12 +44,13 @@ def onboarding_dashboard(
 @router.get("/templates", response_class=HTMLResponse)
 def templates_list(
     request: Request,
+    page: int = 1,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """List all checklist templates."""
     return onboarding_admin_web_service.templates_list_response(
-        request=request, auth=auth, db=db
+        request=request, auth=auth, db=db, page=page
     )
 
 
@@ -152,12 +153,13 @@ async def delete_template_item(
 def employees_list(
     request: Request,
     status: str | None = Query(None),
+    page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """List all employee onboardings."""
     return onboarding_admin_web_service.employees_list_response(
-        request=request, auth=auth, db=db, status_filter=status
+        request=request, auth=auth, db=db, status_filter=status, page=page
     )
 
 

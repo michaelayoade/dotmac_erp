@@ -39,12 +39,9 @@
 
     <!-- Stats Summary -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:grid-cols-4">
-        <div id="results-container">
-
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Evaluations</p>
             <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ total }}</p>
-        </div>
         </div>
 
         <div class="card p-4">
@@ -77,6 +74,7 @@
     </div>
 
     <!-- Evaluations Table -->
+    <div id="results-container">
     <div class="card overflow-hidden">
         {% if evaluations %}
         <div class="table-container">
@@ -127,6 +125,16 @@
                             {{ eval.message or '—' }}
                         </td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="p-0">
+                            {{ empty_state(
+                                "No evaluations found",
+                                "Limit evaluations appear here when expense claims are submitted.",
+                                icon="clipboard"
+                            ) }}
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -139,6 +147,7 @@
             icon="clipboard"
         ) }}
         {% endif %}
+    </div>
     </div>
 
     <!-- Info Box -->

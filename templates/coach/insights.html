@@ -1,8 +1,9 @@
 {% extends "coach/base_coach.html" %}
 {% from "components/macros.html" import topbar, empty_state %}
 
+{% block page_title %}Coach Insights{% endblock %}
+
 {% block content %}
-{{ topbar("Coach Insights") }}
 
 {% set selected_category = category or '' %}
 {% set selected_severity = severity or '' %}

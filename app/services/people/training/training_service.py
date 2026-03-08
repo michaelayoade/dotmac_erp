@@ -15,6 +15,7 @@ from uuid import UUID
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.models.people.hr.employee import Employee
 from app.models.people.training import (
     AttendeeStatus,
     TrainingAttendee,
@@ -144,7 +145,11 @@ class TrainingService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[TrainingProgram]:
         """List training programs."""
-        query = select(TrainingProgram).where(TrainingProgram.organization_id == org_id)
+        query = (
+            select(TrainingProgram)
+            .options(joinedload(TrainingProgram.department))
+            .where(TrainingProgram.organization_id == org_id)
+        )
 
         status_value = status
         if status_value is None and is_active is not None:
@@ -191,7 +196,9 @@ class TrainingService:
     def get_program(self, org_id: UUID, program_id: UUID) -> TrainingProgram:
         """Get a training program by ID."""
         program = self.db.scalar(
-            select(TrainingProgram).where(
+            select(TrainingProgram)
+            .options(joinedload(TrainingProgram.department))
+            .where(
                 TrainingProgram.program_id == program_id,
                 TrainingProgram.organization_id == org_id,
             )
@@ -246,20 +253,31 @@ class TrainingService:
         self.db.flush()
         return program
 
+    # Fields that can be explicitly set to None on program updates
+    _PROGRAM_NULLABLE_FIELDS = frozenset({
+        "category", "department_id", "description", "duration_hours",
+        "duration_days", "cost_per_attendee", "objectives", "prerequisites",
+        "syllabus", "provider_name", "provider_contact",
+    })
+
     def update_program(
         self,
         org_id: UUID,
         program_id: UUID,
-        **kwargs,
+        **kwargs: Any,
     ) -> TrainingProgram:
         """Update a training program."""
         program = self.get_program(org_id, program_id)
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(program, key):
-                setattr(program, key, value)
+            if not hasattr(program, key):
+                continue
+            if value is None and key not in self._PROGRAM_NULLABLE_FIELDS:
+                continue
+            setattr(program, key, value)
 
         self.db.flush()
+        logger.info("Updated training program %s", program_id)
         return program
 
     def delete_program(self, org_id: UUID, program_id: UUID) -> None:
@@ -299,7 +317,14 @@ class TrainingService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[TrainingEvent]:
         """List training events."""
-        query = select(TrainingEvent).where(TrainingEvent.organization_id == org_id)
+        query = (
+            select(TrainingEvent)
+            .options(
+                joinedload(TrainingEvent.program),
+                joinedload(TrainingEvent.trainer).joinedload(Employee.person),
+            )
+            .where(TrainingEvent.organization_id == org_id)
+        )
 
         if program_id:
             query = query.where(TrainingEvent.program_id == program_id)
@@ -343,7 +368,13 @@ class TrainingService:
         """Get a training event by ID."""
         event = self.db.scalar(
             select(TrainingEvent)
-            .options(joinedload(TrainingEvent.attendees))
+            .options(
+                joinedload(TrainingEvent.program),
+                joinedload(TrainingEvent.trainer),
+                joinedload(TrainingEvent.attendees).joinedload(
+                    TrainingAttendee.employee
+                ),
+            )
             .where(
                 TrainingEvent.event_id == event_id,
                 TrainingEvent.organization_id == org_id,
@@ -396,26 +427,50 @@ class TrainingService:
             total_cost=total_cost,
             currency_code=currency_code,
             description=description,
-            status=TrainingEventStatus.SCHEDULED,
+            status=TrainingEventStatus.DRAFT,
         )
 
         self.db.add(event)
         self.db.flush()
         return event
 
+    # Fields that can be explicitly set to None on event updates
+    _EVENT_NULLABLE_FIELDS = frozenset({
+        "description", "location", "meeting_link", "trainer_name",
+        "trainer_email", "trainer_employee_id", "max_attendees",
+        "total_cost", "start_time", "end_time",
+    })
+
     def update_event(
         self,
         org_id: UUID,
         event_id: UUID,
-        **kwargs,
+        **kwargs: Any,
     ) -> TrainingEvent:
         """Update a training event."""
         event = self.get_event(org_id, event_id)
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(event, key):
-                setattr(event, key, value)
+            if not hasattr(event, key):
+                continue
+            if value is None and key not in self._EVENT_NULLABLE_FIELDS:
+                continue
+            setattr(event, key, value)
 
+        self.db.flush()
+        logger.info("Updated training event %s", event_id)
+        return event
+
+    def schedule_event(self, org_id: UUID, event_id: UUID) -> TrainingEvent:
+        """Schedule a draft event."""
+        event = self.get_event(org_id, event_id)
+
+        if event.status != TrainingEventStatus.DRAFT:
+            raise TrainingEventStatusError(
+                event.status.value, TrainingEventStatus.SCHEDULED.value
+            )
+
+        event.status = TrainingEventStatus.SCHEDULED
         self.db.flush()
         return event
 
@@ -586,7 +641,8 @@ class TrainingService:
             current_count = (
                 self.db.scalar(
                     select(func.count(TrainingAttendee.attendee_id)).where(
-                        TrainingAttendee.event_id == event_id
+                        TrainingAttendee.event_id == event_id,
+                        TrainingAttendee.organization_id == org_id,
                     )
                 )
                 or 0

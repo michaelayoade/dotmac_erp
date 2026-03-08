@@ -505,7 +505,7 @@ class SalesOrderService:
             elif so_line.quantity_shipped > 0:
                 so_line.fulfillment_status = FulfillmentStatus.PARTIAL
 
-            if is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+            if is_feature_enabled(db, so.organization_id, FEATURE_STOCK_RESERVATION):
                 reservation = reservation_service.get_reservation_for_line(
                     ReservationSourceType.SALES_ORDER,
                     so_line.line_id,
@@ -758,7 +758,7 @@ class SalesOrderService:
         for line in so.lines:
             line.fulfillment_status = FulfillmentStatus.CANCELLED
 
-        if is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+        if is_feature_enabled(db, so.organization_id, FEATURE_STOCK_RESERVATION):
             from app.services.inventory.stock_reservation import (
                 ReservationSourceType,
                 StockReservationService,

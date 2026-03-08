@@ -1,0 +1,53 @@
+{% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import icon_svg %}
+{% import "components/settings_macros.html" as settings_ui %}
+
+{% block page_title %}Expense Settings{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Home</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/settings" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Settings</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Expense</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    {{ settings_ui.settings_header("Expense Settings", "Configure reimbursement workflows and AP integration.") }}
+    {{ settings_ui.settings_messages(settings_saved|default(false), error, "Expense settings updated successfully.") }}
+
+    <form method="POST" action="/settings/expense" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        <!-- AP Integration -->
+        <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Accounts Payable Integration</h2>
+            <div class="space-y-4">
+                <div class="flex items-start gap-3">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" name="expense_route_to_ap" value="true"
+                               {{ 'checked' if settings.expense_route_to_ap.value else '' }}
+                               class="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-900">
+                        <div>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ settings.expense_route_to_ap.label }}</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ settings.expense_route_to_ap.description }}</p>
+                        </div>
+                    </label>
+                </div>
+                <div class="rounded-lg bg-blue-50 border border-blue-200 p-3 dark:bg-blue-900/20 dark:border-blue-800">
+                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                        When enabled, approving an expense claim will automatically create a supplier invoice in
+                        Accounts Payable. The invoice can then be paid through the normal AP payment process,
+                        giving your finance team full visibility and control over reimbursement disbursements.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        {{ settings_ui.settings_actions() }}
+    </form>
+</div>
+{% endblock %}

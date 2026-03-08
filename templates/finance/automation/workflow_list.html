@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters, icon_svg %}
+{% from "components/macros.html" import status_badge, compact_filters, icon_svg, pagination %}
 
 {% block page_title %}Workflow Rules{% endblock %}
 
@@ -29,7 +29,7 @@
         {# Filters #}
         {% call(filter_attrs) compact_filters(
             base_url="/finance/automation/workflow-list",
-            active_filters=active_filters | default([])
+            active_filters=active_filters if active_filters else []
         ) %}
         <div>
             <select name="entity_type"
@@ -58,6 +58,7 @@
             </select>
         </div>
         {% endcall %}
+    </div>
 
     <div id="results-container">
     <!-- Rules Table -->
@@ -148,6 +149,7 @@
             </table>
         </div>
     </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, filters={'entity_type': filters.entity_type|default(''), 'trigger_event': filters.trigger_event|default(''), 'is_active': (filters.is_active|string|lower) if filters.is_active is not none else ''}) }}
     </div>
 </div>
 {% endblock %}

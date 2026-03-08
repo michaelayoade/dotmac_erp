@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, icon_svg %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 
 {% block page_title %}New Payment Batch{% endblock %}
 
@@ -15,13 +15,18 @@
 
 {% block content %}
 <div class="space-y-6">
+    {% if error %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+        {{ error }}
+    </div>
+    {% endif %}
     <form method="post" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <div class="card p-6">
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Batch Date</label>
-                    <input type="date" name="batch_date"
+                    <input type="date" name="batch_date" value="{{ form_data.get('batch_date', '') }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
@@ -29,7 +34,7 @@
                     <select name="payment_method"
                             class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         {% for method in payment_methods %}
-                        <option value="{{ method }}">{{ method.replace('_', ' ').title() }}</option>
+                        <option value="{{ method }}" {{ 'selected' if form_data.get('payment_method', payment_methods[0] if payment_methods else '') == method else '' }}>{{ method.replace('_', ' ').title() }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -39,7 +44,7 @@
                             class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         <option value="">Select bank account</option>
                         {% for account in bank_accounts %}
-                        <option value="{{ account.bank_account_id }}">
+                        <option value="{{ account.bank_account_id }}" {{ 'selected' if form_data.get('bank_account_id', '') == (account.bank_account_id | string) else '' }}>
                             {{ account.bank_name }} • {{ account.account_name }} ({{ account.account_number }})
                         </option>
                         {% endfor %}
@@ -47,7 +52,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Currency</label>
-                    <input type="text" name="currency_code" value="{{ default_currency_code }}"
+                    <input type="text" name="currency_code" value="{{ form_data.get('currency_code', default_currency_code) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
             </div>
@@ -64,7 +69,8 @@
                             <th scope="col">Select</th>
                             <th scope="col">Invoice #</th>
                             <th scope="col">Supplier</th>
-                            <th scope="col" class="text-right">Amount</th>
+                            <th scope="col" class="text-right">Outstanding</th>
+                            <th scope="col">Status</th>
                             <th scope="col">Due Date</th>
                         </tr>
                     </thead>
@@ -73,6 +79,7 @@
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                             <td>
                                 <input type="checkbox" name="invoice_ids" value="{{ invoice.invoice_id }}"
+                                       {{ 'checked' if (invoice.invoice_id | string) in form_data.get('invoice_ids', []) else '' }}
                                        class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600">
                             </td>
                             <td class="text-sm text-slate-700 dark:text-slate-200">
@@ -81,16 +88,19 @@
                             <td class="text-sm text-slate-600 dark:text-slate-400">
                                 {{ invoice.supplier_name }}
                             </td>
-                            <td class="table-cell-amount text-slate-900 dark:text-white">
-                                {{ invoice.amount }} {{ invoice.currency_code }}
+                            <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">
+                                {{ "{:,.2f}".format(invoice.amount) if invoice.amount else '0.00' }} {{ invoice.currency_code }}
+                            </td>
+                            <td class="text-center">
+                                {{ status_badge(invoice.status if invoice.status else '', 'sm') }}
                             </td>
                             <td class="text-sm text-slate-600 dark:text-slate-400">
-                                {{ invoice.due_date }}
+                                {{ invoice.due_date.strftime('%d %b %Y') if invoice.due_date else '—' }}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="5" class="py-12">
+                            <td colspan="6" class="py-12">
                                 {{ empty_state('No invoices available', 'There are no invoices ready for batching.', 'document') }}
                             </td>
                         </tr>

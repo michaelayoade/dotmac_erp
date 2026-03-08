@@ -88,7 +88,12 @@ class InfoChangeService:
         - NHF: nhf_number
         """
         # Get current values
-        employee = self.db.get(Employee, employee_id)
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == employee_id,
+                Employee.organization_id == organization_id,
+            )
+        )
         if not employee:
             raise ValueError(f"Employee {employee_id} not found")
 
@@ -97,6 +102,7 @@ class InfoChangeService:
             select(EmployeeTaxProfile)
             .where(
                 EmployeeTaxProfile.employee_id == employee_id,
+                EmployeeTaxProfile.organization_id == organization_id,
                 EmployeeTaxProfile.effective_to.is_(None),
             )
             .order_by(EmployeeTaxProfile.effective_from.desc())
@@ -347,7 +353,12 @@ class InfoChangeService:
 
     def _apply_changes(self, request: EmployeeInfoChangeRequest) -> None:
         """Apply the proposed changes to employee/tax profile."""
-        employee = self.db.get(Employee, request.employee_id)
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.employee_id == request.employee_id,
+                Employee.organization_id == request.organization_id,
+            )
+        )
         if not employee:
             raise ValueError(f"Employee {request.employee_id} not found")
 
@@ -375,7 +386,12 @@ class InfoChangeService:
                 setattr(employee, field, _clean_text(changes[field]))
 
         # Apply personal/contact changes
-        person = employee.person or self.db.get(Person, employee.person_id)
+        person = employee.person or self.db.scalar(
+            select(Person).where(
+                Person.id == employee.person_id,
+                Person.organization_id == request.organization_id,
+            )
+        )
         if person:
             person_fields = [
                 "phone",
@@ -410,7 +426,7 @@ class InfoChangeService:
                 if value:
                     try:
                         person.gender = PersonGender(value)
-                    except Exception:
+                    except (ValueError, KeyError):
                         person.gender = cast(Any, None)
                 else:
                     person.gender = cast(Any, None)
@@ -434,6 +450,7 @@ class InfoChangeService:
                 select(EmployeeTaxProfile)
                 .where(
                     EmployeeTaxProfile.employee_id == request.employee_id,
+                    EmployeeTaxProfile.organization_id == request.organization_id,
                     EmployeeTaxProfile.effective_to.is_(None),
                 )
                 .order_by(EmployeeTaxProfile.effective_from.desc())
@@ -469,6 +486,7 @@ class InfoChangeService:
         change_type: InfoChangeType | None = None,
         employee_id: UUID | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[EmployeeInfoChangeRequest]:
         """List info change requests with optional filters and eager-loaded employee."""
         stmt = (
@@ -476,6 +494,7 @@ class InfoChangeService:
             .options(joinedload(EmployeeInfoChangeRequest.employee))
             .where(EmployeeInfoChangeRequest.organization_id == organization_id)
             .order_by(EmployeeInfoChangeRequest.created_at.desc())
+            .offset(offset)
             .limit(limit)
         )
         if employee_id:

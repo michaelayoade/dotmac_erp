@@ -74,17 +74,17 @@ def help_center(
     content_overrides = resolve_value(
         db, SettingDomain.settings, "help_center_content_json"
     )
-    context.update(
-        build_help_center_payload(
-            accessible_modules=auth.accessible_modules,
-            roles=auth.roles,
-            scopes=auth.scopes,
-            is_admin=auth.is_admin,
-            overrides=content_overrides
-            if isinstance(content_overrides, dict)
-            else None,
-        )
+    payload = build_help_center_payload(
+        accessible_modules=auth.accessible_modules,
+        roles=auth.roles,
+        scopes=auth.scopes,
+        is_admin=auth.is_admin,
+        overrides=content_overrides
+        if isinstance(content_overrides, dict)
+        else None,
     )
+    context.update(payload)
+    context["help_tracks"] = payload.get("tracks", [])
     return templates.TemplateResponse(request, "help_center.html", context)
 
 

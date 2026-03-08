@@ -1,8 +1,9 @@
 {% extends "coach/base_coach.html" %}
 {% from "components/macros.html" import topbar, empty_state, status_badge %}
 
+{% block page_title %}Coach Reports{% endblock %}
+
 {% block content %}
-{{ topbar("Coach Reports", accent="teal") }}
 
 <div class="mt-6 text-sm text-slate-600 dark:text-slate-300">
   Showing {{ reports|length }} of {{ total }} report(s)
