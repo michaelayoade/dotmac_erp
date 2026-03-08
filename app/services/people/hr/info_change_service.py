@@ -7,6 +7,7 @@ bank details, tax info, and pension info.
 
 from __future__ import annotations
 
+import html
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, cast
@@ -28,7 +29,7 @@ from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
-from app.services.email import send_email
+from app.services.email import employee_can_receive_email, send_email
 from app.services.notification import NotificationService
 
 if TYPE_CHECKING:
@@ -468,11 +469,11 @@ class InfoChangeService:
                 )
                 self.db.add(tax_profile)
 
-        # Apply changes
-        for field, value in tax_changes.items():
-            setattr(tax_profile, field, _clean_text(value))
+            # Apply changes
+            for field, value in tax_changes.items():
+                setattr(tax_profile, field, _clean_text(value))
 
-        self.db.flush()
+            self.db.flush()
 
     # =========================================================================
     # Query Methods
@@ -728,8 +729,9 @@ class InfoChangeService:
                 f"{employee_name} submitted a request to update their {change_label}.\n"
                 f"Review request: {action_url}"
             )
+            safe_name = html.escape(employee_name)
             body_html = (
-                f"<p>{employee_name} submitted a request to update their {change_label}.</p>"
+                f"<p>{safe_name} submitted a request to update their {change_label}.</p>"
                 f'<p><a href="{action_url}">Review request</a></p>'
             )
             self._send_email_safe(
@@ -758,6 +760,12 @@ class InfoChangeService:
         action_url = self._build_app_url(action_path)
         change_label = request.change_type.value.lower().replace("_", " ")
         employee_email = employee.work_email or employee.personal_email
+        if not employee_can_receive_email(employee):
+            logger.info(
+                "Skipping info change decision email for inactive employee %s",
+                employee.employee_id,
+            )
+            return
 
         try:
             self.notification_service.create(
@@ -792,9 +800,10 @@ class InfoChangeService:
             f"{reason_line}\n"
             f"View details: {action_url}"
         )
+        safe_notes = html.escape(request.reviewer_notes) if request.reviewer_notes else ""
         body_html = (
             f"<p>Your request to update your {change_label} was {status}.</p>"
-            f"{f'<p>Reason: {request.reviewer_notes}</p>' if request.reviewer_notes else ''}"
+            f"{f'<p>Reason: {safe_notes}</p>' if safe_notes else ''}"
             f'<p><a href="{action_url}">View details</a></p>'
         )
         self._send_email_safe(

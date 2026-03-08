@@ -55,71 +55,76 @@ def process_probation_ending_notifications() -> dict:
 
     with SessionLocal() as db:
         today = date.today()
-
-        # Find employees on probation with probation end dates
-        probation_employees = db.scalars(
-            select(Employee).where(
-                Employee.status == EmployeeStatus.ACTIVE,
-                Employee.probation_end_date.isnot(None),
-            )
-        ).all()
+        organizations = db.scalars(select(Organization)).all()
 
         notification_service = HRNotificationService(db)
 
-        for employee in probation_employees:
-            try:
-                probation_end = employee.probation_end_date
-                if probation_end is None:
-                    continue
-                days_remaining = (probation_end - today).days
+        for org in organizations:
+            # Find employees on probation with probation end dates
+            probation_employees = db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org.organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.probation_end_date.isnot(None),
+                )
+            ).all()
 
-                # Skip if probation already ended or too far away
-                if days_remaining < 0 or days_remaining > FIRST_NOTICE_DAYS:
-                    continue
+            for employee in probation_employees:
+                try:
+                    probation_end = employee.probation_end_date
+                    if probation_end is None:
+                        continue
+                    days_remaining = (probation_end - today).days
 
-                # Determine notice type
-                if days_remaining == FINAL_NOTICE_DAYS:
-                    notice_type = "final"
-                elif days_remaining <= SECOND_NOTICE_DAYS:
-                    notice_type = "second"
-                elif days_remaining <= FIRST_NOTICE_DAYS:
-                    notice_type = "first"
-                else:
-                    continue
+                    # Skip if probation already ended or too far away
+                    if days_remaining < 0 or days_remaining > FIRST_NOTICE_DAYS:
+                        continue
 
-                # Get manager
-                manager = None
-                if employee.reports_to_id:
-                    manager = db.get(Employee, employee.reports_to_id)
+                    # Determine notice type
+                    if days_remaining == FINAL_NOTICE_DAYS:
+                        notice_type = "final"
+                    elif days_remaining <= SECOND_NOTICE_DAYS:
+                        notice_type = "second"
+                    elif days_remaining <= FIRST_NOTICE_DAYS:
+                        notice_type = "first"
+                    else:
+                        continue
 
-                # Send notification to manager
-                if manager:
-                    success = notification_service.send_probation_ending_notification(
-                        employee,
-                        manager,
-                        days_remaining=days_remaining,
+                    # Get manager
+                    manager = None
+                    if employee.reports_to_id:
+                        manager = db.get(Employee, employee.reports_to_id)
+
+                    # Send notification to manager
+                    if manager:
+                        success = notification_service.send_probation_ending_notification(
+                            employee,
+                            manager,
+                            days_remaining=days_remaining,
+                        )
+
+                        if success:
+                            if notice_type == "first":
+                                results["first_notices_sent"] += 1
+                            elif notice_type == "second":
+                                results["second_notices_sent"] += 1
+                            else:
+                                results["final_notices_sent"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to process probation notification for employee %s: %s",
+                        employee.employee_id,
+                        e,
+                    )
+                    results["errors"].append(
+                        {
+                            "employee_id": str(employee.employee_id),
+                            "error": str(e),
+                        }
                     )
 
-                    if success:
-                        if notice_type == "first":
-                            results["first_notices_sent"] += 1
-                        elif notice_type == "second":
-                            results["second_notices_sent"] += 1
-                        else:
-                            results["final_notices_sent"] += 1
-
-            except Exception as e:
-                logger.error(
-                    "Failed to process probation notification for employee %s: %s",
-                    employee.employee_id,
-                    e,
-                )
-                results["errors"].append(
-                    {
-                        "employee_id": str(employee.employee_id),
-                        "error": str(e),
-                    }
-                )
+        db.commit()
 
     total_sent = (
         results["first_notices_sent"]
@@ -167,63 +172,68 @@ def process_contract_expiry_notifications() -> dict:
             )
             return results
 
-        # Find employees with contract end dates
-        contract_employees = db.scalars(
-            select(Employee).where(
-                Employee.status == EmployeeStatus.ACTIVE,
-                contract_end_attr.isnot(None),
-            )
-        ).all()
-
+        organizations = db.scalars(select(Organization)).all()
         notification_service = HRNotificationService(db)
 
-        for employee in contract_employees:
-            try:
-                contract_end = getattr(employee, "contract_end_date", None)
-                if contract_end is None:
-                    continue
-                days_remaining = (contract_end - today).days
+        for org in organizations:
+            # Find employees with contract end dates
+            contract_employees = db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org.organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    contract_end_attr.isnot(None),
+                )
+            ).all()
 
-                # Skip if contract already ended or too far away
-                if days_remaining < 0 or days_remaining > FIRST_NOTICE_DAYS:
-                    continue
+            for employee in contract_employees:
+                try:
+                    contract_end = getattr(employee, "contract_end_date", None)
+                    if contract_end is None:
+                        continue
+                    days_remaining = (contract_end - today).days
 
-                # Only send on specific days
-                if days_remaining not in [
-                    FIRST_NOTICE_DAYS,
-                    SECOND_NOTICE_DAYS,
-                    FINAL_NOTICE_DAYS,
-                ]:
-                    continue
+                    # Skip if contract already ended or too far away
+                    if days_remaining < 0 or days_remaining > FIRST_NOTICE_DAYS:
+                        continue
 
-                # Get manager
-                manager = None
-                if employee.reports_to_id:
-                    manager = db.get(Employee, employee.reports_to_id)
+                    # Only send on specific days
+                    if days_remaining not in [
+                        FIRST_NOTICE_DAYS,
+                        SECOND_NOTICE_DAYS,
+                        FINAL_NOTICE_DAYS,
+                    ]:
+                        continue
 
-                # Send notification to manager and HR
-                if manager:
-                    success = notification_service.send_contract_expiry_notification(
-                        employee,
-                        manager,
-                        days_remaining=days_remaining,
+                    # Get manager
+                    manager = None
+                    if employee.reports_to_id:
+                        manager = db.get(Employee, employee.reports_to_id)
+
+                    # Send notification to manager and HR
+                    if manager:
+                        success = notification_service.send_contract_expiry_notification(
+                            employee,
+                            manager,
+                            days_remaining=days_remaining,
+                        )
+
+                        if success:
+                            results["notifications_sent"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to process contract expiry notification for employee %s: %s",
+                        employee.employee_id,
+                        e,
+                    )
+                    results["errors"].append(
+                        {
+                            "employee_id": str(employee.employee_id),
+                            "error": str(e),
+                        }
                     )
 
-                    if success:
-                        results["notifications_sent"] += 1
-
-            except Exception as e:
-                logger.error(
-                    "Failed to process contract expiry notification for employee %s: %s",
-                    employee.employee_id,
-                    e,
-                )
-                results["errors"].append(
-                    {
-                        "employee_id": str(employee.employee_id),
-                        "error": str(e),
-                    }
-                )
+        db.commit()
 
     logger.info(
         "Contract expiry notifications complete: %d sent", results["notifications_sent"]
@@ -255,64 +265,69 @@ def process_work_anniversary_notifications() -> dict:
     with SessionLocal() as db:
         today = date.today()
         week_end = today + timedelta(days=7)
-
-        # Find active employees
-        active_employees = db.scalars(
-            select(Employee).where(
-                Employee.status == EmployeeStatus.ACTIVE,
-                Employee.date_of_joining.isnot(None),
-            )
-        ).all()
+        organizations = db.scalars(select(Organization)).all()
 
         notification_service = HRNotificationService(db)
 
-        for employee in active_employees:
-            try:
-                joining_date = employee.date_of_joining
-
-                # Calculate this year's anniversary
-                this_year_anniversary = joining_date.replace(year=today.year)
-
-                # Check if anniversary is within this week
-                if not (today <= this_year_anniversary <= week_end):
-                    continue
-
-                # Calculate years of service
-                years_of_service = today.year - joining_date.year
-
-                # Determine if it's a milestone year (5, 10, 15, 20, 25, etc.)
-                is_milestone = years_of_service > 0 and years_of_service % 5 == 0
-
-                # Get manager
-                manager = None
-                if employee.reports_to_id:
-                    manager = db.get(Employee, employee.reports_to_id)
-
-                # Send notification
-                success = notification_service.send_work_anniversary_notification(
-                    employee,
-                    manager,
-                    years_of_service=years_of_service,
-                    is_milestone=is_milestone,
+        for org in organizations:
+            # Find active employees
+            active_employees = db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org.organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.date_of_joining.isnot(None),
                 )
+            ).all()
 
-                if success:
-                    results["notifications_sent"] += 1
-                    if is_milestone:
-                        results["milestone_notifications"] += 1
+            for employee in active_employees:
+                try:
+                    joining_date = employee.date_of_joining
 
-            except Exception as e:
-                logger.error(
-                    "Failed to process anniversary notification for employee %s: %s",
-                    employee.employee_id,
-                    e,
-                )
-                results["errors"].append(
-                    {
-                        "employee_id": str(employee.employee_id),
-                        "error": str(e),
-                    }
-                )
+                    # Calculate this year's anniversary
+                    this_year_anniversary = joining_date.replace(year=today.year)
+
+                    # Check if anniversary is within this week
+                    if not (today <= this_year_anniversary <= week_end):
+                        continue
+
+                    # Calculate years of service
+                    years_of_service = today.year - joining_date.year
+
+                    # Determine if it's a milestone year (5, 10, 15, 20, 25, etc.)
+                    is_milestone = years_of_service > 0 and years_of_service % 5 == 0
+
+                    # Get manager
+                    manager = None
+                    if employee.reports_to_id:
+                        manager = db.get(Employee, employee.reports_to_id)
+
+                    # Send notification
+                    success = notification_service.send_work_anniversary_notification(
+                        employee,
+                        manager,
+                        years_of_service=years_of_service,
+                        is_milestone=is_milestone,
+                    )
+
+                    if success:
+                        results["notifications_sent"] += 1
+                        if is_milestone:
+                            results["milestone_notifications"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to process anniversary notification for employee %s: %s",
+                        employee.employee_id,
+                        e,
+                    )
+                    results["errors"].append(
+                        {
+                            "employee_id": str(employee.employee_id),
+                            "error": str(e),
+                        }
+                    )
+
+        db.commit()
 
     logger.info(
         "Work anniversary notifications complete: %d sent (%d milestones)",
@@ -345,61 +360,66 @@ def process_birthday_notifications() -> dict:
     with SessionLocal() as db:
         today = date.today()
         tomorrow = today + timedelta(days=1)
-
-        # Find active employees
-        active_employees = db.scalars(
-            select(Employee).where(
-                Employee.status == EmployeeStatus.ACTIVE,
-                Employee.date_of_birth.isnot(None),
-            )
-        ).all()
+        organizations = db.scalars(select(Organization)).all()
 
         notification_service = HRNotificationService(db)
 
-        for employee in active_employees:
-            try:
-                birthday = employee.date_of_birth
-                if birthday is None:
-                    continue
+        for org in organizations:
+            # Find active employees
+            active_employees = db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org.organization_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.date_of_birth.isnot(None),
+                )
+            ).all()
 
-                # Check if birthday is today or tomorrow
-                this_year_birthday = birthday.replace(year=today.year)
+            for employee in active_employees:
+                try:
+                    birthday = employee.date_of_birth
+                    if birthday is None:
+                        continue
 
-                if this_year_birthday == today:
-                    notification_type = "today"
-                elif this_year_birthday == tomorrow:
-                    notification_type = "tomorrow"
-                else:
-                    continue
+                    # Check if birthday is today or tomorrow
+                    this_year_birthday = birthday.replace(year=today.year)
 
-                # Get manager
-                manager = None
-                if employee.reports_to_id:
-                    manager = db.get(Employee, employee.reports_to_id)
+                    if this_year_birthday == today:
+                        notification_type = "today"
+                    elif this_year_birthday == tomorrow:
+                        notification_type = "tomorrow"
+                    else:
+                        continue
 
-                # Send notification to manager
-                if manager and notification_type == "tomorrow":
-                    success = notification_service.send_birthday_notification(
-                        employee,
-                        manager,
-                        is_advance_notice=True,
+                    # Get manager
+                    manager = None
+                    if employee.reports_to_id:
+                        manager = db.get(Employee, employee.reports_to_id)
+
+                    # Send notification to manager
+                    if manager and notification_type == "tomorrow":
+                        success = notification_service.send_birthday_notification(
+                            employee,
+                            manager,
+                            is_advance_notice=True,
+                        )
+
+                        if success:
+                            results["notifications_sent"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to process birthday notification for employee %s: %s",
+                        employee.employee_id,
+                        e,
+                    )
+                    results["errors"].append(
+                        {
+                            "employee_id": str(employee.employee_id),
+                            "error": str(e),
+                        }
                     )
 
-                    if success:
-                        results["notifications_sent"] += 1
-
-            except Exception as e:
-                logger.error(
-                    "Failed to process birthday notification for employee %s: %s",
-                    employee.employee_id,
-                    e,
-                )
-                results["errors"].append(
-                    {
-                        "employee_id": str(employee.employee_id),
-                        "error": str(e),
-                    }
-                )
+        db.commit()
 
     logger.info(
         "Birthday notifications complete: %d sent", results["notifications_sent"]
@@ -439,98 +459,103 @@ def process_performance_review_reminders() -> dict:
 
     with SessionLocal() as db:
         today = date.today()
-
-        # Find active cycles
-        active_cycles = db.scalars(
-            select(AppraisalCycle).where(
-                AppraisalCycle.status.in_(
-                    [
-                        AppraisalCycleStatus.ACTIVE,
-                        AppraisalCycleStatus.REVIEW,
-                        AppraisalCycleStatus.CALIBRATION,
-                    ]
-                ),
-            )
-        ).all()
+        organizations = db.scalars(select(Organization)).all()
 
         notification_service = HRNotificationService(db)
 
-        for cycle in active_cycles:
-            try:
-                # Check self-assessment deadline
-                if cycle.self_assessment_deadline:
-                    days_to_deadline = (cycle.self_assessment_deadline - today).days
-                    if 0 <= days_to_deadline <= 7:
-                        # Find employees with pending self-assessment
-                        pending_appraisals = db.scalars(
-                            select(Appraisal).where(
-                                Appraisal.cycle_id == cycle.cycle_id,
-                                Appraisal.status.in_(
-                                    [
-                                        AppraisalStatus.DRAFT,
-                                        AppraisalStatus.SELF_ASSESSMENT,
-                                    ]
-                                ),
-                            )
-                        ).all()
-
-                        for appraisal in pending_appraisals:
-                            employee = db.get(Employee, appraisal.employee_id)
-                            if employee:
-                                success = (
-                                    notification_service.send_self_assessment_reminder(
-                                        employee,
-                                        cycle,
-                                        days_remaining=days_to_deadline,
-                                    )
-                                )
-                                if success:
-                                    results["self_assessment_reminders"] += 1
-
-                # Check manager review deadline
-                if cycle.manager_review_deadline:
-                    days_to_deadline = (cycle.manager_review_deadline - today).days
-                    if 0 <= days_to_deadline <= 7:
-                        # Find appraisals pending manager review
-                        pending_reviews = db.scalars(
-                            select(Appraisal).where(
-                                Appraisal.cycle_id == cycle.cycle_id,
-                                Appraisal.status.in_(
-                                    [
-                                        AppraisalStatus.PENDING_REVIEW,
-                                        AppraisalStatus.UNDER_REVIEW,
-                                    ]
-                                ),
-                            )
-                        ).all()
-
-                        for appraisal in pending_reviews:
-                            manager = db.get(Employee, appraisal.manager_id)
-                            employee = db.get(Employee, appraisal.employee_id)
-                            if manager and employee:
-                                success = (
-                                    notification_service.send_manager_review_reminder(
-                                        manager,
-                                        employee,
-                                        cycle,
-                                        days_remaining=days_to_deadline,
-                                    )
-                                )
-                                if success:
-                                    results["manager_review_reminders"] += 1
-
-            except Exception as e:
-                logger.error(
-                    "Failed to process review reminders for cycle %s: %s",
-                    cycle.cycle_id,
-                    e,
+        for org in organizations:
+            # Find active cycles for this organization
+            active_cycles = db.scalars(
+                select(AppraisalCycle).where(
+                    AppraisalCycle.organization_id == org.organization_id,
+                    AppraisalCycle.status.in_(
+                        [
+                            AppraisalCycleStatus.ACTIVE,
+                            AppraisalCycleStatus.REVIEW,
+                            AppraisalCycleStatus.CALIBRATION,
+                        ]
+                    ),
                 )
-                results["errors"].append(
-                    {
-                        "cycle_id": str(cycle.cycle_id),
-                        "error": str(e),
-                    }
-                )
+            ).all()
+
+            for cycle in active_cycles:
+                try:
+                    # Check self-assessment deadline
+                    if cycle.self_assessment_deadline:
+                        days_to_deadline = (cycle.self_assessment_deadline - today).days
+                        if 0 <= days_to_deadline <= 7:
+                            # Find employees with pending self-assessment
+                            pending_appraisals = db.scalars(
+                                select(Appraisal).where(
+                                    Appraisal.cycle_id == cycle.cycle_id,
+                                    Appraisal.status.in_(
+                                        [
+                                            AppraisalStatus.DRAFT,
+                                            AppraisalStatus.SELF_ASSESSMENT,
+                                        ]
+                                    ),
+                                )
+                            ).all()
+
+                            for appraisal in pending_appraisals:
+                                employee = db.get(Employee, appraisal.employee_id)
+                                if employee:
+                                    success = (
+                                        notification_service.send_self_assessment_reminder(
+                                            employee,
+                                            cycle,
+                                            days_remaining=days_to_deadline,
+                                        )
+                                    )
+                                    if success:
+                                        results["self_assessment_reminders"] += 1
+
+                    # Check manager review deadline
+                    if cycle.manager_review_deadline:
+                        days_to_deadline = (cycle.manager_review_deadline - today).days
+                        if 0 <= days_to_deadline <= 7:
+                            # Find appraisals pending manager review
+                            pending_reviews = db.scalars(
+                                select(Appraisal).where(
+                                    Appraisal.cycle_id == cycle.cycle_id,
+                                    Appraisal.status.in_(
+                                        [
+                                            AppraisalStatus.PENDING_REVIEW,
+                                            AppraisalStatus.UNDER_REVIEW,
+                                        ]
+                                    ),
+                                )
+                            ).all()
+
+                            for appraisal in pending_reviews:
+                                manager = db.get(Employee, appraisal.manager_id)
+                                employee = db.get(Employee, appraisal.employee_id)
+                                if manager and employee:
+                                    success = (
+                                        notification_service.send_manager_review_reminder(
+                                            manager,
+                                            employee,
+                                            cycle,
+                                            days_remaining=days_to_deadline,
+                                        )
+                                    )
+                                    if success:
+                                        results["manager_review_reminders"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to process review reminders for cycle %s: %s",
+                        cycle.cycle_id,
+                        e,
+                    )
+                    results["errors"].append(
+                        {
+                            "cycle_id": str(cycle.cycle_id),
+                            "error": str(e),
+                        }
+                    )
+
+        db.commit()
 
     total_sent = (
         results["self_assessment_reminders"]
@@ -571,60 +596,65 @@ def process_certification_expiry_notifications() -> dict:
 
     with SessionLocal() as db:
         today = date.today()
-
-        # Find certifications with expiry dates
-        expiring_certs = db.scalars(
-            select(EmployeeCertification).where(
-                EmployeeCertification.expiry_date.isnot(None),
-                EmployeeCertification.expiry_date >= today,
-                EmployeeCertification.expiry_date
-                <= today + timedelta(days=FIRST_NOTICE_DAYS),
-            )
-        ).all()
+        organizations = db.scalars(select(Organization)).all()
 
         notification_service = HRNotificationService(db)
 
-        for cert in expiring_certs:
-            try:
-                expiry = cert.expiry_date
-                if expiry is None:
-                    continue
-                days_remaining = (expiry - today).days
-
-                # Only send on specific days
-                if days_remaining not in [
-                    FIRST_NOTICE_DAYS,
-                    SECOND_NOTICE_DAYS,
-                    FINAL_NOTICE_DAYS,
-                ]:
-                    continue
-
-                employee = db.get(Employee, cert.employee_id)
-                if not employee:
-                    continue
-
-                # Send notification to employee
-                success = notification_service.send_certification_expiry_notification(
-                    employee,
-                    cert,
-                    days_remaining=days_remaining,
+        for org in organizations:
+            # Find certifications with expiry dates for this organization
+            expiring_certs = db.scalars(
+                select(EmployeeCertification).where(
+                    EmployeeCertification.organization_id == org.organization_id,
+                    EmployeeCertification.expiry_date.isnot(None),
+                    EmployeeCertification.expiry_date >= today,
+                    EmployeeCertification.expiry_date
+                    <= today + timedelta(days=FIRST_NOTICE_DAYS),
                 )
+            ).all()
 
-                if success:
-                    results["notifications_sent"] += 1
+            for cert in expiring_certs:
+                try:
+                    expiry = cert.expiry_date
+                    if expiry is None:
+                        continue
+                    days_remaining = (expiry - today).days
 
-            except Exception as e:
-                logger.error(
-                    "Failed to process certification expiry notification for cert %s: %s",
-                    cert.certification_id,
-                    e,
-                )
-                results["errors"].append(
-                    {
-                        "certification_id": str(cert.certification_id),
-                        "error": str(e),
-                    }
-                )
+                    # Only send on specific days
+                    if days_remaining not in [
+                        FIRST_NOTICE_DAYS,
+                        SECOND_NOTICE_DAYS,
+                        FINAL_NOTICE_DAYS,
+                    ]:
+                        continue
+
+                    employee = db.get(Employee, cert.employee_id)
+                    if not employee:
+                        continue
+
+                    # Send notification to employee
+                    success = notification_service.send_certification_expiry_notification(
+                        employee,
+                        cert,
+                        days_remaining=days_remaining,
+                    )
+
+                    if success:
+                        results["notifications_sent"] += 1
+
+                except Exception as e:
+                    logger.error(
+                        "Failed to process certification expiry notification for cert %s: %s",
+                        cert.certification_id,
+                        e,
+                    )
+                    results["errors"].append(
+                        {
+                            "certification_id": str(cert.certification_id),
+                            "error": str(e),
+                        }
+                    )
+
+        db.commit()
 
     logger.info(
         "Certification expiry notifications complete: %d sent",
@@ -1117,7 +1147,7 @@ def send_welcome_email(onboarding_id: str) -> dict:
 
     from app.models.email_profile import EmailModule
     from app.models.people.hr.lifecycle import EmployeeOnboarding
-    from app.services.email import send_email
+    from app.services.email import employee_can_receive_email, send_email
     from app.services.people.hr.onboarding import OnboardingService
 
     logger.info("Sending welcome email for onboarding %s", onboarding_id)
@@ -1135,6 +1165,12 @@ def send_welcome_email(onboarding_id: str) -> dict:
             employee = db.get(Employee, onboarding.employee_id)
             if not employee or not employee.person:
                 return {"success": False, "error": "Employee or person not found"}
+
+            if not employee_can_receive_email(employee):
+                return {
+                    "success": False,
+                    "error": f"Employee {employee.employee_id} is inactive",
+                }
 
             person = employee.person
             if not person.email:

@@ -152,6 +152,59 @@ class SMTPConnectionPool:
 _smtp_pool = SMTPConnectionPool()
 
 
+def person_can_receive_email(person: object | None) -> bool:
+    """Return whether a person record is eligible for email delivery."""
+    if person is None:
+        return False
+
+    email = getattr(person, "email", None)
+    if not isinstance(email, str) or not email.strip():
+        return False
+
+    if getattr(person, "is_active", True) is False:
+        return False
+
+    try:
+        from app.models.person import PersonStatus
+
+        status = getattr(person, "status", None)
+        if status is not None and status != PersonStatus.active:
+            return False
+    except (ImportError, AttributeError):
+        logger.debug("Could not resolve person status while checking email eligibility")
+
+    return True
+
+
+def employee_can_receive_email(employee: object | None) -> bool:
+    """Return whether an employee record is eligible for email delivery."""
+    if employee is None:
+        return False
+
+    try:
+        from app.models.people.hr.employee import EmployeeStatus
+
+        inactive_statuses = {
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED,
+        }
+        status = getattr(employee, "status", None)
+        if status in inactive_statuses:
+            return False
+    except (ImportError, AttributeError):
+        logger.debug(
+            "Could not resolve employee status while checking email eligibility"
+        )
+
+    person = getattr(employee, "person", None)
+    if person is not None:
+        return person_can_receive_email(person)
+
+    email = getattr(employee, "work_email", None) or getattr(employee, "personal_email", None)
+    return isinstance(email, str) and bool(email.strip())
+
+
 def _env_value(name: str) -> str | None:
     value = os.getenv(name)
     if value is None or value == "":

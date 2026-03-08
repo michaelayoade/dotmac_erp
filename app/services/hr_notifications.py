@@ -20,7 +20,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.email_profile import EmailModule
-from app.services.email import send_email
+from app.services.email import employee_can_receive_email, send_email
 from app.services.email_branding import render_branded_email
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ def _employee_first_name(employee: Employee | None) -> str:
 
 def _get_employee_email(employee: Employee | None) -> str | None:
     """Get employee email address."""
-    if not employee:
+    if not employee or not employee_can_receive_email(employee):
         return None
 
     # Try company email first
@@ -119,7 +119,7 @@ class HRNotificationService:
                 self.db,
                 organization_id,
             )
-            send_email(
+            return send_email(
                 self.db,
                 to_email,
                 subject,
@@ -128,7 +128,6 @@ class HRNotificationService:
                 module=EmailModule.PEOPLE_PAYROLL,
                 organization_id=organization_id,
             )
-            return True
         except Exception as e:
             logger.error("Failed to send %s: %s", template, e)
             return False

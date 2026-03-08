@@ -13,6 +13,7 @@ from urllib.parse import quote_plus
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -68,13 +69,13 @@ def _validate_session_sso(
 
     Handles timezone-naive expires_at values (SQLite compatibility).
     """
-    session = (
-        auth_db.query(AuthSession)
-        .filter(AuthSession.id == session_id)
-        .filter(AuthSession.person_id == person_id)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .first()
+    session = auth_db.scalar(
+        select(AuthSession).where(
+            AuthSession.id == session_id,
+            AuthSession.person_id == person_id,
+            AuthSession.status == SessionStatus.active,
+            AuthSession.revoked_at.is_(None),
+        )
     )
 
     if not session:
@@ -1050,7 +1051,16 @@ def _refresh_cookie_name(db: Session | None) -> str:
 
 
 def _get_refresh_token_cookie(request: Request, db: Session | None) -> str | None:
-    return request.cookies.get(_refresh_cookie_name(db))
+    configured_name = _refresh_cookie_name(db)
+    cookie_names = [configured_name]
+    if configured_name != "refresh_token":
+        cookie_names.append("refresh_token")
+
+    for cookie_name in cookie_names:
+        cookie_value = request.cookies.get(cookie_name)
+        if cookie_value:
+            return cookie_value
+    return None
 
 
 def _resolve_session_from_refresh_token(
@@ -1063,13 +1073,13 @@ def _resolve_session_from_refresh_token(
     auth_db = _get_auth_db_for_sso()
     try:
         target_db = auth_db if auth_db else db
-        session = (
-            target_db.query(AuthSession)
-            .filter(AuthSession.token_hash == token_hash)
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
-            .first()
+        session = target_db.scalar(
+            select(AuthSession).where(
+                AuthSession.token_hash == token_hash,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
         )
         if not session or is_session_inactive(session, now):
             return None
@@ -1105,13 +1115,14 @@ def _normalize_roles_scopes(
 def _ensure_admin_role(db: Session, person_id: UUID, roles: list[str]) -> list[str]:
     if "admin" in roles:
         return roles
-    admin_role = db.query(Role).filter(Role.name == "admin").first()
+    admin_role = db.scalar(select(Role).where(Role.name == "admin"))
     if not admin_role:
         return roles
-    has_admin_role = (
-        db.query(PersonRole)
-        .filter(PersonRole.person_id == person_id, PersonRole.role_id == admin_role.id)
-        .first()
+    has_admin_role = db.scalar(
+        select(PersonRole).where(
+            PersonRole.person_id == person_id,
+            PersonRole.role_id == admin_role.id,
+        )
     )
     if has_admin_role:
         roles = [*roles, "admin"]
@@ -1180,14 +1191,14 @@ def require_web_auth(
                 session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
             else:
                 # SSO provider or non-SSO mode - validate against local database
-                session = (
-                    db.query(AuthSession)
-                    .filter(AuthSession.id == session_uuid)
-                    .filter(AuthSession.person_id == person_uuid)
-                    .filter(AuthSession.status == SessionStatus.active)
-                    .filter(AuthSession.revoked_at.is_(None))
-                    .filter(AuthSession.expires_at > now)
-                    .first()
+                session = db.scalar(
+                    select(AuthSession).where(
+                        AuthSession.id == session_uuid,
+                        AuthSession.person_id == person_uuid,
+                        AuthSession.status == SessionStatus.active,
+                        AuthSession.revoked_at.is_(None),
+                        AuthSession.expires_at > now,
+                    )
                 )
 
             if not session:
@@ -1276,8 +1287,6 @@ def require_web_auth(
     )
 
     # Look up employee_id for the person (may be None if person is not an employee)
-    from sqlalchemy import select
-
     from app.models.people.hr.employee import Employee
 
     try:
@@ -1341,14 +1350,14 @@ def optional_web_auth(
                 session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
             else:
                 # SSO provider or non-SSO mode - validate against local database
-                session = (
-                    db.query(AuthSession)
-                    .filter(AuthSession.id == session_uuid)
-                    .filter(AuthSession.person_id == person_uuid)
-                    .filter(AuthSession.status == SessionStatus.active)
-                    .filter(AuthSession.revoked_at.is_(None))
-                    .filter(AuthSession.expires_at > now)
-                    .first()
+                session = db.scalar(
+                    select(AuthSession).where(
+                        AuthSession.id == session_uuid,
+                        AuthSession.person_id == person_uuid,
+                        AuthSession.status == SessionStatus.active,
+                        AuthSession.revoked_at.is_(None),
+                        AuthSession.expires_at > now,
+                    )
                 )
 
             if not session:
@@ -1429,8 +1438,6 @@ def optional_web_auth(
     )
 
     # Look up employee_id for the person (may be None if person is not an employee)
-    from sqlalchemy import select
-
     from app.models.people.hr.employee import Employee
 
     employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
