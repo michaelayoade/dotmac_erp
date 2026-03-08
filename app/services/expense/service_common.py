@@ -21,7 +21,7 @@ from app.models.expense import (
 )
 
 if TYPE_CHECKING:
-    from app.models.expense import ExpenseLimitRule
+    from app.models.expense import CashAdvance, ExpenseCategory, ExpenseLimitRule
     from app.services.expense.limit_service import EligibleApprover, EvaluationResult
     from app.web.deps import WebAuthContext
 
@@ -267,3 +267,9 @@ class ExpenseServiceBase:
         return SyncNumberingService(self.db).generate_next_number(
             org_id, SequenceType.EXPENSE
         )
+
+    def get_category(self, org_id: UUID, category_id: UUID) -> ExpenseCategory:
+        raise NotImplementedError
+
+    def get_advance(self, org_id: UUID, advance_id: UUID) -> CashAdvance:
+        raise NotImplementedError

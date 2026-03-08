@@ -678,7 +678,6 @@ def project_template_list(
     from sqlalchemy import func, select
 
     from app.models.pm.project_template import ProjectTemplate
-    from app.services.common import PaginationParams
 
     org_id = coerce_uuid(auth.organization_id)
     per_page = 50
@@ -1057,7 +1056,6 @@ def global_task_list(
 ):
     """Global task list page."""
     from app.models.pm.task import TaskPriority, TaskStatus
-
     from app.services.common import PaginationParams
 
     org_id = coerce_uuid(auth.organization_id)

@@ -10,17 +10,23 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import and_, func, select
 
-from app.models.expense import ExpenseClaim, ExpenseClaimAction, ExpenseClaimActionStatus, ExpenseClaimActionType
+from app.models.expense import (
+    ExpenseClaim,
+    ExpenseClaimAction,
+    ExpenseClaimActionStatus,
+    ExpenseClaimActionType,
+)
+from app.models.expense.expense_claim import ExpenseClaimStatus
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginationParams, coerce_uuid
-from app.services.common_filters import build_active_filters
 from app.services.expense.expense_service import ExpenseService, ExpenseServiceError
 from app.services.expense.limit_service import ExpenseLimitService
+from app.services.expense.web_common import ExpenseWebCommonMixin
 from app.templates import templates
 from app.web.deps import base_context
 
 
-class ExpenseCategoriesReportsWebMixin:
+class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
     @staticmethod
     def categories_list_response(request: Request, auth, db, search: str | None, is_active: str | None, page: int) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)

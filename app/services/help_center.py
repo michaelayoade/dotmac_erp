@@ -2196,7 +2196,12 @@ def get_help_article_by_slug(
         is_admin=is_admin,
         overrides=overrides,
     )
-    return payload["articles_by_slug"].get(slug)
+    articles_by_slug = payload.get("articles_by_slug")
+    if not isinstance(articles_by_slug, dict):
+        return None
+
+    article = articles_by_slug.get(slug)
+    return article if isinstance(article, dict) else None
 
 
 def search_help_articles(
@@ -2307,7 +2312,11 @@ def get_help_track_by_slug(
         is_admin=is_admin,
         overrides=overrides,
     )
-    for track in payload["tracks"]:
-        if track["slug"] == slug:
+    tracks = payload.get("tracks")
+    if not isinstance(tracks, list):
+        return None
+
+    for track in tracks:
+        if isinstance(track, dict) and track.get("slug") == slug:
             return track
     return None

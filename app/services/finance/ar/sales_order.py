@@ -919,7 +919,7 @@ class SalesOrderService:
     @staticmethod
     def _reserve_stock_on_confirm(db: Session, so: SalesOrder) -> None:
         """Auto-reserve inventory on SO confirmation when feature is enabled."""
-        if not is_feature_enabled(db, FEATURE_STOCK_RESERVATION):
+        if not is_feature_enabled(db, so.organization_id, FEATURE_STOCK_RESERVATION):
             return
 
         from app.services.inventory.stock_reservation import (

@@ -9,10 +9,13 @@ from sqlalchemy import func, or_, select
 
 from app.models.expense import ExpenseCategory
 from app.services.common import PaginatedResult, PaginationParams
-from app.services.expense.service_common import ExpenseCategoryNotFoundError
+from app.services.expense.service_common import (
+    ExpenseCategoryNotFoundError,
+    ExpenseServiceBase,
+)
 
 
-class ExpenseCategoryMixin:
+class ExpenseCategoryMixin(ExpenseServiceBase):
     def list_categories(
         self,
         org_id: UUID,

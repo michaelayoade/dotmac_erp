@@ -14,8 +14,8 @@ from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
 
 from .common import (
-    DEFAULT_PAGE_SIZE,
     _ORG_SLUG_PATTERN,
+    DEFAULT_PAGE_SIZE,
     _build_pagination,
     _parse_domain,
     _parse_status_filter,

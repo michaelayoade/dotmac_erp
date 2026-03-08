@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -28,6 +29,7 @@ from app.services.expense.service_common import (
     ExpenseClaimNotFoundError,
     ExpenseClaimStatusError,
     ExpenseLimitBlockedError,
+    ExpenseServiceBase,
     ExpenseServiceError,
     SubmitClaimResult,
 )
@@ -35,7 +37,7 @@ from app.services.expense.service_common import (
 logger = logging.getLogger(__name__)
 
 
-class ExpenseClaimMixin:
+class ExpenseClaimMixin(ExpenseServiceBase):
     def list_claims(
         self,
         org_id: UUID,
@@ -416,7 +418,9 @@ class ExpenseClaimMixin:
         self._notify_submission_confirmed(claim)
 
         try:
-            from app.services.finance.automation.event_dispatcher import fire_workflow_event
+            from app.services.finance.automation.event_dispatcher import (
+                fire_workflow_event,
+            )
 
             fire_workflow_event(
                 db=self.db,
@@ -450,7 +454,11 @@ class ExpenseClaimMixin:
         if not claim.employee or not claim.employee.person_id:
             return
         try:
-            from app.models.notification import EntityType, NotificationChannel, NotificationType
+            from app.models.notification import (
+                EntityType,
+                NotificationChannel,
+                NotificationType,
+            )
             from app.services.notification import NotificationService
 
             NotificationService().create(
@@ -471,7 +479,9 @@ class ExpenseClaimMixin:
 
     def _notify_approvers(self, claim: ExpenseClaim, approvers) -> None:
         from app.models.people.hr.employee import Employee
-        from app.services.expense.expense_notifications import ExpenseNotificationService
+        from app.services.expense.expense_notifications import (
+            ExpenseNotificationService,
+        )
         from app.services.notification import NotificationService
 
         email_service = ExpenseNotificationService(self.db)
@@ -574,18 +584,18 @@ class ExpenseClaimMixin:
             if notes:
                 claim.approval_notes = notes
 
-            corrections_map: dict[str, dict] = {}
-            correction_audit: list[dict] = []
+            corrections_map: dict[str, dict[str, Any]] = {}
+            correction_audit: list[dict[str, str]] = []
             if corrections:
-                for correction in corrections:
-                    corrections_map[str(correction["item_id"])] = correction
+                for correction_entry in corrections:
+                    corrections_map[str(correction_entry["item_id"])] = correction_entry
 
             total_approved = Decimal("0")
             for item in claim.items:
                 item_key = str(item.item_id)
-                correction = corrections_map.get(item_key)
-                if correction:
-                    amount = Decimal(str(correction["approved_amount"]))
+                correction_data = corrections_map.get(item_key)
+                if correction_data:
+                    amount = Decimal(str(correction_data["approved_amount"]))
                     changed = False
                     audit_entry: dict[str, str] = {"item_id": item_key}
                     if amount != item.claimed_amount:
@@ -593,13 +603,13 @@ class ExpenseClaimMixin:
                         audit_entry["amount"] = f"{item.claimed_amount} -> {amount}"
                         changed = True
                     item.approved_amount = amount
-                    new_cat_id = correction.get("category_id")
+                    new_cat_id = correction_data.get("category_id")
                     if new_cat_id and str(new_cat_id) != str(item.category_id):
                         item.original_category_id = item.category_id
                         item.category_id = new_cat_id if isinstance(new_cat_id, UUID) else UUID(str(new_cat_id))
                         audit_entry["category_changed"] = "true"
                         changed = True
-                    new_desc = correction.get("description")
+                    new_desc = correction_data.get("description")
                     if new_desc and new_desc.strip() != item.description:
                         item.original_description = item.description
                         item.description = new_desc.strip()
@@ -627,7 +637,9 @@ class ExpenseClaimMixin:
             self.db.flush()
 
             if auto_post_gl and approver_id:
-                from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+                from app.services.expense.expense_posting_adapter import (
+                    ExpensePostingAdapter,
+                )
 
                 posting_result = ExpensePostingAdapter.post_expense_claim(
                     self.db,
@@ -645,7 +657,9 @@ class ExpenseClaimMixin:
                     )
 
             if create_supplier_invoice and approver_id:
-                from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+                from app.services.expense.expense_posting_adapter import (
+                    ExpensePostingAdapter,
+                )
 
                 invoice_result = ExpensePostingAdapter.create_supplier_invoice_from_expense(
                     self.db,
@@ -664,7 +678,7 @@ class ExpenseClaimMixin:
                 self._notify_claim_approved(claim, org_id, approver_id)
 
             self.db.flush()
-            audit_new_values = {
+            audit_new_values: dict[str, str | list[dict[str, str]]] = {
                 "status": ExpenseClaimStatus.APPROVED.value,
                 "total_approved_amount": str(claim.total_approved_amount),
             }
@@ -683,7 +697,9 @@ class ExpenseClaimMixin:
                 new_values=audit_new_values,
             )
             try:
-                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                from app.services.finance.automation.event_dispatcher import (
+                    fire_workflow_event,
+                )
 
                 fire_workflow_event(
                     db=self.db,
@@ -727,7 +743,9 @@ class ExpenseClaimMixin:
 
     def _notify_claim_approved(self, claim: ExpenseClaim, org_id: UUID, approver_id: UUID) -> None:
         from app.models.people.hr.employee import Employee
-        from app.services.expense.expense_notifications import ExpenseNotificationService
+        from app.services.expense.expense_notifications import (
+            ExpenseNotificationService,
+        )
         from app.services.notification import NotificationService
 
         approver = self.db.get(Employee, approver_id)
@@ -764,7 +782,9 @@ class ExpenseClaimMixin:
         if claim.total_approved_amount == Decimal("0"):
             return False
         try:
-            from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
+            from app.services.expense.expense_posting_adapter import (
+                ExpensePostingAdapter,
+            )
 
             user_id = posted_by_user_id or claim.created_by_id or UUID("00000000-0000-0000-0000-000000000000")
             result = ExpensePostingAdapter.post_expense_claim(
@@ -907,7 +927,9 @@ class ExpenseClaimMixin:
                 },
             )
             try:
-                from app.services.finance.automation.event_dispatcher import fire_workflow_event
+                from app.services.finance.automation.event_dispatcher import (
+                    fire_workflow_event,
+                )
 
                 fire_workflow_event(
                     db=self.db,
@@ -947,7 +969,9 @@ class ExpenseClaimMixin:
             raise
 
     def _notify_claim_rejected(self, claim: ExpenseClaim, org_id: UUID, approver, reason: str) -> None:
-        from app.services.expense.expense_notifications import ExpenseNotificationService
+        from app.services.expense.expense_notifications import (
+            ExpenseNotificationService,
+        )
         from app.services.notification import NotificationService
 
         approver_name = approver.full_name if approver else None
@@ -1034,7 +1058,9 @@ class ExpenseClaimMixin:
             claim.paid_on = payment_date or date.today()
             claim.payment_reference = payment_reference
             if send_notification and claim.employee and claim.employee.work_email:
-                from app.services.expense.expense_notifications import ExpenseNotificationService
+                from app.services.expense.expense_notifications import (
+                    ExpenseNotificationService,
+                )
 
                 ExpenseNotificationService(self.db).notify_claim_paid(
                     claim,

@@ -35,6 +35,9 @@ from app.models.finance.banking.reconciliation_match_rule import (
     ReconciliationMatchRule,
     SourceDocType,
 )
+from app.models.finance.banking.reconciliation_policy import (
+    ReconciliationPolicyProfile,
+)
 from app.models.finance.banking.transaction_rule import (
     RuleAction,
     RuleType,
@@ -66,6 +69,7 @@ __all__ = [
     # Reconciliation Match Rules
     "ReconciliationMatchRule",
     "ReconciliationMatchLog",
+    "ReconciliationPolicyProfile",
     "SourceDocType",
     "MatchOperator",
 ]

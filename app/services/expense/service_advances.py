@@ -10,10 +10,14 @@ from sqlalchemy import func, select
 
 from app.models.expense import CashAdvance, CashAdvanceStatus
 from app.services.common import PaginatedResult, PaginationParams
-from app.services.expense.service_common import CashAdvanceNotFoundError, ExpenseServiceError
+from app.services.expense.service_common import (
+    CashAdvanceNotFoundError,
+    ExpenseServiceBase,
+    ExpenseServiceError,
+)
 
 
-class ExpenseAdvanceMixin:
+class ExpenseAdvanceMixin(ExpenseServiceBase):
     def list_advances(
         self,
         org_id: UUID,

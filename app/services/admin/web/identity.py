@@ -94,7 +94,9 @@ class AdminIdentityMixin:
             ).all()
             for person_id, last_seen in last_sessions:
                 if last_seen:
-                    last_active_map[person_id] = _format_relative_time(last_seen)
+                    formatted_last_seen = _format_relative_time(last_seen)
+                    if formatted_last_seen is not None:
+                        last_active_map[person_id] = formatted_last_seen
 
         users = []
         for person in persons:

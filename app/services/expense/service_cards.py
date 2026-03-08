@@ -13,10 +13,11 @@ from app.services.common import PaginatedResult, PaginationParams
 from app.services.expense.service_common import (
     CardTransactionNotFoundError,
     CorporateCardNotFoundError,
+    ExpenseServiceBase,
 )
 
 
-class ExpenseCardMixin:
+class ExpenseCardMixin(ExpenseServiceBase):
     def list_cards(
         self,
         org_id: UUID,

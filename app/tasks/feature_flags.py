@@ -1,6 +1,7 @@
 """Feature Flag Background Tasks."""
 
 import logging
+from typing import Any
 
 from celery import shared_task
 
@@ -18,7 +19,7 @@ def archive_expired_feature_flags() -> dict:
     """
     logger.info("Checking for expired feature flags")
 
-    results = {"archived": 0, "errors": []}
+    results: dict[str, Any] = {"archived": 0, "errors": []}
 
     with SessionLocal() as db:
         from app.services.feature_flag_service import FeatureFlagService

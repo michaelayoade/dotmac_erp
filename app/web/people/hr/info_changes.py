@@ -61,10 +61,10 @@ def info_change_requests(
         limit=limit + 1,
         offset=offset,
     )
-    has_more = len(requests_list) > limit
     requests_list = requests_list[:limit]
     # Compute total from count query
-    from sqlalchemy import func, select as sa_select
+    from sqlalchemy import func
+    from sqlalchemy import select as sa_select
 
     from app.models.people.hr.info_change_request import EmployeeInfoChangeRequest
 

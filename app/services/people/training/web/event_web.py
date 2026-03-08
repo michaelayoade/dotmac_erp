@@ -460,9 +460,10 @@ class EventWebService:
         """Invite selected employees to a training event."""
         form_data = await request.form()
         employee_ids = [
-            parse_uuid(value)
+            employee_id
             for value in form_data.getlist("employee_ids")
-            if parse_uuid(value)
+            if isinstance(value, str)
+            and (employee_id := parse_uuid(value)) is not None
         ]
         org_id = coerce_uuid(auth.organization_id)
         svc = TrainingService(db)

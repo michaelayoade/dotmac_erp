@@ -1,15 +1,16 @@
 """Public expense service facade assembled from focused mixin modules."""
 
-from app.services.audit_dispatcher import fire_audit_event
 from app.services.expense.service_advances import ExpenseAdvanceMixin
 from app.services.expense.service_cards import ExpenseCardMixin
 from app.services.expense.service_categories import ExpenseCategoryMixin
 from app.services.expense.service_claims import ExpenseClaimMixin
 from app.services.expense.service_common import (
-    ApproverAuthorityError,
     CLAIM_STATUS_TRANSITIONS,
-    CashAdvanceNotFoundError,
+    REPORTABLE_EXPENSE_CLAIM_STATUSES,
+    STALE_ACTION_MINUTES,
+    ApproverAuthorityError,
     CardTransactionNotFoundError,
+    CashAdvanceNotFoundError,
     CorporateCardNotFoundError,
     ExpenseCategoryNotFoundError,
     ExpenseClaimNotFoundError,
@@ -17,8 +18,6 @@ from app.services.expense.service_common import (
     ExpenseLimitBlockedError,
     ExpenseServiceBase,
     ExpenseServiceError,
-    REPORTABLE_EXPENSE_CLAIM_STATUSES,
-    STALE_ACTION_MINUTES,
     SubmitClaimResult,
 )
 from app.services.expense.service_reports import ExpenseReportingMixin

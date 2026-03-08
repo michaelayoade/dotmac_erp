@@ -31,10 +31,10 @@ from app.db import Base
 from app.models.mixins import AuditMixin, ERPNextSyncMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
-    from app.models.finance.core_org.project import Project
     from app.models.expense.expense_claim_approval_step import (
         ExpenseClaimApprovalStep,
     )
+    from app.models.finance.core_org.project import Project
     from app.models.people.hr.employee import Employee
     from app.models.pm.task import Task
     from app.models.support.ticket import Ticket

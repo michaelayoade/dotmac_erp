@@ -42,7 +42,6 @@ from app.tasks.data_health import (
     run_data_health_check,
 )
 from app.tasks.email import send_email_async
-from app.tasks.feature_flags import archive_expired_feature_flags
 from app.tasks.expense import (
     calculate_expense_analytics,
     poll_stuck_expense_transfers,
@@ -52,6 +51,7 @@ from app.tasks.expense import (
     refresh_period_usage_cache,
     settle_cash_advance_with_claim,
 )
+from app.tasks.feature_flags import archive_expired_feature_flags
 from app.tasks.finance import (
     refresh_analysis_cubes,
     refresh_stale_balances,

@@ -7,8 +7,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditActorType, AuditEvent
-from app.models.auth import SessionStatus
 from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus
 from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person

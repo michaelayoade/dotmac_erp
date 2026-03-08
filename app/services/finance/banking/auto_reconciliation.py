@@ -70,6 +70,14 @@ from app.models.finance.payments.payment_intent import (
     PaymentIntent,
     PaymentIntentStatus,
 )
+from app.services.finance.banking.programmatic_reconciliation import (
+    ProgrammaticReconciliationEngine,
+    build_extra_gl_account_ids,
+)
+from app.services.finance.banking.reconciliation_policy_service import (
+    reconciliation_policy_service,
+)
+from app.services.finance.banking.reconciliation_runtime import ReconciliationRunContext
 
 _T = TypeVar("_T")
 
@@ -162,6 +170,9 @@ class AutoReconciliationService:
     line via ``correlation_id`` before delegating the match to
     ``BankReconciliationService``.  Strategies 6–7 create their own journals.
     """
+
+    logger = logger
+    SYSTEM_USER_ID = SYSTEM_USER_ID
 
     # ── Configuration ──────────────────────────────────────────────
 
@@ -256,6 +267,11 @@ class AutoReconciliationService:
 
         # Load runtime configuration from DomainSettings
         config = self._load_config(db, organization_id)
+        policy = reconciliation_policy_service.resolve(
+            db,
+            organization_id,
+            legacy_config=config,
+        )
 
         # 1. Load statement + bank account
         statement = db.get(BankStatement, statement_id)
@@ -271,16 +287,7 @@ class AutoReconciliationService:
         # Build fallback GL accounts: all OTHER bank accounts' GL IDs.
         # This handles payments whose GL journals still reference a
         # previous bank account's GL after a bank_account_id reassignment.
-        all_bank_gl_ids = set(
-            db.scalars(
-                select(BankAccount.gl_account_id).where(
-                    BankAccount.organization_id == organization_id,
-                    BankAccount.gl_account_id.isnot(None),
-                    BankAccount.gl_account_id != bank_account.gl_account_id,
-                )
-            ).all()
-        )
-        extra_gl: set[UUID] | None = all_bank_gl_ids or None
+        extra_gl = build_extra_gl_account_ids(db, organization_id, bank_account)
 
         # 2. Load unmatched lines
         unmatched_lines = list(
@@ -305,186 +312,20 @@ class AutoReconciliationService:
         except Exception:
             logger.warning("Failed to seed system match rules", exc_info=True)
 
-        # 3. Load all eligible Splynx payments once (shared by passes 2 & 3)
-        splynx_payments = self._load_splynx_payments(
-            db, organization_id, statement, config=config
-        )
-
-        # 4. Pass 1: PaymentIntent matching
         matched_line_ids: set[UUID] = set()
-        matched_payment_ids: set[UUID] = set()
-        if config.pass_payment_intents_enabled:
-            self._match_payment_intents(
-                db,
-                organization_id,
-                statement,
-                bank_account,
-                unmatched_lines,
-                matched_line_ids,
-                result,
-                extra_gl_account_ids=extra_gl,
-                config=config,
-            )
-        else:
-            logger.debug("Pass 1 (PaymentIntent) disabled by config")
-
-        # 5. Pass 2: Splynx CustomerPayment by reference
-        still_unmatched = [
-            line for line in unmatched_lines if line.line_id not in matched_line_ids
-        ]
-        if config.pass_splynx_by_ref_enabled:
-            if still_unmatched and splynx_payments:
-                self._match_splynx_payments(
-                    db,
-                    organization_id,
-                    bank_account,
-                    splynx_payments,
-                    still_unmatched,
-                    matched_line_ids,
-                    matched_payment_ids,
-                    result,
-                    extra_gl_account_ids=extra_gl,
-                    config=config,
-                )
-        else:
-            logger.debug("Pass 2 (Splynx by ref) disabled by config")
-
-        # 6. Pass 3: Date + amount unique matching (fallback)
-        still_unmatched = [
-            line for line in unmatched_lines if line.line_id not in matched_line_ids
-        ]
-        remaining_payments = [
-            p for p in splynx_payments if p.payment_id not in matched_payment_ids
-        ]
-        if config.pass_splynx_date_amount_enabled:
-            if still_unmatched and remaining_payments:
-                self._match_by_date_amount(
-                    db,
-                    organization_id,
-                    bank_account,
-                    remaining_payments,
-                    still_unmatched,
-                    matched_line_ids,
-                    matched_payment_ids,
-                    result,
-                    extra_gl_account_ids=extra_gl,
-                )
-        else:
-            logger.debug("Pass 3 (Splynx date+amount) disabled by config")
-
-        # 7. Pass 4: AP supplier payment matching
-        if config.pass_ap_payments_enabled:
-            ap_payments = self._load_ap_payments(
-                db, organization_id, statement, config=config
-            )
-            matched_ap_ids: set[UUID] = set()
-            still_unmatched = [
-                line for line in unmatched_lines if line.line_id not in matched_line_ids
-            ]
-            if still_unmatched and ap_payments:
-                self._match_ap_payments(
-                    db,
-                    organization_id,
-                    bank_account,
-                    ap_payments,
-                    still_unmatched,
-                    matched_line_ids,
-                    matched_ap_ids,
-                    result,
-                    extra_gl_account_ids=extra_gl,
-                    config=config,
-                )
-        else:
-            logger.debug("Pass 4 (AP payments) disabled by config")
-
-        # 8. Pass 5: Non-Splynx AR customer payment matching
-        if config.pass_ar_payments_enabled:
-            ar_payments = self._load_non_splynx_ar_payments(
-                db, organization_id, statement, config=config
-            )
-            matched_ar_ids: set[UUID] = set()
-            still_unmatched = [
-                line for line in unmatched_lines if line.line_id not in matched_line_ids
-            ]
-            if still_unmatched and ar_payments:
-                self._match_ar_payments(
-                    db,
-                    organization_id,
-                    bank_account,
-                    ar_payments,
-                    still_unmatched,
-                    matched_line_ids,
-                    matched_ar_ids,
-                    result,
-                    extra_gl_account_ids=extra_gl,
-                    config=config,
-                )
-        else:
-            logger.debug("Pass 5 (AR payments) disabled by config")
-
-        # 9. Pass 6: Bank fee matching (creates journals for fee lines)
-        if config.pass_bank_fees_enabled:
-            still_unmatched = [
-                line for line in unmatched_lines if line.line_id not in matched_line_ids
-            ]
-            if still_unmatched:
-                self._match_bank_fees(
-                    db,
-                    organization_id,
-                    bank_account,
-                    still_unmatched,
-                    matched_line_ids,
-                    result,
-                    config=config,
-                )
-        else:
-            logger.debug("Pass 6 (bank fees) disabled by config")
-
-        # 10. Pass 7: Settlement matching (cross-bank transfer)
-        if config.pass_settlements_enabled:
-            still_unmatched = [
-                line for line in unmatched_lines if line.line_id not in matched_line_ids
-            ]
-            if still_unmatched:
-                self._match_settlements(
-                    db,
-                    organization_id,
-                    bank_account,
-                    still_unmatched,
-                    matched_line_ids,
-                    result,
-                    config=config,
-                )
-        else:
-            logger.debug("Pass 7 (settlements) disabled by config")
-
-        # 11. Pass 8: Custom rules via ReconciliationEngine
-        # After all system passes, run user-defined custom rules against
-        # remaining unmatched lines.  New integrations = new DB rules.
-        still_unmatched = [
-            line for line in unmatched_lines if line.line_id not in matched_line_ids
-        ]
-        if still_unmatched:
-            try:
-                from app.services.finance.banking.reconciliation_engine import (
-                    ReconciliationEngine,
-                )
-
-                engine = ReconciliationEngine(db)
-                engine_result = engine.run_custom_rules(
-                    organization_id,
-                    statement,
-                    bank_account,
-                    unmatched_lines,
-                    matched_line_ids,
-                    amount_tolerance=config.amount_tolerance,
-                    date_buffer_days=config.date_buffer_days,
-                    extra_gl_account_ids=extra_gl,
-                )
-                result.matched += engine_result.matched
-                result.errors.extend(engine_result.errors)
-            except Exception:
-                logger.warning("Pass 8 (custom rules engine) failed", exc_info=True)
+        engine_ctx = ReconciliationRunContext(
+            db=db,
+            organization_id=organization_id,
+            statement=statement,
+            bank_account=bank_account,
+            unmatched_lines=unmatched_lines,
+            matched_line_ids=matched_line_ids,
+            extra_gl_account_ids=extra_gl,
+            config=config,
+            policy=policy,
+            result=result,
+        )
+        ProgrammaticReconciliationEngine().run(self, engine_ctx)
 
         # Recalculate skipped (lines not matched by any pass)
         result.skipped = len(unmatched_lines) - result.matched - len(result.errors)

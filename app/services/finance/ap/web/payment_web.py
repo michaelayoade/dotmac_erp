@@ -785,7 +785,7 @@ class PaymentWebService:
             "currency_code": payment.currency_code,
             "amount": payment.amount,
             "reference": payment.reference,
-            "description": payment.description,
+            "description": getattr(payment, "description", None),
             "bank_account_id": payment.bank_account_id,
         }
         return templates.TemplateResponse(

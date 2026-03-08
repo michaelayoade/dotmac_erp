@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditActorType
@@ -18,7 +18,6 @@ from app.models.domain_settings import DomainSetting, SettingDomain, SettingValu
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
 from app.services.common import coerce_uuid
-from app.services.formatters import format_datetime as _format_datetime
 from app.templates import templates
 
 if TYPE_CHECKING:
@@ -312,7 +311,7 @@ class AdminWebCommonMixin:
         self,
         request: Request,
         db: Session,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
     ) -> dict:
         from app.web.deps import resolve_brand_context
 
@@ -350,8 +349,8 @@ class AdminWebCommonMixin:
     def _require_admin_web_auth(
         self,
         request: Request,
-        auth: "WebAuthContext",
-    ) -> "WebAuthContext" | RedirectResponse:
+        auth: WebAuthContext,
+    ) -> WebAuthContext | RedirectResponse:
         if not auth.is_authenticated:
             return self._admin_login_redirect(self._request_path_with_query(request))
         if "admin" not in auth.roles:
@@ -363,7 +362,7 @@ class AdminWebCommonMixin:
         request: Request,
         db: Session,
         template_name: str,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         title: str,
         page_title: str,
         active_page: str,

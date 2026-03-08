@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import logging
-from importlib import import_module
 from decimal import Decimal
+from importlib import import_module
+from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi import Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from sqlalchemy import and_, exists, false, func, or_, select
 from sqlalchemy.orm import joinedload
 
@@ -29,11 +35,13 @@ from app.services.expense.expense_service import (
     ExpenseServiceError,
 )
 from app.services.expense.limit_service import ExpenseLimitServiceError
+from app.services.expense.web_common import ExpenseWebCommonMixin
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.pm.comment import comment_service
 from app.services.recent_activity import get_recent_activity_for_record
 from app.services.settings_spec import resolve_value
 from app.services.storage import get_storage
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +49,7 @@ def _web_facade():
     return import_module("app.services.expense.web")
 
 
-class ExpenseClaimsWebMixin:
+class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
     @staticmethod
     def claims_list_response(
         request: Request,
@@ -205,7 +213,12 @@ class ExpenseClaimsWebMixin:
                 ),
             }
         )
-        return _web_facade().templates.TemplateResponse(request, "expense/claims_list.html", context)
+        return cast(
+            HTMLResponse,
+            _web_facade().templates.TemplateResponse(
+                request, "expense/claims_list.html", context
+            ),
+        )
 
     @staticmethod
     def claim_detail_response(request: Request, auth, db, claim_id: str):
@@ -260,7 +273,10 @@ class ExpenseClaimsWebMixin:
         transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
         has_active_payment = False
         if claim.status == ExpenseClaimStatus.APPROVED:
-            from app.models.finance.payments.payment_intent import PaymentIntent, PaymentIntentStatus
+            from app.models.finance.payments.payment_intent import (
+                PaymentIntent,
+                PaymentIntentStatus,
+            )
 
             active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
             has_active_payment = (
@@ -543,7 +559,7 @@ class ExpenseClaimsWebMixin:
         ).first()
         approver_id = approver.employee_id if approver else None
 
-        corrections = None
+        corrections: list[dict[str, Any]] | None = None
         approval_notes = None
         if form_data:
             approval_notes = (form_data.get("approval_notes") or "").strip() or None
@@ -554,7 +570,7 @@ class ExpenseClaimsWebMixin:
                     item_id = str(raw_item_id).strip()
                     if not item_id:
                         continue
-                    correction = {"item_id": item_id}
+                    correction: dict[str, Any] = {"item_id": item_id}
                     raw_amount = (form_data.get(f"approved_amount_{item_id}") or "").strip()
                     correction["approved_amount"] = Decimal(raw_amount) if raw_amount else Decimal("0")
                     category_id = (form_data.get(f"category_id_{item_id}") or "").strip()

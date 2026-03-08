@@ -17,10 +17,13 @@ from app.models.expense import (
     ExpenseClaimItem,
     ExpenseClaimStatus,
 )
-from app.services.expense.service_common import REPORTABLE_EXPENSE_CLAIM_STATUSES
+from app.services.expense.service_common import (
+    REPORTABLE_EXPENSE_CLAIM_STATUSES,
+    ExpenseServiceBase,
+)
 
 
-class ExpenseReportingMixin:
+class ExpenseReportingMixin(ExpenseServiceBase):
     def get_expense_stats(self, org_id: UUID) -> dict:
         today = date.today()
         month_start = today.replace(day=1)

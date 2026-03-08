@@ -605,12 +605,16 @@ class AttendanceWebService:
             )
 
         try:
+            parsed_start_time = AttendanceWebService._parse_time(start_time)
+            parsed_end_time = AttendanceWebService._parse_time(end_time)
+            if parsed_start_time is None or parsed_end_time is None:
+                raise ValueError("Shift start and end time are required.")
             svc.create_shift_type(
                 org_id,
                 shift_code=shift_code,
                 shift_name=shift_name,
-                start_time=AttendanceWebService._parse_time(start_time),
-                end_time=AttendanceWebService._parse_time(end_time),
+                start_time=parsed_start_time,
+                end_time=parsed_end_time,
                 working_hours=AttendanceWebService._parse_decimal(working_hours),
                 description=description or None,
                 late_entry_grace_period=AttendanceWebService._parse_int(

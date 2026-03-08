@@ -226,7 +226,7 @@ class HelpAdminWebService:
         feedback_rows = self.db.execute(feedback_stats_stmt).all()
         feedback_counts = {"helpful": 0, "not_helpful": 0}
         for row in feedback_rows:
-            feedback_counts[row.rating] = row.count
+            feedback_counts[row.rating] = int(row._mapping["count"])
 
         # Total completions
         completion_count = self.db.scalar(

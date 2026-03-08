@@ -10,6 +10,7 @@ Create Date: 2026-03-08
 """
 
 from alembic import op
+from sqlalchemy import inspect
 
 revision = "dcbb2ab19c94"
 down_revision = "6561f90419c7"
@@ -18,7 +19,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_primary_key("pk_people", "people", ["id"])
+    bind = op.get_bind()
+    insp = inspect(bind)
+    pk = insp.get_pk_constraint("people")
+    if not pk or not pk.get("constrained_columns"):
+        op.create_primary_key("pk_people", "people", ["id"])
 
 
 def downgrade() -> None:

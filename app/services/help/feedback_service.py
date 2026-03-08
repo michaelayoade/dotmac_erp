@@ -7,6 +7,7 @@ import logging
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.models.help.models import HelpArticleFeedback
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 class HelpFeedbackService:
     """Service for managing help article feedback."""
 
-    def __init__(self, db):
+    def __init__(self, db: Session):
         self.db = db
 
     def get_user_feedback(
