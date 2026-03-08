@@ -760,7 +760,9 @@ class TestListBatches:
 
         mock_db.scalars.return_value.all.return_value = batches
 
-        result = PaymentBatchService.list(mock_db, organization_id=str(org_id), limit=10, offset=20)
+        result = PaymentBatchService.list(
+            mock_db, organization_id=str(org_id), limit=10, offset=20
+        )
 
         assert len(result) == 1
         mock_db.scalars.assert_called_once()

@@ -1327,7 +1327,9 @@ class TestListPOs:
         pos = [MockPurchaseOrder()]
         db.scalars.return_value.all.return_value = pos
 
-        result = PurchaseOrderService.list(db, organization_id=str(org_id), limit=5, offset=10)
+        result = PurchaseOrderService.list(
+            db, organization_id=str(org_id), limit=5, offset=10
+        )
 
         assert len(result) == 1
         # Verify offset and limit were called
