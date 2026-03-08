@@ -142,13 +142,13 @@ def main():
 
                 # If browser/context crashed, relaunch
                 if "has been closed" in error_msg or "crashed" in error_msg:
-                    print(f"  Browser crashed, relaunching...")
+                    print("  Browser crashed, relaunching...")
                     try:
                         browser.close()
                     except Exception:
                         pass
                     browser, page = launch_browser(p)
-                    print(f"  Re-logged in OK")
+                    print("  Re-logged in OK")
 
             pct = ((i + 1) / len(routes)) * 100
             print(f"[{i+1}/{len(routes)}] ({pct:.0f}%) {route} -> {status}")

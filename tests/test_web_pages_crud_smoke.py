@@ -80,10 +80,10 @@ def _build_web_app() -> FastAPI:
     app = FastAPI()
 
     # Root / Home / Auth / Profile / Help
-    from app.web_home import router as web_home_router
     from app.web.auth import router as auth_web_router
-    from app.web.profile import router as profile_web_router
     from app.web.help import router as help_web_router
+    from app.web.profile import router as profile_web_router
+    from app.web_home import router as web_home_router
 
     app.include_router(web_home_router)
     app.include_router(auth_web_router)
@@ -92,8 +92,8 @@ def _build_web_app() -> FastAPI:
 
     # Admin
     from app.web.admin import router as admin_web_router
-    from app.web.admin_sync import router as admin_sync_router
     from app.web.admin_crm_sync import router as admin_crm_sync_router
+    from app.web.admin_sync import router as admin_sync_router
 
     app.include_router(admin_web_router)
     app.include_router(admin_sync_router)
@@ -102,8 +102,14 @@ def _build_web_app() -> FastAPI:
     # Finance (main module + standalone routers)
     from app.web.finance import (
         automation_router as automation_web_router,
+    )
+    from app.web.finance import (
         expense_router as expense_web_router,
+    )
+    from app.web.finance import (
         router as finance_web_router,
+    )
+    from app.web.finance import (
         settings_router as finance_settings_web_router,
     )
 
@@ -113,8 +119,8 @@ def _build_web_app() -> FastAPI:
     app.include_router(automation_web_router)
 
     # People / HR
-    from app.web.people import router as people_web_router
     from app.web.payroll_alias import router as payroll_alias_web_router
+    from app.web.people import router as people_web_router
 
     app.include_router(people_web_router)
     app.include_router(payroll_alias_web_router)
@@ -127,15 +133,15 @@ def _build_web_app() -> FastAPI:
     app.include_router(workflow_tasks_web_router)
 
     # Standalone modules
-    from app.web.fixed_assets import router as fixed_assets_web_router
-    from app.web.inventory import router as inventory_web_router
-    from app.web.fleet import router as fleet_web_router
-    from app.web.procurement import router as procurement_web_router
-    from app.web.support import router as support_web_router
-    from app.web.projects import router as projects_web_router
-    from app.web.settings import router as module_settings_web_router
     from app.web.coach import router as coach_web_router
+    from app.web.fixed_assets import router as fixed_assets_web_router
+    from app.web.fleet import router as fleet_web_router
+    from app.web.inventory import router as inventory_web_router
+    from app.web.procurement import router as procurement_web_router
+    from app.web.projects import router as projects_web_router
     from app.web.public_sector import router as public_sector_web_router
+    from app.web.settings import router as module_settings_web_router
+    from app.web.support import router as support_web_router
 
     app.include_router(fixed_assets_web_router)
     app.include_router(inventory_web_router)

@@ -15,8 +15,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from PIL import Image
 import numpy as np
+from PIL import Image
 
 SCREENSHOTS_DIR = Path("/home/dotmac/projects/dotmac_erp/docs/screenshots")
 VIEWPORT_WIDTH = 1440

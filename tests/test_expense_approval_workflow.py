@@ -1,6 +1,6 @@
+import uuid
 from datetime import date
 from decimal import Decimal
-import uuid
 
 import pytest
 from starlette.requests import Request
@@ -19,7 +19,11 @@ from app.models.expense import (
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person
-from app.services.expense import ExpenseClaimsWebService, ExpenseService, ExpenseServiceError
+from app.services.expense import (
+    ExpenseClaimsWebService,
+    ExpenseService,
+    ExpenseServiceError,
+)
 from app.web.deps import WebAuthContext
 
 

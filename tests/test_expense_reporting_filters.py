@@ -1,8 +1,13 @@
+import uuid
 from datetime import date
 from decimal import Decimal
-import uuid
 
-from app.models.expense import ExpenseCategory, ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
+from app.models.expense import (
+    ExpenseCategory,
+    ExpenseClaim,
+    ExpenseClaimItem,
+    ExpenseClaimStatus,
+)
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person

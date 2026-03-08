@@ -9,8 +9,9 @@ Revises: 6561f90419c7
 Create Date: 2026-03-08
 """
 
-from alembic import op
 from sqlalchemy import inspect
+
+from alembic import op
 
 revision = "dcbb2ab19c94"
 down_revision = "6561f90419c7"

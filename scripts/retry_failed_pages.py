@@ -1,12 +1,16 @@
 """Retry timed-out pages with longer timeout and capture error details."""
+import builtins
+import re
 import sys
 import time
-import re
 from pathlib import Path
 
-import builtins
 _print = builtins.print
-def print(*args, **kw): kw["flush"]=True; _print(*args, **kw)
+
+
+def print(*args, **kw):
+    kw["flush"] = True
+    _print(*args, **kw)
 
 from playwright.sync_api import sync_playwright
 
@@ -126,7 +130,7 @@ def main():
                 # Check for server errors in page content
                 body_text = page.evaluate("() => document.body?.innerText?.substring(0, 500) || ''")
                 if "Internal Server Error" in body_text or "500" in str(status_code):
-                    print(f"  SERVER ERROR detected")
+                    print("  SERVER ERROR detected")
                     # Capture the error page screenshot anyway
                     error_path = module_dir / f"{filename}_ERROR.png"
                     page.screenshot(path=str(error_path), full_page=True)
@@ -134,13 +138,13 @@ def main():
                     continue
 
                 if "/login" in current_url and route != "/login":
-                    print(f"  REDIRECTED TO LOGIN — session expired?")
+                    print("  REDIRECTED TO LOGIN — session expired?")
                     still_failing.append((route, "redirect_to_login", ""))
                     continue
 
                 page.screenshot(path=str(filepath), full_page=True)
                 success += 1
-                print(f"  OK — screenshot saved")
+                print("  OK — screenshot saved")
 
                 if js_errors:
                     print(f"  JS warnings/errors: {len(js_errors)}")
@@ -155,7 +159,7 @@ def main():
                 try:
                     error_path = module_dir / f"{filename}_ERROR.png"
                     page.screenshot(path=str(error_path), full_page=True)
-                    print(f"  Captured partial screenshot as _ERROR")
+                    print("  Captured partial screenshot as _ERROR")
 
                     # Check response status from network
                     body_text = page.evaluate("() => document.body?.innerText?.substring(0, 500) || ''")

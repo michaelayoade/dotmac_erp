@@ -11,11 +11,11 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    JSON,
     Date,
     Enum,
     ForeignKey,
     Index,
-    JSON,
     Numeric,
     String,
     Text,
