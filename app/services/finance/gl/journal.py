@@ -862,9 +862,7 @@ class JournalService(ListResponseMixin):
                 JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
             ).where(JournalEntry.organization_id == org_id)
         elif not is_mock_session(db):
-            raise HTTPException(
-                status_code=400, detail="organization_id is required"
-            )
+            raise HTTPException(status_code=400, detail="organization_id is required")
 
         return list(db.scalars(stmt.order_by(JournalEntryLine.line_number)).all())
 
@@ -900,11 +898,11 @@ class JournalService(ListResponseMixin):
         stmt = select(JournalEntry)
 
         if organization_id is not None:
-            stmt = stmt.where(JournalEntry.organization_id == coerce_uuid(organization_id))
-        elif not is_mock_session(db):
-            raise HTTPException(
-                status_code=400, detail="organization_id is required"
+            stmt = stmt.where(
+                JournalEntry.organization_id == coerce_uuid(organization_id)
             )
+        elif not is_mock_session(db):
+            raise HTTPException(status_code=400, detail="organization_id is required")
 
         if status:
             stmt = stmt.where(JournalEntry.status == status)
