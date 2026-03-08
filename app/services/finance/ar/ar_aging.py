@@ -472,7 +472,7 @@ class ARAgingService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str,
+        organization_id: str | None = None,
         customer_id: str | None = None,
         snapshot_date: date | None = None,
         aging_bucket: str | None = None,
@@ -495,9 +495,10 @@ class ARAgingService(ListResponseMixin):
             List of ARAgingSnapshot objects
         """
         stmt = select(ARAgingSnapshot)
-        stmt = stmt.where(
-            ARAgingSnapshot.organization_id == coerce_uuid(organization_id)
-        )
+        if organization_id:
+            stmt = stmt.where(
+                ARAgingSnapshot.organization_id == coerce_uuid(organization_id)
+            )
         if customer_id:
             stmt = stmt.where(ARAgingSnapshot.customer_id == coerce_uuid(customer_id))
         if snapshot_date:

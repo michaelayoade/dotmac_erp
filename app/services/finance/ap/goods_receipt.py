@@ -626,6 +626,8 @@ class GoodsReceiptService(ListResponseMixin):
     @staticmethod
     def _reverse_po_quantities(db: Session, receipt: GoodsReceipt) -> None:
         """Reverse PO line quantities for a rejected receipt."""
+        if not receipt.lines:
+            return
         for line in receipt.lines:
             po_line = db.scalars(
                 select(PurchaseOrderLine).where(
@@ -648,6 +650,8 @@ class GoodsReceiptService(ListResponseMixin):
     @staticmethod
     def _reverse_rejected_quantities(db: Session, receipt: GoodsReceipt) -> None:
         """Reverse only rejected quantities on PO lines for a partial receipt."""
+        if not receipt.lines:
+            return
         for line in receipt.lines:
             if line.quantity_rejected > 0:
                 po_line = db.scalars(

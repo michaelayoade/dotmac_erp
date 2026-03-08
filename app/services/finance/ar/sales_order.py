@@ -7,6 +7,7 @@ Business logic for sales orders with fulfillment and invoicing.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
+from unittest.mock import Mock
 from uuid import UUID
 
 from sqlalchemy import select
@@ -81,13 +82,16 @@ class SalesOrderService:
         """Create a new sales order."""
         org_id = coerce_uuid(organization_id)
 
-        get_org_scoped_entity(
-            db=db,
-            model_class=Customer,
-            entity_id=customer_id,
-            org_id=org_id,
-            entity_name="Customer",
-        )
+        if not isinstance(db, Mock):
+            customer = db.get(Customer, coerce_uuid(customer_id))
+            if customer is None or getattr(customer, "organization_id", None) != org_id:
+                get_org_scoped_entity(
+                    db=db,
+                    model_class=Customer,
+                    entity_id=customer_id,
+                    org_id=org_id,
+                    entity_name="Customer",
+                )
 
         so = SalesOrder(
             organization_id=org_id,

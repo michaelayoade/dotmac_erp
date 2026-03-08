@@ -493,8 +493,9 @@ class FinanceReminderService:
     ) -> int:
         """Send bank reconciliation reminder to recipients."""
         if account.last_reconciled_date:
-            days_since = (date.today() - account.last_reconciled_date.date()).days
-            last_recon_str = account.last_reconciled_date.strftime("%Y-%m-%d")
+            last_reconciled_date = account.last_reconciled_date
+            days_since = (date.today() - last_reconciled_date).days
+            last_recon_str = last_reconciled_date.strftime("%Y-%m-%d")
         else:
             days_since = None
             last_recon_str = "never"
