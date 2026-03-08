@@ -136,7 +136,7 @@
                         </td>
                         {% endif %}
                         <td class="text-right font-mono tabular-nums text-sm font-medium whitespace-nowrap {{ 'text-emerald-700 dark:text-emerald-400' if txn.transaction_type == 'credit' else 'text-rose-700 dark:text-rose-400' }}">
-                            {{ "+" if txn.transaction_type == 'credit' else "-" }}{{ txn.amount }}
+                            {% if txn.transaction_type == 'debit' %}<span class="text-rose-700 dark:text-rose-400">({{ txn.amount }})</span>{% else %}{{ txn.amount }}{% endif %}
                         </td>
 
                         {# ── Category column ── #}

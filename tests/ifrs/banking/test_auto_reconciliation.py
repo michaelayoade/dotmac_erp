@@ -44,6 +44,24 @@ def _mock_load_config() -> object:
         yield
 
 
+@pytest.fixture(autouse=True)
+def _mock_policy_resolve() -> object:
+    """Patch reconciliation_policy_service.resolve to avoid DB hits."""
+    from app.services.finance.banking.reconciliation_policy import (
+        build_policy_from_config,
+    )
+
+    def _resolve(self, db, organization_id, *, legacy_config):
+        return build_policy_from_config(legacy_config)
+
+    with patch(
+        "app.services.finance.banking.reconciliation_policy_service."
+        "ReconciliationPolicyService.resolve",
+        _resolve,
+    ):
+        yield
+
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
@@ -183,6 +201,7 @@ def mock_db() -> MagicMock:
     session = MagicMock()
     session.flush = MagicMock()
     session.commit = MagicMock()
+    session.scalar = MagicMock(return_value=None)
     return session
 
 

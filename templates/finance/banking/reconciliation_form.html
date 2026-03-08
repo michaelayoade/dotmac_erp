@@ -36,9 +36,7 @@
             <div>
                 <label for="bank_account_id" class="form-label">Bank Account <span class="text-rose-500">*</span></label>
                 <select id="bank_account_id" name="bank_account_id" required
-                        hx-get="/api/v1/banking/accounts/{value}/balance"
-                        hx-trigger="change"
-                        hx-target="#account-info"
+                        @change="if($el.value) { htmx.ajax('GET', '/api/v1/banking/accounts/' + $el.value + '/balance', {target: '#account-info'}) }"
                         class="form-select">
                     <option value="">Select a bank account</option>
                     {% for acc in accounts %}

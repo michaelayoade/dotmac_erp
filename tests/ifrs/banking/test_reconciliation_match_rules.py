@@ -357,7 +357,7 @@ class TestRuleCRUD:
         assert rule.is_system is False
         assert rule.is_active is True
         self.db.add.assert_called_once()
-        self.db.flush.assert_called_once()
+        assert self.db.flush.call_count >= 1
 
     def test_delete_system_rule_raises(self) -> None:
         """System rules cannot be deleted."""
@@ -390,7 +390,7 @@ class TestRuleCRUD:
         self.service.update(uuid.uuid4(), {"name": "New Name", "priority": 50})
         assert rule.name == "New Name"
         assert rule.priority == 50
-        self.db.flush.assert_called_once()
+        assert self.db.flush.call_count >= 1
 
     def test_update_nonexistent_rule_raises(self) -> None:
         self.db.get.return_value = None

@@ -53,7 +53,8 @@ def auto_match_unreconciled_statements() -> dict[str, Any]:
     }
 
     with SessionLocal() as db:
-        # Find all statements that still have unmatched lines
+        # NOTE: Intentionally queries across all organizations — this is a global
+        # periodic task that processes every tenant's unmatched statements.
         statements = list(
             db.scalars(
                 select(BankStatement).where(
@@ -66,37 +67,38 @@ def auto_match_unreconciled_statements() -> dict[str, Any]:
 
         for statement in statements:
             try:
-                match_result = auto_svc.auto_match_statement(
-                    db,
-                    statement.organization_id,
-                    statement.statement_id,
-                )
-                if match_result.matched > 0:
-                    results["total_matched"] += match_result.matched
-                    logger.info(
-                        "Auto-matched %d lines for statement %s (org %s)",
-                        match_result.matched,
-                        statement.statement_id,
+                with db.begin_nested():  # savepoint
+                    match_result = auto_svc.auto_match_statement(
+                        db,
                         statement.organization_id,
+                        statement.statement_id,
                     )
-                results["statements_processed"] += 1
-
-                if match_result.errors:
-                    for err in match_result.errors:
-                        results["errors"].append(
-                            f"Statement {statement.statement_id}: {err}"
+                    if match_result.matched > 0:
+                        results["total_matched"] += match_result.matched
+                        logger.info(
+                            "Auto-matched %d lines for statement %s (org %s)",
+                            match_result.matched,
+                            statement.statement_id,
+                            statement.organization_id,
                         )
 
-                # Commit after each statement so matches are durable
-                # and a subsequent failure doesn't roll back prior work.
-                db.commit()
+                    if match_result.errors:
+                        for err in match_result.errors:
+                            results["errors"].append(
+                                f"Statement {statement.statement_id}: {err}"
+                            )
+                # Savepoint auto-commits on successful exit
+                results["statements_processed"] += 1
 
             except Exception as e:
-                db.rollback()
+                # Savepoint auto-rolls back on exception
                 logger.exception(
                     "Failed to auto-match statement %s", statement.statement_id
                 )
                 results["errors"].append(f"Statement {statement.statement_id}: {e}")
+
+        # Single commit at the end for all successful savepoints
+        db.commit()
 
     logger.info(
         "Periodic auto-match complete: %d statements, %d lines matched",

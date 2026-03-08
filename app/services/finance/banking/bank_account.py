@@ -125,8 +125,6 @@ class BankAccountService:
 
         db.add(bank_account)
         db.flush()
-        db.commit()
-        db.refresh(bank_account)
 
         return bank_account
 
@@ -274,8 +272,6 @@ class BankAccountService:
             bank_account.is_primary = False
 
         db.flush()
-        db.commit()
-        db.refresh(bank_account)
         return bank_account
 
     def update_status(
@@ -297,8 +293,6 @@ class BankAccountService:
         bank_account.status = status
         bank_account.updated_by = updated_by
         db.flush()
-        db.commit()
-        db.refresh(bank_account)
 
         return bank_account
 
@@ -321,8 +315,6 @@ class BankAccountService:
         bank_account.last_reconciled_date = reconciled_date
         bank_account.last_reconciled_balance = reconciled_balance
         db.flush()
-        db.commit()
-        db.refresh(bank_account)
 
         return bank_account
 
@@ -374,8 +366,6 @@ class BankAccountService:
         bank_account.status = BankAccountStatus.closed
         bank_account.updated_by = updated_by
         db.flush()
-        db.commit()
-        db.refresh(bank_account)
 
         return bank_account
 
@@ -409,6 +399,7 @@ class BankAccountService:
             )
             .where(
                 and_(
+                    JournalEntry.organization_id == org_id,
                     JournalEntryLine.account_id == bank_account.gl_account_id,
                     JournalEntry.status == JournalStatus.POSTED,
                 )

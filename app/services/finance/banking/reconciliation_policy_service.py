@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
-from unittest.mock import Mock
 from uuid import UUID
 
 from sqlalchemy import select
@@ -45,8 +44,6 @@ class ReconciliationPolicyService:
         legacy_config: AutoMatchConfigLike,
     ) -> ReconciliationPolicy:
         legacy = build_policy_from_config(legacy_config)
-        if isinstance(db, Mock):
-            return self._with_legacy_compatibility(legacy)
 
         profile = db.scalar(
             select(ReconciliationPolicyProfile).where(

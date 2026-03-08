@@ -54,7 +54,7 @@
             </div>
             <div class="text-right">
                 <p class="text-2xl font-semibold font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
-                    {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
+                    {% if line.transaction_type == 'debit' %}<span class="text-rose-600 dark:text-rose-400">({{ line.amount }})</span>{% else %}{{ line.amount }}{% endif %}
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                     {{ line.transaction_type | title }}

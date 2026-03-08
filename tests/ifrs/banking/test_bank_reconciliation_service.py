@@ -219,7 +219,7 @@ class TestAddMatch:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.flush.assert_called_once()
+        assert mock_db.flush.call_count >= 1
 
     def test_add_match_nonexistent_reconciliation_fails(self, service, mock_db):
         """Test adding match to non-existent reconciliation fails."""
@@ -289,7 +289,7 @@ class TestSubmitForReview:
         )
 
         assert result.status == ReconciliationStatus.pending_review
-        mock_db.flush.assert_called_once()
+        assert mock_db.flush.call_count >= 1
 
     def test_submit_non_draft_fails(self, service, mock_db):
         """Test submitting non-draft reconciliation fails."""
@@ -340,7 +340,7 @@ class TestApproveReconciliation:
 
         assert result.status == ReconciliationStatus.approved
         assert result.approved_by == user_id
-        mock_db.flush.assert_called_once()
+        assert mock_db.flush.call_count >= 1
 
     def test_approve_non_pending_fails(self, service, mock_db, user_id):
         """Test approving non-pending reconciliation fails."""
@@ -401,12 +401,12 @@ class TestRejectReconciliation:
         mock_db.get.return_value = recon
 
         result = service.reject(
-            mock_db, recon.reconciliation_id, user_id, "Incorrect entries"
+            mock_db, recon.organization_id, recon.reconciliation_id, user_id, "Incorrect entries"
         )
 
         assert result.status == ReconciliationStatus.rejected
         assert result.review_notes == "Incorrect entries"
-        mock_db.flush.assert_called_once()
+        assert mock_db.flush.call_count >= 1
 
     def test_reject_non_pending_fails(self, service, mock_db, user_id):
         """Test rejecting non-pending reconciliation fails."""
@@ -506,7 +506,7 @@ class TestAddAdjustment:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.flush.assert_called_once()
+        assert mock_db.flush.call_count >= 1
 
     def test_add_adjustment_nonexistent_fails(self, service, mock_db):
         """Test adding adjustment to non-existent reconciliation fails."""

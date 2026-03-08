@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from unittest.mock import Mock
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -165,7 +164,7 @@ class BankReconciliationService:
     def _get_for_org(
         self,
         db: Session,
-        organization_id: UUID | None,
+        organization_id: UUID,
         reconciliation_id: UUID,
     ) -> BankReconciliation:
         reconciliation = db.get(BankReconciliation, reconciliation_id)
@@ -173,13 +172,11 @@ class BankReconciliationService:
             raise HTTPException(
                 status_code=404, detail=f"Reconciliation {reconciliation_id} not found"
             )
-        if not isinstance(reconciliation, Mock) and organization_id is not None:
-            recon_org_id = getattr(reconciliation, "organization_id", None)
-            if recon_org_id and recon_org_id != organization_id:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Reconciliation {reconciliation_id} not found",
-                )
+        if reconciliation.organization_id != organization_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Reconciliation {reconciliation_id} not found",
+            )
         return reconciliation
 
     def create_reconciliation(
@@ -197,8 +194,7 @@ class BankReconciliationService:
             raise HTTPException(
                 status_code=404, detail=f"Bank account {bank_account_id} not found"
             )
-        bank_org_id = getattr(bank_account, "organization_id", None)
-        if bank_org_id and bank_org_id != organization_id:
+        if bank_account.organization_id != organization_id:
             raise HTTPException(
                 status_code=403,
                 detail="Bank account does not belong to this organization",
@@ -208,6 +204,7 @@ class BankReconciliationService:
         existing = db.execute(
             select(BankReconciliation).where(
                 and_(
+                    BankReconciliation.organization_id == organization_id,
                     BankReconciliation.bank_account_id == bank_account_id,
                     BankReconciliation.reconciliation_date == input.reconciliation_date,
                 )
@@ -222,7 +219,8 @@ class BankReconciliationService:
 
         # Get GL balance as of reconciliation date
         gl_balance = self._get_gl_balance(
-            db, bank_account.gl_account_id, input.reconciliation_date
+            db, bank_account.gl_account_id, input.reconciliation_date,
+            organization_id=organization_id,
         )
 
         # Get prior outstanding items
@@ -272,8 +270,7 @@ class BankReconciliationService:
             new_values={"bank_account_id": str(bank_account_id), "status": "draft"},
         )
 
-        db.commit()
-        db.refresh(reconciliation)
+        db.flush()
         return reconciliation
 
     def get(
@@ -355,7 +352,6 @@ class BankReconciliationService:
         reconciliation_id: UUID,
         input: ReconciliationMatchInput,
         created_by: UUID | None = None,
-        commit: bool = True,
         force_match: bool = False,
     ) -> BankReconciliationLine:
         """Add a match between statement line and GL entry."""
@@ -449,9 +445,6 @@ class BankReconciliationService:
         reconciliation.calculate_difference()
 
         db.flush()
-        if commit:
-            db.commit()
-            db.refresh(recon_line)
         return recon_line
 
     def add_adjustment(
@@ -490,8 +483,6 @@ class BankReconciliationService:
         reconciliation.calculate_difference()
 
         db.flush()
-        db.commit()
-        db.refresh(recon_line)
         return recon_line
 
     def add_outstanding_item(
@@ -534,8 +525,6 @@ class BankReconciliationService:
         reconciliation.calculate_difference()
 
         db.flush()
-        db.commit()
-        db.refresh(recon_line)
         return recon_line
 
     def _get_unmatched_lines(
@@ -751,7 +740,6 @@ class BankReconciliationService:
                         reconciliation_id,
                         match_input,
                         created_by,
-                        commit=False,
                     )
                     recon_line.match_confidence = Decimal(str(best_score))
                     matched_gl_ids.add(best_match.line_id)
@@ -763,8 +751,18 @@ class BankReconciliationService:
                             "confidence": best_score,
                         }
                     )
-                except Exception:
-                    logger.exception("Ignored exception")  # Skip failed matches
+                except (HTTPException, ValueError, TypeError) as e:
+                    logger.warning(
+                        "Auto-match failed for line %s: %s",
+                        stmt_line.line_id,
+                        e,
+                    )
+                    result.match_details.append(
+                        {
+                            "statement_line_id": str(stmt_line.line_id),
+                            "error": str(e),
+                        }
+                    )
 
         # Count remaining unmatched
         result.unmatched_statement_lines = len(
@@ -772,7 +770,7 @@ class BankReconciliationService:
         )
         result.unmatched_gl_lines = len(gl_lines) - len(matched_gl_ids)
 
-        db.commit()
+        db.flush()
         return result
 
     def get_match_suggestions(
@@ -1979,8 +1977,16 @@ class BankReconciliationService:
         db: Session,
         gl_account_id: UUID,
         as_of_date: date,
+        organization_id: UUID | None = None,
     ) -> Decimal:
         """Get GL account balance as of a date."""
+        conditions = [
+            JournalEntryLine.account_id == gl_account_id,
+            JournalEntry.status == JournalStatus.POSTED,
+            JournalEntry.entry_date <= as_of_date,
+        ]
+        if organization_id is not None:
+            conditions.append(JournalEntry.organization_id == organization_id)
         query = (
             select(
                 func.coalesce(func.sum(JournalEntryLine.debit_amount), 0).label(
@@ -1991,13 +1997,7 @@ class BankReconciliationService:
                 ),
             )
             .join(JournalEntry)
-            .where(
-                and_(
-                    JournalEntryLine.account_id == gl_account_id,
-                    JournalEntry.status == JournalStatus.POSTED,
-                    JournalEntry.entry_date <= as_of_date,
-                )
-            )
+            .where(and_(*conditions))
         )
 
         result = db.execute(query).one()
@@ -2008,16 +2008,15 @@ class BankReconciliationService:
         db: Session,
         bank_account_id: UUID,
         before_date: date,
-        organization_id: UUID | None = None,
+        organization_id: UUID,
     ) -> BankReconciliation | None:
         """Get most recent approved reconciliation before a date."""
         conditions = [
+            BankReconciliation.organization_id == organization_id,
             BankReconciliation.bank_account_id == bank_account_id,
             BankReconciliation.status == ReconciliationStatus.approved,
             BankReconciliation.reconciliation_date < before_date,
         ]
-        if organization_id is not None:
-            conditions.append(BankReconciliation.organization_id == organization_id)
         query = (
             select(BankReconciliation)
             .where(and_(*conditions))
@@ -2062,8 +2061,7 @@ class BankReconciliationService:
         except Exception:
             logger.exception("Ignored exception")
 
-        db.commit()
-        db.refresh(reconciliation)
+        db.flush()
         return reconciliation
 
     def approve(
@@ -2124,48 +2122,18 @@ class BankReconciliationService:
         except Exception:
             logger.exception("Ignored exception")
 
-        db.commit()
-        db.refresh(reconciliation)
+        db.flush()
         return reconciliation
 
-    def reject(self, db: Session, *args, **kwargs) -> BankReconciliation:
+    def reject(
+        self,
+        db: Session,
+        organization_id: UUID,
+        reconciliation_id: UUID,
+        rejected_by: UUID,
+        notes: str = "",
+    ) -> BankReconciliation:
         """Reject a reconciliation."""
-        organization_id = kwargs.pop("organization_id", None)
-        reconciliation_id = kwargs.pop("reconciliation_id", None)
-        rejected_by = kwargs.pop("rejected_by", None)
-        notes = kwargs.pop("notes", None)
-
-        if kwargs:
-            raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs.keys())}")
-
-        if reconciliation_id is None:
-            if len(args) == 3:
-                reconciliation_id, rejected_by, notes = args
-            elif len(args) == 2:
-                organization_id, reconciliation_id = args
-            elif len(args) == 4:
-                organization_id, reconciliation_id, rejected_by, notes = args
-            else:
-                raise TypeError(
-                    "reject() expects (reconciliation_id, rejected_by, notes) "
-                    "or (organization_id, reconciliation_id, rejected_by, notes)"
-                )
-        elif args:
-            # Support mixed positional/keyword usage
-            if len(args) == 1 and rejected_by is None and notes is None:
-                rejected_by = args[0]
-            elif len(args) == 2 and rejected_by is None and notes is None:
-                rejected_by, notes = args
-            else:
-                raise TypeError(
-                    "reject() received unexpected positional arguments with keywords"
-                )
-
-        if reconciliation_id is None or rejected_by is None or notes is None:
-            raise TypeError(
-                "reject() requires reconciliation_id, rejected_by, and notes"
-            )
-
         reconciliation = self._get_for_org(db, organization_id, reconciliation_id)
 
         if reconciliation.status != ReconciliationStatus.pending_review:
@@ -2198,32 +2166,17 @@ class BankReconciliationService:
         except Exception:
             logger.exception("Ignored exception")
 
-        db.commit()
-        db.refresh(reconciliation)
+        db.flush()
         return reconciliation
 
     def get_reconciliation_report(
         self,
         db: Session,
-        organization_id_or_reconciliation_id: UUID,
-        reconciliation_id: UUID | None = None,
+        organization_id: UUID,
+        reconciliation_id: UUID,
     ) -> dict:
         """Generate reconciliation report data."""
-        if reconciliation_id is None:
-            organization_id = None
-            reconciliation_id = organization_id_or_reconciliation_id
-        else:
-            organization_id = organization_id_or_reconciliation_id
-
-        if organization_id is None:
-            reconciliation = db.get(BankReconciliation, reconciliation_id)
-            if not reconciliation:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Reconciliation {reconciliation_id} not found",
-                )
-        else:
-            reconciliation = self._get_for_org(db, organization_id, reconciliation_id)
+        reconciliation = self._get_for_org(db, organization_id, reconciliation_id)
 
         # Get all lines
         lines = reconciliation.lines

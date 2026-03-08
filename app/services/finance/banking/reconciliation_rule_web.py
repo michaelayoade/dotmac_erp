@@ -221,8 +221,10 @@ class ReconciliationRuleWebService:
         form_data: dict[str, Any],
     ) -> Response:
         """Update an existing match rule."""
+        org_id = _org_id(auth)
         try:
             service = ReconciliationRuleService(db)
+            _get_rule_for_org(service, rule_id, org_id)
             data = self._build_rule_data(form_data)
             service.update(UUID(rule_id), data)
             db.flush()

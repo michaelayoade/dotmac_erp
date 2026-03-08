@@ -1055,7 +1055,8 @@ class BankingWebService:
         if suggested_account_ids:
             gl_accounts = db.scalars(
                 select(Account).where(
-                    Account.account_id.in_(list(suggested_account_ids))
+                    Account.organization_id == org_id,
+                    Account.account_id.in_(list(suggested_account_ids)),
                 )
             ).all()
             account_map = {
@@ -1175,11 +1176,22 @@ class BankingWebService:
             return {"statement": None, "lines": [], "account_map": {}}
 
         currency = statement.currency_code
-        all_lines = list(statement.lines)
-        total_count = len(all_lines)
+        total_count = db.scalar(
+            select(func.count(BankStatementLine.line_id)).where(
+                BankStatementLine.statement_id == statement.statement_id
+            )
+        ) or 0
         total_pages = max(1, (total_count + limit - 1) // limit)
         offset = (page - 1) * limit
-        paged_lines = all_lines[offset : offset + limit]
+        paged_lines = list(
+            db.scalars(
+                select(BankStatementLine)
+                .where(BankStatementLine.statement_id == statement.statement_id)
+                .order_by(BankStatementLine.transaction_date)
+                .offset(offset)
+                .limit(limit)
+            ).all()
+        )
         lines = [_statement_line_view(line, currency) for line in paged_lines]
 
         # Build account name lookup for suggested accounts
@@ -1191,16 +1203,27 @@ class BankingWebService:
         account_map: dict[str, str] = {}
         if account_ids:
             accounts = db.scalars(
-                select(Account).where(Account.account_id.in_(account_ids))
+                select(Account).where(
+                    Account.organization_id == org_id,
+                    Account.account_id.in_(account_ids),
+                )
             ).all()
             account_map = {
                 str(a.account_id): f"{a.account_code} - {a.account_name}"
                 for a in accounts
             }
 
-        # Categorization summary counts
+        # Categorization summary counts (SQL aggregation, not in-memory)
         from app.models.finance.banking.bank_statement import CategorizationStatus
 
+        cat_rows = db.execute(
+            select(
+                BankStatementLine.categorization_status,
+                func.count(BankStatementLine.line_id),
+            )
+            .where(BankStatementLine.statement_id == statement.statement_id)
+            .group_by(BankStatementLine.categorization_status)
+        ).all()
         cat_summary = {
             "suggested": 0,
             "accepted": 0,
@@ -1208,17 +1231,17 @@ class BankingWebService:
             "auto_applied": 0,
             "flagged": 0,
         }
-        for line in all_lines:
-            if line.categorization_status == CategorizationStatus.SUGGESTED:
-                cat_summary["suggested"] += 1
-            elif line.categorization_status == CategorizationStatus.ACCEPTED:
-                cat_summary["accepted"] += 1
-            elif line.categorization_status == CategorizationStatus.REJECTED:
-                cat_summary["rejected"] += 1
-            elif line.categorization_status == CategorizationStatus.AUTO_APPLIED:
-                cat_summary["auto_applied"] += 1
-            elif line.categorization_status == CategorizationStatus.FLAGGED:
-                cat_summary["flagged"] += 1
+        _cat_key_map = {
+            CategorizationStatus.SUGGESTED: "suggested",
+            CategorizationStatus.ACCEPTED: "accepted",
+            CategorizationStatus.REJECTED: "rejected",
+            CategorizationStatus.AUTO_APPLIED: "auto_applied",
+            CategorizationStatus.FLAGGED: "flagged",
+        }
+        for cat_status, cnt in cat_rows:
+            key = _cat_key_map.get(cat_status)
+            if key:
+                cat_summary[key] = cnt
 
         # GL transaction match suggestions for unmatched lines
         from app.services.finance.banking.bank_reconciliation import (
@@ -1542,6 +1565,7 @@ class BankingWebService:
                 BankStatementLine.statement_id == BankStatement.statement_id,
             )
             .where(
+                BankStatement.organization_id == org_id,
                 BankStatement.bank_account_id == reconciliation.bank_account_id,
                 BankStatementLine.is_matched.is_(False),
                 BankStatementLine.transaction_date >= reconciliation.period_start,
@@ -1559,6 +1583,7 @@ class BankingWebService:
                     JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
                 )
                 .where(
+                    JournalEntry.organization_id == org_id,
                     JournalEntryLine.account_id == bank_account.gl_account_id,
                     JournalEntry.status == JournalStatus.POSTED,
                     JournalEntry.entry_date >= reconciliation.period_start,
@@ -1670,8 +1695,8 @@ class BankingWebService:
             (_line_amount(line) for line in adjustments), Decimal("0")
         )
 
-        statement_balance = Decimal(str(reconciliation.statement_closing_balance))
-        gl_balance = Decimal(str(reconciliation.gl_closing_balance))
+        statement_balance = Decimal(str(reconciliation.statement_closing_balance or 0))
+        gl_balance = Decimal(str(reconciliation.gl_closing_balance or 0))
         adjusted_statement = statement_balance - total_payments + total_deposits
         adjusted_gl = gl_balance + total_adjustments
         difference = adjusted_statement - adjusted_gl
@@ -1776,7 +1801,10 @@ class BankingWebService:
         account_ids = [p.default_account_id for p in payees if p.default_account_id]
         if account_ids:
             accounts = db.scalars(
-                select(Account).where(Account.account_id.in_(account_ids))
+                select(Account).where(
+                    Account.organization_id == org_id,
+                    Account.account_id.in_(account_ids),
+                )
             ).all()
             account_map = {
                 a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts
@@ -1954,7 +1982,10 @@ class BankingWebService:
         account_ids = [r.target_account_id for r in rules if r.target_account_id]
         if account_ids:
             accounts = db.scalars(
-                select(Account).where(Account.account_id.in_(account_ids))
+                select(Account).where(
+                    Account.organization_id == org_id,
+                    Account.account_id.in_(account_ids),
+                )
             ).all()
             account_map = {
                 a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts
@@ -2420,7 +2451,7 @@ class BankingWebService:
             **kwargs,
         )
         rule.is_active = is_active
-        db.commit()
+        db.flush()
         return RedirectResponse(
             url="/finance/banking/rules?success=Rule+created",
             status_code=303,
@@ -2477,7 +2508,7 @@ class BankingWebService:
                 request, "finance/banking/rule_form.html", context
             )
 
-        db.commit()
+        db.flush()
         return RedirectResponse(
             url="/finance/banking/rules?success=Rule+updated",
             status_code=303,
@@ -3062,7 +3093,7 @@ class BankingWebService:
             import_filename=payload.import_filename,
             imported_by=auth.user_id,
         )
-        db.commit()
+        db.flush()
         redirect_url = (
             f"/finance/banking/statements/{result.statement.statement_id}"
             f"?success=Statement+imported+successfully"
@@ -3490,7 +3521,7 @@ class BankingWebService:
 
         service = TransactionCategorizationService()
         result = service.apply_rules_to_statement(db, org_id, coerce_uuid(statement_id))
-        db.commit()
+        db.flush()
 
         msg = (
             f"{result.categorized_count}+suggested,"
@@ -3524,7 +3555,7 @@ class BankingWebService:
             service.accept_suggestion(
                 db, org_id, coerce_uuid(line_id), accepted_by=auth.person_id
             )
-            db.commit()
+            db.flush()
         except ValueError as exc:
             logger.warning("Accept suggestion failed: %s", exc)
             return RedirectResponse(
@@ -3557,7 +3588,7 @@ class BankingWebService:
         service = TransactionCategorizationService()
         try:
             service.reject_suggestion(db, org_id, coerce_uuid(line_id))
-            db.commit()
+            db.flush()
         except ValueError as exc:
             logger.warning("Reject suggestion failed: %s", exc)
             return RedirectResponse(
@@ -3592,7 +3623,7 @@ class BankingWebService:
 
         service = TransactionCategorizationService()
         result = service.apply_rules_to_account(db, org_id, coerce_uuid(account_id))
-        db.commit()
+        db.flush()
 
         msg = (
             f"{result.categorized_count}+suggested,"
@@ -3644,7 +3675,7 @@ class BankingWebService:
             service.accept_suggestion(
                 db, org_id, coerce_uuid(line_id), accepted_by=auth.person_id
             )
-            db.commit()
+            db.flush()
         except ValueError as exc:
             logger.warning("Accept suggestion (flat) failed: %s", exc)
             return RedirectResponse(
@@ -3698,7 +3729,7 @@ class BankingWebService:
         service = TransactionCategorizationService()
         try:
             service.reject_suggestion(db, org_id, coerce_uuid(line_id))
-            db.commit()
+            db.flush()
         except ValueError as exc:
             logger.warning("Reject suggestion (flat) failed: %s", exc)
             return RedirectResponse(
@@ -3733,7 +3764,7 @@ class BankingWebService:
                     url=f"/finance/banking/statements/{statement_id}?error=Statement+not+found",
                     status_code=303,
                 )
-            db.commit()
+            db.flush()
         except ValueError as exc:
             logger.warning("Delete statement failed: %s", exc)
             return RedirectResponse(
@@ -3769,7 +3800,7 @@ class BankingWebService:
         result = auto_svc.auto_match_statement(db, org_id, stmt_id)
 
         if result.matched > 0:
-            db.commit()
+            db.flush()
             msg = f"Auto-matched+{result.matched}+lines"
             if result.skipped > 0:
                 msg += f"+({result.skipped}+skipped)"
@@ -3827,7 +3858,7 @@ class BankingWebService:
                 matched_by=user_id,
                 force_match=force_match,
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as e:
@@ -3967,7 +3998,7 @@ class BankingWebService:
 
         # Commit all successful matches in one transaction
         if matched_count > 0:
-            db.commit()
+            db.flush()
 
         # Get final statement counters
         statement = db.get(BankStatement, UUID(statement_id))
@@ -4014,7 +4045,7 @@ class BankingWebService:
                 organization_id=org_id,
                 statement_line_id=UUID(line_id),
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as e:
@@ -4082,7 +4113,7 @@ class BankingWebService:
                 description=description,
                 matched_by=user_id,
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as e:
@@ -4230,7 +4261,7 @@ class BankingWebService:
                 matched_by=user_id,
                 force_match=force_match,
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as e:
@@ -4641,7 +4672,7 @@ class BankingWebService:
                 include_global=include_global,
                 created_by=auth.person_id,
             )
-            db.commit()
+            db.flush()
         except (ValueError, TypeError) as exc:
             context = base_context(request, auth, "Duplicate Rule", "banking", db=db)
             context.update(
@@ -4723,7 +4754,7 @@ class BankingWebService:
                     created_by=auth.person_id,
                 )
                 total_copies += len(copies)
-            db.commit()
+            db.flush()
         except (ValueError, TypeError) as exc:
             context = base_context(
                 request,
@@ -4776,7 +4807,7 @@ class BankingWebService:
 
         service = TransactionCategorizationService()
         service.swap_rule_order(db, org_id, UUID(rule_id), direction)
-        db.commit()
+        db.flush()
 
         # Check if this is an HTMX request — return partial
         if request.headers.get("HX-Request"):
@@ -4857,7 +4888,7 @@ class BankingWebService:
                 input=inp,
                 prepared_by=user_id,
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as e:
@@ -4930,7 +4961,7 @@ class BankingWebService:
                     rejected_by=user_id,
                     notes=notes,
                 )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as e:
@@ -4997,7 +5028,7 @@ class BankingWebService:
                 created_by=user_id,
                 force_match=force_match,
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError, KeyError) as e:
@@ -5039,7 +5070,7 @@ class BankingWebService:
                 notes=body.get("notes"),
                 created_by=user_id,
             )
-            db.commit()
+            db.flush()
         except HTTPException:
             raise
         except (ValueError, RuntimeError, KeyError) as e:
@@ -5095,7 +5126,7 @@ class BankingWebService:
             account = bank_account_service.create(
                 db, org_id, data, coerce_uuid(user_id) if user_id else None
             )
-            db.commit()
+            db.flush()
             return RedirectResponse(
                 url=f"/finance/banking/accounts/{account.bank_account_id}",
                 status_code=303,
@@ -5160,7 +5191,7 @@ class BankingWebService:
                 data,
                 coerce_uuid(user_id) if user_id else None,
             )
-            db.commit()
+            db.flush()
             return RedirectResponse(
                 url=f"/finance/banking/accounts/{account_id}",
                 status_code=303,
@@ -5215,7 +5246,7 @@ class BankingWebService:
             )
             db.add(payee)
             db.flush()
-            db.commit()
+            db.flush()
             logger.info("Created payee %s: %s", payee.payee_id, payee.payee_name)
             return RedirectResponse(
                 url="/finance/banking/payees",
@@ -5272,7 +5303,7 @@ class BankingWebService:
             )
             payee.notes = str(form.get("notes", "")) or None
             db.flush()
-            db.commit()
+            db.flush()
             logger.info("Updated payee %s: %s", payee.payee_id, payee.payee_name)
             return RedirectResponse(
                 url="/finance/banking/payees",

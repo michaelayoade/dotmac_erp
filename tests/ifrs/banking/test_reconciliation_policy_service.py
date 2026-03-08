@@ -15,9 +15,10 @@ from app.services.finance.banking.reconciliation_policy_service import (
 )
 
 
-def test_resolve_uses_legacy_compatibility_for_mock_sessions() -> None:
+def test_resolve_uses_legacy_compatibility_when_no_profile() -> None:
     service = ReconciliationPolicyService()
     db = MagicMock()
+    db.scalar.return_value = None  # No org-specific profile in DB
 
     policy = service.resolve(
         db,

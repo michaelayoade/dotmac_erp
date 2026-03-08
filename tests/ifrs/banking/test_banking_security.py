@@ -77,7 +77,8 @@ class TestStatementDuplicateIsolation:
         stmt = call_args[0][0]
         # Verify the compiled SQL includes organization_id
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
-        assert "organization_id" in compiled
+        where_part = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
+        assert "organization_id" in where_part, f"organization_id not found in WHERE clause: {compiled}"
 
     def test_check_duplicate_without_org_still_works(
         self, bank_account_id: uuid.UUID
@@ -127,12 +128,13 @@ class TestReconciliationPriorIsolation:
         call_args = db.execute.call_args
         stmt = call_args[0][0]
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
-        assert "organization_id" in compiled
+        where_part = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
+        assert "organization_id" in where_part, f"organization_id not found in WHERE clause: {compiled}"
 
-    def test_prior_reconciliation_without_org_still_works(
-        self, bank_account_id: uuid.UUID
+    def test_prior_reconciliation_always_requires_org(
+        self, bank_account_id: uuid.UUID, org_a_id: uuid.UUID
     ) -> None:
-        """_get_prior_reconciliation works with org_id=None (backward compat)."""
+        """_get_prior_reconciliation always filters by organization_id."""
         db = MagicMock()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -140,18 +142,17 @@ class TestReconciliationPriorIsolation:
 
         service = BankReconciliationService()
         result = service._get_prior_reconciliation(
-            db, bank_account_id, date(2026, 2, 1)
+            db, bank_account_id, date(2026, 2, 1), org_a_id
         )
 
         assert result is None
-        # Should not include organization_id when None
         call_args = db.execute.call_args
         stmt = call_args[0][0]
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
-        # When org_id is None, organization_id should not appear in WHERE
-        # (it may still appear in FROM clause)
         where_clause = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
-        assert "organization_id" not in where_clause
+        assert "organization_id" in where_clause, (
+            f"organization_id must always be in WHERE: {compiled}"
+        )
 
 
 # ============ Auto-Match Scoring ============
@@ -363,4 +364,5 @@ class TestCategorizationDuplicateIsolation:
         call_args = db.execute.call_args
         stmt = call_args[0][0]
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": False}))
-        assert "organization_id" in compiled
+        where_part = compiled.split("WHERE")[1] if "WHERE" in compiled else ""
+        assert "organization_id" in where_part, f"organization_id not found in WHERE clause: {compiled}"

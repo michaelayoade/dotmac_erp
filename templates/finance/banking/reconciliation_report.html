@@ -36,8 +36,8 @@
         <div class="grid gap-6 sm:grid-cols-2 print:grid-cols-2">
             <div>
                 <h3 class="text-sm font-medium text-slate-500 mb-2">Bank Account</h3>
-                <p class="text-slate-900 dark:text-white font-medium">{{ report.reconciliation.bank_name | default("Bank Account") }}</p>
-                <p class="text-sm text-slate-600">Account #: {{ report.reconciliation.account_number | default("N/A") }}</p>
+                <p class="text-slate-900 dark:text-white font-medium">{{ report.reconciliation.bank_name if report.reconciliation.bank_name else "Bank Account" }}</p>
+                <p class="text-sm text-slate-600">Account #: {{ report.reconciliation.account_number if report.reconciliation.account_number else "N/A" }}</p>
             </div>
             <div class="text-right">
                 <h3 class="text-sm font-medium text-slate-500 mb-2">Reconciliation Period</h3>
@@ -58,19 +58,19 @@
                 <table class="table">
                     <tr>
                         <td class="py-1 text-slate-600">Statement Closing Balance</td>
-                        <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.summary.statement_balance }}</td>
+                        <td class="py-1 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ report.summary.statement_balance }}</td>
                     </tr>
                     <tr class="border-t border-slate-100">
                         <td class="py-1 text-slate-600">Less: Outstanding Payments</td>
-                        <td class="py-1 text-right font-medium text-rose-600">-{{ report.outstanding_payments.total }}</td>
+                        <td class="py-1 text-right font-medium font-mono tabular-nums text-rose-600 dark:text-rose-400"><span class="text-rose-600 dark:text-rose-400">({{ report.outstanding_payments.total }})</span></td>
                     </tr>
                     <tr class="border-t border-slate-100">
                         <td class="py-1 text-slate-600">Add: Outstanding Deposits</td>
-                        <td class="py-1 text-right font-medium text-emerald-600">+{{ report.outstanding_deposits.total }}</td>
+                        <td class="py-1 text-right font-medium font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ report.outstanding_deposits.total }}</td>
                     </tr>
                     <tr class="border-t-2 border-slate-200">
                         <td class="py-2 font-medium text-slate-900 dark:text-white">Adjusted Bank Balance</td>
-                        <td class="py-2 text-right font-bold text-slate-900 dark:text-white">{{ report.summary.adjusted_book_balance }}</td>
+                        <td class="py-2 text-right font-bold font-mono tabular-nums text-slate-900 dark:text-white">{{ report.summary.adjusted_bank_balance if report.summary.adjusted_bank_balance is defined else report.summary.adjusted_book_balance }}</td>
                     </tr>
                 </table>
             </div>
@@ -81,15 +81,15 @@
                 <table class="table">
                     <tr>
                         <td class="py-1 text-slate-600">GL Closing Balance</td>
-                        <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.summary.gl_balance }}</td>
+                        <td class="py-1 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ report.summary.gl_balance }}</td>
                     </tr>
                     <tr class="border-t border-slate-100">
                         <td class="py-1 text-slate-600">Add/Less: Adjustments</td>
-                        <td class="py-1 text-right font-medium text-slate-900 dark:text-white">{{ report.adjustments.total }}</td>
+                        <td class="py-1 text-right font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ report.adjustments.total }}</td>
                     </tr>
                     <tr class="border-t-2 border-slate-200">
                         <td class="py-2 font-medium text-slate-900 dark:text-white">Adjusted Book Balance</td>
-                        <td class="py-2 text-right font-bold text-slate-900 dark:text-white">{{ report.summary.adjusted_book_balance }}</td>
+                        <td class="py-2 text-right font-bold font-mono tabular-nums text-slate-900 dark:text-white">{{ report.summary.adjusted_book_balance }}</td>
                     </tr>
                 </table>
             </div>
@@ -99,7 +99,7 @@
         <div class="mt-6 pt-4 border-t-2 border-slate-200 dark:border-slate-700">
             <div class="flex justify-between items-center">
                 <span class="text-lg font-medium text-slate-900 dark:text-white">Reconciliation Difference</span>
-                <span class="text-xl font-bold {{ 'text-emerald-600' if report.summary.is_reconciled else 'text-rose-600' }}">
+                <span class="text-xl font-bold font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if report.summary.is_reconciled else 'text-rose-600 dark:text-rose-400' }}">
                     {{ report.summary.difference }}
                     {% if report.summary.is_reconciled %}
                     {{ icon_svg("check-circle", "inline-block ml-2 h-5 w-5") }}
@@ -135,9 +135,9 @@
                     {% for item in report.matched_items.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.statement_amount | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.gl_amount | default("-") }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums text-slate-900 dark:text-white">{{ item.statement_amount if item.statement_amount is not none else '-' }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums text-slate-900 dark:text-white">{{ item.gl_amount if item.gl_amount is not none else '-' }}</td>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.match_type | title }}</td>
                     </tr>
                     {% else %}
@@ -156,7 +156,7 @@
     <div class="card print:border print:border-slate-300 print:break-inside-avoid">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Outstanding Deposits ({{ report.outstanding_deposits.count }})</h2>
-            <p class="text-sm text-emerald-600">Total: +{{ report.outstanding_deposits.total }}</p>
+            <p class="text-sm text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">Total: {{ report.outstanding_deposits.total }}</p>
         </div>
         <div class="table-container">
             <table class="table">
@@ -172,9 +172,9 @@
                     {% for item in report.outstanding_deposits.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference | default("-") }}</td>
-                        <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">+{{ item.statement_amount or item.gl_amount }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference if item.reference else '-' }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% else %}
                     <tr>
@@ -192,7 +192,7 @@
     <div class="card print:border print:border-slate-300 print:break-inside-avoid">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Outstanding Payments ({{ report.outstanding_payments.count }})</h2>
-            <p class="text-sm text-rose-600">Total: -{{ report.outstanding_payments.total }}</p>
+            <p class="text-sm text-rose-600 dark:text-rose-400 font-mono tabular-nums">Total: <span class="text-rose-600 dark:text-rose-400">({{ report.outstanding_payments.total }})</span></p>
         </div>
         <div class="table-container">
             <table class="table">
@@ -208,9 +208,9 @@
                     {% for item in report.outstanding_payments.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference | default("-") }}</td>
-                        <td class="table-cell-amount text-rose-600 dark:text-rose-400">-{{ item.statement_amount or item.gl_amount }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.reference if item.reference else '-' }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums text-rose-600 dark:text-rose-400"><span class="text-rose-600 dark:text-rose-400">({{ item.statement_amount or item.gl_amount }})</span></td>
                     </tr>
                     {% else %}
                     <tr>
@@ -245,9 +245,9 @@
                     {% for item in report.adjustments.items %}
                     <tr>
                         <td class="text-slate-600 dark:text-slate-400">{{ item.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ item.description | default("-") }}</td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ item.adjustment_type | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ item.statement_amount or item.gl_amount }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ item.description if item.description else '-' }}</td>
+                        <td class="text-slate-600 dark:text-slate-400">{{ item.adjustment_type if item.adjustment_type else '-' }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums text-slate-900 dark:text-white">{{ item.statement_amount or item.gl_amount }}</td>
                     </tr>
                     {% else %}
                     <tr>

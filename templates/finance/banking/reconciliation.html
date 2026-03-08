@@ -37,7 +37,7 @@
             hx-vals='{"notes": "Rejected via UI"}'
             hx-swap="none"
             hx-on::after-request="location.reload()"
-            class="btn btn-danger">
+            class="btn btn-danger-outline">
         Reject
     </button>
     <button hx-post="/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/approve"
@@ -71,10 +71,13 @@
     selectedStatements: [],
     selectedGLs: [],
     suggestions: {{ match_suggestions | tojson }},
-    statementAmounts: {{ statement_line_amounts | default({}) | tojson }},
-    glAmounts: {{ gl_line_amounts | default({}) | tojson }},
+    statementAmounts: {{ (statement_line_amounts if statement_line_amounts else {}) | tojson }},
+    glAmounts: {{ (gl_line_amounts if gl_line_amounts else {}) | tojson }},
     mismatchThreshold: 0.01,
     csrfToken() { return document.querySelector("[name=csrf_token]")?.value || ""; },
+    mismatchData: null,
+    showMismatchModal: false,
+    mismatchResolve: null,
     _checkAmountMismatch(statementLineId, journalLineId) {
         const stmtAmount = this.statementAmounts[statementLineId];
         const glAmount = this.glAmounts[journalLineId];
@@ -92,12 +95,9 @@
             return { proceed: true, forceMatch: false };
         }
         const fmt = (amt) => Math.abs(amt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const proceed = window.confirm(
-            "Amount mismatch: bank line is " + fmt(stmtAmount) +
-            " but selected receipt/transaction is " + fmt(glAmount) +
-            " (difference: " + fmt(diff) + "). Continue and force match?"
-        );
-        return { proceed, forceMatch: proceed };
+        this.mismatchData = { stmtAmount: fmt(stmtAmount), glAmount: fmt(glAmount), diff: fmt(diff) };
+        this.showMismatchModal = true;
+        return { proceed: false, forceMatch: false, deferred: true };
     },
     toggleStatement(id) {
         if (this.multiMode) {
@@ -126,17 +126,15 @@
     isGLSelected(id) {
         return this.multiMode ? this.selectedGLs.includes(id) : this.selectedGL === id;
     },
-    matchSingle() {
-        const mismatch = this._checkAmountMismatch(this.selectedStatement, this.selectedGL);
-        if (!mismatch.proceed) return;
+    _doMatchRequest(stmtId, glId, matchType, forceMatch) {
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
             body: JSON.stringify({
-                statement_line_id: this.selectedStatement,
-                journal_line_id: this.selectedGL,
-                match_type: "manual",
-                force_match: mismatch.forceMatch
+                statement_line_id: stmtId,
+                journal_line_id: glId,
+                match_type: matchType,
+                force_match: forceMatch
             })
         }).then(async (r) => {
             if (!r.ok) {
@@ -147,28 +145,29 @@
             location.reload();
         });
     },
+    _pendingMatchType: "manual",
+    _pendingGLId: null,
+    matchSingle() {
+        const mismatch = this._checkAmountMismatch(this.selectedStatement, this.selectedGL);
+        if (mismatch.deferred) { this._pendingMatchType = "manual"; this._pendingGLId = this.selectedGL; return; }
+        if (!mismatch.proceed) return;
+        this._doMatchRequest(this.selectedStatement, this.selectedGL, "manual", mismatch.forceMatch);
+    },
     acceptSuggestion() {
         let sug = this.suggestions[this.selectedStatement];
         if (!sug) return;
         const mismatch = this._checkAmountMismatch(this.selectedStatement, sug.journal_line_id);
+        if (mismatch.deferred) { this._pendingMatchType = "auto_fuzzy"; this._pendingGLId = sug.journal_line_id; return; }
         if (!mismatch.proceed) return;
-        fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
-            body: JSON.stringify({
-                statement_line_id: this.selectedStatement,
-                journal_line_id: sug.journal_line_id,
-                match_type: "auto_fuzzy",
-                force_match: mismatch.forceMatch
-            })
-        }).then(async (r) => {
-            if (!r.ok) {
-                const data = await r.json().catch(() => ({}));
-                window.showToast(data.detail || "Match failed", "error");
-                return;
-            }
-            location.reload();
-        });
+        this._doMatchRequest(this.selectedStatement, sug.journal_line_id, "auto_fuzzy", mismatch.forceMatch);
+    },
+    confirmMismatch() {
+        this.showMismatchModal = false;
+        this._doMatchRequest(this.selectedStatement, this._pendingGLId, this._pendingMatchType, true);
+    },
+    cancelMismatch() {
+        this.showMismatchModal = false;
+        this.mismatchData = null;
     },
     matchMultiple() {
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/multi-match", {
@@ -211,7 +210,7 @@
     <!-- Status Badge -->
     <div class="flex flex-wrap items-center gap-4">
         <span class="text-sm text-slate-500 dark:text-slate-400">Status:</span>
-        {{ status_badge(reconciliation.status | default('draft'), 'sm') }}
+        {{ status_badge(reconciliation.status if reconciliation.status else 'draft', 'sm') }}
         <span class="text-sm text-slate-500 dark:text-slate-400">Period: {{ reconciliation.period_start }} to {{ reconciliation.period_end }}</span>
     </div>
 
@@ -255,8 +254,8 @@
                             @click="toggleStatement('{{ line.line_id }}')">
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td>
-                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default(line.payee_payer) | default("-") }}</p>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description if line.description else (line.payee_payer if line.payee_payer else '-') }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference if line.reference else '' }}</p>
                                 {# Suggestion badge #}
                                 {% if match_suggestions and match_suggestions[line.line_id | string] %}
                                 {% set sug = match_suggestions[line.line_id | string] %}
@@ -282,7 +281,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-right font-medium font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
-                                {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
+                                {% if line.transaction_type == 'debit' %}<span class="text-rose-600 dark:text-rose-400">({{ line.amount }})</span>{% else %}{{ line.amount }}{% endif %}
                             </td>
                             <td>
                                 <template x-if="multiMode">
@@ -297,7 +296,13 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="py-8 text-center text-sm text-slate-500">No unmatched lines</td>
+                            <td colspan="4" class="py-8 text-center">
+                                <div class="flex flex-col items-center gap-2">
+                                    {{ icon_svg("check-circle", "h-6 w-6 text-emerald-400") }}
+                                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">No unmatched lines</p>
+                                    <p class="text-xs text-slate-400 dark:text-slate-500">All statement lines have been matched.</p>
+                                </div>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -328,8 +333,8 @@
                             @click="toggleGL('{{ line.line_id }}')">
                             <td class="text-slate-600 dark:text-slate-400">{{ line.entry_date }}</td>
                             <td>
-                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default("-") }}</p>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
+                                <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description if line.description else '-' }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference if line.reference else '' }}</p>
                                 {# Payment metadata #}
                                 {% if line.counterparty_name %}
                                 <div class="flex flex-wrap items-center gap-1 mt-1">
@@ -348,7 +353,7 @@
                                 {% endif %}
                             </td>
                             <td class="text-right font-medium font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.debit_amount else 'text-rose-600 dark:text-rose-400' }}">
-                                {{ "+" if line.debit_amount else "-" }}{{ line.debit_amount or line.credit_amount }}
+                                {% if line.credit_amount and not line.debit_amount %}<span class="text-rose-600 dark:text-rose-400">({{ line.credit_amount }})</span>{% else %}{{ line.debit_amount or line.credit_amount }}{% endif %}
                             </td>
                             <td>
                                 <template x-if="multiMode">
@@ -363,7 +368,13 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="py-8 text-center text-sm text-slate-500">No unmatched entries</td>
+                            <td colspan="4" class="py-8 text-center">
+                                <div class="flex flex-col items-center gap-2">
+                                    {{ icon_svg("check-circle", "h-6 w-6 text-emerald-400") }}
+                                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">No unmatched entries</p>
+                                    <p class="text-xs text-slate-400 dark:text-slate-500">All GL entries have been matched.</p>
+                                </div>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -438,19 +449,18 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for line in lines %}
-                    {% if not line.is_adjustment and not line.is_outstanding %}
+                    {% set matched_lines = lines | rejectattr('is_adjustment') | rejectattr('is_outstanding') | list %}
+                    {% for line in matched_lines %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                         <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
-                        <td class="text-slate-900 dark:text-white">{{ line.description | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white font-mono tabular-nums">{{ line.statement_amount | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white font-mono tabular-nums">{{ line.gl_amount | default("-") }}</td>
+                        <td class="text-slate-900 dark:text-white">{{ line.description if line.description else '-' }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white font-mono tabular-nums">{{ line.statement_amount if line.statement_amount is not none else '-' }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white font-mono tabular-nums">{{ line.gl_amount if line.gl_amount is not none else '-' }}</td>
                         <td>
                             {{ status_badge(line.match_type, size="sm") }}
                         </td>
-                        <td class="table-cell-amount font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ line.difference | default(0) }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ line.difference if line.difference is not none else 0 }}</td>
                     </tr>
-                    {% endif %}
                     {% else %}
                     <tr>
                         <td colspan="6" class="py-12">
@@ -463,6 +473,36 @@
         </div>
     </div>
 
+    <!-- Mismatch Confirmation Modal -->
+    <div x-show="showMismatchModal" x-cloak
+         role="dialog" aria-modal="true" aria-labelledby="mismatch-modal-title"
+         @keydown.escape.window="cancelMismatch()"
+         class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="fixed inset-0 bg-black/50" @click="cancelMismatch()"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
+        <div class="relative card max-w-md w-full mx-4 p-6"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0 scale-95"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
+            <h3 id="mismatch-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white mb-3">Amount Mismatch</h3>
+            <template x-if="mismatchData">
+                <div class="space-y-3">
+                    <p class="text-sm text-slate-600 dark:text-slate-400">The amounts do not match:</p>
+                    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-1">
+                        <p class="text-sm text-amber-700 dark:text-amber-400">Bank line: <span class="font-mono font-semibold" x-text="mismatchData.stmtAmount"></span></p>
+                        <p class="text-sm text-amber-700 dark:text-amber-400">GL entry: <span class="font-mono font-semibold" x-text="mismatchData.glAmount"></span></p>
+                        <p class="text-sm text-amber-700 dark:text-amber-400">Difference: <span class="font-mono font-semibold" x-text="mismatchData.diff"></span></p>
+                    </div>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Do you want to force match these items?</p>
+                    <div class="flex justify-end gap-3 pt-2">
+                        <button @click="cancelMismatch()" class="btn btn-secondary">Cancel</button>
+                        <button @click="confirmMismatch()" class="btn btn-primary">Force Match</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- Outstanding Items -->
     <div class="grid gap-6 lg:grid-cols-2">
         <div class="card">
@@ -472,14 +512,14 @@
             <div class="table-container">
                 <table class="table">
                     <tbody>
-                        {% for line in lines %}
-                        {% if line.is_outstanding and line.outstanding_type == 'deposit' %}
+                        {% set deposit_lines = lines | selectattr('is_outstanding') | list %}
+                        {% set deposit_lines = deposit_lines | selectattr('outstanding_type', 'equalto', 'deposit') | list %}
+                        {% for line in deposit_lines %}
                         <tr>
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td class="text-slate-900 dark:text-white">{{ line.description }}</td>
-                            <td class="table-cell-amount text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">+{{ line.statement_amount or line.gl_amount }}</td>
+                            <td class="table-cell-amount text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">{{ line.statement_amount or line.gl_amount }}</td>
                         </tr>
-                        {% endif %}
                         {% else %}
                         <tr>
                             <td colspan="3" class="py-12">
@@ -499,14 +539,14 @@
             <div class="table-container">
                 <table class="table">
                     <tbody>
-                        {% for line in lines %}
-                        {% if line.is_outstanding and line.outstanding_type == 'payment' %}
+                        {% set payment_lines = lines | selectattr('is_outstanding') | list %}
+                        {% set payment_lines = payment_lines | selectattr('outstanding_type', 'equalto', 'payment') | list %}
+                        {% for line in payment_lines %}
                         <tr>
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td class="text-slate-900 dark:text-white">{{ line.description }}</td>
-                            <td class="table-cell-amount text-rose-600 dark:text-rose-400 font-mono tabular-nums">-{{ line.statement_amount or line.gl_amount }}</td>
+                            <td class="table-cell-amount text-rose-600 dark:text-rose-400 font-mono tabular-nums"><span class="text-rose-600 dark:text-rose-400">({{ line.statement_amount or line.gl_amount }})</span></td>
                         </tr>
-                        {% endif %}
                         {% else %}
                         <tr>
                             <td colspan="3" class="py-12">

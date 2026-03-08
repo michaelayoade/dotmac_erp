@@ -620,7 +620,7 @@ class AutoReconciliationService:
         for intent in eligible_intents:
             key: _DateAmountKey = (
                 intent.paid_at.date(),
-                int(abs(intent.amount) * 100),
+                int(round(abs(intent.amount) * 100)),
             )
             intent_index.setdefault(key, []).append(intent)
 
@@ -630,7 +630,7 @@ class AutoReconciliationService:
                 continue
             if line.transaction_type != StatementLineType.debit:
                 continue
-            key = (line.transaction_date, int(abs(line.amount) * 100))
+            key = (line.transaction_date, int(round(abs(line.amount) * 100)))
             line_index.setdefault(key, []).append(line)
 
         for key, key_intents in intent_index.items():
@@ -950,7 +950,7 @@ class AutoReconciliationService:
                 continue
             if not pmt.correlation_id:
                 continue
-            amount_cents = int(pmt.amount * 100)
+            amount_cents = int(round(pmt.amount * 100))
             key: _DateAmountKey = (pmt.payment_date, amount_cents)
             pmt_index.setdefault(key, []).append(pmt)
 
@@ -959,7 +959,7 @@ class AutoReconciliationService:
         for line in unmatched_lines:
             if line.line_id in matched_line_ids:
                 continue
-            amount_cents = int(line.amount * 100)
+            amount_cents = int(round(line.amount * 100))
             key = (line.transaction_date, amount_cents)
             line_index.setdefault(key, []).append(line)
 
@@ -1161,7 +1161,7 @@ class AutoReconciliationService:
         _DateAmountKey = tuple[date, int]
         pmt_index: dict[_DateAmountKey, list[SupplierPayment]] = {}
         for pmt in remaining:
-            key: _DateAmountKey = (pmt.payment_date, int(pmt.amount * 100))
+            key: _DateAmountKey = (pmt.payment_date, int(round(pmt.amount * 100)))
             pmt_index.setdefault(key, []).append(pmt)
 
         line_index: dict[_DateAmountKey, list[BankStatementLine]] = {}
@@ -1170,7 +1170,7 @@ class AutoReconciliationService:
                 continue
             if line.transaction_type != StatementLineType.debit:
                 continue
-            key = (line.transaction_date, int(line.amount * 100))
+            key = (line.transaction_date, int(round(line.amount * 100)))
             line_index.setdefault(key, []).append(line)
 
         for key, pmts in pmt_index.items():
@@ -1367,7 +1367,7 @@ class AutoReconciliationService:
         _DateAmountKey = tuple[date, int]
         pmt_index: dict[_DateAmountKey, list[CustomerPayment]] = {}
         for pmt in remaining:
-            key: _DateAmountKey = (pmt.payment_date, int(pmt.amount * 100))
+            key: _DateAmountKey = (pmt.payment_date, int(round(pmt.amount * 100)))
             pmt_index.setdefault(key, []).append(pmt)
 
         line_index: dict[_DateAmountKey, list[BankStatementLine]] = {}
@@ -1376,7 +1376,7 @@ class AutoReconciliationService:
                 continue
             if line.transaction_type != StatementLineType.credit:
                 continue
-            key = (line.transaction_date, int(line.amount * 100))
+            key = (line.transaction_date, int(round(line.amount * 100)))
             line_index.setdefault(key, []).append(line)
 
         for key, pmts in pmt_index.items():
@@ -1691,7 +1691,7 @@ class AutoReconciliationService:
             key: _DedupKey = (
                 line.transaction_date,
                 line.reference,
-                int(line.amount * 100),
+                int(round(line.amount * 100)),
             )
             group = dedup_groups.setdefault(key, [])
             group.append(line)
@@ -1734,6 +1734,7 @@ class AutoReconciliationService:
                     BankStatementLine.statement_id == BankStatement.statement_id,
                 )
                 .where(
+                    BankStatement.organization_id == organization_id,
                     BankStatement.bank_account_id.in_(other_bank_ids),
                     BankStatementLine.is_matched.is_(False),
                     BankStatementLine.transaction_date.between(min_date, max_date),
@@ -1925,7 +1926,7 @@ class AutoReconciliationService:
                 dedup_key: _DedupKey = (
                     settlement_line.transaction_date,
                     settlement_line.reference,
-                    int(settlement_line.amount * 100),
+                    int(round(settlement_line.amount * 100)),
                 )
                 if credit_jl:
                     for dup_line in dedup_groups.get(dedup_key, [settlement_line]):

@@ -22,7 +22,9 @@ from app.models.finance.banking.bank_reconciliation import (
 from app.models.finance.banking.bank_statement import (
     BankStatement,
     BankStatementLine,
+    BankStatementLineMatch,
     BankStatementStatus,
+    CategorizationStatus,
     StatementLineType,
 )
 from app.models.finance.banking.payee import (
@@ -52,7 +54,9 @@ __all__ = [
     # Bank Statement
     "BankStatement",
     "BankStatementLine",
+    "BankStatementLineMatch",
     "BankStatementStatus",
+    "CategorizationStatus",
     "StatementLineType",
     # Bank Reconciliation
     "BankReconciliation",

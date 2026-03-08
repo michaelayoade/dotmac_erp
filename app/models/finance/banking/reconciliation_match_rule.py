@@ -159,7 +159,9 @@ class ReconciliationMatchLog(Base):
     )
 
     statement_line_id: Mapped[UUID] = mapped_column(
-        SAUUID(as_uuid=True), nullable=False
+        SAUUID(as_uuid=True),
+        ForeignKey("banking.bank_statement_lines.line_id", ondelete="CASCADE"),
+        nullable=False,
     )
     source_doc_type: Mapped[str] = mapped_column(String(50), nullable=False)
     source_doc_id: Mapped[UUID | None] = mapped_column(

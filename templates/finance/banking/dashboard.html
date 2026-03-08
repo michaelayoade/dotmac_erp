@@ -105,7 +105,7 @@
                         </span>
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Draft</span>
                     </div>
-                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_draft | default(0) }}</span>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_draft if recon_draft is not none else 0 }}</span>
                 </a>
                 <a href="/finance/banking/reconciliations?status=rejected" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div class="flex items-center gap-3">
@@ -114,7 +114,7 @@
                         </span>
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Rejected</span>
                     </div>
-                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_rejected | default(0) }}</span>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_rejected if recon_rejected is not none else 0 }}</span>
                 </a>
                 <a href="/finance/banking/reconciliations?status=pending_review" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div class="flex items-center gap-3">
@@ -123,7 +123,7 @@
                         </span>
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Pending Review</span>
                     </div>
-                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_pending_review | default(0) }}</span>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_pending_review if recon_pending_review is not none else 0 }}</span>
                 </a>
                 <a href="/finance/banking/reconciliations?status=approved" class="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div class="flex items-center gap-3">
@@ -132,7 +132,7 @@
                         </span>
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Approved</span>
                     </div>
-                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_approved | default(0) }}</span>
+                    <span class="text-sm font-semibold font-mono text-slate-900 dark:text-white">{{ recon_approved if recon_approved is not none else 0 }}</span>
                 </a>
             </div>
         </div>

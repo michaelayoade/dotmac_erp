@@ -5,7 +5,7 @@ Represents imported bank statements and their transaction lines.
 """
 
 import enum
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
@@ -144,7 +144,7 @@ class BankStatement(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
     imported_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
@@ -162,13 +162,13 @@ class BankStatement(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
@@ -322,7 +322,7 @@ class BankStatementLine(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
 
     # Relationships
@@ -394,7 +394,7 @@ class BankStatementLineMatch(Base):
     matched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
     matched_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),

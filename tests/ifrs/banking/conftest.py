@@ -296,21 +296,20 @@ class MockBankReconciliation:
 
     def calculate_difference(self):
         """Calculate reconciliation difference."""
-        adjusted = (
-            self.gl_closing_balance
-            + self.outstanding_deposits
-            - self.outstanding_payments
-            + self.total_adjustments
+        self.reconciliation_difference = (
+            self.adjusted_bank_balance - self.adjusted_book_balance
         )
-        self.reconciliation_difference = self.statement_closing_balance - adjusted
 
     @property
     def adjusted_book_balance(self) -> Decimal:
+        return self.gl_closing_balance + self.total_adjustments
+
+    @property
+    def adjusted_bank_balance(self) -> Decimal:
         return (
-            self.gl_closing_balance
+            self.statement_closing_balance
             + self.outstanding_deposits
             - self.outstanding_payments
-            + self.total_adjustments
         )
 
     @property
@@ -428,7 +427,6 @@ def user_id() -> uuid.UUID:
 def mock_db():
     """Create a mock database session."""
     session = MagicMock()
-    session.query = MagicMock(return_value=session)
     session.filter = MagicMock(return_value=session)
     session.first = MagicMock(return_value=None)
     session.all = MagicMock(return_value=[])
@@ -439,6 +437,7 @@ def mock_db():
     session.delete = MagicMock()
     session.get = MagicMock(return_value=None)
     session.execute = MagicMock()
+    session.scalar = MagicMock(return_value=None)
     return session
 
 

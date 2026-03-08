@@ -5,13 +5,14 @@ Represents a bank account linked to a GL cash/bank account for reconciliation.
 """
 
 import enum
-from datetime import datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -127,12 +128,12 @@ class BankAccount(Base):
         Numeric(19, 4),
         nullable=True,
     )
-    last_statement_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+    last_statement_date: Mapped[date | None] = mapped_column(
+        Date,
         nullable=True,
     )
-    last_reconciled_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+    last_reconciled_date: Mapped[date | None] = mapped_column(
+        Date,
         nullable=True,
     )
     last_reconciled_balance: Mapped[Decimal] = mapped_column(
@@ -158,13 +159,13 @@ class BankAccount(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
     created_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)
     updated_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)

@@ -5,7 +5,7 @@ Represents bank reconciliation records that match bank statements to GL entries.
 """
 
 import enum
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
@@ -196,19 +196,19 @@ class BankReconciliation(Base, TrackedMixin):
     prepared_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
-    prepared_at: Mapped[datetime] = mapped_column(
+    prepared_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     reviewed_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
-    reviewed_at: Mapped[datetime] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     approved_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
-    approved_at: Mapped[datetime] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -220,13 +220,13 @@ class BankReconciliation(Base, TrackedMixin):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     # Relationships
@@ -251,12 +251,22 @@ class BankReconciliation(Base, TrackedMixin):
 
     @property
     def adjusted_book_balance(self) -> Decimal:
-        """Calculate adjusted book balance."""
+        """Calculate adjusted book balance.
+
+        GL Closing Balance + total adjustments (bank charges, interest not yet recorded).
+        """
+        return self.gl_closing_balance + self.total_adjustments
+
+    @property
+    def adjusted_bank_balance(self) -> Decimal:
+        """Calculate adjusted bank balance.
+
+        Statement Closing Balance + outstanding deposits - outstanding payments.
+        """
         return (
-            self.gl_closing_balance
+            self.statement_closing_balance
             + self.outstanding_deposits
             - self.outstanding_payments
-            + self.total_adjustments
         )
 
     def calculate_difference(self) -> Decimal:
@@ -313,7 +323,9 @@ class BankReconciliationLine(Base):
 
     # GL journal entry line reference
     journal_line_id: Mapped[UUID | None] = mapped_column(
-        SAUUID(as_uuid=True), nullable=True
+        SAUUID(as_uuid=True),
+        ForeignKey("gl.journal_entry_line.line_id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Transaction details (for display/audit)
@@ -362,7 +374,7 @@ class BankReconciliationLine(Base):
 
     # Status
     is_cleared: Mapped[bool] = mapped_column(Boolean, default=False)
-    cleared_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Notes
     notes: Mapped[str] = mapped_column(Text, nullable=True)
@@ -371,7 +383,7 @@ class BankReconciliationLine(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=datetime.utcnow,
+        default=lambda: datetime.now(UTC),
     )
     created_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)
 

@@ -93,8 +93,8 @@ class TestAutoMatchUnreconciledStatements:
         assert result["statements_processed"] == 2
         assert result["total_matched"] == 4
         assert result["errors"] == []
-        # Each statement should trigger a commit
-        assert mock_db.commit.call_count == 2
+        # Single commit at end after all savepoints
+        assert mock_db.commit.call_count == 1
 
     @patch("app.tasks.banking.SessionLocal")
     def test_per_statement_commit_isolation(self, mock_session_cls: MagicMock) -> None:
@@ -129,9 +129,8 @@ class TestAutoMatchUnreconciledStatements:
         # Second statement recorded as error
         assert len(result["errors"]) == 1
         assert "DB exploded" in result["errors"][0]
-        # Commit for stmt1, rollback for stmt2
+        # Single commit at end; savepoints handle isolation
         assert mock_db.commit.call_count == 1
-        assert mock_db.rollback.call_count == 1
 
     @patch("app.tasks.banking.SessionLocal")
     def test_match_errors_appended_to_results(

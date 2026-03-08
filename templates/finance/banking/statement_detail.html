@@ -473,7 +473,7 @@
                     </div>
                     <div>
                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Debits</p>
-                        <p class="mt-1 text-lg font-semibold text-rose-600 dark:text-rose-400 font-mono tabular-nums">&minus;{{ statement.total_debits }}</p>
+                        <p class="mt-1 text-lg font-semibold text-rose-600 dark:text-rose-400 font-mono tabular-nums">({{ statement.total_debits }})</p>
                     </div>
                     <div>
                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Net Change</p>
@@ -542,7 +542,7 @@
                                     {% endif %}
                                 </td>
                                 <td class="text-right font-mono tabular-nums text-sm {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
-                                    {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
+                                    {% if line.transaction_type == 'debit' %}<span class="text-rose-600 dark:text-rose-400">({{ line.amount }})</span>{% else %}{{ line.amount }}{% endif %}
                                 </td>
                                 {% if has_balance_data %}<td class="text-right font-mono tabular-nums text-sm text-slate-600 dark:text-slate-400">{{ line.running_balance if line.running_balance else "-" }}</td>{% endif %}
                                 <td class="text-center">
@@ -942,7 +942,7 @@
                     </div>
                     <div class="flex items-center justify-between">
                         <dt class="text-sm text-rose-600 dark:text-rose-400">Debits</dt>
-                        <dd class="text-sm font-mono tabular-nums text-rose-600 dark:text-rose-400">&minus;{{ statement.total_debits }}</dd>
+                        <dd class="text-sm font-mono tabular-nums text-rose-600 dark:text-rose-400">({{ statement.total_debits }})</dd>
                     </div>
                     <div class="border-t border-slate-200 dark:border-slate-700 pt-3 flex items-center justify-between">
                         <dt class="text-sm font-medium text-slate-900 dark:text-white">Closing</dt>

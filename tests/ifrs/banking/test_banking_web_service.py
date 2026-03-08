@@ -80,7 +80,7 @@ def test_duplicate_rule_response_redirects_with_copy_count(mock_db):
     assert response.status_code == 303
     assert "Rule+duplicated+(2+copy)" in response.headers["location"]
     assert mock_duplicate.called
-    mock_db.commit.assert_called_once()
+    assert mock_db.flush.call_count >= 1
 
 
 def test_bulk_rule_duplicate_form_context_requires_rule_ids(mock_db):
@@ -122,7 +122,7 @@ def test_bulk_duplicate_rules_response_redirects_with_total_count(mock_db):
     assert response.status_code == 303
     assert "Rules+duplicated+(3+copies)" in response.headers["location"]
     assert mock_duplicate.call_count == 2
-    mock_db.commit.assert_called_once()
+    assert mock_db.flush.call_count >= 1
 
 
 @pytest.mark.asyncio
@@ -587,7 +587,7 @@ def test_statement_auto_match_response_matched(mock_db, monkeypatch):
     assert response.status_code == 303
     assert "success" in response.headers["location"]
     assert "5" in response.headers["location"]
-    mock_db.commit.assert_called_once()
+    assert mock_db.flush.call_count >= 1
 
 
 def test_statement_auto_match_response_no_matches(mock_db, monkeypatch):

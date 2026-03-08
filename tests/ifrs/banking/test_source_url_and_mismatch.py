@@ -358,6 +358,14 @@ class TestStatementDetailContextEnhancements:
         statement = self._make_statement(org_id, lines)
         mock_db.get.return_value = statement
 
+        # Mock SQL pagination: total_count=3 via db.scalar, page 2 returns 1 line
+        mock_db.scalar.return_value = 3
+        line_scalars = MagicMock()
+        line_scalars.all.return_value = [lines[2]]  # page 2, limit 2 → 1 line
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
+
         mock_recon = MagicMock()
         mock_recon.get_statement_match_suggestions.return_value = {}
         MockReconCls.return_value = mock_recon
@@ -393,7 +401,14 @@ class TestStatementDetailContextEnhancements:
         statement = self._make_statement(org_id, [line])
 
         mock_db.get.return_value = statement
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        # Mock SQL pagination
+        mock_db.scalar.return_value = 1
+        line_scalars = MagicMock()
+        line_scalars.all.return_value = [line]
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
 
         mock_recon = MagicMock()
         mock_recon.get_statement_match_suggestions.return_value = {}
@@ -432,7 +447,14 @@ class TestStatementDetailContextEnhancements:
         statement = self._make_statement(org_id, [line])
 
         mock_db.get.return_value = statement
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        # Mock SQL pagination
+        mock_db.scalar.return_value = 1
+        line_scalars = MagicMock()
+        line_scalars.all.return_value = [line]
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
 
         # Mock the JournalEntryLine lookup for matched lines
         mock_jl = MockJournalEntryLine(line_id=jl_id)
@@ -477,7 +499,14 @@ class TestStatementDetailContextEnhancements:
         statement = self._make_statement(org_id, [line])
 
         mock_db.get.return_value = statement
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        # Mock SQL pagination
+        mock_db.scalar.return_value = 1
+        line_scalars = MagicMock()
+        line_scalars.all.return_value = [line]
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
 
         mock_recon = MagicMock()
         mock_recon.get_statement_match_suggestions.return_value = {}
@@ -511,7 +540,14 @@ class TestStatementDetailContextEnhancements:
         statement = self._make_statement(org_id, [line])
 
         mock_db.get.return_value = statement
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        # Mock SQL pagination
+        mock_db.scalar.return_value = 1
+        line_scalars = MagicMock()
+        line_scalars.all.return_value = [line]
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
 
         doc_id = uuid4()
         suggestion = MatchSuggestion(
@@ -568,7 +604,14 @@ class TestStatementDetailContextEnhancements:
         statement = self._make_statement(org_id, [matched_line, unmatched_line])
 
         mock_db.get.return_value = statement
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        # Mock SQL pagination
+        mock_db.scalar.return_value = 2
+        line_scalars = MagicMock()
+        line_scalars.all.return_value = [matched_line, unmatched_line]
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        mock_db.scalars.side_effect = [line_scalars, empty_scalars, empty_scalars, empty_scalars]
 
         # Mock the JournalEntryLine lookup
         mock_jl = MockJournalEntryLine(line_id=jl_id)

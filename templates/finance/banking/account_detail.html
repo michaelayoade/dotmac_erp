@@ -42,7 +42,7 @@
                 </div>
                 <div>
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ account.account_name }}</h2>
-                    <p class="text-sm text-slate-500">{{ account.bank_name }} - {{ account.branch_name | default("") }}</p>
+                    <p class="text-sm text-slate-500">{{ account.bank_name }} - {{ account.branch_name if account.branch_name else '' }}</p>
                 </div>
             </div>
             <div class="flex items-center gap-3">
@@ -102,24 +102,24 @@
             <dl class="space-y-3">
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Last Statement Balance</dt>
-                    <dd class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ account.last_statement_balance | default("-") }}</dd>
+                    <dd class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ account.last_statement_balance if account.last_statement_balance is not none else '-' }}</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Last Statement Date</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ account.last_statement_date | default("-") }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ account.last_statement_date if account.last_statement_date else '-' }}</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Last Reconciled Balance</dt>
-                    <dd class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ account.last_reconciled_balance | default("-") }}</dd>
+                    <dd class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ account.last_reconciled_balance if account.last_reconciled_balance is not none else '-' }}</dd>
                 </div>
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Last Reconciled Date</dt>
-                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ account.last_reconciled_date | default("Never") }}</dd>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ account.last_reconciled_date if account.last_reconciled_date else 'Never' }}</dd>
                 </div>
                 {% if account.allow_overdraft %}
                 <div class="flex justify-between">
                     <dt class="text-sm text-slate-500">Overdraft Limit</dt>
-                    <dd class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ account.overdraft_limit | default("-") }}</dd>
+                    <dd class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ account.overdraft_limit if account.overdraft_limit is not none else '-' }}</dd>
                 </div>
                 {% endif %}
             </dl>
@@ -131,7 +131,7 @@
     <div class="card p-6">
         <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Contact Information</h3>
 
-        <div class="grid gap-4 sm:grid-cols-3">
+        <dl class="grid gap-4 sm:grid-cols-3">
             {% if account.contact_name %}
             <div>
                 <dt class="text-sm text-slate-500">Contact Name</dt>
@@ -150,7 +150,7 @@
                 <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ account.contact_email }}</dd>
             </div>
             {% endif %}
-        </div>
+        </dl>
     </div>
     {% endif %}
 
@@ -192,21 +192,21 @@
                         <td>
                             <a href="/finance/banking/transactions/{{ line.line_id }}"
                                class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
-                                {{ line.description | default("-") }}
+                                {{ line.description if line.description else '-' }}
                             </a>
                             {% if line.payee_payer %}
                             <p class="text-xs text-slate-500">{{ line.payee_payer }}</p>
                             {% endif %}
                         </td>
-                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.reference | default(line.bank_reference) | default("-") }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.reference if line.reference else (line.bank_reference if line.bank_reference else '-') }}</td>
                         <td>
                             <span class="text-sm font-mono text-slate-600 dark:text-slate-400">
                                 {{ line.statement_number }}
                             </span>
                             <p class="text-xs text-slate-500">{{ line.statement_date }}</p>
                         </td>
-                        <td class="table-cell-amount {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
-                            {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
+                        <td class="table-cell-amount font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
+                            {% if line.transaction_type == 'debit' %}<span class="text-rose-600 dark:text-rose-400">({{ line.amount }})</span>{% else %}{{ line.amount }}{% endif %}
                         </td>
                     </tr>
                     {% else %}

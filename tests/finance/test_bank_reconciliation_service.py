@@ -39,12 +39,15 @@ def _make_reconciliation(status=ReconciliationStatus.draft):
     )
 
     def _calc():
-        recon.reconciliation_difference = recon.statement_closing_balance - (
-            recon.gl_closing_balance
+        adjusted_book = recon.gl_closing_balance + recon.total_adjustments
+        adjusted_bank = (
+            recon.statement_closing_balance
             + recon.outstanding_deposits
             - recon.outstanding_payments
-            + recon.total_adjustments
         )
+        recon.adjusted_book_balance = adjusted_book
+        recon.adjusted_bank_balance = adjusted_bank
+        recon.reconciliation_difference = adjusted_bank - adjusted_book
         return recon.reconciliation_difference
 
     recon.calculate_difference = _calc
@@ -76,7 +79,10 @@ def test_create_reconciliation_missing_bank_account():
 def test_create_reconciliation_existing():
     svc = BankReconciliationService()
     db = MagicMock()
-    bank_account = SimpleNamespace(gl_account_id=uuid4(), currency_code="NGN")
+    org_id = uuid4()
+    bank_account = SimpleNamespace(
+        gl_account_id=uuid4(), currency_code="NGN", organization_id=org_id
+    )
     db.get.return_value = bank_account
     existing = SimpleNamespace()
     db.execute.return_value.scalar_one_or_none.return_value = existing
@@ -84,7 +90,7 @@ def test_create_reconciliation_existing():
     with pytest.raises(HTTPException) as excinfo:
         svc.create_reconciliation(
             db,
-            uuid4(),
+            org_id,
             uuid4(),
             ReconciliationInput(
                 reconciliation_date=date.today(),
@@ -101,7 +107,10 @@ def test_create_reconciliation_existing():
 def test_create_reconciliation_success_with_prior():
     svc = BankReconciliationService()
     db = MagicMock()
-    bank_account = SimpleNamespace(gl_account_id=uuid4(), currency_code="NGN")
+    org_id = uuid4()
+    bank_account = SimpleNamespace(
+        gl_account_id=uuid4(), currency_code="NGN", organization_id=org_id
+    )
     db.get.return_value = bank_account
     db.execute.return_value.scalar_one_or_none.return_value = None
 
@@ -123,7 +132,7 @@ def test_create_reconciliation_success_with_prior():
     ):
         recon = svc.create_reconciliation(
             db,
-            uuid4(),
+            org_id,
             uuid4(),
             ReconciliationInput(
                 reconciliation_date=date(2024, 1, 31),
@@ -197,6 +206,7 @@ def test_add_match_invalid_status():
     svc = BankReconciliationService()
     db = MagicMock()
     recon = _make_reconciliation(status=ReconciliationStatus.approved)
+    db.get.return_value = recon
 
     with pytest.raises(HTTPException) as excinfo:
         svc.add_match(
@@ -427,13 +437,19 @@ def test_calculate_match_score():
 def test_get_gl_balance_and_prior_reconciliation():
     svc = BankReconciliationService()
     db = MagicMock()
+    org_id = uuid4()
     db.execute.return_value.one.return_value = SimpleNamespace(
         debits=Decimal("100.00"), credits=Decimal("40.00")
     )
-    assert svc._get_gl_balance(db, uuid4(), date(2024, 1, 1)) == Decimal("60.00")
+    assert (
+        svc._get_gl_balance(db, uuid4(), date(2024, 1, 1), organization_id=org_id)
+        == Decimal("60.00")
+    )
 
     db.execute.return_value.scalar_one_or_none.return_value = "prior"
-    assert svc._get_prior_reconciliation(db, uuid4(), date(2024, 1, 2)) == "prior"
+    assert (
+        svc._get_prior_reconciliation(db, uuid4(), date(2024, 1, 2), org_id) == "prior"
+    )
 
 
 def test_submit_approve_reject():
@@ -509,7 +525,7 @@ def test_get_reconciliation_report():
     ]
     db.get.return_value = recon
 
-    report = svc.get_reconciliation_report(db, recon.reconciliation_id)
+    report = svc.get_reconciliation_report(db, recon.organization_id, recon.reconciliation_id)
     assert report["matched_items"]["count"] == 1
     assert report["adjustments"]["count"] == 1
     assert report["outstanding_deposits"]["count"] == 1

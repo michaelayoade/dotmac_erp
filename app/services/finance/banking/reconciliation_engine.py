@@ -685,6 +685,7 @@ class ReconciliationEngine:
                     BankStatementLine.statement_id == BankStatement.statement_id,
                 )
                 .where(
+                    BankStatement.organization_id == ctx.organization_id,
                     BankStatement.bank_account_id.in_(other_bank_ids),
                     BankStatementLine.is_matched.is_(False),
                     BankStatementLine.transaction_date.between(min_date, max_date),
@@ -1005,7 +1006,7 @@ class ReconciliationEngine:
                 continue
             key: _DateAmountKey = (
                 c_date,
-                int(abs(get_amount(c)) * 100),
+                int(round(abs(get_amount(c)) * 100)),
             )
             candidate_index.setdefault(key, []).append(c)
 
@@ -1016,7 +1017,7 @@ class ReconciliationEngine:
                 continue
             key = (
                 line.transaction_date,
-                int(abs(line.amount) * 100),
+                int(round(abs(line.amount) * 100)),
             )
             line_index.setdefault(key, []).append(line)
 
