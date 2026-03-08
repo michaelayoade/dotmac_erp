@@ -23,12 +23,12 @@ VIEWPORT_WIDTH = 1440
 VIEWPORT_HEIGHT = 900
 
 # Thresholds
-MIN_HEIGHT = 400           # Suspiciously short page
-MAX_HEIGHT = 15000         # Suspiciously tall page
-BLANK_WHITE_RATIO = 0.92   # >92% white pixels = likely blank
-BLANK_DARK_RATIO = 0.90    # >90% dark pixels = broken render
-SIDEBAR_SAMPLE_X = 80      # X position to sample for sidebar presence
-SIDEBAR_COLOR_RANGE = 40   # How uniform the sidebar column should be
+MIN_HEIGHT = 400  # Suspiciously short page
+MAX_HEIGHT = 15000  # Suspiciously tall page
+BLANK_WHITE_RATIO = 0.92  # >92% white pixels = likely blank
+BLANK_DARK_RATIO = 0.90  # >90% dark pixels = broken render
+SIDEBAR_SAMPLE_X = 80  # X position to sample for sidebar presence
+SIDEBAR_COLOR_RANGE = 40  # How uniform the sidebar column should be
 
 
 def analyze_image(filepath):
@@ -50,7 +50,9 @@ def analyze_image(filepath):
     if height < MIN_HEIGHT:
         issues.append(("SHORT_PAGE", f"Height {height}px — likely empty or error"))
     if height > MAX_HEIGHT:
-        issues.append(("TALL_PAGE", f"Height {height}px — possibly unpaginated or runaway"))
+        issues.append(
+            ("TALL_PAGE", f"Height {height}px — possibly unpaginated or runaway")
+        )
 
     # --- Check 2: Blank/white page ---
     # Consider pixels with R,G,B all > 245 as "white"
@@ -66,25 +68,34 @@ def analyze_image(filepath):
         dark_ratio = dark_mask.sum() / (width * height)
         stats["dark_ratio"] = round(float(dark_ratio), 3)
         if dark_ratio > BLANK_DARK_RATIO:
-            issues.append(("DARK_PAGE", f"{dark_ratio:.0%} dark pixels — broken render?"))
+            issues.append(
+                ("DARK_PAGE", f"{dark_ratio:.0%} dark pixels — broken render?")
+            )
 
     # --- Check 4: Error page detection ---
     # Sample the top portion for red/amber error indicators
     # We check image height — error pages tend to be short with centered content
     if height < 600 and width == VIEWPORT_WIDTH:
-        issues.append(("POSSIBLE_ERROR", f"Short page ({height}px) — may be error/404/400"))
+        issues.append(
+            ("POSSIBLE_ERROR", f"Short page ({height}px) — may be error/404/400")
+        )
 
     # --- Check 5: Sidebar presence ---
     # Sample a vertical strip at x=80 (mid-sidebar region)
     # A proper sidebar should have a consistent color band
     if width >= VIEWPORT_WIDTH and height >= VIEWPORT_HEIGHT:
-        sidebar_strip = arr[100:min(500, height), SIDEBAR_SAMPLE_X, :3]
+        sidebar_strip = arr[100 : min(500, height), SIDEBAR_SAMPLE_X, :3]
         if len(sidebar_strip) > 0:
             sidebar_std = np.std(sidebar_strip, axis=0).mean()
             stats["sidebar_std"] = round(float(sidebar_std), 2)
             # High variance in sidebar column = likely no sidebar
             if sidebar_std > SIDEBAR_COLOR_RANGE:
-                issues.append(("NO_SIDEBAR", f"Sidebar column variance={sidebar_std:.1f} — may be missing sidebar"))
+                issues.append(
+                    (
+                        "NO_SIDEBAR",
+                        f"Sidebar column variance={sidebar_std:.1f} — may be missing sidebar",
+                    )
+                )
 
     # --- Check 6: Mostly single-color (not white/dark) ---
     if len(arr.shape) == 3:
@@ -92,7 +103,12 @@ def analyze_image(filepath):
         color_std = arr[:, :, :3].std(axis=(0, 1)).mean()
         stats["color_std"] = round(float(color_std), 2)
         if color_std < 15 and not issues:
-            issues.append(("UNIFORM_COLOR", f"Very low color variance ({color_std:.1f}) — possibly blank/broken"))
+            issues.append(
+                (
+                    "UNIFORM_COLOR",
+                    f"Very low color variance ({color_std:.1f}) — possibly blank/broken",
+                )
+            )
 
     return issues, stats
 
@@ -134,7 +150,9 @@ def main():
         rate = ((m["total"] - m["issues"]) / m["total"] * 100) if m["total"] else 0
         print(f"{module:<20} {m['total']:>6} {m['issues']:>7} {rate:>9.0f}%")
     print("-" * 45)
-    overall_rate = ((total_pages - total_issues) / total_pages * 100) if total_pages else 0
+    overall_rate = (
+        ((total_pages - total_issues) / total_pages * 100) if total_pages else 0
+    )
     print(f"{'TOTAL':<20} {total_pages:>6} {total_issues:>7} {overall_rate:>9.0f}%")
 
     # Issues by severity
@@ -145,8 +163,16 @@ def main():
             for issue_type, detail in issues:
                 by_type[issue_type].append((path, detail))
 
-        severity_order = ["CORRUPT", "DARK_PAGE", "BLANK_PAGE", "POSSIBLE_ERROR",
-                          "SHORT_PAGE", "NO_SIDEBAR", "TALL_PAGE", "UNIFORM_COLOR"]
+        severity_order = [
+            "CORRUPT",
+            "DARK_PAGE",
+            "BLANK_PAGE",
+            "POSSIBLE_ERROR",
+            "SHORT_PAGE",
+            "NO_SIDEBAR",
+            "TALL_PAGE",
+            "UNIFORM_COLOR",
+        ]
 
         for issue_type in severity_order:
             if issue_type not in by_type:

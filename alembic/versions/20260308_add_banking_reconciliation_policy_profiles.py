@@ -32,7 +32,9 @@ def upgrade() -> None:
         ),
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sa.String(length=120), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
         sa.Column(
             "enabled_provider_keys",
             postgresql.JSONB(astext_type=sa.Text()),
@@ -115,4 +117,3 @@ def downgrade() -> None:
         schema="banking",
     )
     op.drop_table("reconciliation_policy_profile", schema="banking")
-

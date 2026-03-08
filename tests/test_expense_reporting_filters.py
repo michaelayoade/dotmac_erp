@@ -253,9 +253,7 @@ def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, eng
     )
     db_session.commit()
 
-    top_spenders = expense_dashboard_service._get_top_spenders(
-        db_session, org_id, None
-    )
+    top_spenders = expense_dashboard_service._get_top_spenders(db_session, org_id, None)
     assert len(top_spenders) == 1
     assert top_spenders[0]["amount"] == 75.0
 
@@ -265,9 +263,7 @@ def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, eng
     assert len(category_distribution) == 1
     assert category_distribution[0]["amount"] == 75.0
 
-    monthly_amounts = expense_dashboard_service._get_monthly_amounts(
-        db_session, org_id
-    )
+    monthly_amounts = expense_dashboard_service._get_monthly_amounts(db_session, org_id)
     assert monthly_amounts[-1]["claimed"] == 75.0
 
 

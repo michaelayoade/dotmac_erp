@@ -24,7 +24,7 @@ from app.models.expense import (
     ExpenseClaim,
     ExpenseLimitRule,
 )
-from app.services.email import send_email
+from app.services.email import employee_can_receive_email, send_email
 from app.services.email_branding import render_branded_email
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ def _employee_first_name(employee: Employee | None) -> str:
 
 def _employee_work_email(employee: Employee | None) -> str | None:
     """Get employee work email if available."""
-    if not employee:
+    if not employee or not employee_can_receive_email(employee):
         return None
     work_email = getattr(employee, "work_email", None)
     if isinstance(work_email, str) and work_email:
@@ -156,7 +156,8 @@ class ExpenseNotificationService:
         Returns:
             True if notification was sent successfully
         """
-        if not approver.work_email:
+        approver_email = _employee_work_email(approver)
+        if not approver_email:
             logger.warning("No email for approver %s", approver.employee_id)
             return False
 
@@ -186,7 +187,7 @@ class ExpenseNotificationService:
         return self._send(
             "emails/expense/approval_needed.html",
             context,
-            to_email=approver.work_email,
+            to_email=approver_email,
             subject=subject,
             organization_id=claim.organization_id,
         )
@@ -207,7 +208,7 @@ class ExpenseNotificationService:
         Returns:
             True if notification was sent successfully
         """
-        if not claim.employee or not claim.employee.work_email:
+        if not claim.employee or not _employee_work_email(claim.employee):
             logger.warning("No email for claimant on claim %s", claim.claim_id)
             return False
 
@@ -265,7 +266,7 @@ class ExpenseNotificationService:
         Returns:
             True if notification was sent successfully
         """
-        if not claim.employee or not claim.employee.work_email:
+        if not claim.employee or not _employee_work_email(claim.employee):
             logger.warning("No email for claimant on claim %s", claim.claim_id)
             return False
 
@@ -317,7 +318,7 @@ class ExpenseNotificationService:
         Returns:
             True if notification was sent successfully
         """
-        if not claim.employee or not claim.employee.work_email:
+        if not claim.employee or not _employee_work_email(claim.employee):
             logger.warning("No email for claimant on claim %s", claim.claim_id)
             return False
 
@@ -383,7 +384,8 @@ class ExpenseNotificationService:
         Returns:
             True if notification was sent successfully
         """
-        if not approver.work_email:
+        approver_email = _employee_work_email(approver)
+        if not approver_email:
             logger.warning("No email for approver %s", approver.employee_id)
             return False
 
@@ -406,7 +408,7 @@ class ExpenseNotificationService:
         return self._send(
             "emails/expense/pending_reminder.html",
             context,
-            to_email=approver.work_email,
+            to_email=approver_email,
             subject=f"Reminder: Expense Claim Awaiting Your Approval - {claim.claim_number}",
             organization_id=claim.organization_id,
         )
@@ -429,7 +431,7 @@ class ExpenseNotificationService:
         Returns:
             True if notification was sent successfully
         """
-        if not claim.employee or not claim.employee.work_email:
+        if not claim.employee or not _employee_work_email(claim.employee):
             logger.warning("No email for claimant on claim %s", claim.claim_id)
             return False
 

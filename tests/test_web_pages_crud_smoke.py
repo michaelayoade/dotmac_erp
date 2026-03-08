@@ -55,9 +55,7 @@ PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000099"
 _PARAM_RE = re.compile(r"\{[^}]+\}")
 
 # Routes to always skip (token-auth, not session-auth).
-SKIP_PREFIXES = (
-    "/onboarding/start/",
-)
+SKIP_PREFIXES = ("/onboarding/start/",)
 
 # Special path parameter replacements (non-UUID).
 SPECIAL_PARAMS: dict[str, str] = {
@@ -424,8 +422,7 @@ def test_web_route_no_5xx(smoke_client: _ASGIClient, path: str):
         is_infra_limitation = any(err in snippet for err in _INFRA_ERRORS)
         if not is_infra_limitation:
             pytest.fail(
-                f"{path} returned {response.status_code}\n"
-                f"Body snippet: {snippet[:500]}"
+                f"{path} returned {response.status_code}\nBody snippet: {snippet[:500]}"
             )
 
 

@@ -44,7 +44,9 @@ def test_training_event_starts_in_draft_and_schedules_once(monkeypatch):
 
 
 def test_training_program_list_context_includes_pagination_metadata(monkeypatch):
-    result = PaginatedResult(items=[SimpleNamespace(program_id=uuid4())], total=1, limit=20)
+    result = PaginatedResult(
+        items=[SimpleNamespace(program_id=uuid4())], total=1, limit=20
+    )
 
     monkeypatch.setattr(
         TrainingService,
@@ -60,8 +62,12 @@ def test_training_program_list_context_includes_pagination_metadata(monkeypatch)
 
 
 def test_training_event_list_context_includes_pagination_metadata(monkeypatch):
-    event_result = PaginatedResult(items=[SimpleNamespace(event_id=uuid4())], total=1, limit=20)
-    program_result = PaginatedResult(items=[SimpleNamespace(program_id=uuid4())], total=1, limit=200)
+    event_result = PaginatedResult(
+        items=[SimpleNamespace(event_id=uuid4())], total=1, limit=20
+    )
+    program_result = PaginatedResult(
+        items=[SimpleNamespace(program_id=uuid4())], total=1, limit=200
+    )
 
     def fake_list_programs(self, organization_id, **kwargs):
         return program_result

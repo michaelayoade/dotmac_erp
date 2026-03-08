@@ -1,13 +1,18 @@
 """Tests for email service - failure handling and configuration."""
 
 import smtplib
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from app.models.people.hr.employee import EmployeeStatus
+from app.models.person import PersonStatus
 from app.services.email import (
     _env_bool,
     _env_int,
     _env_value,
     _get_smtp_config,
+    employee_can_receive_email,
+    person_can_receive_email,
     send_email,
     send_password_reset_email,
     validate_smtp_config,
@@ -64,6 +69,58 @@ class TestEnvHelpers:
         monkeypatch.delenv("MISSING_BOOL", raising=False)
         assert _env_bool("MISSING_BOOL", True) is True
         assert _env_bool("MISSING_BOOL", False) is False
+
+
+class TestRecipientEligibility:
+    """Tests for recipient email eligibility helpers."""
+
+    def test_person_can_receive_email_for_active_person(self):
+        person = SimpleNamespace(
+            email="active@example.com",
+            is_active=True,
+            status=PersonStatus.active,
+        )
+
+        assert person_can_receive_email(person) is True
+
+    def test_person_can_receive_email_rejects_inactive_person(self):
+        person = SimpleNamespace(
+            email="inactive@example.com",
+            is_active=False,
+            status=PersonStatus.active,
+        )
+
+        assert person_can_receive_email(person) is False
+
+    def test_employee_can_receive_email_rejects_separated_employee(self):
+        person = SimpleNamespace(
+            email="employee@example.com",
+            is_active=True,
+            status=PersonStatus.active,
+        )
+        employee = SimpleNamespace(
+            status=EmployeeStatus.TERMINATED,
+            person=person,
+            work_email="employee@example.com",
+            personal_email=None,
+        )
+
+        assert employee_can_receive_email(employee) is False
+
+    def test_employee_can_receive_email_allows_draft_employee(self):
+        person = SimpleNamespace(
+            email="newhire@example.com",
+            is_active=True,
+            status=PersonStatus.active,
+        )
+        employee = SimpleNamespace(
+            status=EmployeeStatus.DRAFT,
+            person=person,
+            work_email="newhire@example.com",
+            personal_email=None,
+        )
+
+        assert employee_can_receive_email(employee) is True
 
 
 class TestSmtpConfig:

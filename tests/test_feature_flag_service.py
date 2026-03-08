@@ -34,7 +34,9 @@ def service(db_session):
     return FeatureFlagService(db_session)
 
 
-def _seed_registry(db, flag_key, default_enabled=False, category=FeatureFlagCategory.MODULE):
+def _seed_registry(
+    db, flag_key, default_enabled=False, category=FeatureFlagCategory.MODULE
+):
     """Seed a registry entry."""
     entry = FeatureFlagRegistry(
         flag_key=flag_key,
@@ -146,7 +148,10 @@ class TestRegister:
 
     def test_register_new_flag(self, db_session, service):
         flag = service.register_flag(
-            "enable_new", "New Feature", "A new feature", FeatureFlagCategory.EXPERIMENTAL
+            "enable_new",
+            "New Feature",
+            "A new feature",
+            FeatureFlagCategory.EXPERIMENTAL,
         )
         assert flag.flag_key == "enable_new"
         assert flag.label == "New Feature"

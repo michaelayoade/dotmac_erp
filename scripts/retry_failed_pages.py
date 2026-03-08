@@ -1,4 +1,5 @@
 """Retry timed-out pages with longer timeout and capture error details."""
+
 import builtins
 import re
 import sys
@@ -11,6 +12,7 @@ _print = builtins.print
 def print(*args, **kw):
     kw["flush"] = True
     _print(*args, **kw)
+
 
 from playwright.sync_api import sync_playwright
 
@@ -54,7 +56,9 @@ def get_module(route):
     if not parts or parts[0] == "":
         return "_root"
     module_map = {
-        "support": "support", "tasks": "projects", "tax": "finance",
+        "support": "support",
+        "tasks": "projects",
+        "tax": "finance",
     }
     return module_map.get(parts[0], "_other")
 
@@ -72,15 +76,25 @@ def main():
 
         # Enable console logging to catch JS errors
         js_errors = []
-        page.on("console", lambda msg: js_errors.append(f"[{msg.type}] {msg.text}") if msg.type in ("error", "warning") else None)
-        page.on("pageerror", lambda err: js_errors.append(f"[PAGE_ERROR] {err.message}"))
+        page.on(
+            "console",
+            lambda msg: (
+                js_errors.append(f"[{msg.type}] {msg.text}")
+                if msg.type in ("error", "warning")
+                else None
+            ),
+        )
+        page.on(
+            "pageerror", lambda err: js_errors.append(f"[PAGE_ERROR] {err.message}")
+        )
 
         # Login
         print("Logging in...")
         page.goto(f"{BASE_URL}/login", wait_until="networkidle", timeout=30000)
         time.sleep(1)
 
-        login_result = page.evaluate("""async () => {
+        login_result = page.evaluate(
+            """async () => {
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const resp = await fetch('/auth/login', {
                 method: 'POST',
@@ -88,11 +102,16 @@ def main():
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': csrf || '',
                 },
-                body: JSON.stringify({username: '""" + USERNAME + """', password: '""" + PASSWORD + """'}),
+                body: JSON.stringify({username: '"""
+            + USERNAME
+            + """', password: '"""
+            + PASSWORD
+            + """'}),
             });
             const data = await resp.json();
             return {status: resp.status, data: data};
-        }""")
+        }"""
+        )
 
         if login_result["status"] != 200:
             print(f"ERROR: Login failed: {login_result}")
@@ -115,7 +134,7 @@ def main():
             filepath = module_dir / f"{filename}.png"
 
             url = f"{BASE_URL}{route}"
-            print(f"\n[{i+1}/{len(FAILED_ROUTES)}] {route}")
+            print(f"\n[{i + 1}/{len(FAILED_ROUTES)}] {route}")
 
             try:
                 resp = page.goto(url, wait_until="networkidle", timeout=TIMEOUT)
@@ -125,16 +144,22 @@ def main():
                 page_title = page.title()
                 current_url = page.url
 
-                print(f"  HTTP {status_code} | title: {page_title} | url: {current_url}")
+                print(
+                    f"  HTTP {status_code} | title: {page_title} | url: {current_url}"
+                )
 
                 # Check for server errors in page content
-                body_text = page.evaluate("() => document.body?.innerText?.substring(0, 500) || ''")
+                body_text = page.evaluate(
+                    "() => document.body?.innerText?.substring(0, 500) || ''"
+                )
                 if "Internal Server Error" in body_text or "500" in str(status_code):
                     print("  SERVER ERROR detected")
                     # Capture the error page screenshot anyway
                     error_path = module_dir / f"{filename}_ERROR.png"
                     page.screenshot(path=str(error_path), full_page=True)
-                    still_failing.append((route, f"HTTP {status_code}", body_text[:200]))
+                    still_failing.append(
+                        (route, f"HTTP {status_code}", body_text[:200])
+                    )
                     continue
 
                 if "/login" in current_url and route != "/login":
@@ -162,7 +187,9 @@ def main():
                     print("  Captured partial screenshot as _ERROR")
 
                     # Check response status from network
-                    body_text = page.evaluate("() => document.body?.innerText?.substring(0, 500) || ''")
+                    body_text = page.evaluate(
+                        "() => document.body?.innerText?.substring(0, 500) || ''"
+                    )
                     print(f"  Page content preview: {body_text[:150]}")
                     still_failing.append((route, "timeout", body_text[:200]))
                 except Exception:
@@ -170,7 +197,7 @@ def main():
 
         browser.close()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Retry complete: {success}/{len(FAILED_ROUTES)} succeeded")
 
     if still_failing:

@@ -33,22 +33,53 @@ def upgrade() -> None:
         sa.Column("summary", sa.Text, nullable=False, server_default=""),
         sa.Column("body_json", postgresql.JSON, nullable=True),
         sa.Column("module_key", sa.String(50), nullable=False),
-        sa.Column("content_type", sa.String(50), nullable=False, server_default="workflow"),
+        sa.Column(
+            "content_type", sa.String(50), nullable=False, server_default="workflow"
+        ),
         sa.Column(
             "status",
-            postgresql.ENUM("DRAFT", "PUBLISHED", "ARCHIVED", name="help_article_status", create_type=False),
+            postgresql.ENUM(
+                "DRAFT",
+                "PUBLISHED",
+                "ARCHIVED",
+                name="help_article_status",
+                create_type=False,
+            ),
             nullable=False,
             server_default="DRAFT",
         ),
         sa.Column("owner_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_reviewed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
-    op.create_index("idx_help_article_org_slug", "help_article_override", ["organization_id", "slug"], unique=True)
-    op.create_index("idx_help_article_org_status", "help_article_override", ["organization_id", "status"])
-    op.create_index("idx_help_article_module", "help_article_override", ["organization_id", "module_key"])
+    op.create_index(
+        "idx_help_article_org_slug",
+        "help_article_override",
+        ["organization_id", "slug"],
+        unique=True,
+    )
+    op.create_index(
+        "idx_help_article_org_status",
+        "help_article_override",
+        ["organization_id", "status"],
+    )
+    op.create_index(
+        "idx_help_article_module",
+        "help_article_override",
+        ["organization_id", "module_key"],
+    )
 
     # -- help_user_progress --
     op.create_table(
@@ -57,7 +88,12 @@ def upgrade() -> None:
         sa.Column("organization_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("person_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("article_slug", sa.String(200), nullable=False),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "completed_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_index(
         "idx_help_progress_unique",
@@ -76,8 +112,18 @@ def upgrade() -> None:
         sa.Column("article_slug", sa.String(200), nullable=False),
         sa.Column("rating", sa.String(20), nullable=False),
         sa.Column("comment", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_index(
         "idx_help_feedback_unique",
@@ -85,7 +131,11 @@ def upgrade() -> None:
         ["organization_id", "person_id", "article_slug"],
         unique=True,
     )
-    op.create_index("idx_help_feedback_slug", "help_article_feedback", ["organization_id", "article_slug"])
+    op.create_index(
+        "idx_help_feedback_slug",
+        "help_article_feedback",
+        ["organization_id", "article_slug"],
+    )
 
     # -- help_search_event --
     op.create_table(
@@ -97,7 +147,12 @@ def upgrade() -> None:
         sa.Column("filters", postgresql.JSON, nullable=True),
         sa.Column("result_count", sa.Integer, nullable=False, server_default="0"),
         sa.Column("clicked_slug", sa.String(200), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_index("idx_help_search_org", "help_search_event", ["organization_id"])
     op.create_index("idx_help_search_created", "help_search_event", ["created_at"])

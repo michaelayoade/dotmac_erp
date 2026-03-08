@@ -129,8 +129,12 @@ def test_help_center_experience_payload_includes_articles_and_tracks():
     )
 
     assert payload["featured_articles"]
-    assert any(article["slug"] == "finance-month-end-close" for article in payload["articles"])
-    assert any(track["slug"] == "finance-operations-foundations" for track in payload["tracks"])
+    assert any(
+        article["slug"] == "finance-month-end-close" for article in payload["articles"]
+    )
+    assert any(
+        track["slug"] == "finance-operations-foundations" for track in payload["tracks"]
+    )
 
 
 def test_get_help_article_by_slug_filters_to_accessible_modules():
@@ -179,7 +183,10 @@ def test_build_help_module_hub_returns_article_listing():
 
     assert hub is not None
     assert hub["module_title"] == "People & HR"
-    assert any(article["slug"] == "people-payroll-execution" for article in hub["module_articles"])
+    assert any(
+        article["slug"] == "people-payroll-execution"
+        for article in hub["module_articles"]
+    )
 
 
 def test_get_help_track_by_slug_returns_track_with_steps():

@@ -225,7 +225,9 @@ def test_create_batch_from_invoice_ids_groups_and_links_payments():
 
     created_payments = []
 
-    def _fake_create_payment(db, organization_id, input, created_by_user_id, auto_commit):
+    def _fake_create_payment(
+        db, organization_id, input, created_by_user_id, auto_commit
+    ):
         payment = SimpleNamespace(
             payment_id=uuid4(),
             supplier_id=input.supplier_id,
@@ -266,7 +268,9 @@ def test_create_batch_from_invoice_ids_groups_and_links_payments():
         Decimal("100.00"),
         Decimal("100.00"),
     }
-    assert all(payment.payment_batch_id == batch.batch_id for payment in created_payments)
+    assert all(
+        payment.payment_batch_id == batch.batch_id for payment in created_payments
+    )
     db.commit.assert_called_once()
 
 

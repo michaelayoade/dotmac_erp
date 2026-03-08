@@ -350,7 +350,11 @@ class TestFeaturesSettingsAPI:
             )
             if not exists:
                 db_session.add(
-                    FeatureFlagRegistry(flag_key=key, label=key.replace("_", " ").title(), description="Test flag")
+                    FeatureFlagRegistry(
+                        flag_key=key,
+                        label=key.replace("_", " ").title(),
+                        description="Test flag",
+                    )
                 )
         db_session.commit()
 

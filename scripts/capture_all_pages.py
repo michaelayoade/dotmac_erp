@@ -1,4 +1,5 @@
 """Capture full-page screenshots of all static GET routes in dotmac_erp."""
+
 import builtins
 import re
 import sys
@@ -11,6 +12,7 @@ _print = builtins.print
 def print(*args, **kw):
     kw["flush"] = True
     _print(*args, **kw)
+
 
 from playwright.sync_api import sync_playwright
 
@@ -80,7 +82,8 @@ def launch_browser(pw):
     page.goto(f"{BASE_URL}/login", wait_until="networkidle", timeout=30000)
     time.sleep(1)
 
-    login_result = page.evaluate("""async () => {
+    login_result = page.evaluate(
+        """async () => {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         const resp = await fetch('/auth/login', {
             method: 'POST',
@@ -88,11 +91,16 @@ def launch_browser(pw):
                 'Content-Type': 'application/json',
                 'X-CSRF-Token': csrf || '',
             },
-            body: JSON.stringify({username: '""" + USERNAME + """', password: '""" + PASSWORD + """'}),
+            body: JSON.stringify({username: '"""
+        + USERNAME
+        + """', password: '"""
+        + PASSWORD
+        + """'}),
         });
         const data = await resp.json();
         return {status: resp.status, data: data};
-    }""")
+    }"""
+    )
 
     if login_result["status"] != 200:
         raise RuntimeError(f"Login failed: {login_result}")
@@ -151,7 +159,7 @@ def main():
                     print("  Re-logged in OK")
 
             pct = ((i + 1) / len(routes)) * 100
-            print(f"[{i+1}/{len(routes)}] ({pct:.0f}%) {route} -> {status}")
+            print(f"[{i + 1}/{len(routes)}] ({pct:.0f}%) {route} -> {status}")
 
         browser.close()
 
