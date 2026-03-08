@@ -681,11 +681,14 @@ def project_template_list(
 
     org_id = coerce_uuid(auth.organization_id)
     per_page = 50
-    total_count = db.scalar(
-        select(func.count()).select_from(ProjectTemplate).where(
-            ProjectTemplate.organization_id == org_id
+    total_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(ProjectTemplate)
+            .where(ProjectTemplate.organization_id == org_id)
         )
-    ) or 0
+        or 0
+    )
     total_pages = max(1, (total_count + per_page - 1) // per_page)
 
     stmt = (
@@ -880,7 +883,9 @@ def project_template_detail(
         "tasks": tasks,
         "dependencies": dependencies,
     }
-    return templates.TemplateResponse(request, "projects/templates/detail.html", context)
+    return templates.TemplateResponse(
+        request, "projects/templates/detail.html", context
+    )
 
 
 @router.get("/templates/{template_id}/edit", response_class=HTMLResponse)
@@ -1084,7 +1089,9 @@ def global_task_list(
         "total_count": result.total,
         "limit": result.limit,
     }
-    return templates.TemplateResponse(request, "projects/tasks/global_list.html", context)
+    return templates.TemplateResponse(
+        request, "projects/tasks/global_list.html", context
+    )
 
 
 @router.get("/tasks/new", response_class=HTMLResponse)
@@ -1107,7 +1114,9 @@ def global_task_new_form(
         "team_members": _get_employees(db, org_id),
         "tickets": _get_tickets(db, org_id),
     }
-    return templates.TemplateResponse(request, "projects/tasks/global_form.html", context)
+    return templates.TemplateResponse(
+        request, "projects/tasks/global_form.html", context
+    )
 
 
 @router.post("/tasks", response_class=RedirectResponse)

@@ -28,7 +28,9 @@ from app.web.deps import base_context
 
 class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
     @staticmethod
-    def categories_list_response(request: Request, auth, db, search: str | None, is_active: str | None, page: int) -> HTMLResponse:
+    def categories_list_response(
+        request: Request, auth, db, search: str | None, is_active: str | None, page: int
+    ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
 
@@ -41,7 +43,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 is_active_value = False
 
         pagination = PaginationParams.from_page(page, 20)
-        result = svc.list_categories(org_id, search=search, is_active=is_active_value, pagination=pagination)
+        result = svc.list_categories(
+            org_id, search=search, is_active=is_active_value, pagination=pagination
+        )
 
         context = base_context(request, auth, "Expense Categories", "categories")
         context.update(
@@ -78,8 +82,12 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         ).all()
 
         context = base_context(request, auth, "New Expense Category", "categories")
-        context.update({"category": None, "expense_accounts": expense_accounts, "errors": {}})
-        return templates.TemplateResponse(request, "expense/category_form.html", context)
+        context.update(
+            {"category": None, "expense_accounts": expense_accounts, "errors": {}}
+        )
+        return templates.TemplateResponse(
+            request, "expense/category_form.html", context
+        )
 
     @classmethod
     async def create_category_response(cls, request: Request, auth, db):
@@ -92,7 +100,12 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         description = cls._form_str(form, "description")
         expense_account_id = cls._form_str(form, "expense_account_id")
         max_amount = cls._form_str(form, "max_amount_per_claim")
-        requires_receipt = cls._form_str(form, "requires_receipt") in {"1", "true", "on", "yes"}
+        requires_receipt = cls._form_str(form, "requires_receipt") in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
         is_active = cls._form_str(form, "is_active") in {"1", "true", "on", "yes"}
 
         errors = {}
@@ -114,7 +127,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         if errors:
             expense_accounts = db.scalars(
                 select(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
@@ -139,7 +154,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/category_form.html", context
+            )
 
         try:
             svc.create_category(
@@ -147,7 +164,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 category_code=category_code,
                 category_name=category_name,
                 description=description or None,
-                expense_account_id=coerce_uuid(expense_account_id) if expense_account_id else None,
+                expense_account_id=coerce_uuid(expense_account_id)
+                if expense_account_id
+                else None,
                 max_amount_per_claim=max_amount_value,
                 requires_receipt=requires_receipt if requires_receipt else False,
                 is_active=is_active if is_active else False,
@@ -157,7 +176,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
             db.rollback()
             expense_accounts = db.scalars(
                 select(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
@@ -182,12 +203,18 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                     "errors": {"_": str(exc)},
                 }
             )
-            return templates.TemplateResponse(request, "expense/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/category_form.html", context
+            )
 
-        return RedirectResponse(url="/expense/categories?success=Record+saved+successfully", status_code=303)
+        return RedirectResponse(
+            url="/expense/categories?success=Record+saved+successfully", status_code=303
+        )
 
     @staticmethod
-    def edit_category_form_response(request: Request, auth, db, category_id: str) -> HTMLResponse:
+    def edit_category_form_response(
+        request: Request, auth, db, category_id: str
+    ) -> HTMLResponse:
         from app.models.finance.gl.account import Account
         from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
@@ -207,11 +234,17 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         ).all()
 
         context = base_context(request, auth, "Edit Expense Category", "categories")
-        context.update({"category": category, "expense_accounts": expense_accounts, "errors": {}})
-        return templates.TemplateResponse(request, "expense/category_form.html", context)
+        context.update(
+            {"category": category, "expense_accounts": expense_accounts, "errors": {}}
+        )
+        return templates.TemplateResponse(
+            request, "expense/category_form.html", context
+        )
 
     @classmethod
-    async def update_category_response(cls, request: Request, auth, db, category_id: str):
+    async def update_category_response(
+        cls, request: Request, auth, db, category_id: str
+    ):
         from app.models.finance.gl.account import Account
         from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
@@ -221,7 +254,12 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         description = cls._form_str(form, "description")
         expense_account_id = cls._form_str(form, "expense_account_id")
         max_amount = cls._form_str(form, "max_amount_per_claim")
-        requires_receipt = cls._form_str(form, "requires_receipt") in {"1", "true", "on", "yes"}
+        requires_receipt = cls._form_str(form, "requires_receipt") in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
         is_active = cls._form_str(form, "is_active") in {"1", "true", "on", "yes"}
 
         errors = {}
@@ -241,7 +279,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         if errors:
             expense_accounts = db.scalars(
                 select(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
@@ -267,7 +307,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                     "errors": errors,
                 }
             )
-            return templates.TemplateResponse(request, "expense/category_form.html", context)
+            return templates.TemplateResponse(
+                request, "expense/category_form.html", context
+            )
 
         svc.update_category(
             org_id,
@@ -275,23 +317,34 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
             category_code=category_code,
             category_name=category_name,
             description=description or None,
-            expense_account_id=coerce_uuid(expense_account_id) if expense_account_id else None,
+            expense_account_id=coerce_uuid(expense_account_id)
+            if expense_account_id
+            else None,
             max_amount_per_claim=max_amount_value,
             requires_receipt=requires_receipt,
             is_active=is_active,
         )
         db.flush()
-        return RedirectResponse(url="/expense/categories?success=Record+saved+successfully", status_code=303)
+        return RedirectResponse(
+            url="/expense/categories?success=Record+saved+successfully", status_code=303
+        )
 
     @staticmethod
     def delete_category_response(category_id: str, auth, db) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
-        ExpenseService(db).update_category(org_id, coerce_uuid(category_id), is_active=False)
+        ExpenseService(db).update_category(
+            org_id, coerce_uuid(category_id), is_active=False
+        )
         db.flush()
-        return RedirectResponse(url="/expense/categories?success=Record+deleted+successfully", status_code=303)
+        return RedirectResponse(
+            url="/expense/categories?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     @staticmethod
-    def expense_summary_report_response(request: Request, auth, db, start_date: str | None, end_date: str | None) -> HTMLResponse:
+    def expense_summary_report_response(
+        request: Request, auth, db, start_date: str | None, end_date: str | None
+    ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         report_data = ExpenseService(db).get_expense_summary_report(
             org_id,
@@ -306,10 +359,14 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "end_date": end_date or report_data["end_date"].isoformat(),
             }
         )
-        return templates.TemplateResponse(request, "expense/reports/summary.html", context)
+        return templates.TemplateResponse(
+            request, "expense/reports/summary.html", context
+        )
 
     @staticmethod
-    def expense_by_category_report_response(request: Request, auth, db, start_date: str | None, end_date: str | None) -> HTMLResponse:
+    def expense_by_category_report_response(
+        request: Request, auth, db, start_date: str | None, end_date: str | None
+    ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         report_data = ExpenseService(db).get_expense_by_category_report(
             org_id,
@@ -324,10 +381,19 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "end_date": end_date or report_data["end_date"].isoformat(),
             }
         )
-        return templates.TemplateResponse(request, "expense/reports/by_category.html", context)
+        return templates.TemplateResponse(
+            request, "expense/reports/by_category.html", context
+        )
 
     @staticmethod
-    def expense_by_employee_report_response(request: Request, auth, db, start_date: str | None, end_date: str | None, department_id: str | None) -> HTMLResponse:
+    def expense_by_employee_report_response(
+        request: Request,
+        auth,
+        db,
+        start_date: str | None,
+        end_date: str | None,
+        department_id: str | None,
+    ) -> HTMLResponse:
         from app.services.people.hr import DepartmentFilters, OrganizationService
 
         org_id = coerce_uuid(auth.organization_id)
@@ -340,7 +406,9 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
             end_date=date_type.fromisoformat(end_date) if end_date else None,
             department_id=parsed_dept,
         )
-        departments = org_svc.list_departments(DepartmentFilters(is_active=True), PaginationParams(limit=200)).items
+        departments = org_svc.list_departments(
+            DepartmentFilters(is_active=True), PaginationParams(limit=200)
+        ).items
         context = base_context(request, auth, "Expense by Employee Report", "expense")
         context.update(
             {
@@ -351,18 +419,28 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "department_id": department_id,
             }
         )
-        return templates.TemplateResponse(request, "expense/reports/by_employee.html", context)
+        return templates.TemplateResponse(
+            request, "expense/reports/by_employee.html", context
+        )
 
     @staticmethod
-    def expense_trends_report_response(request: Request, auth, db, months: int) -> HTMLResponse:
+    def expense_trends_report_response(
+        request: Request, auth, db, months: int
+    ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
-        report_data = ExpenseService(db).get_expense_trends_report(org_id, months=months)
+        report_data = ExpenseService(db).get_expense_trends_report(
+            org_id, months=months
+        )
         context = base_context(request, auth, "Expense Trends Report", "expense")
         context.update({"report": report_data, "months": months})
-        return templates.TemplateResponse(request, "expense/reports/trends.html", context)
+        return templates.TemplateResponse(
+            request, "expense/reports/trends.html", context
+        )
 
     @staticmethod
-    def my_approvals_report_response(request: Request, auth, db, start_date: str | None, end_date: str | None) -> HTMLResponse:
+    def my_approvals_report_response(
+        request: Request, auth, db, start_date: str | None, end_date: str | None
+    ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         approver_id = coerce_uuid(auth.employee_id) if auth.employee_id else None
         svc = ExpenseService(db)
@@ -372,7 +450,12 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         parsed_end = date_type.fromisoformat(end_date) if end_date else None
 
         report_data = (
-            svc.get_my_approvals_report(org_id, approver_id=approver_id, start_date=parsed_start, end_date=parsed_end)
+            svc.get_my_approvals_report(
+                org_id,
+                approver_id=approver_id,
+                start_date=parsed_start,
+                end_date=parsed_end,
+            )
             if approver_id
             else {
                 "start_date": parsed_start or date_type.today().replace(day=1),
@@ -401,21 +484,34 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                         approver_limit_id=limit_id,
                         from_datetime=week_start,
                     )
-                    usage_start = latest_reset.reset_at if latest_reset is not None else week_start
+                    usage_start = (
+                        latest_reset.reset_at
+                        if latest_reset is not None
+                        else week_start
+                    )
                     used_amount = db.scalar(
-                        select(func.coalesce(func.sum(ExpenseClaim.total_approved_amount), Decimal("0")))
+                        select(
+                            func.coalesce(
+                                func.sum(ExpenseClaim.total_approved_amount),
+                                Decimal("0"),
+                            )
+                        )
                         .select_from(ExpenseClaim)
                         .join(
                             ExpenseClaimAction,
                             and_(
                                 ExpenseClaimAction.claim_id == ExpenseClaim.claim_id,
-                                ExpenseClaimAction.action_type == ExpenseClaimActionType.APPROVE,
-                                ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                                ExpenseClaimAction.action_type
+                                == ExpenseClaimActionType.APPROVE,
+                                ExpenseClaimAction.status
+                                == ExpenseClaimActionStatus.COMPLETED,
                             ),
                         )
                         .where(
                             ExpenseClaim.organization_id == org_id,
-                            ExpenseClaim.status.in_([ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]),
+                            ExpenseClaim.status.in_(
+                                [ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]
+                            ),
                             ExpenseClaimAction.created_at >= usage_start,
                             ExpenseClaimAction.created_at <= now,
                             ExpenseClaim.approver_id == approver_id,
@@ -426,10 +522,14 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                         "budget": budget_amount,
                         "used": used_amount,
                         "remaining": budget_amount - used_amount,
-                        "last_reset_at": latest_reset.reset_at if latest_reset else None,
+                        "last_reset_at": latest_reset.reset_at
+                        if latest_reset
+                        else None,
                     }
 
-        context = base_context(request, auth, "My Approvals Report", "reports-my-approvals")
+        context = base_context(
+            request, auth, "My Approvals Report", "reports-my-approvals"
+        )
         context.update(
             {
                 "report": report_data,
@@ -438,4 +538,6 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "end_date": end_date or report_data["end_date"].isoformat(),
             }
         )
-        return templates.TemplateResponse(request, "expense/reports/my_approvals.html", context)
+        return templates.TemplateResponse(
+            request, "expense/reports/my_approvals.html", context
+        )

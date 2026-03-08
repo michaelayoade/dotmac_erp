@@ -233,7 +233,9 @@ class PeriodWebService:
                     ),
                 )
                 .join(Account, PostedLedgerLine.account_id == Account.account_id)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .where(
                     PostedLedgerLine.organization_id == org_id,
                     PostedLedgerLine.posting_date <= ref_date,
@@ -248,9 +250,14 @@ class PeriodWebService:
             )
             fallback_rows = db.execute(fallback_stmt).all()
 
-            for account_id, account_code, account_name, ifrs_category, debit, credit in (
-                fallback_rows
-            ):
+            for (
+                account_id,
+                account_code,
+                account_name,
+                ifrs_category,
+                debit,
+                credit,
+            ) in fallback_rows:
                 raw_debit = Decimal(str(debit or 0))
                 raw_credit = Decimal(str(credit or 0))
                 net = raw_debit - raw_credit

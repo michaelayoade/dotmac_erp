@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStatsMixin):
     """Service facade for Expense module dashboard pages."""
 
-    def dashboard_response(self, request: Request, auth, db, period: str = "month") -> HTMLResponse:
+    def dashboard_response(
+        self, request: Request, auth, db, period: str = "month"
+    ) -> HTMLResponse:
         from app.web.deps import base_context
 
         org_id = coerce_uuid(auth.organization_id)
@@ -41,7 +43,9 @@ class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStats
             **base_context(request, auth, "Expense Dashboard", "dashboard"),
             "stats": self._get_dashboard_stats(db, org_id, start_date, currency),
             "chart_data": self._get_chart_data(db, org_id, start_date),
-            "recent_claims": self._get_recent_claims(db, org_id, limit=5, currency=currency),
+            "recent_claims": self._get_recent_claims(
+                db, org_id, limit=5, currency=currency
+            ),
             "selected_period": period,
             "currency_zero": _format_currency(Decimal(0), currency),
             "presentation_currency_code": currency,
@@ -60,12 +64,16 @@ class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStats
             logger.warning("Coach service unavailable for expense dashboard: %s", e)
             context["coach_insights"] = []
         except Exception:
-            logger.exception("Unexpected error loading coach insights for expense dashboard")
+            logger.exception(
+                "Unexpected error loading coach insights for expense dashboard"
+            )
             context["coach_insights"] = []
 
         return templates.TemplateResponse(request, "expense/dashboard.html", context)
 
-    def claims_dashboard_response(self, request: Request, auth, db, period: str = "month") -> HTMLResponse:
+    def claims_dashboard_response(
+        self, request: Request, auth, db, period: str = "month"
+    ) -> HTMLResponse:
         from app.web.deps import base_context
 
         org_id = coerce_uuid(auth.organization_id)
@@ -85,12 +93,16 @@ class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStats
             **base_context(request, auth, "Expense Claims", "claims"),
             "stats": self._get_claims_stats(db, org_id, start_date, currency),
             "chart_data": self._get_claims_chart_data(db, org_id, start_date),
-            "recent_claims": self._get_recent_claims_detailed(db, org_id, limit=8, currency=currency),
+            "recent_claims": self._get_recent_claims_detailed(
+                db, org_id, limit=8, currency=currency
+            ),
             "selected_period": period,
             "currency_zero": _format_currency(Decimal(0), currency),
             "presentation_currency_code": currency,
         }
-        return templates.TemplateResponse(request, "expense/claims_dashboard.html", context)
+        return templates.TemplateResponse(
+            request, "expense/claims_dashboard.html", context
+        )
 
 
 expense_dashboard_service = ExpenseDashboardService()

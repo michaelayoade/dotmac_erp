@@ -2,7 +2,9 @@ from collections.abc import Generator
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
@@ -10,6 +12,12 @@ from app.config import settings
 
 class Base(DeclarativeBase):
     pass
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_for_sqlite(_type, _compiler, **_kw) -> str:
+    """Allow PostgreSQL JSONB columns to compile under SQLite-backed tests."""
+    return "TEXT"
 
 
 def _get_connect_args() -> dict:

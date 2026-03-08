@@ -62,7 +62,9 @@ class ReconciliationRunContext:
 
     def still_unmatched_lines(self) -> list[BankStatementLine]:
         return [
-            line for line in self.unmatched_lines if line.line_id not in self.matched_line_ids
+            line
+            for line in self.unmatched_lines
+            if line.line_id not in self.matched_line_ids
         ]
 
     def tracker(self, key: str) -> set[UUID]:
@@ -75,15 +77,13 @@ class CandidateProvider(Protocol):
     provider_key: str
     source_type: str
 
-    def load(self, service: Any, ctx: ReconciliationRunContext) -> list[Any]:
-        ...
+    def load(self, service: Any, ctx: ReconciliationRunContext) -> list[Any]: ...
 
 
 class MatchStrategy(Protocol):
     strategy_id: str
 
-    def run(self, service: Any, ctx: ReconciliationRunContext) -> None:
-        ...
+    def run(self, service: Any, ctx: ReconciliationRunContext) -> None: ...
 
 
 def normalize_statement_line(line: BankStatementLine) -> NormalizedStatementLine:
@@ -114,7 +114,9 @@ def normalize_statement_line(line: BankStatementLine) -> NormalizedStatementLine
 
 
 def extract_line_signals(line: NormalizedStatementLine) -> LineSignals:
-    tokens = frozenset(match.group(0).lower() for match in _TOKEN_RE.finditer(line.searchable_text))
+    tokens = frozenset(
+        match.group(0).lower() for match in _TOKEN_RE.finditer(line.searchable_text)
+    )
     references = frozenset(ref.lower() for ref in line.references)
     text = line.searchable_text.lower()
     return LineSignals(
@@ -123,4 +125,3 @@ def extract_line_signals(line: NormalizedStatementLine) -> LineSignals:
         has_transfer_hint=bool(_TRANSFER_HINT_RE.search(text)),
         has_fee_hint=bool(_FEE_HINT_RE.search(text)),
     )
-

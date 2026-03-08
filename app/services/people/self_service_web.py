@@ -1367,10 +1367,14 @@ class SelfServiceWebService:
         # Get cost centers for dropdown
         from app.models.finance.core_org.cost_center import CostCenter
 
-        cost_centers_stmt = select(CostCenter).where(
-            CostCenter.organization_id == org_id,
-            CostCenter.is_active.is_(True),
-        ).order_by(CostCenter.cost_center_code)
+        cost_centers_stmt = (
+            select(CostCenter)
+            .where(
+                CostCenter.organization_id == org_id,
+                CostCenter.is_active.is_(True),
+            )
+            .order_by(CostCenter.cost_center_code)
+        )
         cost_centers = list(db.scalars(cost_centers_stmt).all())
 
         allowed_banks = OrgBankDirectoryService(db).list_active_banks(org_id)
@@ -1585,10 +1589,14 @@ class SelfServiceWebService:
         # Get cost centers for dropdown
         from app.models.finance.core_org.cost_center import CostCenter
 
-        cost_centers_stmt = select(CostCenter).where(
-            CostCenter.organization_id == org_id,
-            CostCenter.is_active.is_(True),
-        ).order_by(CostCenter.cost_center_code)
+        cost_centers_stmt = (
+            select(CostCenter)
+            .where(
+                CostCenter.organization_id == org_id,
+                CostCenter.is_active.is_(True),
+            )
+            .order_by(CostCenter.cost_center_code)
+        )
         cost_centers = list(db.scalars(cost_centers_stmt).all())
 
         allowed_banks = OrgBankDirectoryService(db).list_active_banks(org_id)

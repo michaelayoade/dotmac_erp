@@ -59,14 +59,20 @@ class ReconciliationPolicyService:
         return self._merge_profile(legacy, profile)
 
     @staticmethod
-    def _with_legacy_compatibility(policy: ReconciliationPolicy) -> ReconciliationPolicy:
-        deposit_keywords = tuple(dict.fromkeys((*policy.deposit_keywords, *DOTMAC_COMPAT_DEPOSIT_KEYWORDS)))
+    def _with_legacy_compatibility(
+        policy: ReconciliationPolicy,
+    ) -> ReconciliationPolicy:
+        deposit_keywords = tuple(
+            dict.fromkeys((*policy.deposit_keywords, *DOTMAC_COMPAT_DEPOSIT_KEYWORDS))
+        )
         return replace(
             policy,
             enabled_provider_keys=frozenset(
                 set(policy.enabled_provider_keys) | set(DEFAULT_ENABLED_PROVIDER_KEYS)
             ),
-            fee_keywords=tuple(dict.fromkeys((*policy.fee_keywords, *DEFAULT_FEE_KEYWORDS))),
+            fee_keywords=tuple(
+                dict.fromkeys((*policy.fee_keywords, *DEFAULT_FEE_KEYWORDS))
+            ),
             transfer_keywords=tuple(
                 dict.fromkeys((*policy.transfer_keywords, *DEFAULT_TRANSFER_KEYWORDS))
             ),
@@ -90,7 +96,9 @@ class ReconciliationPolicyService:
             values = keywords.get(key)
             if not values:
                 return fallback
-            return tuple(str(value).strip().lower() for value in values if str(value).strip())
+            return tuple(
+                str(value).strip().lower() for value in values if str(value).strip()
+            )
 
         return replace(
             base,

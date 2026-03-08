@@ -212,7 +212,13 @@ class ModuleSettingsWebService:
                 override_dict = None
 
         preview = build_help_experience_payload(
-            accessible_modules=["finance", "people", "support", "procurement", "settings"],
+            accessible_modules=[
+                "finance",
+                "people",
+                "support",
+                "procurement",
+                "settings",
+            ],
             roles=["admin"],
             scopes=[],
             is_admin=True,
@@ -504,11 +510,15 @@ class ModuleSettingsWebService:
             setting = result.scalar_one_or_none()
 
             if setting:
-                setting.value_json = value if normalized_type == SettingValueType.json else None
+                setting.value_json = (
+                    value if normalized_type == SettingValueType.json else None
+                )
                 setting.value_text = (
                     None
                     if normalized_type == SettingValueType.json
-                    else str(value) if value is not None else None
+                    else str(value)
+                    if value is not None
+                    else None
                 )
                 if normalized_type == SettingValueType.boolean:
                     setting.value_type = SettingValueType.boolean
@@ -527,9 +537,13 @@ class ModuleSettingsWebService:
                     value_text=(
                         None
                         if normalized_type == SettingValueType.json
-                        else str(value) if value is not None else None
+                        else str(value)
+                        if value is not None
+                        else None
                     ),
-                    value_json=value if normalized_type == SettingValueType.json else None,
+                    value_json=value
+                    if normalized_type == SettingValueType.json
+                    else None,
                     value_type=SettingValueType.string,
                     is_active=True,
                 )

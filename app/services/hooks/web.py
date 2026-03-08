@@ -190,7 +190,9 @@ class ServiceHookWebService:
         )
 
         return {
-            "service_hooks_enabled": is_feature_enabled(db, organization_id, FEATURE_SERVICE_HOOKS),
+            "service_hooks_enabled": is_feature_enabled(
+                db, organization_id, FEATURE_SERVICE_HOOKS
+            ),
             "hooks": hook_items,
             "available_events": available_events,
             "handler_types": [member.value for member in HookHandlerType],

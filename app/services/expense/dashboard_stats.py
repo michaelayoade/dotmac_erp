@@ -28,7 +28,9 @@ class ExpenseDashboardStatsMixin:
             base_filter.append(ExpenseClaim.claim_date >= start_date)
 
         total_claims = (
-            db.scalar(select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter)))
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter))
+            )
             or 0
         )
         total_amount = db.scalar(
@@ -38,7 +40,10 @@ class ExpenseDashboardStatsMixin:
         ) or Decimal(0)
         avg_claim = total_amount / total_claims if total_claims > 0 else Decimal(0)
 
-        pending_statuses = [ExpenseClaimStatus.SUBMITTED, ExpenseClaimStatus.PENDING_APPROVAL]
+        pending_statuses = [
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+        ]
         pending_count = (
             db.scalar(
                 select(func.count(ExpenseClaim.claim_id)).where(
@@ -56,7 +61,9 @@ class ExpenseDashboardStatsMixin:
         approved_count = (
             db.scalar(
                 select(func.count(ExpenseClaim.claim_id)).where(
-                    and_(*base_filter, ExpenseClaim.status == ExpenseClaimStatus.APPROVED)
+                    and_(
+                        *base_filter, ExpenseClaim.status == ExpenseClaimStatus.APPROVED
+                    )
                 )
             )
             or 0
@@ -77,7 +84,9 @@ class ExpenseDashboardStatsMixin:
         rejected_count = (
             db.scalar(
                 select(func.count(ExpenseClaim.claim_id)).where(
-                    and_(*base_filter, ExpenseClaim.status == ExpenseClaimStatus.REJECTED)
+                    and_(
+                        *base_filter, ExpenseClaim.status == ExpenseClaimStatus.REJECTED
+                    )
                 )
             )
             or 0
@@ -95,9 +104,13 @@ class ExpenseDashboardStatsMixin:
         )
 
         completed_claims = paid_count + rejected_count
-        approval_rate = round((paid_count / completed_claims) * 100) if completed_claims > 0 else 0
+        approval_rate = (
+            round((paid_count / completed_claims) * 100) if completed_claims > 0 else 0
+        )
         rejection_rate = (
-            round((rejected_count / completed_claims) * 100) if completed_claims > 0 else 0
+            round((rejected_count / completed_claims) * 100)
+            if completed_claims > 0
+            else 0
         )
 
         return {
@@ -128,7 +141,9 @@ class ExpenseDashboardStatsMixin:
             base_filter.append(ExpenseClaim.claim_date >= start_date)
 
         total_claims = (
-            db.scalar(select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter)))
+            db.scalar(
+                select(func.count(ExpenseClaim.claim_id)).where(and_(*base_filter))
+            )
             or 0
         )
         total_amount = db.scalar(
@@ -138,7 +153,10 @@ class ExpenseDashboardStatsMixin:
         ) or Decimal(0)
         avg_claim = total_amount / total_claims if total_claims > 0 else Decimal(0)
 
-        pending_statuses = [ExpenseClaimStatus.SUBMITTED, ExpenseClaimStatus.PENDING_APPROVAL]
+        pending_statuses = [
+            ExpenseClaimStatus.SUBMITTED,
+            ExpenseClaimStatus.PENDING_APPROVAL,
+        ]
         pending_approval = (
             db.scalar(
                 select(func.count(ExpenseClaim.claim_id)).where(
@@ -182,7 +200,13 @@ class ExpenseDashboardStatsMixin:
                 select(func.count(CashAdvance.advance_id)).where(
                     and_(
                         CashAdvance.organization_id == org_id,
-                        CashAdvance.status.in_([CashAdvanceStatus.PENDING_APPROVAL, CashAdvanceStatus.APPROVED, CashAdvanceStatus.DISBURSED]),
+                        CashAdvance.status.in_(
+                            [
+                                CashAdvanceStatus.PENDING_APPROVAL,
+                                CashAdvanceStatus.APPROVED,
+                                CashAdvanceStatus.DISBURSED,
+                            ]
+                        ),
                     )
                 )
             )
@@ -191,10 +215,14 @@ class ExpenseDashboardStatsMixin:
         outstanding_advances = db.scalar(
             select(
                 func.coalesce(
-                    func.sum(CashAdvance.requested_amount - CashAdvance.amount_settled), 0
+                    func.sum(CashAdvance.requested_amount - CashAdvance.amount_settled),
+                    0,
                 )
             ).where(
-                and_(CashAdvance.organization_id == org_id, CashAdvance.status == CashAdvanceStatus.DISBURSED)
+                and_(
+                    CashAdvance.organization_id == org_id,
+                    CashAdvance.status == CashAdvanceStatus.DISBURSED,
+                )
             )
         ) or Decimal(0)
         advances_to_approve = (
@@ -202,7 +230,12 @@ class ExpenseDashboardStatsMixin:
                 select(func.count(CashAdvance.advance_id)).where(
                     and_(
                         CashAdvance.organization_id == org_id,
-                        CashAdvance.status.in_([CashAdvanceStatus.SUBMITTED, CashAdvanceStatus.PENDING_APPROVAL]),
+                        CashAdvance.status.in_(
+                            [
+                                CashAdvanceStatus.SUBMITTED,
+                                CashAdvanceStatus.PENDING_APPROVAL,
+                            ]
+                        ),
                     )
                 )
             )
@@ -260,7 +293,9 @@ class ExpenseDashboardStatsMixin:
         total_rejected = (
             db.scalar(
                 select(func.count(ExpenseClaim.claim_id)).where(
-                    and_(*base_filter, ExpenseClaim.status == ExpenseClaimStatus.REJECTED)
+                    and_(
+                        *base_filter, ExpenseClaim.status == ExpenseClaimStatus.REJECTED
+                    )
                 )
             )
             or 0

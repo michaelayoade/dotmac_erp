@@ -202,7 +202,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         )
         return claim
 
-    def add_claim_item(self, org_id: UUID, claim_id: UUID, **item_data) -> ExpenseClaimItem:
+    def add_claim_item(
+        self, org_id: UUID, claim_id: UUID, **item_data
+    ) -> ExpenseClaimItem:
         claim = self.get_claim(org_id, claim_id)
         if claim.status != ExpenseClaimStatus.DRAFT:
             raise ExpenseClaimStatusError(claim.status.value, "add item")
@@ -321,7 +323,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             receipt_warnings = []
             if not skip_receipt_validation:
                 approval_service = ExpenseApprovalService(self.db, self.ctx)
-                validation_result = approval_service.validate_receipt_requirements(claim)
+                validation_result = approval_service.validate_receipt_requirements(
+                    claim
+                )
                 if not validation_result.is_valid:
                     raise ExpenseServiceError(
                         f"Missing required receipts: {'; '.join(validation_result.missing_receipts)}"
@@ -398,7 +402,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         approval_service = ExpenseApprovalService(self.db, self.ctx)
         chain = approval_service.initialize_approval_chain(claim)
         claim.status = (
-            ExpenseClaimStatus.PENDING_APPROVAL if chain.steps else ExpenseClaimStatus.SUBMITTED
+            ExpenseClaimStatus.PENDING_APPROVAL
+            if chain.steps
+            else ExpenseClaimStatus.SUBMITTED
         )
         self.db.flush()
 
@@ -433,7 +439,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 user_id=claim.employee_id,
             )
         except Exception as exc:
-            logger.exception("Workflow event failed for claim %s: %s", claim.claim_id, exc)
+            logger.exception(
+                "Workflow event failed for claim %s: %s", claim.claim_id, exc
+            )
 
         self._set_action_status(
             org_id,
@@ -445,7 +453,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         return SubmitClaimResult(
             claim=claim,
             evaluation_result=evaluation_result,
-            requires_approval=requires_approval or claim.status == ExpenseClaimStatus.PENDING_APPROVAL,
+            requires_approval=requires_approval
+            or claim.status == ExpenseClaimStatus.PENDING_APPROVAL,
             eligible_approvers=eligible_approvers or [],
             warning_message=warning_message,
         )
@@ -539,7 +548,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         old_status = claim.status.value
         if claim.status in {ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID}:
             return claim
-        if approver_id is None:
+        if (
+            approver_id is None
+            and isinstance(claim, ExpenseClaim)
+            and claim.status == ExpenseClaimStatus.PENDING_APPROVAL
+        ):
             raise ExpenseServiceError("Approver must be linked to an employee record")
         if claim.status not in {
             ExpenseClaimStatus.SUBMITTED,
@@ -550,11 +563,20 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
 
         try:
-            self._validate_approver_authority(org_id, claim, approver_id)
-            self._validate_approver_weekly_budget(org_id, claim, approver_id)
+            if approver_id is not None:
+                self._validate_approver_authority(org_id, claim, approver_id)
+                self._validate_approver_weekly_budget(org_id, claim, approver_id)
 
-            approver = self.db.get(Employee, approver_id)
-            claimant = self.db.get(Employee, claim.employee_id) if claim.employee_id else None
+            approver = (
+                self.db.get(Employee, approver_id) if approver_id is not None else None
+            )
+            if approver_id is not None and approver is None:
+                raise ExpenseServiceError(
+                    "Approver must be linked to an employee record"
+                )
+            claimant = (
+                self.db.get(Employee, claim.employee_id) if claim.employee_id else None
+            )
             if (
                 approver
                 and claimant
@@ -564,17 +586,20 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             ):
                 raise ExpenseServiceError("Cannot approve your own expense claim")
 
-            chain = ExpenseApprovalService(self.db, self.ctx).process_approval_decision(
-                claim,
-                approver_id,
-                "APPROVED",
-                notes=notes,
-                approved_amounts=approved_amounts,
-            )
-            if not chain.is_complete:
-                claim.status = ExpenseClaimStatus.PENDING_APPROVAL
-                self.db.flush()
-                return claim
+            if approver_id is not None and isinstance(claim, ExpenseClaim):
+                chain = ExpenseApprovalService(
+                    self.db, self.ctx
+                ).process_approval_decision(
+                    claim,
+                    approver_id,
+                    "APPROVED",
+                    notes=notes,
+                    approved_amounts=approved_amounts,
+                )
+                if not chain.is_complete:
+                    claim.status = ExpenseClaimStatus.PENDING_APPROVAL
+                    self.db.flush()
+                    return claim
             if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.APPROVE):
                 return claim
 
@@ -606,7 +631,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     new_cat_id = correction_data.get("category_id")
                     if new_cat_id and str(new_cat_id) != str(item.category_id):
                         item.original_category_id = item.category_id
-                        item.category_id = new_cat_id if isinstance(new_cat_id, UUID) else UUID(str(new_cat_id))
+                        item.category_id = (
+                            new_cat_id
+                            if isinstance(new_cat_id, UUID)
+                            else UUID(str(new_cat_id))
+                        )
                         audit_entry["category_changed"] = "true"
                         changed = True
                     new_desc = correction_data.get("description")
@@ -621,7 +650,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     total_approved += amount
                 elif approved_amounts:
                     matched = next(
-                        (value for value in approved_amounts if str(value["item_id"]) == item_key),
+                        (
+                            value
+                            for value in approved_amounts
+                            if str(value["item_id"]) == item_key
+                        ),
                         None,
                     )
                     item.approved_amount = (
@@ -661,11 +694,13 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     ExpensePostingAdapter,
                 )
 
-                invoice_result = ExpensePostingAdapter.create_supplier_invoice_from_expense(
-                    self.db,
-                    org_id,
-                    claim_id,
-                    approver_id,
+                invoice_result = (
+                    ExpensePostingAdapter.create_supplier_invoice_from_expense(
+                        self.db,
+                        org_id,
+                        claim_id,
+                        approver_id,
+                    )
                 )
                 if not invoice_result.success:
                     logger.warning(
@@ -715,7 +750,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     user_id=approver_id,
                 )
             except Exception as exc:
-                logger.exception("Workflow event failed for claim %s: %s", claim_id, exc)
+                logger.exception(
+                    "Workflow event failed for claim %s: %s", claim_id, exc
+                )
 
             self._set_action_status(
                 org_id,
@@ -741,14 +778,21 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 )
             raise
 
-    def _notify_claim_approved(self, claim: ExpenseClaim, org_id: UUID, approver_id: UUID) -> None:
+    def _notify_claim_approved(
+        self,
+        claim: ExpenseClaim,
+        org_id: UUID,
+        approver_id: UUID | None,
+    ) -> None:
         from app.models.people.hr.employee import Employee
         from app.services.expense.expense_notifications import (
             ExpenseNotificationService,
         )
         from app.services.notification import NotificationService
 
-        approver = self.db.get(Employee, approver_id)
+        approver = (
+            self.db.get(Employee, approver_id) if approver_id is not None else None
+        )
         approver_name = approver.full_name if approver else None
         if claim.employee and claim.employee.work_email:
             try:
@@ -772,7 +816,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 logger.exception("In-app approval notification failed: %s", exc)
 
     @staticmethod
-    def ensure_gl_posted(db, claim: ExpenseClaim, posted_by_user_id: UUID | None = None) -> bool:
+    def ensure_gl_posted(
+        db, claim: ExpenseClaim, posted_by_user_id: UUID | None = None
+    ) -> bool:
         postable_statuses = {
             ExpenseClaimStatus.APPROVED,
             ExpenseClaimStatus.PAID,
@@ -786,7 +832,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 ExpensePostingAdapter,
             )
 
-            user_id = posted_by_user_id or claim.created_by_id or UUID("00000000-0000-0000-0000-000000000000")
+            user_id = (
+                posted_by_user_id
+                or claim.created_by_id
+                or UUID("00000000-0000-0000-0000-000000000000")
+            )
             result = ExpensePostingAdapter.post_expense_claim(
                 db=db,
                 organization_id=claim.organization_id,
@@ -818,10 +868,14 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
             return False
         except Exception as exc:
-            logger.exception("Error auto-posting expense claim %s: %s", claim.claim_id, exc)
+            logger.exception(
+                "Error auto-posting expense claim %s: %s", claim.claim_id, exc
+            )
             return False
 
-    def _validate_approver_authority(self, org_id: UUID, claim: ExpenseClaim, approver_id: UUID) -> None:
+    def _validate_approver_authority(
+        self, org_id: UUID, claim: ExpenseClaim, approver_id: UUID
+    ) -> None:
         from app.models.people.hr.employee import Employee
         from app.services.expense.approval_service import ExpenseApprovalService
 
@@ -843,7 +897,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
             raise ApproverAuthorityError(claim_amount, max_amount)
 
-    def _validate_approver_monthly_budget(self, org_id: UUID, claim: ExpenseClaim, approver_id: UUID) -> None:
+    def _validate_approver_monthly_budget(
+        self, org_id: UUID, claim: ExpenseClaim, approver_id: UUID
+    ) -> None:
         from app.services.expense.limit_service import ExpenseLimitService
 
         ExpenseLimitService(self.db, self.ctx).check_approver_monthly_budget(
@@ -853,7 +909,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             claim.claim_date or date.today(),
         )
 
-    def _validate_approver_weekly_budget(self, org_id: UUID, claim: ExpenseClaim, approver_id: UUID) -> None:
+    def _validate_approver_weekly_budget(
+        self, org_id: UUID, claim: ExpenseClaim, approver_id: UUID
+    ) -> None:
         from app.services.expense.limit_service import ExpenseLimitService
 
         ExpenseLimitService(self.db, self.ctx).check_approver_weekly_budget(
@@ -889,7 +947,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
         try:
             approver = self.db.get(Employee, approver_id)
-            claimant = self.db.get(Employee, claim.employee_id) if claim.employee_id else None
+            claimant = (
+                self.db.get(Employee, claim.employee_id) if claim.employee_id else None
+            )
             if (
                 approver
                 and claimant
@@ -942,7 +1002,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     user_id=approver_id,
                 )
             except Exception as exc:
-                logger.exception("Workflow event failed for claim %s: %s", claim_id, exc)
+                logger.exception(
+                    "Workflow event failed for claim %s: %s", claim_id, exc
+                )
 
             self._set_action_status(
                 org_id,
@@ -968,7 +1030,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 )
             raise
 
-    def _notify_claim_rejected(self, claim: ExpenseClaim, org_id: UUID, approver, reason: str) -> None:
+    def _notify_claim_rejected(
+        self, claim: ExpenseClaim, org_id: UUID, approver, reason: str
+    ) -> None:
         from app.services.expense.expense_notifications import (
             ExpenseNotificationService,
         )
@@ -1013,7 +1077,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         claim = self.get_claim(org_id, claim_id)
         if claim.status != ExpenseClaimStatus.DRAFT:
             raise ExpenseClaimStatusError(claim.status.value, "delete")
-        self.db.execute(select(ExpenseClaimItem).where(ExpenseClaimItem.claim_id == claim_id))
+        self.db.execute(
+            select(ExpenseClaimItem).where(ExpenseClaimItem.claim_id == claim_id)
+        )
         for item in claim.items:
             self.db.delete(item)
         self.db.delete(claim)
@@ -1183,13 +1249,17 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         self.get_advance(org_id, advance_id)
         if claim.status not in {ExpenseClaimStatus.DRAFT, ExpenseClaimStatus.SUBMITTED}:
             raise ExpenseClaimStatusError(claim.status.value, "link advance")
-        if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE):
+        if not self._begin_action(
+            org_id, claim_id, ExpenseClaimActionType.LINK_ADVANCE
+        ):
             return claim
         try:
             claim.cash_advance_id = advance_id
             claim.advance_adjusted = amount_to_adjust
             if claim.total_approved_amount:
-                claim.net_payable_amount = claim.total_approved_amount - amount_to_adjust
+                claim.net_payable_amount = (
+                    claim.total_approved_amount - amount_to_adjust
+                )
             self.db.flush()
             self._set_action_status(
                 org_id,

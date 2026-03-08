@@ -266,7 +266,9 @@ class SLAService:
             )
             .group_by(TicketComment.ticket_id)
         ).all()
-        result: dict[UUID, datetime] = {row.ticket_id: row.first_at for row in status_changes}
+        result: dict[UUID, datetime] = {
+            row.ticket_id: row.first_at for row in status_changes
+        }
 
         # Query 2: first non-internal comment for tickets not yet found
         remaining = [tid for tid in ticket_ids if tid not in result]
@@ -315,7 +317,9 @@ class SLAService:
                 response_breached = True
                 response_breach_hours = (now - response_due_at).total_seconds() / 3600
 
-        resolution_due_at = ticket.created_at + timedelta(hours=sla_target.resolution_hours)
+        resolution_due_at = ticket.created_at + timedelta(
+            hours=sla_target.resolution_hours
+        )
         resolution_hours = None
         resolution_breached = False
         resolution_breach_hours = None
@@ -335,7 +339,9 @@ class SLAService:
                 TicketStatus.CLOSED,
             ):
                 resolution_breached = True
-                resolution_breach_hours = (now - resolution_due_at).total_seconds() / 3600
+                resolution_breach_hours = (
+                    now - resolution_due_at
+                ).total_seconds() / 3600
 
         return TicketSLAStatus(
             ticket_id=ticket.ticket_id,

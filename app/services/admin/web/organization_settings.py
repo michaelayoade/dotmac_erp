@@ -25,7 +25,13 @@ from .common import (
 
 class AdminOrganizationSettingsMixin:
     @staticmethod
-    def organizations_context(db: Session, search: str | None, status: str | None, page: int, limit: int = DEFAULT_PAGE_SIZE) -> dict:
+    def organizations_context(
+        db: Session,
+        search: str | None,
+        status: str | None,
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         offset = (page - 1) * limit
         conditions = []
         search_value = search.strip() if search else ""
@@ -38,13 +44,32 @@ class AdminOrganizationSettingsMixin:
                     Organization.trading_name.ilike(search_pattern),
                 )
             )
-        active_count = db.scalar(select(func.count(Organization.organization_id)).where(*conditions, Organization.is_active.is_(True))) or 0
-        inactive_count = db.scalar(select(func.count(Organization.organization_id)).where(*conditions, Organization.is_active.is_(False))) or 0
+        active_count = (
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    *conditions, Organization.is_active.is_(True)
+                )
+            )
+            or 0
+        )
+        inactive_count = (
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    *conditions, Organization.is_active.is_(False)
+                )
+            )
+            or 0
+        )
         org_conditions = list(conditions)
         status_flag = _parse_status_filter(status)
         if status_flag is not None:
             org_conditions.append(Organization.is_active == status_flag)
-        total_count = db.scalar(select(func.count(Organization.organization_id)).where(*org_conditions)) or 0
+        total_count = (
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(*org_conditions)
+            )
+            or 0
+        )
         organizations = list(
             db.scalars(
                 select(Organization)
@@ -70,7 +95,9 @@ class AdminOrganizationSettingsMixin:
                 org_id: count
                 for org_id, count in db.execute(
                     select(Person.organization_id, func.count(Person.id))
-                    .where(Person.organization_id.in_(org_ids), Person.is_active.is_(True))
+                    .where(
+                        Person.organization_id.in_(org_ids), Person.is_active.is_(True)
+                    )
                     .group_by(Person.organization_id)
                 ).all()
             }
@@ -91,26 +118,47 @@ class AdminOrganizationSettingsMixin:
                 }
                 for org in organizations
             ],
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "status_filter": status or "",
-            "stats": {"active": active_count, "inactive": inactive_count, "total": active_count + inactive_count},
+            "stats": {
+                "active": active_count,
+                "inactive": inactive_count,
+                "total": active_count + inactive_count,
+            },
         }
 
     @staticmethod
-    def organization_form_context(db: Session, organization_id: str | None = None, default_currency_org_id: str | None = None) -> dict:
+    def organization_form_context(
+        db: Session,
+        organization_id: str | None = None,
+        default_currency_org_id: str | None = None,
+    ) -> dict:
         from app.models.finance.core_org.organization import ConsolidationMethod
         from app.models.finance.gl.account import Account
         from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 
         parent_orgs = list(
-            db.scalars(select(Organization).where(Organization.is_active.is_(True)).order_by(Organization.legal_name)).all()
+            db.scalars(
+                select(Organization)
+                .where(Organization.is_active.is_(True))
+                .order_by(Organization.legal_name)
+            ).all()
         )
         parent_org_list = [
-            {"id": str(org.organization_id), "code": org.organization_code, "name": org.legal_name or org.trading_name or org.organization_code}
+            {
+                "id": str(org.organization_id),
+                "code": org.organization_code,
+                "name": org.legal_name or org.trading_name or org.organization_code,
+            }
             for org in parent_orgs
         ]
-        consolidation_methods = [{"value": cm.value, "label": cm.value.replace("_", " ").title()} for cm in ConsolidationMethod]
+        consolidation_methods = [
+            {"value": cm.value, "label": cm.value.replace("_", " ").title()}
+            for cm in ConsolidationMethod
+        ]
         organization_data = None
         default_functional_currency_code = None
         default_presentation_currency_code = None
@@ -119,21 +167,37 @@ class AdminOrganizationSettingsMixin:
             default_org = db.get(Organization, coerce_uuid(default_org_id))
             if default_org:
                 default_functional_currency_code = default_org.functional_currency_code
-                default_presentation_currency_code = default_org.presentation_currency_code
+                default_presentation_currency_code = (
+                    default_org.presentation_currency_code
+                )
         if not default_functional_currency_code:
             default_functional_currency_code = settings.default_functional_currency_code
         if not default_presentation_currency_code:
-            default_presentation_currency_code = settings.default_presentation_currency_code
+            default_presentation_currency_code = (
+                settings.default_presentation_currency_code
+            )
 
         expense_accounts = []
         liability_accounts = []
         if organization_id:
             org = db.get(Organization, coerce_uuid(organization_id))
             if org:
-                user_count = db.scalar(select(func.count(Person.id)).where(Person.organization_id == org.organization_id)) or 0
-                subsidiaries_count = db.scalar(
-                    select(func.count(Organization.organization_id)).where(Organization.parent_organization_id == org.organization_id)
-                ) or 0
+                user_count = (
+                    db.scalar(
+                        select(func.count(Person.id)).where(
+                            Person.organization_id == org.organization_id
+                        )
+                    )
+                    or 0
+                )
+                subsidiaries_count = (
+                    db.scalar(
+                        select(func.count(Organization.organization_id)).where(
+                            Organization.parent_organization_id == org.organization_id
+                        )
+                    )
+                    or 0
+                )
                 organization_data = {
                     "id": str(org.organization_id),
                     "organization_code": org.organization_code,
@@ -142,28 +206,49 @@ class AdminOrganizationSettingsMixin:
                     "trading_name": org.trading_name or "",
                     "registration_number": org.registration_number or "",
                     "tax_identification_number": org.tax_identification_number or "",
-                    "incorporation_date": org.incorporation_date.isoformat() if org.incorporation_date else "",
+                    "incorporation_date": org.incorporation_date.isoformat()
+                    if org.incorporation_date
+                    else "",
                     "jurisdiction_country_code": org.jurisdiction_country_code or "",
                     "functional_currency_code": org.functional_currency_code,
                     "presentation_currency_code": org.presentation_currency_code,
                     "fiscal_year_end_month": org.fiscal_year_end_month,
                     "fiscal_year_end_day": org.fiscal_year_end_day,
-                    "parent_organization_id": str(org.parent_organization_id) if org.parent_organization_id else "",
-                    "consolidation_method": org.consolidation_method.value if org.consolidation_method else "",
-                    "ownership_percentage": str(org.ownership_percentage) if org.ownership_percentage else "",
+                    "parent_organization_id": str(org.parent_organization_id)
+                    if org.parent_organization_id
+                    else "",
+                    "consolidation_method": org.consolidation_method.value
+                    if org.consolidation_method
+                    else "",
+                    "ownership_percentage": str(org.ownership_percentage)
+                    if org.ownership_percentage
+                    else "",
                     "is_active": org.is_active,
                     "user_count": user_count,
                     "subsidiaries_count": subsidiaries_count,
-                    "salaries_expense_account_id": str(org.salaries_expense_account_id) if org.salaries_expense_account_id else "",
-                    "salary_payable_account_id": str(org.salary_payable_account_id) if org.salary_payable_account_id else "",
+                    "salaries_expense_account_id": str(org.salaries_expense_account_id)
+                    if org.salaries_expense_account_id
+                    else "",
+                    "salary_payable_account_id": str(org.salary_payable_account_id)
+                    if org.salary_payable_account_id
+                    else "",
                 }
-                parent_org_list = [p for p in parent_org_list if p["id"] != str(org.organization_id)]
+                parent_org_list = [
+                    p for p in parent_org_list if p["id"] != str(org.organization_id)
+                ]
                 org_uuid = coerce_uuid(organization_id)
                 expense_accounts = [
-                    {"account_id": str(a.account_id), "account_code": a.account_code, "account_name": a.account_name}
+                    {
+                        "account_id": str(a.account_id),
+                        "account_code": a.account_code,
+                        "account_name": a.account_name,
+                    }
                     for a in db.scalars(
                         select(Account)
-                        .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                        .join(
+                            AccountCategory,
+                            Account.category_id == AccountCategory.category_id,
+                        )
                         .where(
                             Account.organization_id == org_uuid,
                             Account.is_active.is_(True),
@@ -174,10 +259,17 @@ class AdminOrganizationSettingsMixin:
                     ).all()
                 ]
                 liability_accounts = [
-                    {"account_id": str(a.account_id), "account_code": a.account_code, "account_name": a.account_name}
+                    {
+                        "account_id": str(a.account_id),
+                        "account_code": a.account_code,
+                        "account_name": a.account_name,
+                    }
                     for a in db.scalars(
                         select(Account)
-                        .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                        .join(
+                            AccountCategory,
+                            Account.category_id == AccountCategory.category_id,
+                        )
                         .where(
                             Account.organization_id == org_uuid,
                             Account.is_active.is_(True),
@@ -210,7 +302,9 @@ class AdminOrganizationSettingsMixin:
         if len(slug) > 50:
             return "Slug must be 50 characters or fewer"
         if not _ORG_SLUG_PATTERN.fullmatch(slug):
-            return "Slug must contain only lowercase letters, numbers, and single hyphens"
+            return (
+                "Slug must contain only lowercase letters, numbers, and single hyphens"
+            )
         return None
 
     @staticmethod
@@ -235,33 +329,55 @@ class AdminOrganizationSettingsMixin:
     ) -> tuple[Organization | None, str | None]:
         from app.models.finance.core_org.organization import ConsolidationMethod
 
-        existing = db.scalar(select(Organization).where(Organization.organization_code == organization_code))
+        existing = db.scalar(
+            select(Organization).where(
+                Organization.organization_code == organization_code
+            )
+        )
         if existing:
             return None, "An organization with this code already exists"
         normalized_slug = AdminOrganizationSettingsMixin._normalize_org_slug(slug)
         slug_error = AdminOrganizationSettingsMixin._validate_org_slug(normalized_slug)
         if slug_error:
             return None, slug_error
-        if normalized_slug and db.scalar(select(Organization).where(Organization.slug == normalized_slug)):
+        if normalized_slug and db.scalar(
+            select(Organization).where(Organization.slug == normalized_slug)
+        ):
             return None, "An organization with this slug already exists"
         try:
-            incorp_date = date_type.fromisoformat(incorporation_date) if incorporation_date else None
-            consol_method = ConsolidationMethod(consolidation_method) if consolidation_method else None
+            incorp_date = (
+                date_type.fromisoformat(incorporation_date)
+                if incorporation_date
+                else None
+            )
+            consol_method = (
+                ConsolidationMethod(consolidation_method)
+                if consolidation_method
+                else None
+            )
             ownership_pct = None
             if ownership_percentage:
                 from decimal import Decimal
 
                 ownership_pct = Decimal(ownership_percentage)
-            parent_org_id = coerce_uuid(parent_organization_id) if parent_organization_id else None
+            parent_org_id = (
+                coerce_uuid(parent_organization_id) if parent_organization_id else None
+            )
             org = Organization(
                 organization_code=organization_code,
                 legal_name=legal_name,
                 slug=normalized_slug,
                 trading_name=trading_name if trading_name else None,
-                registration_number=registration_number if registration_number else None,
-                tax_identification_number=tax_identification_number if tax_identification_number else None,
+                registration_number=registration_number
+                if registration_number
+                else None,
+                tax_identification_number=tax_identification_number
+                if tax_identification_number
+                else None,
                 incorporation_date=incorp_date,
-                jurisdiction_country_code=jurisdiction_country_code if jurisdiction_country_code else None,
+                jurisdiction_country_code=jurisdiction_country_code
+                if jurisdiction_country_code
+                else None,
                 functional_currency_code=functional_currency_code,
                 presentation_currency_code=presentation_currency_code,
                 fiscal_year_end_month=fiscal_year_end_month,
@@ -318,7 +434,10 @@ class AdminOrganizationSettingsMixin:
         )
         if existing:
             return None, "An organization with this code already exists"
-        if parent_organization_id and coerce_uuid(parent_organization_id) == org.organization_id:
+        if (
+            parent_organization_id
+            and coerce_uuid(parent_organization_id) == org.organization_id
+        ):
             return None, "An organization cannot be its own parent"
         normalized_slug = AdminOrganizationSettingsMixin._normalize_org_slug(slug)
         slug_error = AdminOrganizationSettingsMixin._validate_org_slug(normalized_slug)
@@ -338,16 +457,32 @@ class AdminOrganizationSettingsMixin:
             org.legal_name = legal_name
             org.slug = normalized_slug
             org.trading_name = trading_name if trading_name else None
-            org.registration_number = registration_number if registration_number else None
-            org.tax_identification_number = tax_identification_number if tax_identification_number else None
-            org.incorporation_date = date_type.fromisoformat(incorporation_date) if incorporation_date else None
-            org.jurisdiction_country_code = jurisdiction_country_code if jurisdiction_country_code else None
+            org.registration_number = (
+                registration_number if registration_number else None
+            )
+            org.tax_identification_number = (
+                tax_identification_number if tax_identification_number else None
+            )
+            org.incorporation_date = (
+                date_type.fromisoformat(incorporation_date)
+                if incorporation_date
+                else None
+            )
+            org.jurisdiction_country_code = (
+                jurisdiction_country_code if jurisdiction_country_code else None
+            )
             org.functional_currency_code = functional_currency_code
             org.presentation_currency_code = presentation_currency_code
             org.fiscal_year_end_month = fiscal_year_end_month
             org.fiscal_year_end_day = fiscal_year_end_day
-            org.parent_organization_id = coerce_uuid(parent_organization_id) if parent_organization_id else None
-            org.consolidation_method = ConsolidationMethod(consolidation_method) if consolidation_method else None
+            org.parent_organization_id = (
+                coerce_uuid(parent_organization_id) if parent_organization_id else None
+            )
+            org.consolidation_method = (
+                ConsolidationMethod(consolidation_method)
+                if consolidation_method
+                else None
+            )
             if ownership_percentage:
                 from decimal import Decimal
 
@@ -355,8 +490,16 @@ class AdminOrganizationSettingsMixin:
             else:
                 org.ownership_percentage = None
             org.is_active = is_active
-            org.salaries_expense_account_id = coerce_uuid(salaries_expense_account_id) if salaries_expense_account_id else None
-            org.salary_payable_account_id = coerce_uuid(salary_payable_account_id) if salary_payable_account_id else None
+            org.salaries_expense_account_id = (
+                coerce_uuid(salaries_expense_account_id)
+                if salaries_expense_account_id
+                else None
+            )
+            org.salary_payable_account_id = (
+                coerce_uuid(salary_payable_account_id)
+                if salary_payable_account_id
+                else None
+            )
             db.commit()
             return org, None
         except Exception as exc:
@@ -368,12 +511,24 @@ class AdminOrganizationSettingsMixin:
         org = db.get(Organization, coerce_uuid(organization_id))
         if not org:
             return "Organization not found"
-        user_count = db.scalar(select(func.count(Person.id)).where(Person.organization_id == org.organization_id)) or 0
+        user_count = (
+            db.scalar(
+                select(func.count(Person.id)).where(
+                    Person.organization_id == org.organization_id
+                )
+            )
+            or 0
+        )
         if user_count > 0:
             return f"Cannot delete organization with {user_count} user(s). Remove users first."
-        subsidiaries_count = db.scalar(
-            select(func.count(Organization.organization_id)).where(Organization.parent_organization_id == org.organization_id)
-        ) or 0
+        subsidiaries_count = (
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    Organization.parent_organization_id == org.organization_id
+                )
+            )
+            or 0
+        )
         if subsidiaries_count > 0:
             return f"Cannot delete organization with {subsidiaries_count} subsidiary(ies). Remove subsidiaries first."
         try:
@@ -385,7 +540,14 @@ class AdminOrganizationSettingsMixin:
             return f"Failed to delete organization: {str(exc)}"
 
     @staticmethod
-    def settings_context(db: Session, search: str | None, domain: str | None, status: str | None, page: int, limit: int = DEFAULT_PAGE_SIZE) -> dict:
+    def settings_context(
+        db: Session,
+        search: str | None,
+        domain: str | None,
+        status: str | None,
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         offset = (page - 1) * limit
         conditions = []
         domain_value = _parse_domain(domain)
@@ -394,13 +556,30 @@ class AdminOrganizationSettingsMixin:
         search_value = search.strip() if search else ""
         if search_value:
             conditions.append(DomainSetting.key.ilike(f"%{search_value}%"))
-        active_count = db.scalar(select(func.count(DomainSetting.id)).where(*conditions, DomainSetting.is_active.is_(True))) or 0
-        inactive_count = db.scalar(select(func.count(DomainSetting.id)).where(*conditions, DomainSetting.is_active.is_(False))) or 0
+        active_count = (
+            db.scalar(
+                select(func.count(DomainSetting.id)).where(
+                    *conditions, DomainSetting.is_active.is_(True)
+                )
+            )
+            or 0
+        )
+        inactive_count = (
+            db.scalar(
+                select(func.count(DomainSetting.id)).where(
+                    *conditions, DomainSetting.is_active.is_(False)
+                )
+            )
+            or 0
+        )
         setting_conditions = list(conditions)
         status_flag = _parse_status_filter(status)
         if status_flag is not None:
             setting_conditions.append(DomainSetting.is_active == status_flag)
-        total_count = db.scalar(select(func.count(DomainSetting.id)).where(*setting_conditions)) or 0
+        total_count = (
+            db.scalar(select(func.count(DomainSetting.id)).where(*setting_conditions))
+            or 0
+        )
         settings_rows = list(
             db.scalars(
                 select(DomainSetting)
@@ -420,16 +599,24 @@ class AdminOrganizationSettingsMixin:
                     "value_type": setting.value_type.value,
                     "is_secret": setting.is_secret,
                     "is_active": setting.is_active,
-                    "updated_at": _format_datetime(setting.updated_at or setting.created_at),
+                    "updated_at": _format_datetime(
+                        setting.updated_at or setting.created_at
+                    ),
                 }
                 for setting in settings_rows
             ],
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "status_filter": status or "",
             "domain_filter": domain_value.value if domain_value else "",
             "domains": [value.value for value in SettingDomain],
-            "stats": {"active": active_count, "inactive": inactive_count, "total": active_count + inactive_count},
+            "stats": {
+                "active": active_count,
+                "inactive": inactive_count,
+                "total": active_count + inactive_count,
+            },
         }
 
     @staticmethod
@@ -438,7 +625,11 @@ class AdminOrganizationSettingsMixin:
         if setting_id:
             setting = db.get(DomainSetting, coerce_uuid(setting_id))
             if setting:
-                value = json.dumps(setting.value_json, indent=2) if setting.value_type == SettingValueType.json else (setting.value_text or "")
+                value = (
+                    json.dumps(setting.value_json, indent=2)
+                    if setting.value_type == SettingValueType.json
+                    else (setting.value_text or "")
+                )
                 setting_data = {
                     "id": str(setting.id),
                     "domain": setting.domain.value,
@@ -455,7 +646,15 @@ class AdminOrganizationSettingsMixin:
         }
 
     @staticmethod
-    def create_setting(db: Session, domain: str, key: str, value_type: str, value: str, is_secret: bool = False, is_active: bool = True) -> tuple[DomainSetting | None, str | None]:
+    def create_setting(
+        db: Session,
+        domain: str,
+        key: str,
+        value_type: str,
+        value: str,
+        is_secret: bool = False,
+        is_active: bool = True,
+    ) -> tuple[DomainSetting | None, str | None]:
         try:
             domain_enum = SettingDomain(domain)
         except ValueError:
@@ -464,9 +663,16 @@ class AdminOrganizationSettingsMixin:
             value_type_enum = SettingValueType(value_type)
         except ValueError:
             return None, f"Invalid value type: {value_type}"
-        existing = db.scalar(select(DomainSetting).where(DomainSetting.domain == domain_enum, DomainSetting.key == key))
+        existing = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == domain_enum, DomainSetting.key == key
+            )
+        )
         if existing:
-            return None, f"A setting with key '{key}' already exists in domain '{domain}'"
+            return (
+                None,
+                f"A setting with key '{key}' already exists in domain '{domain}'",
+            )
         try:
             value_text = None
             value_json = None
@@ -476,7 +682,9 @@ class AdminOrganizationSettingsMixin:
                 except json.JSONDecodeError as exc:
                     return None, f"Invalid JSON value: {str(exc)}"
             elif value_type_enum == SettingValueType.boolean:
-                value_text = "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                value_text = (
+                    "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                )
             elif value_type_enum == SettingValueType.integer:
                 try:
                     int(value) if value else 0
@@ -502,7 +710,16 @@ class AdminOrganizationSettingsMixin:
             return None, f"Failed to create setting: {str(exc)}"
 
     @staticmethod
-    def update_setting(db: Session, setting_id: str, domain: str, key: str, value_type: str, value: str, is_secret: bool = False, is_active: bool = True) -> tuple[DomainSetting | None, str | None]:
+    def update_setting(
+        db: Session,
+        setting_id: str,
+        domain: str,
+        key: str,
+        value_type: str,
+        value: str,
+        is_secret: bool = False,
+        is_active: bool = True,
+    ) -> tuple[DomainSetting | None, str | None]:
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting:
             return None, "Setting not found"
@@ -522,7 +739,10 @@ class AdminOrganizationSettingsMixin:
             )
         )
         if existing:
-            return None, f"A setting with key '{key}' already exists in domain '{domain}'"
+            return (
+                None,
+                f"A setting with key '{key}' already exists in domain '{domain}'",
+            )
         try:
             value_text = None
             value_json = None
@@ -532,7 +752,9 @@ class AdminOrganizationSettingsMixin:
                 except json.JSONDecodeError as exc:
                     return None, f"Invalid JSON value: {str(exc)}"
             elif value_type_enum == SettingValueType.boolean:
-                value_text = "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                value_text = (
+                    "true" if value.lower() in ("true", "1", "yes", "on") else "false"
+                )
             elif value_type_enum == SettingValueType.integer:
                 try:
                     int(value) if value else 0

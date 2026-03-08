@@ -263,7 +263,9 @@ async def invite_attendees(
     )
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/confirm", response_class=HTMLResponse)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/confirm", response_class=HTMLResponse
+)
 def confirm_attendee(
     event_id: str,
     attendee_id: str,
@@ -276,7 +278,9 @@ def confirm_attendee(
     )
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/attend", response_class=HTMLResponse)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/attend", response_class=HTMLResponse
+)
 def mark_attendee_attended(
     event_id: str,
     attendee_id: str,
@@ -284,12 +288,13 @@ def mark_attendee_attended(
     db: Session = Depends(get_db),
 ):
     """Mark an attendee as attended."""
-    return training_web_service.mark_attended_response(
-        auth, db, event_id, attendee_id
-    )
+    return training_web_service.mark_attended_response(auth, db, event_id, attendee_id)
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/certificate", response_class=HTMLResponse)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/certificate",
+    response_class=HTMLResponse,
+)
 def issue_attendee_certificate(
     event_id: str,
     attendee_id: str,
@@ -302,7 +307,9 @@ def issue_attendee_certificate(
     )
 
 
-@router.post("/events/{event_id}/attendees/{attendee_id}/remove", response_class=HTMLResponse)
+@router.post(
+    "/events/{event_id}/attendees/{attendee_id}/remove", response_class=HTMLResponse
+)
 def remove_attendee(
     event_id: str,
     attendee_id: str,

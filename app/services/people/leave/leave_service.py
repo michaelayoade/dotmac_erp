@@ -1009,25 +1009,22 @@ class LeaveService:
             LeaveApplication.organization_id == org_id
         )
         if employee_id:
-            count_query = count_query.where(
-                LeaveApplication.employee_id == employee_id
-            )
+            count_query = count_query.where(LeaveApplication.employee_id == employee_id)
         if leave_type_id:
             count_query = count_query.where(
                 LeaveApplication.leave_type_id == leave_type_id
             )
         if status:
             count_query = count_query.where(
-                LeaveApplication.status == (
+                LeaveApplication.status
+                == (
                     LeaveApplicationStatus(status)
                     if isinstance(status, str)
                     else status
                 )
             )
         if from_date:
-            count_query = count_query.where(
-                LeaveApplication.from_date >= from_date
-            )
+            count_query = count_query.where(LeaveApplication.from_date >= from_date)
         if to_date:
             count_query = count_query.where(LeaveApplication.to_date <= to_date)
         total = self.db.scalar(count_query) or 0
@@ -1086,7 +1083,8 @@ class LeaveService:
         )
         if status:
             count_query = count_query.where(
-                LeaveApplication.status == (
+                LeaveApplication.status
+                == (
                     LeaveApplicationStatus(status)
                     if isinstance(status, str)
                     else status

@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
+from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.settings_spec import resolve_value
 
@@ -95,7 +96,7 @@ class PaymentWebService:
         from app.models.finance.ar.customer import Customer
         from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 
-        invoice = db.get(Invoice, invoice_id)
+        invoice = db.get(Invoice, coerce_uuid(invoice_id))
         if not invoice or invoice.organization_id != organization_id:
             return {"redirect_url": "/finance/ar/invoices"}
 
@@ -144,7 +145,7 @@ class PaymentWebService:
         )
         from app.models.people.hr.employee import Employee
 
-        expense_claim = db.get(ExpenseClaim, expense_claim_id)
+        expense_claim = db.get(ExpenseClaim, coerce_uuid(expense_claim_id))
         if not expense_claim or expense_claim.organization_id != organization_id:
             return {"redirect_url": "/expense/claims"}
 

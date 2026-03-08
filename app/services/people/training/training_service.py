@@ -254,11 +254,21 @@ class TrainingService:
         return program
 
     # Fields that can be explicitly set to None on program updates
-    _PROGRAM_NULLABLE_FIELDS = frozenset({
-        "category", "department_id", "description", "duration_hours",
-        "duration_days", "cost_per_attendee", "objectives", "prerequisites",
-        "syllabus", "provider_name", "provider_contact",
-    })
+    _PROGRAM_NULLABLE_FIELDS = frozenset(
+        {
+            "category",
+            "department_id",
+            "description",
+            "duration_hours",
+            "duration_days",
+            "cost_per_attendee",
+            "objectives",
+            "prerequisites",
+            "syllabus",
+            "provider_name",
+            "provider_contact",
+        }
+    )
 
     def update_program(
         self,
@@ -435,11 +445,20 @@ class TrainingService:
         return event
 
     # Fields that can be explicitly set to None on event updates
-    _EVENT_NULLABLE_FIELDS = frozenset({
-        "description", "location", "meeting_link", "trainer_name",
-        "trainer_email", "trainer_employee_id", "max_attendees",
-        "total_cost", "start_time", "end_time",
-    })
+    _EVENT_NULLABLE_FIELDS = frozenset(
+        {
+            "description",
+            "location",
+            "meeting_link",
+            "trainer_name",
+            "trainer_email",
+            "trainer_employee_id",
+            "max_attendees",
+            "total_cost",
+            "start_time",
+            "end_time",
+        }
+    )
 
     def update_event(
         self,

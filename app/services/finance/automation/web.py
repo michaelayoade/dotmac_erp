@@ -688,7 +688,9 @@ class AutomationWebService:
     ) -> dict:
         """Get context for recurring template detail page."""
         org_id = coerce_uuid(organization_id)
-        template = recurring_service.get(db, coerce_uuid(template_id), organization_id=org_id)
+        template = recurring_service.get(
+            db, coerce_uuid(template_id), organization_id=org_id
+        )
         if not template:
             return {"template": None, "error": "Template not found"}
 
@@ -835,7 +837,9 @@ class AutomationWebService:
 
         if rule_id:
             org_id = coerce_uuid(organization_id)
-            rule = workflow_service.get(db, coerce_uuid(rule_id), organization_id=org_id)
+            rule = workflow_service.get(
+                db, coerce_uuid(rule_id), organization_id=org_id
+            )
             if rule:
                 executions = workflow_service.get_executions(
                     db, rule_id=rule.rule_id, limit=10
@@ -962,9 +966,7 @@ class AutomationWebService:
             CustomFieldDefinition.organization_id == org_id,
         )
         if is_active is not None:
-            count_stmt = count_stmt.where(
-                CustomFieldDefinition.is_active == is_active
-            )
+            count_stmt = count_stmt.where(CustomFieldDefinition.is_active == is_active)
         if et_filter is not None:
             count_stmt = count_stmt.where(
                 CustomFieldDefinition.entity_type == et_filter
@@ -1018,7 +1020,9 @@ class AutomationWebService:
 
         if field_id:
             org_id = coerce_uuid(organization_id)
-            field = custom_fields_service.get(db, coerce_uuid(field_id), organization_id=org_id)
+            field = custom_fields_service.get(
+                db, coerce_uuid(field_id), organization_id=org_id
+            )
             if field:
                 context["field"] = _custom_field_detail_view(field)
                 context["is_edit"] = True
@@ -1033,7 +1037,9 @@ class AutomationWebService:
     ) -> dict:
         """Get context for custom field detail page."""
         org_id = coerce_uuid(organization_id)
-        field = custom_fields_service.get(db, coerce_uuid(field_id), organization_id=org_id)
+        field = custom_fields_service.get(
+            db, coerce_uuid(field_id), organization_id=org_id
+        )
         if not field:
             return {"field": None, "error": "Field not found"}
 

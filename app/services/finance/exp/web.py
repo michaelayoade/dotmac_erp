@@ -84,7 +84,9 @@ class ExpenseWebService:
         total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         expenses = (
             db.scalars(
-                query.order_by(ExpenseEntry.expense_date.desc()).offset(offset).limit(limit)
+                query.order_by(ExpenseEntry.expense_date.desc())
+                .offset(offset)
+                .limit(limit)
             )
             .unique()
             .all()

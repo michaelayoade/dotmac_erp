@@ -466,9 +466,7 @@ class AdminSettingsWebService:
 
         service = FeatureFlagService(db)
         try:
-            service.toggle(
-                organization_id, key, enabled, changed_by_id=changed_by_id
-            )
+            service.toggle(organization_id, key, enabled, changed_by_id=changed_by_id)
             db.commit()
             return True, None
         except ValueError as e:

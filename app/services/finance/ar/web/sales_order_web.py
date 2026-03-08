@@ -775,7 +775,9 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("submit_response: failed")
-            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}?error=1", status_code=303
+            )
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def approve_response(
@@ -788,7 +790,9 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("approve_response: failed")
-            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}?error=1", status_code=303
+            )
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def confirm_response(
@@ -801,7 +805,9 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("confirm_response: failed")
-            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}?error=1", status_code=303
+            )
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def cancel_response(
@@ -823,7 +829,9 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("cancel_response: failed")
-            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}?error=1", status_code=303
+            )
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def hold_response(
@@ -836,7 +844,9 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("hold_response: failed")
-            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}?error=1", status_code=303
+            )
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def release_response(
@@ -849,7 +859,9 @@ class SalesOrderWebService:
             )
         except Exception:
             logger.exception("release_response: failed")
-            return RedirectResponse(url=f"/sales-orders/{so_id}?error=1", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so_id}?error=1", status_code=303
+            )
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def create_invoice_response(

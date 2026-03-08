@@ -68,15 +68,21 @@ def info_change_requests(
 
     from app.models.people.hr.info_change_request import EmployeeInfoChangeRequest
 
-    count_stmt = sa_select(func.count()).select_from(EmployeeInfoChangeRequest).where(
-        EmployeeInfoChangeRequest.organization_id == org_id
+    count_stmt = (
+        sa_select(func.count())
+        .select_from(EmployeeInfoChangeRequest)
+        .where(EmployeeInfoChangeRequest.organization_id == org_id)
     )
     if parsed_status:
         count_stmt = count_stmt.where(EmployeeInfoChangeRequest.status == parsed_status)
     if parsed_change_type:
-        count_stmt = count_stmt.where(EmployeeInfoChangeRequest.change_type == parsed_change_type)
+        count_stmt = count_stmt.where(
+            EmployeeInfoChangeRequest.change_type == parsed_change_type
+        )
     if parsed_employee_id:
-        count_stmt = count_stmt.where(EmployeeInfoChangeRequest.employee_id == parsed_employee_id)
+        count_stmt = count_stmt.where(
+            EmployeeInfoChangeRequest.employee_id == parsed_employee_id
+        )
     total_count = db.scalar(count_stmt) or 0
     total_pages = max(1, (total_count + limit - 1) // limit)
 

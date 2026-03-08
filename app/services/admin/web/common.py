@@ -68,7 +68,14 @@ def _build_pagination(
         if page <= 3:
             pages = [1, 2, 3, 4, "...", total_pages]
         elif page >= total_pages - 2:
-            pages = [1, "...", total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
+            pages = [
+                1,
+                "...",
+                total_pages - 3,
+                total_pages - 2,
+                total_pages - 1,
+                total_pages,
+            ]
         else:
             pages = [1, "...", page - 1, page, page + 1, "...", total_pages]
 
@@ -140,11 +147,15 @@ def _clean_name(value: str | None) -> str:
     return (value or "").strip()
 
 
-def _derive_display_name(first_name: str, last_name: str, display_name: str | None) -> str | None:
+def _derive_display_name(
+    first_name: str, last_name: str, display_name: str | None
+) -> str | None:
     explicit = _clean_name(display_name)
     if explicit:
         return explicit
-    full_name = " ".join(part for part in [first_name.strip(), last_name.strip()] if part).strip()
+    full_name = " ".join(
+        part for part in [first_name.strip(), last_name.strip()] if part
+    ).strip()
     return full_name or None
 
 
@@ -297,9 +308,7 @@ def _resolve_person_name_map(
     names: dict[str, str] = {}
     for person in db.scalars(query).all():
         display = (
-            _clean_name(person.display_name)
-            or _clean_name(person.name)
-            or person.email
+            _clean_name(person.display_name) or _clean_name(person.name) or person.email
         )
         if display:
             names[str(person.id)] = display

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 from starlette.requests import Request
@@ -26,12 +27,17 @@ def _request(path: str, headers: list[tuple[bytes, bytes]] | None = None) -> Req
 
 
 def test_sso_login_url_keeps_absolute_safe_next(monkeypatch):
-    from app.config import settings
+    from app.services import auth_web as auth_web_module
 
-    monkeypatch.setattr(settings, "sso_enabled", True, raising=False)
-    monkeypatch.setattr(settings, "sso_provider_mode", False, raising=False)
     monkeypatch.setattr(
-        settings, "sso_provider_url", "https://sso.example.com", raising=False
+        auth_web_module,
+        "settings",
+        SimpleNamespace(
+            sso_enabled=True,
+            sso_provider_mode=False,
+            sso_provider_url="https://sso.example.com",
+            sso_cookie_domain=None,
+        ),
     )
 
     next_url = "https://testserver/finance/dashboard?tab=summary"

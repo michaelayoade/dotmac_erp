@@ -1225,7 +1225,9 @@ def delete_template(
 ):
     """Delete a document template."""
     try:
-        automation_web_service.delete_template(db, UUID(template_id), organization_id=auth.organization_id)
+        automation_web_service.delete_template(
+            db, UUID(template_id), organization_id=auth.organization_id
+        )
         return RedirectResponse(
             url="/automation/templates?success=Template+deleted",
             status_code=303,

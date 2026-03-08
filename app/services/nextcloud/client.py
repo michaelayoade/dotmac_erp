@@ -50,12 +50,20 @@ class NextcloudConfig:
         """Load Nextcloud config from domain settings."""
         from app.services.settings_spec import resolve_value
 
-        server_url = resolve_value(db, SettingDomain.notifications, "nextcloud_server_url")
+        server_url = resolve_value(
+            db, SettingDomain.notifications, "nextcloud_server_url"
+        )
         if not server_url:
-            raise ValueError("Nextcloud is not configured (nextcloud_server_url missing)")
+            raise ValueError(
+                "Nextcloud is not configured (nextcloud_server_url missing)"
+            )
 
-        username = resolve_value(db, SettingDomain.notifications, "nextcloud_username") or ""
-        password = resolve_value(db, SettingDomain.notifications, "nextcloud_password") or ""
+        username = (
+            resolve_value(db, SettingDomain.notifications, "nextcloud_username") or ""
+        )
+        password = (
+            resolve_value(db, SettingDomain.notifications, "nextcloud_password") or ""
+        )
         raw_timeout = resolve_value(
             db, SettingDomain.notifications, "nextcloud_request_timeout"
         )

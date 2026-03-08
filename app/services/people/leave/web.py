@@ -1250,7 +1250,9 @@ class LeaveWebService:
                 status_code=303,
             )
         except Exception as exc:
-            logger.exception("Failed to approve leave application %s: %s", application_id, exc)
+            logger.exception(
+                "Failed to approve leave application %s: %s", application_id, exc
+            )
             db.rollback()
             error_msg = quote(str(exc))
             return RedirectResponse(
@@ -1296,7 +1298,9 @@ class LeaveWebService:
                 status_code=303,
             )
         except Exception as exc:
-            logger.exception("Failed to reject leave application %s: %s", application_id, exc)
+            logger.exception(
+                "Failed to reject leave application %s: %s", application_id, exc
+            )
             db.rollback()
             error_msg = quote(str(exc))
             return RedirectResponse(

@@ -720,7 +720,10 @@ class AdminWebService:
             password = DEFAULT_NEW_LOCAL_PASSWORD
             password_confirm = DEFAULT_NEW_LOCAL_PASSWORD
         elif bool(password) != bool(password_confirm):
-            return None, "Both password fields are required when setting a custom password"
+            return (
+                None,
+                "Both password fields are required when setting a custom password",
+            )
 
         # New local accounts must reset password after first login.
         must_change_password = True

@@ -3520,13 +3520,13 @@ class APWebService:
 
         # Count total for pagination
         count_stmt = select(func.count()).select_from(
-            select(APPaymentBatch.batch_id)
-            .where(APPaymentBatch.organization_id == auth.organization_id)
+            select(APPaymentBatch.batch_id).where(
+                APPaymentBatch.organization_id == auth.organization_id
+            )
         )
         if status_value:
             count_stmt = select(func.count()).select_from(
-                select(APPaymentBatch.batch_id)
-                .where(
+                select(APPaymentBatch.batch_id).where(
                     APPaymentBatch.organization_id == auth.organization_id,
                     APPaymentBatch.status == status_value,
                 )
@@ -3572,12 +3572,16 @@ class APWebService:
             status=BankAccountStatus.active,
             limit=200,
         )
-        active_payment_invoice_ids = select(APPaymentAllocation.invoice_id).join(
-            SupplierPayment,
-            SupplierPayment.payment_id == APPaymentAllocation.payment_id,
-        ).where(
-            SupplierPayment.organization_id == organization_id,
-            SupplierPayment.status.not_in(APPaymentStatus.terminal()),
+        active_payment_invoice_ids = (
+            select(APPaymentAllocation.invoice_id)
+            .join(
+                SupplierPayment,
+                SupplierPayment.payment_id == APPaymentAllocation.payment_id,
+            )
+            .where(
+                SupplierPayment.organization_id == organization_id,
+                SupplierPayment.status.not_in(APPaymentStatus.terminal()),
+            )
         )
         invoices = db.execute(
             select(SupplierInvoice, Supplier)
@@ -3593,7 +3597,9 @@ class APWebService:
                 SupplierInvoice.total_amount > SupplierInvoice.amount_paid,
                 SupplierInvoice.invoice_id.not_in(active_payment_invoice_ids),
             )
-            .order_by(SupplierInvoice.due_date.asc(), SupplierInvoice.invoice_date.desc())
+            .order_by(
+                SupplierInvoice.due_date.asc(), SupplierInvoice.invoice_date.desc()
+            )
             .limit(50)
         ).all()
         invoices_view = [
@@ -3662,7 +3668,9 @@ class APWebService:
             )
         except Exception as e:
             context = base_context(request, auth, "New Payment Batch", "ap")
-            context.update(self.payment_batch_new_form_context(db, auth.organization_id))
+            context.update(
+                self.payment_batch_new_form_context(db, auth.organization_id)
+            )
             data["invoice_ids"] = invoice_ids
             context["form_data"] = data
             context["error"] = str(e)

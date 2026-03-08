@@ -13,6 +13,7 @@ from urllib.parse import quote_plus
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -685,7 +686,9 @@ def base_context(
         _saved = bool(request.query_params.get("saved"))
 
         help_module_map = {
-            "dashboard": "settings" if request.url.path.startswith("/operations") else "",
+            "dashboard": "settings"
+            if request.url.path.startswith("/operations")
+            else "",
             "training": "people",
             "employees": "people",
             "departments": "people",
@@ -1071,7 +1074,10 @@ def _resolve_session_from_refresh_token(
         if not session or is_session_inactive(session, now):
             return None
         # Update session activity tracking (throttled to avoid row-lock contention)
-        if not session.last_seen_at or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL:
+        if (
+            not session.last_seen_at
+            or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
+        ):
             if auth_db:
                 session.last_seen_at = now
                 auth_db.commit()
@@ -1196,7 +1202,10 @@ def require_web_auth(
                 )
 
             # Update session activity tracking (throttled to avoid row-lock contention)
-            if not session.last_seen_at or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL:
+            if (
+                not session.last_seen_at
+                or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
+            ):
                 if auth_db:
                     session.last_seen_at = now
                     auth_db.commit()
@@ -1271,7 +1280,10 @@ def require_web_auth(
 
     from app.models.people.hr.employee import Employee
 
-    employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
+    try:
+        employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
+    except OperationalError:
+        employee = None
     employee_id = employee.employee_id if employee else None
 
     return WebAuthContext(
@@ -1347,7 +1359,10 @@ def optional_web_auth(
                 return WebAuthContext(is_authenticated=False)
 
             # Update session activity tracking (throttled to avoid row-lock contention)
-            if not session.last_seen_at or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL:
+            if (
+                not session.last_seen_at
+                or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
+            ):
                 if auth_db:
                     session.last_seen_at = now
                     auth_db.commit()

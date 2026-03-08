@@ -79,9 +79,7 @@ def help_center(
         roles=auth.roles,
         scopes=auth.scopes,
         is_admin=auth.is_admin,
-        overrides=content_overrides
-        if isinstance(content_overrides, dict)
-        else None,
+        overrides=content_overrides if isinstance(content_overrides, dict) else None,
     )
     context.update(payload)
     context["help_tracks"] = payload.get("tracks", [])

@@ -200,7 +200,9 @@ class PaymentBatchService(ListResponseMixin):
                 raise HTTPException(status_code=404, detail="Bank account not found")
             resolved_currency = bank_account.currency_code
         if not resolved_currency:
-            raise HTTPException(status_code=400, detail="Currency could not be resolved")
+            raise HTTPException(
+                status_code=400, detail="Currency could not be resolved"
+            )
         resolved_currency = resolved_currency.upper()
 
         invoices = db.scalars(

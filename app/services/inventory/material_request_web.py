@@ -97,9 +97,7 @@ class MaterialRequestWebService:
         # Count total for pagination
         from sqlalchemy import func as sa_func
 
-        count_stmt = select(sa_func.count()).select_from(
-            stmt.order_by(None).subquery()
-        )
+        count_stmt = select(sa_func.count()).select_from(stmt.order_by(None).subquery())
         total_count = db.scalar(count_stmt) or 0
         total_pages = max(1, (total_count + per_page - 1) // per_page)
         page = max(1, min(page, total_pages))

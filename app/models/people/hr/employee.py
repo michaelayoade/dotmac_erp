@@ -15,6 +15,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    JSON,
     Numeric,
     String,
     Text,
@@ -208,12 +209,12 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
 
     # Address information (JSONB for flexible structure)
     current_address: Mapped[dict | None] = mapped_column(
-        JSONB,
+        JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
         comment="Current residential address",
     )
     permanent_address: Mapped[dict | None] = mapped_column(
-        JSONB,
+        JSON().with_variant(JSONB, "postgresql"),
         nullable=True,
         comment="Permanent address",
     )

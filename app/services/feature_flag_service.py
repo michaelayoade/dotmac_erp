@@ -217,9 +217,7 @@ class FeatureFlagService:
         # Load registry
         stmt = select(FeatureFlagRegistry)
         if not include_archived:
-            stmt = stmt.where(
-                FeatureFlagRegistry.status != FeatureFlagStatus.ARCHIVED
-            )
+            stmt = stmt.where(FeatureFlagRegistry.status != FeatureFlagStatus.ARCHIVED)
         stmt = stmt.order_by(
             FeatureFlagRegistry.category,
             FeatureFlagRegistry.sort_order,
@@ -318,7 +316,9 @@ class FeatureFlagService:
             raise ValueError(f"Cannot toggle archived flag: {flag_key}")
 
         target_org_id = org_id if scope == "org" else None
-        target_scope = SettingScope.ORG_SPECIFIC if scope == "org" else SettingScope.GLOBAL
+        target_scope = (
+            SettingScope.ORG_SPECIFIC if scope == "org" else SettingScope.GLOBAL
+        )
 
         # Upsert domain_settings
         existing = self.db.scalar(

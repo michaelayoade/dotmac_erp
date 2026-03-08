@@ -40,7 +40,6 @@ from app.services.finance.platform.authorization import AuthorizationService
 from app.services.pm.comment import comment_service
 from app.services.recent_activity import get_recent_activity_for_record
 from app.services.settings_spec import resolve_value
-from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +162,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
 
         claims = list(
             db.scalars(
-                stmt.order_by(ExpenseClaim.claim_date.desc()).offset(offset).limit(limit)
+                stmt.order_by(ExpenseClaim.claim_date.desc())
+                .offset(offset)
+                .limit(limit)
             )
             .unique()
             .all()
@@ -174,7 +175,10 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             .where(ExpenseClaim.organization_id == org_id)
             .group_by(ExpenseClaim.status)
         ).all()
-        counts = {(status.value if status else "UNKNOWN"): count for status, count in status_rows}
+        counts = {
+            (status.value if status else "UNKNOWN"): count
+            for status, count in status_rows
+        }
         can_delete_claim = auth.is_admin
         if not can_delete_claim and auth.person_id:
             can_delete_claim = AuthorizationService.check_permission(
@@ -228,7 +232,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             db.scalars(
                 select(ExpenseClaim)
                 .options(
-                    joinedload(ExpenseClaim.items).joinedload(ExpenseClaimItem.category),
+                    joinedload(ExpenseClaim.items).joinedload(
+                        ExpenseClaimItem.category
+                    ),
                     joinedload(ExpenseClaim.employee),
                 )
                 .where(
@@ -252,7 +258,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             can_approve = AuthorizationService.check_any_permission(
                 db, auth.person_id, approve_perms, org_id
             )
-        can_submit = (auth.is_admin or can_approve) and claim.status == ExpenseClaimStatus.DRAFT
+        can_submit = (
+            auth.is_admin or can_approve
+        ) and claim.status == ExpenseClaimStatus.DRAFT
         can_reject = auth.is_admin
         if not can_reject and auth.person_id:
             can_reject = AuthorizationService.check_permission(
@@ -270,7 +278,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         }
 
         paystack_enabled = resolve_value(db, SettingDomain.payments, "paystack_enabled")
-        transfers_enabled = resolve_value(db, SettingDomain.payments, "paystack_transfers_enabled")
+        transfers_enabled = resolve_value(
+            db, SettingDomain.payments, "paystack_transfers_enabled"
+        )
         has_active_payment = False
         if claim.status == ExpenseClaimStatus.APPROVED:
             from app.models.finance.payments.payment_intent import (
@@ -278,7 +288,10 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 PaymentIntentStatus,
             )
 
-            active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
+            active_statuses = [
+                PaymentIntentStatus.PENDING,
+                PaymentIntentStatus.PROCESSING,
+            ]
             has_active_payment = (
                 db.scalars(
                     select(PaymentIntent).where(
@@ -314,7 +327,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 ).all()
             )
 
-        context = _web_facade().base_context(request, auth, f"Claim {claim.claim_number}", "claims")
+        context = _web_facade().base_context(
+            request, auth, f"Claim {claim.claim_number}", "claims"
+        )
         context.update(
             {
                 "claim": claim,
@@ -325,7 +340,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                     entity_id=claim_uuid,
                     include_internal=auth.is_admin,
                 ),
-                "recent_activity": get_recent_activity_for_record(db, org_id, record=claim, limit=10),
+                "recent_activity": get_recent_activity_for_record(
+                    db, org_id, record=claim, limit=10
+                ),
                 "categories": categories,
                 "can_submit": can_submit,
                 "can_act": can_act,
@@ -338,17 +355,26 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "error": request.query_params.get("error"),
             }
         )
-        return _web_facade().templates.TemplateResponse(request, "expense/claim_detail.html", context)
+        return _web_facade().templates.TemplateResponse(
+            request, "expense/claim_detail.html", context
+        )
 
     @staticmethod
-    def add_claim_comment_response(claim_id: str, content: str, auth, db) -> RedirectResponse:
+    def add_claim_comment_response(
+        claim_id: str, content: str, auth, db
+    ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
         comment_text = (content or "").strip()
         if not comment_text:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=Comment+cannot+be+empty", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Comment+cannot+be+empty",
+                status_code=303,
+            )
         if len(comment_text) > 5000:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=Comment+is+too+long", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Comment+is+too+long", status_code=303
+            )
 
         claim = db.scalar(
             select(ExpenseClaim).where(
@@ -357,7 +383,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             )
         )
         if not claim:
-            return RedirectResponse("/expense/claims/list?error=not_found", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=not_found", status_code=302
+            )
 
         author_id_raw = auth.person_id or auth.user_id
         if not author_id_raw:
@@ -376,10 +404,14 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             is_internal=False,
         )
         db.flush()
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=comment_added", status_code=303)
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=comment_added", status_code=303
+        )
 
     @staticmethod
-    def claim_item_detail_response(request: Request, claim_id: str, item_id: str, auth, db):
+    def claim_item_detail_response(
+        request: Request, claim_id: str, item_id: str, auth, db
+    ):
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
         item_uuid = coerce_uuid(item_id)
@@ -389,8 +421,12 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 select(ExpenseClaimItem)
                 .options(
                     joinedload(ExpenseClaimItem.category),
-                    joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.employee),
-                    joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.approver),
+                    joinedload(ExpenseClaimItem.claim).joinedload(
+                        ExpenseClaim.employee
+                    ),
+                    joinedload(ExpenseClaimItem.claim).joinedload(
+                        ExpenseClaim.approver
+                    ),
                     joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.project),
                     joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.ticket),
                     joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.task),
@@ -418,7 +454,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 )
             ).first()
 
-        context = _web_facade().base_context(request, auth, f"Expense Item {item.sequence or 0}", "claims")
+        context = _web_facade().base_context(
+            request, auth, f"Expense Item {item.sequence or 0}", "claims"
+        )
         context.update(
             {
                 "claim": claim,
@@ -427,10 +465,14 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "error": request.query_params.get("error"),
             }
         )
-        return _web_facade().templates.TemplateResponse(request, "expense/claim_item_detail.html", context)
+        return _web_facade().templates.TemplateResponse(
+            request, "expense/claim_item_detail.html", context
+        )
 
     @classmethod
-    def claim_receipt_response(cls, claim_id: str, item_id: str, auth, db, index: int = 0):
+    def claim_receipt_response(
+        cls, claim_id: str, item_id: str, auth, db, index: int = 0
+    ):
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
         item_uuid = coerce_uuid(item_id)
@@ -445,11 +487,15 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             )
         )
         if not item or not item.receipt_url:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303
+            )
 
         receipt_urls = cls._parse_receipt_urls(item.receipt_url)
         if not receipt_urls or index < 0 or index >= len(receipt_urls):
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303
+            )
 
         receipt_url = receipt_urls[index]
         if cls._is_remote_receipt(receipt_url):
@@ -472,13 +518,18 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                     status_code=303,
                 )
 
-            storage = get_storage()
+            storage = _web_facade().get_storage()
             if not storage.exists(receipt_url):
-                return RedirectResponse(f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303)
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=Receipt+not+found",
+                    status_code=303,
+                )
 
             chunks, content_type, content_length = storage.stream(receipt_url)
             filename = cls._UNSAFE_FILENAME_RE.sub("_", receipt_url.split("/")[-1])
-            headers: dict[str, str] = {"Content-Disposition": f'inline; filename="{filename}"'}
+            headers: dict[str, str] = {
+                "Content-Disposition": f'inline; filename="{filename}"'
+            }
             if content_length is not None:
                 headers["Content-Length"] = str(content_length)
             return StreamingResponse(
@@ -490,11 +541,17 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         try:
             receipt_path = cls._resolve_claim_receipt_path(receipt_url)
         except FileNotFoundError:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303
+            )
         except Exception:
             logger.warning(
                 "Invalid receipt path for claim item",
-                extra={"claim_id": claim_id, "item_id": item_id, "organization_id": str(org_id)},
+                extra={
+                    "claim_id": claim_id,
+                    "item_id": item_id,
+                    "organization_id": str(org_id),
+                },
             )
             return RedirectResponse(
                 f"/expense/claims/{claim_id}?error=Receipt+file+is+unavailable",
@@ -520,7 +577,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 ]
             )
         ):
-            return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=permission", status_code=302
+            )
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
@@ -528,19 +587,34 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         try:
             result = svc.submit_claim(org_id, claim_uuid)
             if not result.success:
-                return RedirectResponse(f"/expense/claims/{claim_id}?error=submit_in_progress", status_code=303)
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=submit_in_progress",
+                    status_code=303,
+                )
             db.flush()
         except ExpenseClaimStatusError:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except ExpenseServiceError as exc:
-            return RedirectResponse(f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
+            )
         except Exception:
-            logging.getLogger(__name__).exception("Expense claim submit failed", extra={"claim_id": claim_id})
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=submit_failed", status_code=303)
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=submitted", status_code=303)
+            logging.getLogger(__name__).exception(
+                "Expense claim submit failed", extra={"claim_id": claim_id}
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=submit_failed", status_code=303
+            )
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=submitted", status_code=303
+        )
 
     @classmethod
-    def approve_claim_response(cls, claim_id: str, auth, db, form_data: dict[str, str] | None = None) -> RedirectResponse:
+    def approve_claim_response(
+        cls, claim_id: str, auth, db, form_data: dict[str, str] | None = None
+    ) -> RedirectResponse:
         if not auth.has_any_permission(
             [
                 "expense:claims:approve:tier1",
@@ -548,7 +622,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "expense:claims:approve:tier3",
             ]
         ):
-            return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=permission", status_code=302
+            )
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
@@ -563,7 +639,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         approval_notes = None
         if form_data:
             approval_notes = (form_data.get("approval_notes") or "").strip() or None
-            item_ids = form_data.getlist("item_id") if hasattr(form_data, "getlist") else []
+            item_ids = (
+                form_data.getlist("item_id") if hasattr(form_data, "getlist") else []
+            )
             if item_ids:
                 corrections = []
                 for raw_item_id in item_ids:
@@ -571,17 +649,27 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                     if not item_id:
                         continue
                     correction: dict[str, Any] = {"item_id": item_id}
-                    raw_amount = (form_data.get(f"approved_amount_{item_id}") or "").strip()
-                    correction["approved_amount"] = Decimal(raw_amount) if raw_amount else Decimal("0")
-                    category_id = (form_data.get(f"category_id_{item_id}") or "").strip()
+                    raw_amount = (
+                        form_data.get(f"approved_amount_{item_id}") or ""
+                    ).strip()
+                    correction["approved_amount"] = (
+                        Decimal(raw_amount) if raw_amount else Decimal("0")
+                    )
+                    category_id = (
+                        form_data.get(f"category_id_{item_id}") or ""
+                    ).strip()
                     if category_id:
                         correction["category_id"] = category_id
-                    description = (form_data.get(f"description_{item_id}") or "").strip()
+                    description = (
+                        form_data.get(f"description_{item_id}") or ""
+                    ).strip()
                     if description:
                         correction["description"] = description
                     corrections.append(correction)
 
-        route_to_ap = bool(resolve_value(db, SettingDomain.expense, "expense_route_to_ap"))
+        route_to_ap = bool(
+            resolve_value(db, SettingDomain.expense, "expense_route_to_ap")
+        )
         svc = ExpenseService(db)
         try:
             claim = svc.approve_claim(
@@ -592,32 +680,58 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 notes=approval_notes,
                 create_supplier_invoice=route_to_ap,
             )
-            if claim.status not in {ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PENDING_APPROVAL}:
+            if claim.status not in {
+                ExpenseClaimStatus.APPROVED,
+                ExpenseClaimStatus.PENDING_APPROVAL,
+            }:
                 db.rollback()
-                return RedirectResponse(f"/expense/claims/{claim_id}?error=approve_in_progress", status_code=303)
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=approve_in_progress",
+                    status_code=303,
+                )
             db.flush()
         except ApproverAuthorityError as exc:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
+            )
         except ExpenseLimitServiceError as exc:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
+            )
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except ExpenseServiceError as exc:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
+            )
         except Exception:
             db.rollback()
-            logging.getLogger(__name__).exception("Expense claim approval failed", extra={"claim_id": claim_id})
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=approve_failed", status_code=303)
+            logging.getLogger(__name__).exception(
+                "Expense claim approval failed", extra={"claim_id": claim_id}
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=approve_failed", status_code=303
+            )
 
-        action = "approved" if claim.status == ExpenseClaimStatus.APPROVED else "approval_recorded"
-        return RedirectResponse(f"/expense/claims/{claim_id}?action={action}", status_code=303)
+        action = (
+            "approved"
+            if claim.status == ExpenseClaimStatus.APPROVED
+            else "approval_recorded"
+        )
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action={action}", status_code=303
+        )
 
     @staticmethod
-    def reject_claim_response(claim_id: str, reason: str | None, auth, db) -> RedirectResponse:
+    def reject_claim_response(
+        claim_id: str, reason: str | None, auth, db
+    ) -> RedirectResponse:
         if not auth.has_any_permission(
             [
                 "expense:claims:approve:tier1",
@@ -625,7 +739,9 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "expense:claims:approve:tier3",
             ]
         ):
-            return RedirectResponse("/expense/claims/list?error=permission", status_code=302)
+            return RedirectResponse(
+                "/expense/claims/list?error=permission", status_code=302
+            )
 
         org_id = coerce_uuid(auth.organization_id)
         claim_uuid = coerce_uuid(claim_id)
@@ -646,36 +762,62 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             )
             if claim.status != ExpenseClaimStatus.REJECTED:
                 db.rollback()
-                return RedirectResponse(f"/expense/claims/{claim_id}?error=reject_in_progress", status_code=303)
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=reject_in_progress",
+                    status_code=303,
+                )
             db.flush()
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except Exception:
             db.rollback()
-            logging.getLogger(__name__).exception("Expense claim rejection failed", extra={"claim_id": claim_id})
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=reject_failed", status_code=303)
+            logging.getLogger(__name__).exception(
+                "Expense claim rejection failed", extra={"claim_id": claim_id}
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=reject_failed", status_code=303
+            )
 
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=rejected", status_code=303)
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=rejected", status_code=303
+        )
 
     @staticmethod
-    def cancel_claim_response(claim_id: str, reason: str | None, auth, db) -> RedirectResponse:
+    def cancel_claim_response(
+        claim_id: str, reason: str | None, auth, db
+    ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
         try:
-            claim = svc.cancel_claim(org_id, coerce_uuid(claim_id), reason=(reason or "").strip() or None)
+            claim = svc.cancel_claim(
+                org_id, coerce_uuid(claim_id), reason=(reason or "").strip() or None
+            )
             if claim.status != ExpenseClaimStatus.CANCELLED:
                 db.rollback()
-                return RedirectResponse(f"/expense/claims/{claim_id}?error=cancel_in_progress", status_code=303)
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=cancel_in_progress",
+                    status_code=303,
+                )
             db.flush()
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except Exception:
             db.rollback()
-            logger.exception("Expense claim cancellation failed", extra={"claim_id": claim_id})
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=cancel_failed", status_code=303)
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=cancelled", status_code=303)
+            logger.exception(
+                "Expense claim cancellation failed", extra={"claim_id": claim_id}
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=cancel_failed", status_code=303
+            )
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=cancelled", status_code=303
+        )
 
     @staticmethod
     def resubmit_claim_response(claim_id: str, auth, db) -> RedirectResponse:
@@ -685,16 +827,26 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             claim = svc.resubmit_claim(org_id, coerce_uuid(claim_id))
             if claim.status != ExpenseClaimStatus.DRAFT:
                 db.rollback()
-                return RedirectResponse(f"/expense/claims/{claim_id}?error=resubmit_failed", status_code=303)
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=resubmit_failed", status_code=303
+                )
             db.flush()
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except Exception:
             db.rollback()
-            logger.exception("Expense claim resubmission failed", extra={"claim_id": claim_id})
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=resubmit_failed", status_code=303)
-        return RedirectResponse(f"/expense/claims/{claim_id}?action=resubmitted", status_code=303)
+            logger.exception(
+                "Expense claim resubmission failed", extra={"claim_id": claim_id}
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=resubmit_failed", status_code=303
+            )
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?action=resubmitted", status_code=303
+        )
 
     @staticmethod
     def delete_claim_response(claim_id: str, auth, db) -> RedirectResponse:
@@ -705,9 +857,15 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             db.flush()
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=invalid_status", status_code=303)
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
         except Exception:
             db.rollback()
-            logger.exception("Expense claim delete failed", extra={"claim_id": claim_id})
-            return RedirectResponse(f"/expense/claims/{claim_id}?error=delete_failed", status_code=303)
+            logger.exception(
+                "Expense claim delete failed", extra={"claim_id": claim_id}
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=delete_failed", status_code=303
+            )
         return RedirectResponse("/expense/claims/list?saved=1", status_code=303)

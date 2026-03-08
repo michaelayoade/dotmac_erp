@@ -92,9 +92,7 @@ class HelpFeedbackService:
             )
         return rating
 
-    def get_article_stats(
-        self, organization_id: UUID, slug: str
-    ) -> dict[str, int]:
+    def get_article_stats(self, organization_id: UUID, slug: str) -> dict[str, int]:
         """Return feedback counts for an article."""
         stmt = (
             select(HelpArticleFeedback.rating, func.count())

@@ -84,7 +84,4 @@ class HelpSearchAnalyticsService:
             .limit(limit)
         )
         rows = self.db.execute(stmt).all()
-        return [
-            {"query": row.query, "search_count": row.search_count}
-            for row in rows
-        ]
+        return [{"query": row.query, "search_count": row.search_count} for row in rows]

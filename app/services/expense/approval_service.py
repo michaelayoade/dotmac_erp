@@ -336,7 +336,9 @@ class ExpenseApprovalService:
             or 0
         )
 
-    def _get_persisted_steps(self, claim: ExpenseClaim) -> list[ExpenseClaimApprovalStep]:
+    def _get_persisted_steps(
+        self, claim: ExpenseClaim
+    ) -> list[ExpenseClaimApprovalStep]:
         latest_round = self._current_submission_round(claim.claim_id)
         if latest_round <= 0:
             return []
@@ -385,7 +387,9 @@ class ExpenseApprovalService:
             is_complete = True
             final_decision = "APPROVED"
 
-        pending_step_numbers = [step.step_number for step in steps if not step.is_completed]
+        pending_step_numbers = [
+            step.step_number for step in steps if not step.is_completed
+        ]
         current_step = min(pending_step_numbers) if pending_step_numbers else len(steps)
         return ApprovalChain(
             claim_id=claim.claim_id,
@@ -594,12 +598,7 @@ class ExpenseApprovalService:
         for item in claim.items:
             # Load category
             category = (
-                self.db.scalar(
-                    select(ExpenseCategory).where(
-                        ExpenseCategory.category_id == item.category_id,
-                        ExpenseCategory.organization_id == claim.organization_id,
-                    )
-                )
+                self.db.get(ExpenseCategory, item.category_id)
                 if item.category_id
                 else None
             )

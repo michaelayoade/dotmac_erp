@@ -27,9 +27,7 @@ class HelpProgressService:
         )
         return list(self.db.scalars(stmt).all())
 
-    def is_completed(
-        self, organization_id: UUID, person_id: UUID, slug: str
-    ) -> bool:
+    def is_completed(self, organization_id: UUID, person_id: UUID, slug: str) -> bool:
         """Check if a specific article is completed."""
         stmt = select(HelpUserProgress.progress_id).where(
             HelpUserProgress.organization_id == organization_id,
@@ -51,14 +49,10 @@ class HelpProgressService:
         )
         if existing:
             self.db.execute(
-                delete(HelpUserProgress).where(
-                    HelpUserProgress.progress_id == existing
-                )
+                delete(HelpUserProgress).where(HelpUserProgress.progress_id == existing)
             )
             self.db.flush()
-            logger.info(
-                "Help progress removed: person=%s slug=%s", person_id, slug
-            )
+            logger.info("Help progress removed: person=%s slug=%s", person_id, slug)
             return False
 
         record = HelpUserProgress(
@@ -68,7 +62,5 @@ class HelpProgressService:
         )
         self.db.add(record)
         self.db.flush()
-        logger.info(
-            "Help progress added: person=%s slug=%s", person_id, slug
-        )
+        logger.info("Help progress added: person=%s slug=%s", person_id, slug)
         return True

@@ -32,7 +32,9 @@ class PostedLedgerLine(Base):
         Index("idx_pll_journal", "journal_entry_id"),
         Index("idx_pll_posting_date", "posting_date"),
         Index("idx_pll_org_posting_date", "organization_id", "posting_date"),
-        Index("idx_pll_org_account_date", "organization_id", "account_id", "posting_date"),
+        Index(
+            "idx_pll_org_account_date", "organization_id", "account_id", "posting_date"
+        ),
         Index(
             "idx_pll_dimensions",
             "cost_center_id",

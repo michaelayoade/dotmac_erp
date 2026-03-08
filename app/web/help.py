@@ -98,19 +98,32 @@ def submit_feedback(
         return HTMLResponse("Invalid rating", status_code=400)
     db.commit()
 
-    helpful_cls = "border-teal-200 text-teal-700 dark:text-teal-300" if saved_rating == "helpful" else ""
-    not_helpful_cls = "border-rose-200 text-rose-700 dark:text-rose-300" if saved_rating == "not_helpful" else ""
+    helpful_cls = (
+        "border-teal-200 text-teal-700 dark:text-teal-300"
+        if saved_rating == "helpful"
+        else ""
+    )
+    not_helpful_cls = (
+        "border-rose-200 text-rose-700 dark:text-rose-300"
+        if saved_rating == "not_helpful"
+        else ""
+    )
 
     html = (
-        '<div id="feedback-buttons" class="flex gap-2">'
-        '<button type="button" hx-post="/help/feedback/{slug}" hx-target="#feedback-buttons" '
-        'hx-swap="outerHTML" hx-vals=\'{{ "rating": "helpful" }}\' '
-        'class="btn btn-secondary btn-sm {helpful_cls}">Helpful</button>'
-        '<button type="button" hx-post="/help/feedback/{slug}" hx-target="#feedback-buttons" '
-        'hx-swap="outerHTML" hx-vals=\'{{ "rating": "not_helpful" }}\' '
-        'class="btn btn-secondary btn-sm {not_helpful_cls}">Not Helpful</button>'
-        "</div>"
-    ).replace("{slug}", slug).replace("{helpful_cls}", helpful_cls).replace("{not_helpful_cls}", not_helpful_cls)
+        (
+            '<div id="feedback-buttons" class="flex gap-2">'
+            '<button type="button" hx-post="/help/feedback/{slug}" hx-target="#feedback-buttons" '
+            'hx-swap="outerHTML" hx-vals=\'{{ "rating": "helpful" }}\' '
+            'class="btn btn-secondary btn-sm {helpful_cls}">Helpful</button>'
+            '<button type="button" hx-post="/help/feedback/{slug}" hx-target="#feedback-buttons" '
+            'hx-swap="outerHTML" hx-vals=\'{{ "rating": "not_helpful" }}\' '
+            'class="btn btn-secondary btn-sm {not_helpful_cls}">Not Helpful</button>'
+            "</div>"
+        )
+        .replace("{slug}", slug)
+        .replace("{helpful_cls}", helpful_cls)
+        .replace("{not_helpful_cls}", not_helpful_cls)
+    )
     return HTMLResponse(html)
 
 
@@ -277,7 +290,9 @@ def module_hub(
         overrides=_help_overrides(db),
     )
     if not payload:
-        return RedirectResponse(url="/help?error=Module+help+not+available", status_code=303)
+        return RedirectResponse(
+            url="/help?error=Module+help+not+available", status_code=303
+        )
 
     context = base_context(
         request,
@@ -332,7 +347,9 @@ def track_detail(
         overrides=_help_overrides(db),
     )
     if not track:
-        return RedirectResponse(url="/help/tracks?error=Track+not+found", status_code=303)
+        return RedirectResponse(
+            url="/help/tracks?error=Track+not+found", status_code=303
+        )
 
     progress_svc = HelpProgressService(db)
     completed_slugs = set(

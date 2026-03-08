@@ -359,8 +359,13 @@ class EventWebService:
             db.rollback()
             logger.exception("create_event_response: failed")
             context = self._event_error_context(
-                request, auth, db, org_id,
-                "New Training Event", dict(form_data), str(e),
+                request,
+                auth,
+                db,
+                org_id,
+                "New Training Event",
+                dict(form_data),
+                str(e),
             )
             return templates.TemplateResponse(
                 request, "people/training/event_form.html", context
@@ -390,8 +395,14 @@ class EventWebService:
             db.rollback()
             logger.exception("update_event_response: failed")
             context = self._event_error_context(
-                request, auth, db, org_id,
-                "Edit Event", dict(form_data), str(e), event_id,
+                request,
+                auth,
+                db,
+                org_id,
+                "Edit Event",
+                dict(form_data),
+                str(e),
+                event_id,
             )
             return templates.TemplateResponse(
                 request, "people/training/event_form.html", context
@@ -462,8 +473,7 @@ class EventWebService:
         employee_ids = [
             employee_id
             for value in form_data.getlist("employee_ids")
-            if isinstance(value, str)
-            and (employee_id := parse_uuid(value)) is not None
+            if isinstance(value, str) and (employee_id := parse_uuid(value)) is not None
         ]
         org_id = coerce_uuid(auth.organization_id)
         svc = TrainingService(db)

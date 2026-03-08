@@ -203,7 +203,9 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             or 0
         )
         total_claimed = self.db.scalar(
-            select(func.sum(ExpenseClaim.total_claimed_amount)).where(*reportable_filters)
+            select(func.sum(ExpenseClaim.total_claimed_amount)).where(
+                *reportable_filters
+            )
         ) or Decimal("0")
 
         status_breakdown = []

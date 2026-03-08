@@ -1,5 +1,6 @@
 """Public expense service facade assembled from focused mixin modules."""
 
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.expense.service_advances import ExpenseAdvanceMixin
 from app.services.expense.service_cards import ExpenseCardMixin
 from app.services.expense.service_categories import ExpenseCategoryMixin
@@ -34,6 +35,7 @@ __all__ = [
     "ExpenseLimitBlockedError",
     "ExpenseService",
     "ExpenseServiceError",
+    "fire_audit_event",
     "REPORTABLE_EXPENSE_CLAIM_STATUSES",
     "STALE_ACTION_MINUTES",
     "SubmitClaimResult",

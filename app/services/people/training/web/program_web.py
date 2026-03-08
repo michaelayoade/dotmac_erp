@@ -46,9 +46,7 @@ class ProgramWebService:
         )
 
         active_filters = [
-            name
-            for name, val in [("status", status), ("category", category)]
-            if val
+            name for name, val in [("status", status), ("category", category)] if val
         ]
 
         return {
@@ -281,8 +279,13 @@ class ProgramWebService:
             db.rollback()
             logger.exception("create_program_response: failed")
             context = self._program_error_context(
-                request, auth, db, org_id,
-                "New Training Program", dict(form_data), str(e),
+                request,
+                auth,
+                db,
+                org_id,
+                "New Training Program",
+                dict(form_data),
+                str(e),
             )
             return templates.TemplateResponse(
                 request, "people/training/program_form.html", context
@@ -312,8 +315,14 @@ class ProgramWebService:
             db.rollback()
             logger.exception("update_program_response: failed")
             context = self._program_error_context(
-                request, auth, db, org_id,
-                "Edit Program", dict(form_data), str(e), program_id,
+                request,
+                auth,
+                db,
+                org_id,
+                "Edit Program",
+                dict(form_data),
+                str(e),
+                program_id,
             )
             return templates.TemplateResponse(
                 request, "people/training/program_form.html", context

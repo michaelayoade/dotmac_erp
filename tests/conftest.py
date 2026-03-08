@@ -243,8 +243,12 @@ class MockSettings:
     captcha_secret_key = None
     # App URL
     app_url = "http://localhost:8000"
+    # CRM webhook secret
+    crm_webhook_secret = None
     # SSO settings
     sso_enabled = False
+    sso_provider_mode = False
+    sso_provider_url = None
     sso_jwt_secret = None
     sso_cookie_domain = None
     # Coach / Intelligence Engine
@@ -287,7 +291,6 @@ class MockSettings:
     db_statement_timeout_ms = 30000
     # Default org
     default_organization_id = None
-
 
 mock_config_module.settings = MockSettings()
 mock_config_module.Settings = MockSettings

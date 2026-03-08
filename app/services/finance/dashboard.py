@@ -563,9 +563,7 @@ class DashboardService:
         org_id = coerce_uuid(organization_id)
 
         revenue, expenses, cogs_spend, opex_spend = (
-            DashboardService.get_gl_revenue_expenses_with_cogs(
-                db, org_id, year=year
-            )
+            DashboardService.get_gl_revenue_expenses_with_cogs(db, org_id, year=year)
         )
         ar_control_balance, ap_control_balance = (
             DashboardService.get_gl_control_balances(db, org_id, year=year)
@@ -1190,9 +1188,7 @@ class DashboardService:
         # In PostgreSQL, (date - date) returns an integer number of days.
         # Cast explicitly to Integer so SQLAlchemy comparisons use plain
         # integer operators instead of date_part(), which fails on int.
-        days_overdue_expr = func.cast(
-            func.current_date() - Invoice.due_date, Integer
-        )
+        days_overdue_expr = func.cast(func.current_date() - Invoice.due_date, Integer)
 
         aging_stmt = select(
             func.coalesce(

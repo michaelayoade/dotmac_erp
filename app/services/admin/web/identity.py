@@ -101,7 +101,9 @@ class AdminIdentityMixin:
         users = []
         for person in persons:
             name = person.name or person.email or "Unknown"
-            initials = "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            initials = (
+                "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            )
             users.append(
                 {
                     "id": str(person.id),
@@ -113,7 +115,9 @@ class AdminIdentityMixin:
                     "status": person.status.value if person.status else "active",
                     "roles": person_roles_map.get(person.id, []),
                     "last_active": last_active_map.get(person.id),
-                    "created_at": person.created_at.strftime("%b %d, %Y") if person.created_at else "",
+                    "created_at": person.created_at.strftime("%b %d, %Y")
+                    if person.created_at
+                    else "",
                 }
             )
 
@@ -127,14 +131,26 @@ class AdminIdentityMixin:
     @staticmethod
     def user_form_context(db: Session, user_id: str | None = None) -> dict:
         organizations = list(
-            db.scalars(select(Organization).where(Organization.is_active.is_(True))).all()
+            db.scalars(
+                select(Organization).where(Organization.is_active.is_(True))
+            ).all()
         )
         org_list = [
-            {"id": str(org.organization_id), "name": org.legal_name or org.trading_name or org.organization_code}
+            {
+                "id": str(org.organization_id),
+                "name": org.legal_name or org.trading_name or org.organization_code,
+            }
             for org in organizations
         ]
-        roles = list(db.scalars(select(Role).where(Role.is_active.is_(True)).order_by(Role.name)).all())
-        role_list = [{"id": str(role.id), "name": role.name, "description": role.description} for role in roles]
+        roles = list(
+            db.scalars(
+                select(Role).where(Role.is_active.is_(True)).order_by(Role.name)
+            ).all()
+        )
+        role_list = [
+            {"id": str(role.id), "name": role.name, "description": role.description}
+            for role in roles
+        ]
 
         user_data = None
         if user_id:
@@ -163,9 +179,13 @@ class AdminIdentityMixin:
                 "phone": person.phone,
                 "email_verified": person.email_verified,
                 "status": person.status.value if person.status else "active",
-                "organization_id": str(person.organization_id) if person.organization_id else None,
+                "organization_id": str(person.organization_id)
+                if person.organization_id
+                else None,
                 "username": credential.username if credential else None,
-                "must_change_password": credential.must_change_password if credential else False,
+                "must_change_password": credential.must_change_password
+                if credential
+                else False,
                 "role_ids": [str(role.id) for role in user_roles],
             }
 
@@ -218,7 +238,10 @@ class AdminIdentityMixin:
             password = DEFAULT_NEW_LOCAL_PASSWORD
             password_confirm = DEFAULT_NEW_LOCAL_PASSWORD
         elif bool(password) != bool(password_confirm):
-            return None, "Both password fields are required when setting a custom password"
+            return (
+                None,
+                "Both password fields are required when setting a custom password",
+            )
 
         must_change_password = True
         if password != password_confirm:
@@ -239,7 +262,9 @@ class AdminIdentityMixin:
 
         try:
             person_status = PersonStatus(status) if status else PersonStatus.active
-            derived_display_name = _derive_display_name(first_name, last_name, display_name)
+            derived_display_name = _derive_display_name(
+                first_name, last_name, display_name
+            )
             person = Person(
                 first_name=first_name,
                 last_name=last_name,
@@ -265,7 +290,9 @@ class AdminIdentityMixin:
             )
             for role_id in role_ids:
                 if role_id:
-                    db.add(PersonRole(person_id=person.id, role_id=coerce_uuid(role_id)))
+                    db.add(
+                        PersonRole(person_id=person.id, role_id=coerce_uuid(role_id))
+                    )
 
             db.commit()
             _admin_web_facade().fire_audit_event(
@@ -303,7 +330,9 @@ class AdminIdentityMixin:
         role_ids = role_ids or []
         if isinstance(role_ids, str):
             role_ids = [role_ids]
-        normalized_role_ids = {str(coerce_uuid(role_id)) for role_id in role_ids if role_id}
+        normalized_role_ids = {
+            str(coerce_uuid(role_id)) for role_id in role_ids if role_id
+        }
         must_change_password = _parse_flag(must_change_password)
         email_verified = _parse_flag(email_verified)
 
@@ -317,7 +346,9 @@ class AdminIdentityMixin:
             if len(password) < 8:
                 return None, "Password must be at least 8 characters"
 
-        existing_email = db.scalar(select(Person).where(Person.email == email, Person.id != person.id))
+        existing_email = db.scalar(
+            select(Person).where(Person.email == email, Person.id != person.id)
+        )
         if existing_email:
             return None, "A user with this email already exists"
 
@@ -335,7 +366,9 @@ class AdminIdentityMixin:
             person_status = PersonStatus(status) if status else PersonStatus.active
             person.first_name = first_name
             person.last_name = last_name
-            person.display_name = _derive_display_name(first_name, last_name, display_name)
+            person.display_name = _derive_display_name(
+                first_name, last_name, display_name
+            )
             person.email = email
             person.phone = phone if phone else None
             person.organization_id = coerce_uuid(organization_id)
@@ -369,7 +402,9 @@ class AdminIdentityMixin:
 
             current_role_ids = {
                 str(role_id)
-                for (role_id,) in db.execute(select(PersonRole.role_id).where(PersonRole.person_id == person.id)).all()
+                for (role_id,) in db.execute(
+                    select(PersonRole.role_id).where(PersonRole.person_id == person.id)
+                ).all()
             }
             db.execute(delete(PersonRole).where(PersonRole.person_id == person.id))
             for role_id in normalized_role_ids:
@@ -431,12 +466,16 @@ class AdminIdentityMixin:
             raise HTTPException(status_code=404, detail="User not found")
         try:
             employee = db.scalar(
-                select(Employee).where(Employee.person_id == person.id, Employee.is_deleted.is_(False))
+                select(Employee).where(
+                    Employee.person_id == person.id, Employee.is_deleted.is_(False)
+                )
             )
             if employee:
                 return "Cannot delete user linked to an employee. Delete the employee record first."
             db.execute(delete(PersonRole).where(PersonRole.person_id == person.id))
-            db.execute(delete(UserCredential).where(UserCredential.person_id == person.id))
+            db.execute(
+                delete(UserCredential).where(UserCredential.person_id == person.id)
+            )
             db.execute(delete(AuthSession).where(AuthSession.person_id == person.id))
             db.delete(person)
             db.commit()
@@ -446,22 +485,53 @@ class AdminIdentityMixin:
             return f"Failed to delete user: {str(exc)}"
 
     @staticmethod
-    def roles_context(db: Session, search: str | None, status: str | None, page: int, limit: int = DEFAULT_PAGE_SIZE) -> dict:
+    def roles_context(
+        db: Session,
+        search: str | None,
+        status: str | None,
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         offset = (page - 1) * limit
         conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            conditions.append(or_(Role.name.ilike(search_pattern), Role.description.ilike(search_pattern)))
-        active_count = db.scalar(select(func.count(Role.id)).where(*conditions, Role.is_active.is_(True))) or 0
-        inactive_count = db.scalar(select(func.count(Role.id)).where(*conditions, Role.is_active.is_(False))) or 0
+            conditions.append(
+                or_(
+                    Role.name.ilike(search_pattern),
+                    Role.description.ilike(search_pattern),
+                )
+            )
+        active_count = (
+            db.scalar(
+                select(func.count(Role.id)).where(*conditions, Role.is_active.is_(True))
+            )
+            or 0
+        )
+        inactive_count = (
+            db.scalar(
+                select(func.count(Role.id)).where(
+                    *conditions, Role.is_active.is_(False)
+                )
+            )
+            or 0
+        )
         role_conditions = list(conditions)
         status_flag = _parse_status_filter(status)
         if status_flag is not None:
             role_conditions.append(Role.is_active == status_flag)
-        total_count = db.scalar(select(func.count(Role.id)).where(*role_conditions)) or 0
+        total_count = (
+            db.scalar(select(func.count(Role.id)).where(*role_conditions)) or 0
+        )
         roles = list(
-            db.scalars(select(Role).where(*role_conditions).order_by(Role.name).limit(limit).offset(offset)).all()
+            db.scalars(
+                select(Role)
+                .where(*role_conditions)
+                .order_by(Role.name)
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
         role_ids = [role.id for role in roles]
         permission_counts: dict[UUID, int] = {}
@@ -496,10 +566,16 @@ class AdminIdentityMixin:
                 }
                 for role in roles
             ],
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "status_filter": status or "",
-            "stats": {"active": active_count, "inactive": inactive_count, "total": active_count + inactive_count},
+            "stats": {
+                "active": active_count,
+                "inactive": inactive_count,
+                "total": active_count + inactive_count,
+            },
         }
 
     @staticmethod
@@ -509,17 +585,27 @@ class AdminIdentityMixin:
             role = db.get(Role, coerce_uuid(role_id))
             if role:
                 role_permission_ids = [
-                    rp.permission_id for rp in db.scalars(select(RolePermission).where(RolePermission.role_id == role.id)).all()
+                    rp.permission_id
+                    for rp in db.scalars(
+                        select(RolePermission).where(RolePermission.role_id == role.id)
+                    ).all()
                 ]
                 members_query = list(
                     db.scalars(
-                        select(Person).join(PersonRole, PersonRole.person_id == Person.id).where(PersonRole.role_id == role.id).limit(20)
+                        select(Person)
+                        .join(PersonRole, PersonRole.person_id == Person.id)
+                        .where(PersonRole.role_id == role.id)
+                        .limit(20)
                     ).all()
                 )
                 members = []
                 for person in members_query:
                     name = person.name or person.email or "Unknown"
-                    initials = "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+                    initials = (
+                        "".join(word[0].upper() for word in name.split()[:2])
+                        if name
+                        else "?"
+                    )
                     members.append({"name": name, "initials": initials})
                 role_data = {
                     "id": str(role.id),
@@ -530,14 +616,25 @@ class AdminIdentityMixin:
                     "members": members,
                 }
 
-        permissions = list(db.scalars(select(Permission).where(Permission.is_active.is_(True)).order_by(Permission.key)).all())
+        permissions = list(
+            db.scalars(
+                select(Permission)
+                .where(Permission.is_active.is_(True))
+                .order_by(Permission.key)
+            ).all()
+        )
         permissions_by_category: dict[str, list[dict]] = {}
         for perm in permissions:
-            category = perm.key.replace("_", ":").split(":")[0] if perm.key else "general"
+            category = (
+                perm.key.replace("_", ":").split(":")[0] if perm.key else "general"
+            )
             permissions_by_category.setdefault(category, []).append(
                 {"id": perm.id, "key": perm.key, "description": perm.description}
             )
-        return {"role_data": role_data, "permissions_by_category": permissions_by_category}
+        return {
+            "role_data": role_data,
+            "permissions_by_category": permissions_by_category,
+        }
 
     @staticmethod
     def role_profile_context(db: Session, role_id: str) -> dict:
@@ -548,7 +645,9 @@ class AdminIdentityMixin:
             db.scalars(
                 select(Permission)
                 .join(RolePermission, RolePermission.permission_id == Permission.id)
-                .where(RolePermission.role_id == role.id, Permission.is_active.is_(True))
+                .where(
+                    RolePermission.role_id == role.id, Permission.is_active.is_(True)
+                )
                 .order_by(Permission.key)
             ).all()
         )
@@ -557,9 +656,18 @@ class AdminIdentityMixin:
             key_parts = perm.key.split(":")
             module = key_parts[0] if key_parts else "general"
             permissions_by_module.setdefault(module, []).append(
-                {"key": perm.key, "description": perm.description, "action": key_parts[-1] if len(key_parts) > 1 else "access"}
+                {
+                    "key": perm.key,
+                    "description": perm.description,
+                    "action": key_parts[-1] if len(key_parts) > 1 else "access",
+                }
             )
-        member_count = db.scalar(select(func.count(PersonRole.id)).where(PersonRole.role_id == role.id)) or 0
+        member_count = (
+            db.scalar(
+                select(func.count(PersonRole.id)).where(PersonRole.role_id == role.id)
+            )
+            or 0
+        )
         members_query = list(
             db.scalars(
                 select(Person)
@@ -572,24 +680,65 @@ class AdminIdentityMixin:
         members = []
         for person in members_query:
             name = person.name or person.email or "Unknown"
-            initials = "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
-            members.append({"id": str(person.id), "name": name, "email": person.email, "initials": initials})
+            initials = (
+                "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            )
+            members.append(
+                {
+                    "id": str(person.id),
+                    "name": name,
+                    "email": person.email,
+                    "initials": initials,
+                }
+            )
         module_names = {
-            "audit": "Audit & Compliance", "auth": "Authentication", "rbac": "Roles & Permissions", "scheduler": "Job Scheduler",
-            "settings": "System Settings", "integrations": "Integrations", "finance": "Finance Module", "gl": "General Ledger",
-            "ar": "Accounts Receivable", "ap": "Accounts Payable", "fa": "Fixed Assets", "banking": "Banking",
-            "inv": "Inventory", "inventory": "Inventory", "tax": "Tax Management", "lease": "Lease Accounting",
-            "cons": "Consolidation", "fx": "Foreign Exchange", "reports": "Financial Reports", "rpt": "Reporting API",
-            "payments": "Payment Gateway", "automation": "Automation", "org": "Organization Setup", "import": "Data Import",
-            "hr": "Human Resources", "payroll": "Payroll", "leave": "Leave Management", "attendance": "Attendance",
-            "perf": "Performance Management", "recruit": "Recruitment", "training": "Training & Development",
-            "selfservice": "Self-Service Portal", "expense": "Expense Management", "fleet": "Fleet Management",
-            "procurement": "Procurement", "projects": "Projects", "support": "Support & Ticketing", "tasks": "Task Management",
+            "audit": "Audit & Compliance",
+            "auth": "Authentication",
+            "rbac": "Roles & Permissions",
+            "scheduler": "Job Scheduler",
+            "settings": "System Settings",
+            "integrations": "Integrations",
+            "finance": "Finance Module",
+            "gl": "General Ledger",
+            "ar": "Accounts Receivable",
+            "ap": "Accounts Payable",
+            "fa": "Fixed Assets",
+            "banking": "Banking",
+            "inv": "Inventory",
+            "inventory": "Inventory",
+            "tax": "Tax Management",
+            "lease": "Lease Accounting",
+            "cons": "Consolidation",
+            "fx": "Foreign Exchange",
+            "reports": "Financial Reports",
+            "rpt": "Reporting API",
+            "payments": "Payment Gateway",
+            "automation": "Automation",
+            "org": "Organization Setup",
+            "import": "Data Import",
+            "hr": "Human Resources",
+            "payroll": "Payroll",
+            "leave": "Leave Management",
+            "attendance": "Attendance",
+            "perf": "Performance Management",
+            "recruit": "Recruitment",
+            "training": "Training & Development",
+            "selfservice": "Self-Service Portal",
+            "expense": "Expense Management",
+            "fleet": "Fleet Management",
+            "procurement": "Procurement",
+            "projects": "Projects",
+            "support": "Support & Ticketing",
+            "tasks": "Task Management",
         }
         return {
             "role": {
-                "id": str(role.id), "name": role.name, "description": role.description or "", "is_active": role.is_active,
-                "created_at": _format_datetime(role.created_at), "updated_at": _format_datetime(role.updated_at),
+                "id": str(role.id),
+                "name": role.name,
+                "description": role.description or "",
+                "is_active": role.is_active,
+                "created_at": _format_datetime(role.created_at),
+                "updated_at": _format_datetime(role.updated_at),
             },
             "permissions_by_module": dict(sorted(permissions_by_module.items())),
             "permission_count": len(role_permissions),
@@ -599,17 +748,31 @@ class AdminIdentityMixin:
         }
 
     @staticmethod
-    def create_role(db: Session, name: str, description: str, is_active: bool, permission_ids: list[str]) -> tuple[Role | None, str | None]:
+    def create_role(
+        db: Session,
+        name: str,
+        description: str,
+        is_active: bool,
+        permission_ids: list[str],
+    ) -> tuple[Role | None, str | None]:
         existing = db.scalar(select(Role).where(Role.name == name))
         if existing:
             return None, "A role with this name already exists"
         try:
-            role = Role(name=name, description=description if description else None, is_active=is_active)
+            role = Role(
+                name=name,
+                description=description if description else None,
+                is_active=is_active,
+            )
             db.add(role)
             db.flush()
             for perm_id in permission_ids:
                 if perm_id:
-                    db.add(RolePermission(role_id=role.id, permission_id=coerce_uuid(perm_id)))
+                    db.add(
+                        RolePermission(
+                            role_id=role.id, permission_id=coerce_uuid(perm_id)
+                        )
+                    )
             db.commit()
             return role, None
         except Exception as exc:
@@ -617,7 +780,14 @@ class AdminIdentityMixin:
             return None, f"Failed to create role: {str(exc)}"
 
     @staticmethod
-    def update_role(db: Session, role_id: str, name: str, description: str, is_active: bool, permission_ids: list[str]) -> tuple[Role | None, str | None]:
+    def update_role(
+        db: Session,
+        role_id: str,
+        name: str,
+        description: str,
+        is_active: bool,
+        permission_ids: list[str],
+    ) -> tuple[Role | None, str | None]:
         role = db.get(Role, coerce_uuid(role_id))
         if not role:
             return None, "Role not found"
@@ -631,7 +801,11 @@ class AdminIdentityMixin:
             db.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
             for perm_id in permission_ids:
                 if perm_id:
-                    db.add(RolePermission(role_id=role.id, permission_id=coerce_uuid(perm_id)))
+                    db.add(
+                        RolePermission(
+                            role_id=role.id, permission_id=coerce_uuid(perm_id)
+                        )
+                    )
             db.commit()
             return role, None
         except Exception as exc:
@@ -654,22 +828,56 @@ class AdminIdentityMixin:
             return f"Failed to delete role: {str(exc)}"
 
     @staticmethod
-    def permissions_context(db: Session, search: str | None, status: str | None, page: int, limit: int = DEFAULT_PAGE_SIZE) -> dict:
+    def permissions_context(
+        db: Session,
+        search: str | None,
+        status: str | None,
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         offset = (page - 1) * limit
         conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            conditions.append(or_(Permission.key.ilike(search_pattern), Permission.description.ilike(search_pattern)))
-        active_count = db.scalar(select(func.count(Permission.id)).where(*conditions, Permission.is_active.is_(True))) or 0
-        inactive_count = db.scalar(select(func.count(Permission.id)).where(*conditions, Permission.is_active.is_(False))) or 0
+            conditions.append(
+                or_(
+                    Permission.key.ilike(search_pattern),
+                    Permission.description.ilike(search_pattern),
+                )
+            )
+        active_count = (
+            db.scalar(
+                select(func.count(Permission.id)).where(
+                    *conditions, Permission.is_active.is_(True)
+                )
+            )
+            or 0
+        )
+        inactive_count = (
+            db.scalar(
+                select(func.count(Permission.id)).where(
+                    *conditions, Permission.is_active.is_(False)
+                )
+            )
+            or 0
+        )
         permission_conditions = list(conditions)
         status_flag = _parse_status_filter(status)
         if status_flag is not None:
             permission_conditions.append(Permission.is_active == status_flag)
-        total_count = db.scalar(select(func.count(Permission.id)).where(*permission_conditions)) or 0
+        total_count = (
+            db.scalar(select(func.count(Permission.id)).where(*permission_conditions))
+            or 0
+        )
         permissions = list(
-            db.scalars(select(Permission).where(*permission_conditions).order_by(Permission.key).limit(limit).offset(offset)).all()
+            db.scalars(
+                select(Permission)
+                .where(*permission_conditions)
+                .order_by(Permission.key)
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
         perm_ids = [p.id for p in permissions]
         role_counts: dict[UUID, int] = {}
@@ -685,15 +893,25 @@ class AdminIdentityMixin:
         return {
             "permissions": [
                 {
-                    "permission_id": perm.id, "key": perm.key, "description": perm.description, "is_active": perm.is_active,
-                    "role_count": role_counts.get(perm.id, 0), "created_at": _format_datetime(perm.created_at),
+                    "permission_id": perm.id,
+                    "key": perm.key,
+                    "description": perm.description,
+                    "is_active": perm.is_active,
+                    "role_count": role_counts.get(perm.id, 0),
+                    "created_at": _format_datetime(perm.created_at),
                 }
                 for perm in permissions
             ],
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "status_filter": status or "",
-            "stats": {"active": active_count, "inactive": inactive_count, "total": active_count + inactive_count},
+            "stats": {
+                "active": active_count,
+                "inactive": inactive_count,
+                "total": active_count + inactive_count,
+            },
         }
 
     @staticmethod
@@ -703,7 +921,9 @@ class AdminIdentityMixin:
             perm = db.get(Permission, coerce_uuid(permission_id))
             if perm:
                 roles_with_permission = db.execute(
-                    select(Role.name).join(RolePermission, RolePermission.role_id == Role.id).where(RolePermission.permission_id == perm.id)
+                    select(Role.name)
+                    .join(RolePermission, RolePermission.role_id == Role.id)
+                    .where(RolePermission.permission_id == perm.id)
                 ).all()
                 permission_data = {
                     "id": str(perm.id),
@@ -715,12 +935,18 @@ class AdminIdentityMixin:
         return {"permission_data": permission_data}
 
     @staticmethod
-    def create_permission(db: Session, key: str, description: str, is_active: bool) -> tuple[Permission | None, str | None]:
+    def create_permission(
+        db: Session, key: str, description: str, is_active: bool
+    ) -> tuple[Permission | None, str | None]:
         existing = db.scalar(select(Permission).where(Permission.key == key))
         if existing:
             return None, "A permission with this key already exists"
         try:
-            permission = Permission(key=key, description=description if description else None, is_active=is_active)
+            permission = Permission(
+                key=key,
+                description=description if description else None,
+                is_active=is_active,
+            )
             db.add(permission)
             db.commit()
             return permission, None
@@ -729,11 +955,17 @@ class AdminIdentityMixin:
             return None, f"Failed to create permission: {str(exc)}"
 
     @staticmethod
-    def update_permission(db: Session, permission_id: str, key: str, description: str, is_active: bool) -> tuple[Permission | None, str | None]:
+    def update_permission(
+        db: Session, permission_id: str, key: str, description: str, is_active: bool
+    ) -> tuple[Permission | None, str | None]:
         permission = db.get(Permission, coerce_uuid(permission_id))
         if not permission:
             return None, "Permission not found"
-        existing = db.scalar(select(Permission).where(Permission.key == key, Permission.id != permission.id))
+        existing = db.scalar(
+            select(Permission).where(
+                Permission.key == key, Permission.id != permission.id
+            )
+        )
         if existing:
             return None, "A permission with this key already exists"
         try:
@@ -752,7 +984,11 @@ class AdminIdentityMixin:
         if not permission:
             return "Permission not found"
         try:
-            db.execute(delete(RolePermission).where(RolePermission.permission_id == permission.id))
+            db.execute(
+                delete(RolePermission).where(
+                    RolePermission.permission_id == permission.id
+                )
+            )
             db.delete(permission)
             db.commit()
             return None

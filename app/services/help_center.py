@@ -1277,8 +1277,14 @@ CROSS_MODULE_WORKFLOWS: list[dict[str, Any]] = [
         "title": "Budget-to-Commitment",
         "modules": ["public_sector", "procurement", "finance"],
         "steps": [
-            {"label": "Set appropriation budget", "href": "/public-sector/appropriations"},
-            {"label": "Create procurement requisition", "href": "/procurement/requisitions"},
+            {
+                "label": "Set appropriation budget",
+                "href": "/public-sector/appropriations",
+            },
+            {
+                "label": "Create procurement requisition",
+                "href": "/procurement/requisitions",
+            },
             {"label": "Record commitment", "href": "/public-sector/commitments"},
             {"label": "Post expenditure to GL", "href": "/finance/gl/journals"},
         ],
@@ -1379,7 +1385,10 @@ ROLE_PLAYBOOKS: list[dict[str, Any]] = [
         "journeys": [
             {"label": "Process requisitions", "href": "/procurement/requisitions"},
             {"label": "Manage RFQs and evaluations", "href": "/procurement/rfqs"},
-            {"label": "Track contracts and obligations", "href": "/procurement/contracts"},
+            {
+                "label": "Track contracts and obligations",
+                "href": "/procurement/contracts",
+            },
         ],
     },
     {
@@ -1409,7 +1418,10 @@ ROLE_PLAYBOOKS: list[dict[str, Any]] = [
         "journeys": [
             {"label": "Manage appropriations", "href": "/public-sector/appropriations"},
             {"label": "Process virements", "href": "/public-sector/virements"},
-            {"label": "Monitor commitment controls", "href": "/public-sector/commitments"},
+            {
+                "label": "Monitor commitment controls",
+                "href": "/public-sector/commitments",
+            },
         ],
     },
     {
@@ -1426,36 +1438,186 @@ ROLE_PLAYBOOKS: list[dict[str, Any]] = [
 
 
 GLOSSARY: list[dict[str, Any]] = [
-    {"term": "General Ledger (GL)", "definition": "The central accounting record that contains all financial transactions organized by account.", "category": "finance", "see_also": "Chart of Accounts, Journal Entry"},
-    {"term": "Chart of Accounts", "definition": "A structured list of all accounts used by an organization to classify financial transactions.", "category": "finance", "see_also": "General Ledger"},
-    {"term": "Journal Entry", "definition": "A record of a financial transaction with equal debits and credits posted to GL accounts.", "category": "finance", "see_also": "General Ledger, Trial Balance"},
-    {"term": "Trial Balance", "definition": "A report listing all GL account balances to verify that total debits equal total credits.", "category": "finance", "see_also": "General Ledger"},
-    {"term": "Accounts Receivable (AR)", "definition": "Money owed to the organization by customers for goods or services delivered.", "category": "finance", "see_also": "Invoice, Receipt"},
-    {"term": "Accounts Payable (AP)", "definition": "Money the organization owes to suppliers for goods or services received.", "category": "finance", "see_also": "Supplier Invoice, Payment"},
-    {"term": "Fiscal Period", "definition": "A time segment (usually monthly) within a fiscal year used for financial reporting and controls.", "category": "finance", "see_also": "Period Close"},
-    {"term": "Period Close", "definition": "The process of finalizing all transactions for a fiscal period and preventing further postings.", "category": "finance", "see_also": "Fiscal Period"},
-    {"term": "Bank Reconciliation", "definition": "The process of matching book transactions with bank statement entries to identify and resolve differences.", "category": "finance", "see_also": "Banking"},
-    {"term": "Aging Report", "definition": "A report showing outstanding receivables or payables organized by how long they have been unpaid.", "category": "finance", "see_also": "AR, AP"},
-    {"term": "Credit Note", "definition": "A document issued to reduce the amount owed by a customer, typically for returns or corrections.", "category": "finance", "see_also": "Invoice"},
-    {"term": "Debit Note", "definition": "A document issued to a supplier to reduce the amount owed, typically for returns or corrections.", "category": "finance", "see_also": "Supplier Invoice"},
-    {"term": "Requisition", "definition": "A formal request to procure goods or services, subject to approval before a purchase order is created.", "category": "procurement", "see_also": "Purchase Order, RFQ"},
-    {"term": "RFQ (Request for Quotation)", "definition": "A document sent to vendors inviting them to submit price quotes for specified goods or services.", "category": "procurement", "see_also": "Requisition, Purchase Order"},
-    {"term": "Purchase Order (PO)", "definition": "A formal document authorizing a vendor to supply goods or services at agreed terms.", "category": "procurement", "see_also": "Requisition, Goods Receipt"},
-    {"term": "Goods Receipt", "definition": "A record confirming that goods ordered via a purchase order have been physically received.", "category": "procurement", "see_also": "Purchase Order"},
-    {"term": "SLA (Service Level Agreement)", "definition": "A defined target for response and resolution times for support tickets based on priority.", "category": "support", "see_also": "Ticket, Escalation"},
-    {"term": "Escalation", "definition": "The process of raising a ticket to a higher support tier when SLA targets are at risk.", "category": "support", "see_also": "SLA"},
-    {"term": "Payroll Run", "definition": "The periodic process of calculating and distributing employee compensation.", "category": "people", "see_also": "Payslip"},
-    {"term": "Payslip", "definition": "A document showing an employee's earnings, deductions, and net pay for a pay period.", "category": "people", "see_also": "Payroll Run"},
-    {"term": "Leave Allocation", "definition": "The number of leave days assigned to an employee for a specific leave type and period.", "category": "people", "see_also": "Leave Request"},
-    {"term": "Onboarding", "definition": "The structured process of integrating a new employee into the organization with assigned tasks.", "category": "people", "see_also": "Employee Lifecycle"},
-    {"term": "Expense Claim", "definition": "A request for reimbursement of business expenses incurred by an employee.", "category": "expense", "see_also": "Reimbursement"},
-    {"term": "Appropriation", "definition": "A budgetary allocation of funds for a specific purpose within a public sector organization.", "category": "public_sector", "see_also": "Commitment, Virement"},
-    {"term": "Commitment", "definition": "A recorded obligation to spend funds, reducing available budget before actual expenditure.", "category": "public_sector", "see_also": "Appropriation"},
-    {"term": "Virement", "definition": "An authorized transfer of budget allocation from one appropriation line to another.", "category": "public_sector", "see_also": "Appropriation"},
-    {"term": "Stock Valuation", "definition": "The monetary value of inventory on hand, calculated using methods like FIFO or weighted average.", "category": "inventory", "see_also": "Cycle Count"},
-    {"term": "Cycle Count", "definition": "A periodic physical count of a subset of inventory items to verify system accuracy.", "category": "inventory", "see_also": "Stock Valuation"},
-    {"term": "Material Request", "definition": "A formal request to issue or transfer inventory items from a warehouse.", "category": "inventory", "see_also": "Stock Issue"},
-    {"term": "Milestone", "definition": "A significant checkpoint in a project timeline marking the completion of a deliverable.", "category": "projects", "see_also": "Task"},
+    {
+        "term": "General Ledger (GL)",
+        "definition": "The central accounting record that contains all financial transactions organized by account.",
+        "category": "finance",
+        "see_also": "Chart of Accounts, Journal Entry",
+    },
+    {
+        "term": "Chart of Accounts",
+        "definition": "A structured list of all accounts used by an organization to classify financial transactions.",
+        "category": "finance",
+        "see_also": "General Ledger",
+    },
+    {
+        "term": "Journal Entry",
+        "definition": "A record of a financial transaction with equal debits and credits posted to GL accounts.",
+        "category": "finance",
+        "see_also": "General Ledger, Trial Balance",
+    },
+    {
+        "term": "Trial Balance",
+        "definition": "A report listing all GL account balances to verify that total debits equal total credits.",
+        "category": "finance",
+        "see_also": "General Ledger",
+    },
+    {
+        "term": "Accounts Receivable (AR)",
+        "definition": "Money owed to the organization by customers for goods or services delivered.",
+        "category": "finance",
+        "see_also": "Invoice, Receipt",
+    },
+    {
+        "term": "Accounts Payable (AP)",
+        "definition": "Money the organization owes to suppliers for goods or services received.",
+        "category": "finance",
+        "see_also": "Supplier Invoice, Payment",
+    },
+    {
+        "term": "Fiscal Period",
+        "definition": "A time segment (usually monthly) within a fiscal year used for financial reporting and controls.",
+        "category": "finance",
+        "see_also": "Period Close",
+    },
+    {
+        "term": "Period Close",
+        "definition": "The process of finalizing all transactions for a fiscal period and preventing further postings.",
+        "category": "finance",
+        "see_also": "Fiscal Period",
+    },
+    {
+        "term": "Bank Reconciliation",
+        "definition": "The process of matching book transactions with bank statement entries to identify and resolve differences.",
+        "category": "finance",
+        "see_also": "Banking",
+    },
+    {
+        "term": "Aging Report",
+        "definition": "A report showing outstanding receivables or payables organized by how long they have been unpaid.",
+        "category": "finance",
+        "see_also": "AR, AP",
+    },
+    {
+        "term": "Credit Note",
+        "definition": "A document issued to reduce the amount owed by a customer, typically for returns or corrections.",
+        "category": "finance",
+        "see_also": "Invoice",
+    },
+    {
+        "term": "Debit Note",
+        "definition": "A document issued to a supplier to reduce the amount owed, typically for returns or corrections.",
+        "category": "finance",
+        "see_also": "Supplier Invoice",
+    },
+    {
+        "term": "Requisition",
+        "definition": "A formal request to procure goods or services, subject to approval before a purchase order is created.",
+        "category": "procurement",
+        "see_also": "Purchase Order, RFQ",
+    },
+    {
+        "term": "RFQ (Request for Quotation)",
+        "definition": "A document sent to vendors inviting them to submit price quotes for specified goods or services.",
+        "category": "procurement",
+        "see_also": "Requisition, Purchase Order",
+    },
+    {
+        "term": "Purchase Order (PO)",
+        "definition": "A formal document authorizing a vendor to supply goods or services at agreed terms.",
+        "category": "procurement",
+        "see_also": "Requisition, Goods Receipt",
+    },
+    {
+        "term": "Goods Receipt",
+        "definition": "A record confirming that goods ordered via a purchase order have been physically received.",
+        "category": "procurement",
+        "see_also": "Purchase Order",
+    },
+    {
+        "term": "SLA (Service Level Agreement)",
+        "definition": "A defined target for response and resolution times for support tickets based on priority.",
+        "category": "support",
+        "see_also": "Ticket, Escalation",
+    },
+    {
+        "term": "Escalation",
+        "definition": "The process of raising a ticket to a higher support tier when SLA targets are at risk.",
+        "category": "support",
+        "see_also": "SLA",
+    },
+    {
+        "term": "Payroll Run",
+        "definition": "The periodic process of calculating and distributing employee compensation.",
+        "category": "people",
+        "see_also": "Payslip",
+    },
+    {
+        "term": "Payslip",
+        "definition": "A document showing an employee's earnings, deductions, and net pay for a pay period.",
+        "category": "people",
+        "see_also": "Payroll Run",
+    },
+    {
+        "term": "Leave Allocation",
+        "definition": "The number of leave days assigned to an employee for a specific leave type and period.",
+        "category": "people",
+        "see_also": "Leave Request",
+    },
+    {
+        "term": "Onboarding",
+        "definition": "The structured process of integrating a new employee into the organization with assigned tasks.",
+        "category": "people",
+        "see_also": "Employee Lifecycle",
+    },
+    {
+        "term": "Expense Claim",
+        "definition": "A request for reimbursement of business expenses incurred by an employee.",
+        "category": "expense",
+        "see_also": "Reimbursement",
+    },
+    {
+        "term": "Appropriation",
+        "definition": "A budgetary allocation of funds for a specific purpose within a public sector organization.",
+        "category": "public_sector",
+        "see_also": "Commitment, Virement",
+    },
+    {
+        "term": "Commitment",
+        "definition": "A recorded obligation to spend funds, reducing available budget before actual expenditure.",
+        "category": "public_sector",
+        "see_also": "Appropriation",
+    },
+    {
+        "term": "Virement",
+        "definition": "An authorized transfer of budget allocation from one appropriation line to another.",
+        "category": "public_sector",
+        "see_also": "Appropriation",
+    },
+    {
+        "term": "Stock Valuation",
+        "definition": "The monetary value of inventory on hand, calculated using methods like FIFO or weighted average.",
+        "category": "inventory",
+        "see_also": "Cycle Count",
+    },
+    {
+        "term": "Cycle Count",
+        "definition": "A periodic physical count of a subset of inventory items to verify system accuracy.",
+        "category": "inventory",
+        "see_also": "Stock Valuation",
+    },
+    {
+        "term": "Material Request",
+        "definition": "A formal request to issue or transfer inventory items from a warehouse.",
+        "category": "inventory",
+        "see_also": "Stock Issue",
+    },
+    {
+        "term": "Milestone",
+        "definition": "A significant checkpoint in a project timeline marking the completion of a deliverable.",
+        "category": "projects",
+        "see_also": "Task",
+    },
 ]
 
 RELEASE_NOTES: list[dict[str, Any]] = [
@@ -1797,7 +1959,9 @@ def _quick_start_article(module_key: str, guide: dict[str, Any]) -> dict[str, An
     )
 
 
-def _journey_article(module_key: str, guide: dict[str, Any], journey: dict[str, Any]) -> dict[str, Any]:
+def _journey_article(
+    module_key: str, guide: dict[str, Any], journey: dict[str, Any]
+) -> dict[str, Any]:
     module_title = guide["title"]
     slug = f"{module_key}-{_slugify(journey['title'])}"
     return _build_article(
@@ -1930,7 +2094,9 @@ def _build_articles_for_modules(modules: list[str]) -> list[dict[str, Any]]:
     for module in modules:
         guide = MODULE_GUIDES[module]
         articles.append(_quick_start_article(module, guide))
-        articles.extend(_journey_article(module, guide, journey) for journey in guide["journeys"])
+        articles.extend(
+            _journey_article(module, guide, journey) for journey in guide["journeys"]
+        )
         articles.extend(
             _troubleshooting_article(module, guide, issue)
             for issue in guide["troubleshooting"]
@@ -1955,8 +2121,14 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Set up modules, validate governance, and understand cross-module workflows.",
                 "audience": "System administrators",
                 "steps": [
-                    {"label": "Settings Quick Start", "article_slug": "settings-quick-start"},
-                    {"label": "Finance Quick Start", "article_slug": "finance-quick-start"},
+                    {
+                        "label": "Settings Quick Start",
+                        "article_slug": "settings-quick-start",
+                    },
+                    {
+                        "label": "Finance Quick Start",
+                        "article_slug": "finance-quick-start",
+                    },
                     {"label": "Procure-to-Pay", "article_slug": "procure-to-pay"},
                 ],
             }
@@ -1969,13 +2141,34 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Learn the main finance flows from setup through close.",
                 "audience": "Finance operators",
                 "steps": [
-                    {"label": "Finance Quick Start", "article_slug": "finance-quick-start"},
-                    {"label": "Chart of Accounts Setup", "article_slug": "finance-chart-of-accounts-setup"},
-                    {"label": "Month-End Close", "article_slug": "finance-month-end-close"},
-                    {"label": "Receivables to Cash", "article_slug": "finance-receivables-to-cash"},
-                    {"label": "AP Invoice Processing", "article_slug": "finance-ap-invoice-processing"},
-                    {"label": "Bank Reconciliation", "article_slug": "finance-bank-reconciliation"},
-                    {"label": "Period Close Checklist", "article_slug": "finance-period-close-checklist"},
+                    {
+                        "label": "Finance Quick Start",
+                        "article_slug": "finance-quick-start",
+                    },
+                    {
+                        "label": "Chart of Accounts Setup",
+                        "article_slug": "finance-chart-of-accounts-setup",
+                    },
+                    {
+                        "label": "Month-End Close",
+                        "article_slug": "finance-month-end-close",
+                    },
+                    {
+                        "label": "Receivables to Cash",
+                        "article_slug": "finance-receivables-to-cash",
+                    },
+                    {
+                        "label": "AP Invoice Processing",
+                        "article_slug": "finance-ap-invoice-processing",
+                    },
+                    {
+                        "label": "Bank Reconciliation",
+                        "article_slug": "finance-bank-reconciliation",
+                    },
+                    {
+                        "label": "Period Close Checklist",
+                        "article_slug": "finance-period-close-checklist",
+                    },
                 ],
             }
         )
@@ -1987,16 +2180,34 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Cover the employee lifecycle, payroll, and training operations.",
                 "audience": "HR and payroll operators",
                 "steps": [
-                    {"label": "People Quick Start", "article_slug": "people-quick-start"},
-                    {"label": "Employee Lifecycle", "article_slug": "people-employee-lifecycle"},
-                    {"label": "Recruitment Pipeline", "article_slug": "people-recruitment-pipeline"},
-                    {"label": "Leave Management", "article_slug": "people-leave-management"},
-                    {"label": "Payroll Execution", "article_slug": "people-payroll-execution"},
+                    {
+                        "label": "People Quick Start",
+                        "article_slug": "people-quick-start",
+                    },
+                    {
+                        "label": "Employee Lifecycle",
+                        "article_slug": "people-employee-lifecycle",
+                    },
+                    {
+                        "label": "Recruitment Pipeline",
+                        "article_slug": "people-recruitment-pipeline",
+                    },
+                    {
+                        "label": "Leave Management",
+                        "article_slug": "people-leave-management",
+                    },
+                    {
+                        "label": "Payroll Execution",
+                        "article_slug": "people-payroll-execution",
+                    },
                     {
                         "label": "Training Program to Completion",
                         "article_slug": "people-training-program-to-completion",
                     },
-                    {"label": "Onboarding Workflow", "article_slug": "people-onboarding-workflow"},
+                    {
+                        "label": "Onboarding Workflow",
+                        "article_slug": "people-onboarding-workflow",
+                    },
                 ],
             }
         )
@@ -2008,7 +2219,10 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Run ticket intake, assignment, and closure with SLA awareness.",
                 "audience": "Support agents and leads",
                 "steps": [
-                    {"label": "Support Quick Start", "article_slug": "support-quick-start"},
+                    {
+                        "label": "Support Quick Start",
+                        "article_slug": "support-quick-start",
+                    },
                     {"label": "Ticket Triage", "article_slug": "support-ticket-triage"},
                     {
                         "label": "Resolution Workflow",
@@ -2025,10 +2239,22 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Learn warehouse management, stock transactions, and inventory control.",
                 "audience": "Inventory and warehouse operators",
                 "steps": [
-                    {"label": "Inventory Quick Start", "article_slug": "inventory-quick-start"},
-                    {"label": "Warehouse Setup", "article_slug": "inventory-warehouse-setup"},
-                    {"label": "Item Setup to Stock Use", "article_slug": "inventory-item-setup-to-stock-use"},
-                    {"label": "Cycle Count and Adjustment", "article_slug": "inventory-cycle-count-and-adjustment"},
+                    {
+                        "label": "Inventory Quick Start",
+                        "article_slug": "inventory-quick-start",
+                    },
+                    {
+                        "label": "Warehouse Setup",
+                        "article_slug": "inventory-warehouse-setup",
+                    },
+                    {
+                        "label": "Item Setup to Stock Use",
+                        "article_slug": "inventory-item-setup-to-stock-use",
+                    },
+                    {
+                        "label": "Cycle Count and Adjustment",
+                        "article_slug": "inventory-cycle-count-and-adjustment",
+                    },
                 ],
             }
         )
@@ -2040,10 +2266,22 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Master the full procurement cycle from requisition to contract.",
                 "audience": "Procurement officers and buyers",
                 "steps": [
-                    {"label": "Procurement Quick Start", "article_slug": "procurement-quick-start"},
-                    {"label": "Requisition to RFQ", "article_slug": "procurement-requisition-to-rfq"},
-                    {"label": "PO to Goods Receipt", "article_slug": "procurement-purchase-order-to-goods-receipt"},
-                    {"label": "Contract Lifecycle", "article_slug": "procurement-contract-lifecycle"},
+                    {
+                        "label": "Procurement Quick Start",
+                        "article_slug": "procurement-quick-start",
+                    },
+                    {
+                        "label": "Requisition to RFQ",
+                        "article_slug": "procurement-requisition-to-rfq",
+                    },
+                    {
+                        "label": "PO to Goods Receipt",
+                        "article_slug": "procurement-purchase-order-to-goods-receipt",
+                    },
+                    {
+                        "label": "Contract Lifecycle",
+                        "article_slug": "procurement-contract-lifecycle",
+                    },
                 ],
             }
         )
@@ -2055,10 +2293,22 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Set up projects, manage tasks and milestones, and report on progress.",
                 "audience": "Project managers and team leads",
                 "steps": [
-                    {"label": "Projects Quick Start", "article_slug": "projects-quick-start"},
-                    {"label": "Project Setup and Planning", "article_slug": "projects-project-setup-and-planning"},
-                    {"label": "Task Delivery and Reporting", "article_slug": "projects-task-delivery-and-reporting"},
-                    {"label": "Milestone Management", "article_slug": "projects-milestone-management"},
+                    {
+                        "label": "Projects Quick Start",
+                        "article_slug": "projects-quick-start",
+                    },
+                    {
+                        "label": "Project Setup and Planning",
+                        "article_slug": "projects-project-setup-and-planning",
+                    },
+                    {
+                        "label": "Task Delivery and Reporting",
+                        "article_slug": "projects-task-delivery-and-reporting",
+                    },
+                    {
+                        "label": "Milestone Management",
+                        "article_slug": "projects-milestone-management",
+                    },
                 ],
             }
         )
@@ -2070,10 +2320,22 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Process expense claims, enforce policies, and manage reimbursements.",
                 "audience": "Finance teams and expense approvers",
                 "steps": [
-                    {"label": "Expense Quick Start", "article_slug": "expense-quick-start"},
-                    {"label": "Claim Submission Workflow", "article_slug": "expense-claim-submission-workflow"},
-                    {"label": "Claim Review Workflow", "article_slug": "expense-claim-review-workflow"},
-                    {"label": "Policy Limit Enforcement", "article_slug": "expense-policy-limit-enforcement"},
+                    {
+                        "label": "Expense Quick Start",
+                        "article_slug": "expense-quick-start",
+                    },
+                    {
+                        "label": "Claim Submission Workflow",
+                        "article_slug": "expense-claim-submission-workflow",
+                    },
+                    {
+                        "label": "Claim Review Workflow",
+                        "article_slug": "expense-claim-review-workflow",
+                    },
+                    {
+                        "label": "Policy Limit Enforcement",
+                        "article_slug": "expense-policy-limit-enforcement",
+                    },
                 ],
             }
         )
@@ -2085,10 +2347,22 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Learn to use self-service for leave, attendance, payslips, and expenses.",
                 "audience": "All employees",
                 "steps": [
-                    {"label": "Self Service Quick Start", "article_slug": "self_service-quick-start"},
-                    {"label": "Employee Request Journey", "article_slug": "self_service-employee-request-journey"},
-                    {"label": "View Payslips", "article_slug": "self_service-view-payslips"},
-                    {"label": "Check Attendance Record", "article_slug": "self_service-check-attendance-record"},
+                    {
+                        "label": "Self Service Quick Start",
+                        "article_slug": "self_service-quick-start",
+                    },
+                    {
+                        "label": "Employee Request Journey",
+                        "article_slug": "self_service-employee-request-journey",
+                    },
+                    {
+                        "label": "View Payslips",
+                        "article_slug": "self_service-view-payslips",
+                    },
+                    {
+                        "label": "Check Attendance Record",
+                        "article_slug": "self_service-check-attendance-record",
+                    },
                 ],
             }
         )
@@ -2100,10 +2374,22 @@ def _build_tracks(modules: list[str], is_admin: bool) -> list[dict[str, Any]]:
                 "summary": "Master appropriation setup, commitment control, and the virement process.",
                 "audience": "Budget officers and public sector finance teams",
                 "steps": [
-                    {"label": "Public Sector Quick Start", "article_slug": "public_sector-quick-start"},
-                    {"label": "Budget Control Setup", "article_slug": "public_sector-budget-control-setup"},
-                    {"label": "Commitment to Virement", "article_slug": "public_sector-commitment-to-virement"},
-                    {"label": "Appropriation Setup", "article_slug": "public_sector-appropriation-setup"},
+                    {
+                        "label": "Public Sector Quick Start",
+                        "article_slug": "public_sector-quick-start",
+                    },
+                    {
+                        "label": "Budget Control Setup",
+                        "article_slug": "public_sector-budget-control-setup",
+                    },
+                    {
+                        "label": "Commitment to Virement",
+                        "article_slug": "public_sector-commitment-to-virement",
+                    },
+                    {
+                        "label": "Appropriation Setup",
+                        "article_slug": "public_sector-appropriation-setup",
+                    },
                 ],
             }
         )
@@ -2147,7 +2433,9 @@ def build_help_experience_payload(
     module_hubs = []
     for module in modules:
         guide = MODULE_GUIDES[module]
-        module_articles = [article for article in articles if article["module_key"] == module]
+        module_articles = [
+            article for article in articles if article["module_key"] == module
+        ]
         module_hubs.append(
             {
                 "module_key": module,
@@ -2225,7 +2513,9 @@ def search_help_articles(
     normalized_query = (query or "").strip().lower()
     results = payload["articles"]
     if module_key:
-        results = [article for article in results if article["module_key"] == module_key]
+        results = [
+            article for article in results if article["module_key"] == module_key
+        ]
     if content_type:
         results = [
             article for article in results if article["content_type"] == content_type
@@ -2291,7 +2581,9 @@ def build_help_module_hub(
         "module_summary": guide["summary"],
         "quick_links": guide["manual_links"],
         "module_articles": [
-            article for article in payload["articles"] if article["module_key"] == module_key
+            article
+            for article in payload["articles"]
+            if article["module_key"] == module_key
         ],
     }
 

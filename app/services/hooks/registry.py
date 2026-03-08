@@ -49,7 +49,9 @@ class HookRegistry:
 
     def emit(self, event: HookEvent) -> list[UUID]:
         """Emit an event to matching hooks and return execution IDs."""
-        if not is_feature_enabled(self.db, event.organization_id, FEATURE_SERVICE_HOOKS):
+        if not is_feature_enabled(
+            self.db, event.organization_id, FEATURE_SERVICE_HOOKS
+        ):
             return []
 
         hooks = self._find_matching_hooks(event)

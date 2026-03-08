@@ -39,7 +39,9 @@ def list_competencies(
 
     cat = CompetencyCategory(category) if category else None
     result = comp_svc.list_competencies(
-        category=cat, is_active=None, search=search,
+        category=cat,
+        is_active=None,
+        search=search,
         pagination=PaginationParams.from_page(max(1, page)),
     )
 

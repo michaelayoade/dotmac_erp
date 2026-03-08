@@ -42,7 +42,9 @@ def _find_entity_for_line(
     return None
 
 
-def _payment_intent_ref_lookup(intents: list[PaymentIntent]) -> dict[str, PaymentIntent]:
+def _payment_intent_ref_lookup(
+    intents: list[PaymentIntent],
+) -> dict[str, PaymentIntent]:
     return {
         intent.paystack_reference: intent
         for intent in intents
@@ -100,7 +102,10 @@ def _reference_payment_lookup(payments: list[Any]) -> dict[str, Any]:
     for payment in payments:
         if getattr(payment, "payment_number", None):
             ref_to_payment[payment.payment_number] = payment
-        if getattr(payment, "reference", None) and payment.reference not in ref_to_payment:
+        if (
+            getattr(payment, "reference", None)
+            and payment.reference not in ref_to_payment
+        ):
             ref_to_payment[payment.reference] = payment
     return ref_to_payment
 
@@ -128,7 +133,9 @@ def _run_directional_reference_match(
                 continue
 
             tolerance = ctx.config.amount_tolerance if ctx.config else None
-            if not service._amounts_match(line.amount, payment.amount, tolerance=tolerance):
+            if not service._amounts_match(
+                line.amount, payment.amount, tolerance=tolerance
+            ):
                 continue
             if not payment.correlation_id:
                 continue
@@ -255,7 +262,8 @@ class PaymentIntentProvider(CandidateProvider):
         if ctx.statement.period_start and ctx.statement.period_end:
             stmt = stmt.where(
                 PaymentIntent.paid_at >= ctx.statement.period_start - date_buffer,
-                PaymentIntent.paid_at < ctx.statement.period_end + date_buffer + timedelta(days=1),
+                PaymentIntent.paid_at
+                < ctx.statement.period_end + date_buffer + timedelta(days=1),
             )
         loaded = list(ctx.db.scalars(stmt).all())
         ctx.provider_cache[self.provider_key] = loaded
@@ -346,7 +354,9 @@ class PaymentIntentReferenceStrategy(MatchStrategy):
                     continue
 
                 tolerance = ctx.config.amount_tolerance if ctx.config else None
-                if not service._amounts_match(line.amount, intent.amount, tolerance=tolerance):
+                if not service._amounts_match(
+                    line.amount, intent.amount, tolerance=tolerance
+                ):
                     continue
 
                 journal_line = service._find_journal_line(
@@ -416,7 +426,9 @@ class CustomerPaymentReferenceStrategy(MatchStrategy):
                     continue
 
                 tolerance = ctx.config.amount_tolerance if ctx.config else None
-                if not service._amounts_match(line.amount, payment.amount, tolerance=tolerance):
+                if not service._amounts_match(
+                    line.amount, payment.amount, tolerance=tolerance
+                ):
                     continue
                 if not payment.correlation_id:
                     continue
@@ -638,7 +650,10 @@ class BankFeeStrategy(MatchStrategy):
             line
             for line in still_unmatched
             if line.description
-            and any(keyword in line.description.lower() for keyword in ctx.policy.fee_keywords)
+            and any(
+                keyword in line.description.lower()
+                for keyword in ctx.policy.fee_keywords
+            )
         ]
 
         for line in fee_lines:
@@ -724,7 +739,9 @@ class BankFeeStrategy(MatchStrategy):
                     explanation=f"Bank fee: {line.description}",
                 )
             except Exception as exc:
-                service.logger.exception("Error matching fee line %s: %s", line.line_id, exc)
+                service.logger.exception(
+                    "Error matching fee line %s: %s", line.line_id, exc
+                )
                 ctx.result.errors.append(f"Line {line.line_number}: {exc}")
 
 
@@ -755,8 +772,14 @@ class InterbankCounterpartStrategy(MatchStrategy):
             line
             for line in still_unmatched
             if line.description
-            and any(keyword in line.description.lower() for keyword in ctx.policy.transfer_keywords)
-            and not any(keyword in line.description.lower() for keyword in ctx.policy.fee_keywords)
+            and any(
+                keyword in line.description.lower()
+                for keyword in ctx.policy.transfer_keywords
+            )
+            and not any(
+                keyword in line.description.lower()
+                for keyword in ctx.policy.fee_keywords
+            )
         ]
         if not settlement_lines:
             return
@@ -771,7 +794,9 @@ class InterbankCounterpartStrategy(MatchStrategy):
                 unique_settlements.append(line)
 
         min_date = min(line.transaction_date for line in unique_settlements)
-        max_date = max(line.transaction_date for line in unique_settlements) + date_window
+        max_date = (
+            max(line.transaction_date for line in unique_settlements) + date_window
+        )
 
         other_bank_ids = list(
             ctx.db.scalars(
@@ -788,7 +813,10 @@ class InterbankCounterpartStrategy(MatchStrategy):
         deposit_lines = list(
             ctx.db.scalars(
                 select(BankStatementLine)
-                .join(BankStatement, BankStatementLine.statement_id == BankStatement.statement_id)
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
                 .where(
                     BankStatement.bank_account_id.in_(other_bank_ids),
                     BankStatementLine.is_matched.is_(False),
@@ -802,7 +830,10 @@ class InterbankCounterpartStrategy(MatchStrategy):
             if dep.description
             and (
                 not ctx.policy.deposit_keywords
-                or any(keyword in dep.description.lower() for keyword in ctx.policy.deposit_keywords)
+                or any(
+                    keyword in dep.description.lower()
+                    for keyword in ctx.policy.deposit_keywords
+                )
             )
         ]
         if not deposit_lines:
@@ -811,7 +842,9 @@ class InterbankCounterpartStrategy(MatchStrategy):
         target_accounts = {
             bank.bank_account_id: bank
             for bank in ctx.db.scalars(
-                select(BankAccount).where(BankAccount.bank_account_id.in_(other_bank_ids))
+                select(BankAccount).where(
+                    BankAccount.bank_account_id.in_(other_bank_ids)
+                )
             ).all()
         }
         deposits_by_date: dict[object, list[BankStatementLine]] = {}
@@ -823,14 +856,18 @@ class InterbankCounterpartStrategy(MatchStrategy):
             try:
                 candidates: list[BankStatementLine] = []
                 for day_offset in range(window_days + 1):
-                    check_date = settlement_line.transaction_date + timedelta(days=day_offset)
+                    check_date = settlement_line.transaction_date + timedelta(
+                        days=day_offset
+                    )
                     for dep in deposits_by_date.get(check_date, []):
                         if dep.line_id not in matched_deposit_ids:
                             candidates.append(dep)
                 if not candidates:
                     continue
 
-                best_deposit = min(candidates, key=lambda dep: abs(dep.amount - settlement_line.amount))
+                best_deposit = min(
+                    candidates, key=lambda dep: abs(dep.amount - settlement_line.amount)
+                )
                 dep_statement = ctx.db.get(BankStatement, best_deposit.statement_id)
                 if not dep_statement:
                     continue
@@ -840,12 +877,18 @@ class InterbankCounterpartStrategy(MatchStrategy):
 
                 correlation_id = f"settlement-{settlement_line.line_id}"
                 credit_jl = service._find_journal_line(
-                    ctx.db, ctx.organization_id, correlation_id, ctx.bank_account.gl_account_id
+                    ctx.db,
+                    ctx.organization_id,
+                    correlation_id,
+                    ctx.bank_account.gl_account_id,
                 )
                 debit_jl = None
                 if credit_jl:
                     debit_jl = service._find_journal_line(
-                        ctx.db, ctx.organization_id, correlation_id, dest_bank.gl_account_id
+                        ctx.db,
+                        ctx.organization_id,
+                        correlation_id,
+                        dest_bank.gl_account_id,
                     )
                 else:
                     amount = abs(settlement_line.amount)
@@ -871,12 +914,14 @@ class InterbankCounterpartStrategy(MatchStrategy):
                             ),
                         ],
                     )
-                    journal, create_error = BasePostingAdapter.create_and_approve_journal(
-                        ctx.db,
-                        ctx.organization_id,
-                        journal_input,
-                        service.SYSTEM_USER_ID,
-                        error_prefix="Settlement journal creation failed",
+                    journal, create_error = (
+                        BasePostingAdapter.create_and_approve_journal(
+                            ctx.db,
+                            ctx.organization_id,
+                            journal_input,
+                            service.SYSTEM_USER_ID,
+                            error_prefix="Settlement journal creation failed",
+                        )
                     )
                     if create_error:
                         ctx.result.errors.append(
@@ -907,10 +952,16 @@ class InterbankCounterpartStrategy(MatchStrategy):
                         )
                         continue
                     credit_jl = service._find_journal_line(
-                        ctx.db, ctx.organization_id, correlation_id, ctx.bank_account.gl_account_id
+                        ctx.db,
+                        ctx.organization_id,
+                        correlation_id,
+                        ctx.bank_account.gl_account_id,
                     )
                     debit_jl = service._find_journal_line(
-                        ctx.db, ctx.organization_id, correlation_id, dest_bank.gl_account_id
+                        ctx.db,
+                        ctx.organization_id,
+                        correlation_id,
+                        dest_bank.gl_account_id,
                     )
 
                 dedup_key = (
@@ -935,7 +986,9 @@ class InterbankCounterpartStrategy(MatchStrategy):
                             )
                         except Exception:
                             service.logger.debug(
-                                "Settlement line %s match skipped", dup_line.line_id, exc_info=True
+                                "Settlement line %s match skipped",
+                                dup_line.line_id,
+                                exc_info=True,
                             )
 
                 if debit_jl and best_deposit.line_id not in matched_deposit_ids:
@@ -951,7 +1004,9 @@ class InterbankCounterpartStrategy(MatchStrategy):
                         matched_deposit_ids.add(best_deposit.line_id)
                     except Exception:
                         service.logger.debug(
-                            "Deposit line %s match skipped", best_deposit.line_id, exc_info=True
+                            "Deposit line %s match skipped",
+                            best_deposit.line_id,
+                            exc_info=True,
                         )
             except Exception as exc:
                 service.logger.exception(

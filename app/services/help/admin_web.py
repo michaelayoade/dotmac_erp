@@ -71,9 +71,7 @@ class HelpAdminWebService:
         if module_key:
             stmt = stmt.where(HelpArticleOverride.module_key == module_key)
         if search:
-            stmt = stmt.where(
-                HelpArticleOverride.title.ilike(f"%{search}%")
-            )
+            stmt = stmt.where(HelpArticleOverride.title.ilike(f"%{search}%"))
 
         # Count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -125,9 +123,7 @@ class HelpAdminWebService:
             "is_edit": article is not None,
         }
 
-    def create_article(
-        self, organization_id: UUID, data: dict
-    ) -> HelpArticleOverride:
+    def create_article(self, organization_id: UUID, data: dict) -> HelpArticleOverride:
         """Create a new admin-authored article."""
         article = HelpArticleOverride(
             organization_id=organization_id,
@@ -229,18 +225,24 @@ class HelpAdminWebService:
             feedback_counts[row.rating] = int(row._mapping["count"])
 
         # Total completions
-        completion_count = self.db.scalar(
-            select(func.count()).where(
-                HelpUserProgress.organization_id == organization_id
+        completion_count = (
+            self.db.scalar(
+                select(func.count()).where(
+                    HelpUserProgress.organization_id == organization_id
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Total searches
-        search_count = self.db.scalar(
-            select(func.count()).where(
-                HelpSearchEvent.organization_id == organization_id
+        search_count = (
+            self.db.scalar(
+                select(func.count()).where(
+                    HelpSearchEvent.organization_id == organization_id
+                )
             )
-        ) or 0
+            or 0
+        )
 
         # Popular searches
         popular_stmt = (

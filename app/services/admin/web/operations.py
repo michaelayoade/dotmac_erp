@@ -38,29 +38,51 @@ class AdminOperationsMixin:
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = now - timedelta(days=7)
         total_users = db.scalar(select(func.count(Person.id))) or 0
-        new_users_week = db.scalar(select(func.count(Person.id)).where(Person.created_at >= week_start)) or 0
-        active_sessions = db.scalar(
-            select(func.count(AuthSession.id)).where(
-                AuthSession.status == SessionStatus.active,
-                AuthSession.revoked_at.is_(None),
-                AuthSession.expires_at > now,
+        new_users_week = (
+            db.scalar(
+                select(func.count(Person.id)).where(Person.created_at >= week_start)
             )
-        ) or 0
-        unique_users_today = db.scalar(
-            select(func.count(func.distinct(AuthSession.person_id))).where(
-                AuthSession.last_seen_at.isnot(None),
-                AuthSession.last_seen_at >= start_of_day,
+            or 0
+        )
+        active_sessions = (
+            db.scalar(
+                select(func.count(AuthSession.id)).where(
+                    AuthSession.status == SessionStatus.active,
+                    AuthSession.revoked_at.is_(None),
+                    AuthSession.expires_at > now,
+                )
             )
-        ) or 0
-        total_organizations = db.scalar(select(func.count(Organization.organization_id))) or 0
-        active_organizations = db.scalar(
-            select(func.count(Organization.organization_id)).where(Organization.is_active.is_(True))
-        ) or 0
-        recent_users_query = list(db.scalars(select(Person).order_by(Person.created_at.desc()).limit(5)).all())
+            or 0
+        )
+        unique_users_today = (
+            db.scalar(
+                select(func.count(func.distinct(AuthSession.person_id))).where(
+                    AuthSession.last_seen_at.isnot(None),
+                    AuthSession.last_seen_at >= start_of_day,
+                )
+            )
+            or 0
+        )
+        total_organizations = (
+            db.scalar(select(func.count(Organization.organization_id))) or 0
+        )
+        active_organizations = (
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    Organization.is_active.is_(True)
+                )
+            )
+            or 0
+        )
+        recent_users_query = list(
+            db.scalars(select(Person).order_by(Person.created_at.desc()).limit(5)).all()
+        )
         recent_users = []
         for person in recent_users_query:
             name = person.name or person.email or "Unknown"
-            initials = "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            initials = (
+                "".join(word[0].upper() for word in name.split()[:2]) if name else "?"
+            )
             recent_users.append(
                 {
                     "id": str(person.id),
@@ -123,16 +145,23 @@ class AdminOperationsMixin:
         if start_date_value:
             try:
                 parsed_start = datetime.strptime(start_date_value, "%Y-%m-%d")
-                conditions.append(AuditEvent.occurred_at >= parsed_start.replace(tzinfo=UTC))
+                conditions.append(
+                    AuditEvent.occurred_at >= parsed_start.replace(tzinfo=UTC)
+                )
             except ValueError:
                 start_date_value = ""
         if end_date_value:
             try:
                 parsed_end = datetime.strptime(end_date_value, "%Y-%m-%d")
-                conditions.append(AuditEvent.occurred_at < (parsed_end + timedelta(days=1)).replace(tzinfo=UTC))
+                conditions.append(
+                    AuditEvent.occurred_at
+                    < (parsed_end + timedelta(days=1)).replace(tzinfo=UTC)
+                )
             except ValueError:
                 end_date_value = ""
-        total_count = db.scalar(select(func.count(AuditEvent.id)).where(*conditions)) or 0
+        total_count = (
+            db.scalar(select(func.count(AuditEvent.id)).where(*conditions)) or 0
+        )
         events = list(
             db.scalars(
                 select(AuditEvent)
@@ -142,15 +171,37 @@ class AdminOperationsMixin:
                 .offset(offset)
             ).all()
         )
-        actor_ids = [str(event.actor_person_id) for event in events if event.actor_person_id is not None]
-        actor_ids.extend([event.actor_id for event in events if event.actor_id and not event.actor_person_id])
-        actor_name_map = _resolve_person_name_map(db=db, person_ids=actor_ids, organization_id=organization_id)
+        actor_ids = [
+            str(event.actor_person_id)
+            for event in events
+            if event.actor_person_id is not None
+        ]
+        actor_ids.extend(
+            [
+                event.actor_id
+                for event in events
+                if event.actor_id and not event.actor_person_id
+            ]
+        )
+        actor_name_map = _resolve_person_name_map(
+            db=db, person_ids=actor_ids, organization_id=organization_id
+        )
         events_view = []
         for event in events:
-            actor_lookup_key = str(event.actor_person_id) if event.actor_person_id else event.actor_id if event.actor_id else ""
-            actor_name = actor_name_map.get(actor_lookup_key) if actor_lookup_key else None
+            actor_lookup_key = (
+                str(event.actor_person_id)
+                if event.actor_person_id
+                else event.actor_id
+                if event.actor_id
+                else ""
+            )
+            actor_name = (
+                actor_name_map.get(actor_lookup_key) if actor_lookup_key else None
+            )
             if not actor_name:
-                if (event.actor_id or event.actor_person_id) and event.actor_type == AuditActorType.user:
+                if (
+                    event.actor_id or event.actor_person_id
+                ) and event.actor_type == AuditActorType.user:
                     actor_name = "Unknown User"
                 elif event.actor_type == AuditActorType.system:
                     actor_name = "System"
@@ -166,7 +217,11 @@ class AdminOperationsMixin:
                 request_meta.append(f"Request {event.request_id}")
             if event.ip_address:
                 request_meta.append(f"IP {event.ip_address}")
-            entity_source = event.metadata_.get("path") if isinstance(event.metadata_, dict) else event.entity_type
+            entity_source = (
+                event.metadata_.get("path")
+                if isinstance(event.metadata_, dict)
+                else event.entity_type
+            )
             events_view.append(
                 {
                     "event_id": event.id,
@@ -184,43 +239,76 @@ class AdminOperationsMixin:
                     "is_success": event.is_success,
                     "request_id": event.request_id,
                     "ip_address": event.ip_address,
-                    "request_summary": _format_request_summary(event.action, event.metadata_, event.request_id),
+                    "request_summary": _format_request_summary(
+                        event.action, event.metadata_, event.request_id
+                    ),
                     "request_meta": " | ".join(request_meta) if request_meta else "-",
                 }
             )
         return {
             "events": events_view,
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "status_filter": status or "",
             "start_date_filter": start_date_value,
             "end_date_filter": end_date_value,
-            "actor_type_filter": actor_type_filter_value.value if actor_type_filter_value else "",
+            "actor_type_filter": actor_type_filter_value.value
+            if actor_type_filter_value
+            else "",
             "actor_types": [value.value for value in AuditActorType],
         }
 
     @staticmethod
-    def tasks_context(db: Session, search: str | None, status: str | None, page: int, limit: int = DEFAULT_PAGE_SIZE) -> dict:
+    def tasks_context(
+        db: Session,
+        search: str | None,
+        status: str | None,
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         offset = (page - 1) * limit
         conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            conditions.append(or_(ScheduledTask.name.ilike(search_pattern), ScheduledTask.task_name.ilike(search_pattern)))
-        status_flag = True if status == "enabled" else False if status == "disabled" else None
+            conditions.append(
+                or_(
+                    ScheduledTask.name.ilike(search_pattern),
+                    ScheduledTask.task_name.ilike(search_pattern),
+                )
+            )
+        status_flag = (
+            True if status == "enabled" else False if status == "disabled" else None
+        )
         if status_flag is not None:
             conditions.append(ScheduledTask.enabled == status_flag)
-        total_count = db.scalar(select(func.count(ScheduledTask.id)).where(*conditions)) or 0
+        total_count = (
+            db.scalar(select(func.count(ScheduledTask.id)).where(*conditions)) or 0
+        )
         tasks = list(
             db.scalars(
-                select(ScheduledTask).where(*conditions).order_by(ScheduledTask.name).limit(limit).offset(offset)
+                select(ScheduledTask)
+                .where(*conditions)
+                .order_by(ScheduledTask.name)
+                .limit(limit)
+                .offset(offset)
             ).all()
         )
         tasks_view = []
         for task in tasks:
-            args_display = _truncate(_safe_json_dump(task.args_json)) if task.args_json else ""
-            kwargs_display = _truncate(_safe_json_dump(task.kwargs_json)) if task.kwargs_json else ""
-            schedule_label = _format_interval(task.interval_seconds) if task.schedule_type == ScheduleType.interval else "-"
+            args_display = (
+                _truncate(_safe_json_dump(task.args_json)) if task.args_json else ""
+            )
+            kwargs_display = (
+                _truncate(_safe_json_dump(task.kwargs_json)) if task.kwargs_json else ""
+            )
+            schedule_label = (
+                _format_interval(task.interval_seconds)
+                if task.schedule_type == ScheduleType.interval
+                else "-"
+            )
             tasks_view.append(
                 {
                     "task_id": task.id,
@@ -236,7 +324,9 @@ class AdminOperationsMixin:
             )
         return {
             "tasks": tasks_view,
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "status_filter": status or "",
         }
@@ -255,8 +345,12 @@ class AdminOperationsMixin:
                     "task_name": task.task_name,
                     "schedule_type": task.schedule_type.value,
                     "interval_seconds": task.interval_seconds,
-                    "args_json": json.dumps(task.args_json, indent=2) if task.args_json else "",
-                    "kwargs_json": json.dumps(task.kwargs_json, indent=2) if task.kwargs_json else "",
+                    "args_json": json.dumps(task.args_json, indent=2)
+                    if task.args_json
+                    else "",
+                    "kwargs_json": json.dumps(task.kwargs_json, indent=2)
+                    if task.kwargs_json
+                    else "",
                     "enabled": task.enabled,
                     "last_run_at": _format_datetime(task.last_run_at),
                 }
@@ -280,7 +374,16 @@ class AdminOperationsMixin:
         }
 
     @staticmethod
-    def create_task(db: Session, name: str, task_name: str, schedule_type: str, interval_seconds: int, args_json: str = "", kwargs_json: str = "", enabled: bool = True) -> tuple[ScheduledTask | None, str | None]:
+    def create_task(
+        db: Session,
+        name: str,
+        task_name: str,
+        schedule_type: str,
+        interval_seconds: int,
+        args_json: str = "",
+        kwargs_json: str = "",
+        enabled: bool = True,
+    ) -> tuple[ScheduledTask | None, str | None]:
         try:
             schedule_type_enum = ScheduleType(schedule_type)
         except ValueError:
@@ -322,7 +425,17 @@ class AdminOperationsMixin:
             return None, f"Failed to create task: {str(exc)}"
 
     @staticmethod
-    def update_task(db: Session, task_id: str, name: str, task_name: str, schedule_type: str, interval_seconds: int, args_json: str = "", kwargs_json: str = "", enabled: bool = True) -> tuple[ScheduledTask | None, str | None]:
+    def update_task(
+        db: Session,
+        task_id: str,
+        name: str,
+        task_name: str,
+        schedule_type: str,
+        interval_seconds: int,
+        args_json: str = "",
+        kwargs_json: str = "",
+        enabled: bool = True,
+    ) -> tuple[ScheduledTask | None, str | None]:
         from app.services.common import coerce_uuid
 
         task = db.get(ScheduledTask, coerce_uuid(task_id))
@@ -332,7 +445,11 @@ class AdminOperationsMixin:
             schedule_type_enum = ScheduleType(schedule_type)
         except ValueError:
             return None, f"Invalid schedule type: {schedule_type}"
-        existing = db.scalar(select(ScheduledTask).where(ScheduledTask.name == name, ScheduledTask.id != task.id))
+        existing = db.scalar(
+            select(ScheduledTask).where(
+                ScheduledTask.name == name, ScheduledTask.id != task.id
+            )
+        )
         if existing:
             return None, f"A task with name '{name}' already exists"
         args_list = None
@@ -381,7 +498,16 @@ class AdminOperationsMixin:
             return f"Failed to delete task: {str(exc)}"
 
     @staticmethod
-    def data_changes_context(db: Session, organization_id, module: str | None, entity: str | None, action: str | None, search: str | None, page: int, limit: int = DEFAULT_PAGE_SIZE) -> dict:
+    def data_changes_context(
+        db: Session,
+        organization_id,
+        module: str | None,
+        entity: str | None,
+        action: str | None,
+        search: str | None,
+        page: int,
+        limit: int = DEFAULT_PAGE_SIZE,
+    ) -> dict:
         offset = (page - 1) * limit
         conditions = []
         if organization_id:
@@ -405,7 +531,9 @@ class AdminOperationsMixin:
                     AuditLog.correlation_id.ilike(search_pattern),
                 )
             )
-        total_count = db.scalar(select(func.count(AuditLog.audit_id)).where(*conditions)) or 0
+        total_count = (
+            db.scalar(select(func.count(AuditLog.audit_id)).where(*conditions)) or 0
+        )
         logs = list(
             db.scalars(
                 select(AuditLog)
@@ -416,7 +544,9 @@ class AdminOperationsMixin:
             ).all()
         )
         user_ids = [str(log.user_id) for log in logs if log.user_id]
-        user_name_map = _resolve_person_name_map(db=db, person_ids=user_ids, organization_id=organization_id)
+        user_name_map = _resolve_person_name_map(
+            db=db, person_ids=user_ids, organization_id=organization_id
+        )
         logs_view = []
         for log in logs:
             user_id_value = str(log.user_id) if log.user_id else None
@@ -432,18 +562,34 @@ class AdminOperationsMixin:
                     "old_values": log.old_values or {},
                     "new_values": log.new_values or {},
                     "user_id": user_id_value,
-                    "user_name": user_name_map.get(user_id_value) if user_id_value else "System",
+                    "user_name": user_name_map.get(user_id_value)
+                    if user_id_value
+                    else "System",
                     "ip_address": log.ip_address,
                     "reason": log.reason,
                     "correlation_id": log.correlation_id,
                     "has_hash": bool(log.hash_chain),
                 }
             )
-        modules = sorted({row[0] for row in db.execute(select(AuditLog.table_schema).distinct()).all() if row[0]})
-        entities = sorted({row[0] for row in db.execute(select(AuditLog.table_name).distinct()).all() if row[0]})
+        modules = sorted(
+            {
+                row[0]
+                for row in db.execute(select(AuditLog.table_schema).distinct()).all()
+                if row[0]
+            }
+        )
+        entities = sorted(
+            {
+                row[0]
+                for row in db.execute(select(AuditLog.table_name).distinct()).all()
+                if row[0]
+            }
+        )
         return {
             "logs": logs_view,
-            "pagination": _build_pagination(page, max(1, (total_count + limit - 1) // limit), total_count, limit),
+            "pagination": _build_pagination(
+                page, max(1, (total_count + limit - 1) // limit), total_count, limit
+            ),
             "search": search_value,
             "module_filter": module or "",
             "entity_filter": entity or "",
