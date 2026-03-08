@@ -898,7 +898,9 @@ class PurchaseOrderService(ListResponseMixin):
         stmt = select(PurchaseOrder)
 
         if organization_id:
-            stmt = stmt.where(PurchaseOrder.organization_id == coerce_uuid(organization_id))
+            stmt = stmt.where(
+                PurchaseOrder.organization_id == coerce_uuid(organization_id)
+            )
 
         if supplier_id:
             stmt = stmt.where(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
