@@ -278,7 +278,7 @@ def toggle_entity_status(
     # Update status
     setattr(entity, status_field, is_active)
 
-    db.commit()
+    db.flush()
     db.refresh(entity)
 
     return entity

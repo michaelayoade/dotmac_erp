@@ -73,6 +73,10 @@
                         <div><p class="text-slate-500 dark:text-slate-400">Balance</p><p class="text-slate-900 dark:text-white">{{ invoice.balance | default(zero_amount) }}</p></div>
                     </div>
                 </article>
+                {% else %}
+                <div class="py-8">
+                    {{ empty_state('No invoices found', 'Create your first invoice to get started.', 'document', 'Create Invoice', '/finance/ar/invoices/new') }}
+                </div>
                 {% endfor %}
             </div>
 

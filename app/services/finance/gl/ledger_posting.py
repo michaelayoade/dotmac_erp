@@ -153,7 +153,8 @@ class LedgerPostingService(ListResponseMixin):
         # 2. Check for existing batch with same idempotency key
         existing_batch = db.scalar(
             select(PostingBatch).where(
-                PostingBatch.idempotency_key == request.idempotency_key
+                PostingBatch.organization_id == request.organization_id,
+                PostingBatch.idempotency_key == request.idempotency_key,
             )
         )
 
@@ -389,8 +390,8 @@ class LedgerPostingService(ListResponseMixin):
                 "Failed to emit gl.journal.posted hook for journal %s", journal_id
             )
 
-        # 15. Commit the transaction (journal + ledger lines + outbox event)
-        db.commit()
+        # 15. Flush the transaction (journal + ledger lines + outbox event)
+        db.flush()
         db.refresh(batch)
 
         return PostingResult(
@@ -623,7 +624,7 @@ class LedgerPostingService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         status: BatchStatus | None = None,
         source_module: str | None = None,
         limit: int = 50,
@@ -634,7 +635,7 @@ class LedgerPostingService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization
+            organization_id: Filter by organization (required)
             status: Filter by status
             source_module: Filter by source module
             limit: Maximum results
@@ -645,10 +646,9 @@ class LedgerPostingService(ListResponseMixin):
         """
         stmt = select(PostingBatch)
 
-        if organization_id:
-            stmt = stmt.where(
-                PostingBatch.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = stmt.where(
+            PostingBatch.organization_id == coerce_uuid(organization_id)
+        )
 
         if status:
             stmt = stmt.where(PostingBatch.status == status)

@@ -13,7 +13,7 @@ import pytest
 import starlette.background as starlette_background
 import starlette.concurrency as starlette_concurrency
 from jose import jwt
-from sqlalchemy import String, Text, TypeDecorator, create_engine
+from sqlalchemy import String, Text, TypeDecorator, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -292,6 +292,7 @@ class MockSettings:
     # Default org
     default_organization_id = None
 
+
 mock_config_module.settings = MockSettings()
 mock_config_module.Settings = MockSettings
 
@@ -416,6 +417,7 @@ def db_session(engine):
     try:
         yield session
     finally:
+        session.rollback()
         session.close()
 
 
@@ -763,7 +765,7 @@ def auth_headers(auth_token):
 @pytest.fixture()
 def admin_role(db_session):
     """Create an admin role."""
-    role = db_session.query(Role).filter(Role.name == "admin").first()
+    role = db_session.scalar(select(Role).where(Role.name == "admin"))
     if role:
         return role
     role = Role(name="admin", description="Administrator role")

@@ -133,7 +133,7 @@ class CustomerService(ListResponseMixin):
             currency_code=currency_code,
             payment_terms_days=payment_terms_days,
             credit_limit=credit_limit,
-            credit_hold=payload.get("credit_hold") is not None,
+            credit_hold=payload.get("credit_hold") in ("on", "true", "1", True),
             risk_category=RiskCategory.MEDIUM,
             default_receivable_account_id=(
                 coerce_uuid(payload.get("default_receivable_account_id"))
@@ -166,7 +166,7 @@ class CustomerService(ListResponseMixin):
             }
             if payload.get("email") or payload.get("phone")
             else None,
-            is_active=payload.get("is_active") is not None,
+            is_active=payload.get("is_active") in ("on", "true", "1", True),
             parent_customer_id=parent_customer_id,
         )
 

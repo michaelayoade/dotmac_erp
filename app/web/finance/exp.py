@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.services.expense.dashboard_web import expense_dashboard_service
@@ -145,13 +144,8 @@ def expense_claim_new_redirect(
     Verifies the user has an employee profile before redirecting.
     If not, renders a helpful message within the expense module layout.
     """
-    from app.models.people.hr.employee import Employee
-
-    employee = db.scalar(
-        select(Employee).where(
-            Employee.organization_id == auth.organization_id,
-            Employee.person_id == auth.person_id,
-        )
+    employee = expense_claims_web_service.get_employee_for_person(
+        db, auth.organization_id, auth.person_id
     )
     if employee:
         return RedirectResponse("/people/self/expenses", status_code=302)

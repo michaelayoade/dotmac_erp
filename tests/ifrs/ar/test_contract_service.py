@@ -1145,6 +1145,7 @@ class TestGetters:
         """Test getting obligations for a contract."""
         db = MagicMock()
         contract_id = uuid4()
+        org_id = uuid4()
 
         obligations = [
             MockPerformanceObligation(obligation_number=1),
@@ -1152,7 +1153,7 @@ class TestGetters:
         ]
         db.scalars.return_value.all.return_value = obligations
 
-        result = ContractService.get_obligations(db, str(contract_id))
+        result = ContractService.get_obligations(db, str(contract_id), str(org_id))
 
         assert len(result) == 2
 
@@ -1160,6 +1161,7 @@ class TestGetters:
         """Test getting recognition events for an obligation."""
         db = MagicMock()
         obligation_id = uuid4()
+        org_id = uuid4()
 
         events = [
             MockRevenueRecognitionEvent(progress_percentage=Decimal("50")),
@@ -1167,7 +1169,9 @@ class TestGetters:
         ]
         db.scalars.return_value.all.return_value = events
 
-        result = ContractService.get_recognition_events(db, str(obligation_id))
+        result = ContractService.get_recognition_events(
+            db, str(obligation_id), str(org_id)
+        )
 
         assert len(result) == 2
 

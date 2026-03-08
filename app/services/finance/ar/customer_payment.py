@@ -705,7 +705,10 @@ class CustomerPaymentService(ListResponseMixin):
                 if invoice:
                     invoice.amount_paid -= alloc.allocated_amount
                     if invoice.amount_paid <= Decimal("0"):
-                        invoice.status = InvoiceStatus.POSTED
+                        if invoice.due_date and invoice.due_date < date.today():
+                            invoice.status = InvoiceStatus.OVERDUE
+                        else:
+                            invoice.status = InvoiceStatus.POSTED
                     else:
                         invoice.status = InvoiceStatus.PARTIALLY_PAID
 
@@ -786,7 +789,10 @@ class CustomerPaymentService(ListResponseMixin):
                 if invoice:
                     invoice.amount_paid -= alloc.allocated_amount
                     if invoice.amount_paid <= Decimal("0"):
-                        invoice.status = InvoiceStatus.POSTED
+                        if invoice.due_date and invoice.due_date < date.today():
+                            invoice.status = InvoiceStatus.OVERDUE
+                        else:
+                            invoice.status = InvoiceStatus.POSTED
                     else:
                         invoice.status = InvoiceStatus.PARTIALLY_PAID
 
@@ -883,6 +889,12 @@ class CustomerPaymentService(ListResponseMixin):
                 raise ValidationError("Allocation total exceeds payment amount")
 
             for alloc in input.allocations:
+                # Lock the invoice row to prevent over-allocation race condition
+                db.execute(
+                    select(Invoice)
+                    .where(Invoice.invoice_id == coerce_uuid(alloc.invoice_id))
+                    .with_for_update()
+                )
                 invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
                     raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
@@ -922,6 +934,21 @@ class CustomerPaymentService(ListResponseMixin):
         else:
             gross_amount = net_amount + wht_amount
 
+        # Validate WHT code if provided
+        validated_wht_code_id: UUID | None = None
+        if input.wht_code_id:
+            wht_code = db.get(TaxCode, coerce_uuid(input.wht_code_id))
+            if not wht_code or wht_code.organization_id != org_id:
+                raise NotFoundError("WHT tax code not found")
+            if wht_code.tax_type != TaxType.WITHHOLDING:
+                raise ValidationError("Selected tax code is not a WITHHOLDING tax code")
+            validated_wht_code_id = wht_code.tax_code_id
+
+        if wht_amount > Decimal("0") and not validated_wht_code_id:
+            raise ValidationError(
+                "WHT tax code is required when WHT amount is specified"
+            )
+
         # Calculate functional currency amount
         exchange_rate = input.exchange_rate or Decimal("1.0")
         functional_amount = net_amount * exchange_rate
@@ -933,7 +960,7 @@ class CustomerPaymentService(ListResponseMixin):
         payment.currency_code = input.currency_code
         payment.gross_amount = gross_amount
         payment.amount = net_amount
-        payment.wht_code_id = input.wht_code_id
+        payment.wht_code_id = validated_wht_code_id
         payment.wht_amount = wht_amount
         payment.wht_certificate_number = input.wht_certificate_number
         payment.exchange_rate = exchange_rate

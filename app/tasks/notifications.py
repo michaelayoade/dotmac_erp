@@ -6,8 +6,9 @@ Handles:
 - Delivery of pending Nextcloud Talk notifications
 """
 
+import html
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
 from celery import shared_task
@@ -16,9 +17,15 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models.email_profile import EmailModule
 from app.models.notification import Notification, NotificationChannel
-from app.services.email import send_email
+from app.services.email import person_can_receive_email, send_email
 
 logger = logging.getLogger(__name__)
+
+
+# Notifications older than this are considered permanently failed and will not
+# be retried.  They remain in the database with email_sent=False for operator
+# inspection but are excluded from the processing query.
+_DEAD_LETTER_AGE = timedelta(days=3)
 
 
 class NotificationEmailDispatchResults(TypedDict):
@@ -26,6 +33,7 @@ class NotificationEmailDispatchResults(TypedDict):
     sent: int
     skipped: int
     failed: int
+    dead_letter: int
 
 
 @shared_task
@@ -44,9 +52,36 @@ def process_pending_notification_emails(
         "sent": 0,
         "skipped": 0,
         "failed": 0,
+        "dead_letter": 0,
     }
 
     with SessionLocal() as db:
+        cutoff = datetime.now(UTC) - _DEAD_LETTER_AGE
+
+        # Count dead-lettered notifications for observability (lightweight).
+        dead_letter_count_stmt = (
+            select(Notification.notification_id)
+            .where(Notification.email_sent == False)  # noqa: E712
+            .where(
+                Notification.channel.in_(
+                    [
+                        NotificationChannel.EMAIL,
+                        NotificationChannel.BOTH,
+                        NotificationChannel.ALL,
+                    ]
+                )
+            )
+            .where(Notification.created_at < cutoff)
+        )
+        dead_letter_ids = list(db.execute(dead_letter_count_stmt).scalars().all())
+        results["dead_letter"] = len(dead_letter_ids)
+        if dead_letter_ids:
+            logger.warning(
+                "Dead-letter: %d notification emails older than %s days will not be retried",
+                len(dead_letter_ids),
+                _DEAD_LETTER_AGE.days,
+            )
+
         stmt = (
             select(Notification)
             .where(Notification.email_sent == False)  # noqa: E712
@@ -59,6 +94,7 @@ def process_pending_notification_emails(
                     ]
                 )
             )
+            .where(Notification.created_at >= cutoff)
             .order_by(Notification.created_at.asc())
             .limit(batch_size)
             .with_for_update(of=Notification, skip_locked=True)
@@ -67,6 +103,16 @@ def process_pending_notification_emails(
 
         for notification in notifications:
             results["processed"] += 1
+
+            if not person_can_receive_email(notification.recipient):
+                logger.info(
+                    "Suppressing notification email %s: recipient is inactive",
+                    notification.notification_id,
+                )
+                notification.email_sent = True
+                notification.email_sent_at = datetime.now(UTC)
+                results["skipped"] += 1
+                continue
 
             recipient_email = None
             if notification.recipient and notification.recipient.email:
@@ -83,13 +129,21 @@ def process_pending_notification_emails(
 
             try:
                 body_text = notification.message
-                body_html = (
-                    f"<p>{notification.message}</p>"
+                safe_message = (
+                    html.escape(notification.message)
                     if notification.message
+                    else None
+                )
+                body_html = (
+                    f"<p>{safe_message}</p>"
+                    if safe_message
                     else "<p>You have a new notification in Dotmac ERP.</p>"
                 )
                 if notification.action_url:
-                    body_html += f'<p><a href="{notification.action_url}">Open notification</a></p>'
+                    url = notification.action_url
+                    if url.startswith("/") or url.startswith("http"):
+                        safe_url = html.escape(url)
+                        body_html += f'<p><a href="{safe_url}">Open notification</a></p>'
 
                 ok = send_email(
                     db=db,
@@ -115,13 +169,14 @@ def process_pending_notification_emails(
 
         db.commit()
 
-    if results["processed"] > 0:
+    if results["processed"] > 0 or results["dead_letter"] > 0:
         logger.info(
-            "Notification email dispatch: processed=%d sent=%d skipped=%d failed=%d",
+            "Notification email dispatch: processed=%d sent=%d skipped=%d failed=%d dead_letter=%d",
             results["processed"],
             results["sent"],
             results["skipped"],
             results["failed"],
+            results["dead_letter"],
         )
 
     return results
@@ -132,6 +187,7 @@ class NextcloudDispatchResults(TypedDict):
     sent: int
     skipped: int
     failed: int
+    dead_letter: int
 
 
 @shared_task
@@ -158,11 +214,37 @@ def process_pending_nextcloud_notifications(
         "sent": 0,
         "skipped": 0,
         "failed": 0,
+        "dead_letter": 0,
     }
 
     with SessionLocal() as db:
         if not is_configured(db):
             return results
+
+        cutoff = datetime.now(UTC) - _DEAD_LETTER_AGE
+
+        # Count dead-lettered Nextcloud notifications for observability.
+        dead_nc_stmt = (
+            select(Notification.notification_id)
+            .where(Notification.nextcloud_sent == False)  # noqa: E712
+            .where(
+                Notification.channel.in_(
+                    [
+                        NotificationChannel.NEXTCLOUD,
+                        NotificationChannel.ALL,
+                    ]
+                )
+            )
+            .where(Notification.created_at < cutoff)
+        )
+        dead_nc_ids = list(db.execute(dead_nc_stmt).scalars().all())
+        results["dead_letter"] = len(dead_nc_ids)
+        if dead_nc_ids:
+            logger.warning(
+                "Dead-letter: %d Nextcloud notifications older than %s days will not be retried",
+                len(dead_nc_ids),
+                _DEAD_LETTER_AGE.days,
+            )
 
         stmt = (
             select(Notification)
@@ -175,6 +257,7 @@ def process_pending_nextcloud_notifications(
                     ]
                 )
             )
+            .where(Notification.created_at >= cutoff)
             .order_by(Notification.created_at.asc())
             .limit(batch_size)
             .with_for_update(of=Notification, skip_locked=True)
@@ -225,13 +308,14 @@ def process_pending_nextcloud_notifications(
 
         db.commit()
 
-    if results["processed"] > 0:
+    if results["processed"] > 0 or results["dead_letter"] > 0:
         logger.info(
-            "Nextcloud dispatch: processed=%d sent=%d skipped=%d failed=%d",
+            "Nextcloud dispatch: processed=%d sent=%d skipped=%d failed=%d dead_letter=%d",
             results["processed"],
             results["sent"],
             results["skipped"],
             results["failed"],
+            results["dead_letter"],
         )
 
     return results

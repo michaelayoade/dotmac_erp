@@ -474,7 +474,7 @@ class FinanceReminderService:
             return "critical"  # Never reconciled
 
         today = date.today()
-        last_recon = account.last_reconciled_date.date()
+        last_recon = account.last_reconciled_date
         days_since = (today - last_recon).days
 
         if days_since >= self.config.bank_recon_critical_days:

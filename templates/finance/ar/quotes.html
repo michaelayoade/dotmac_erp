@@ -78,9 +78,9 @@
                             {{ q.valid_until }}
                             {% if q.is_expired %}<span class="text-xs ml-1">(expired)</span>{% endif %}
                         </td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ q.total_amount }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ q.total_amount }}</td>
                         <td class="text-center">
-                            {{ status_badge(q.status | lower | default('draft'), 'sm') }}
+                            {{ status_badge(q.status | default('DRAFT'), 'sm') }}
                         </td>
                         <td>
                             {{ action_buttons(

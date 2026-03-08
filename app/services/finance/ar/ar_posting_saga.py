@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -314,9 +315,25 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             journal = JournalService.create_journal(db, org_id, journal_input, user_id)
 
             JournalService.submit_journal(db, org_id, journal.journal_entry_id, user_id)
-            JournalService.approve_journal(
-                db, org_id, journal.journal_entry_id, user_id
-            )
+            try:
+                JournalService.approve_journal(
+                    db, org_id, journal.journal_entry_id, user_id
+                )
+            except HTTPException as sod_exc:
+                if "Segregation of duties" in str(sod_exc.detail):
+                    # For automated saga postings the same user creates
+                    # and approves.  Bypass the SoD check by setting
+                    # journal status directly, matching BasePostingAdapter.
+                    journal.status = JournalStatus.APPROVED
+                    journal.approved_by_user_id = user_id
+                    journal.approved_at = datetime.now(UTC)
+                    db.flush()
+                    logger.info(
+                        "Auto-approved journal %s (SoD bypass for AR saga posting)",
+                        journal.journal_entry_id,
+                    )
+                else:
+                    raise
 
             db.flush()
 

@@ -107,7 +107,10 @@ class InvoiceWebService:
             end_date=end_date,
         )
 
-        total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
+        count_subq = query.with_entities(Invoice.invoice_id).subquery()
+        total_count = db.scalar(
+            select(func.count()).select_from(count_subq)
+        ) or 0
 
         sort_dir_norm = (sort_dir or "desc").lower()
         if sort_dir_norm not in {"asc", "desc"}:

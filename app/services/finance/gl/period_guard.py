@@ -424,7 +424,7 @@ class PeriodGuardService(ListResponseMixin):
             )
 
         period.status = PeriodStatus.OPEN
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -470,7 +470,7 @@ class PeriodGuardService(ListResponseMixin):
         period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -520,7 +520,7 @@ class PeriodGuardService(ListResponseMixin):
         period.hard_closed_at = datetime.now(UTC)
         period.hard_closed_by_user_id = user_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -572,7 +572,7 @@ class PeriodGuardService(ListResponseMixin):
         period.reopen_count += 1
         period.last_reopen_session_id = reopen_session_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period, reopen_session_id
@@ -623,7 +623,7 @@ class PeriodGuardService(ListResponseMixin):
         period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -659,7 +659,7 @@ class PeriodGuardService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         fiscal_year_id: str | None = None,
         status: PeriodStatus | None = None,
         limit: int = 50,
@@ -670,7 +670,7 @@ class PeriodGuardService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization
+            organization_id: Filter by organization (required)
             fiscal_year_id: Filter by fiscal year
             status: Filter by status
             limit: Maximum results
@@ -681,10 +681,9 @@ class PeriodGuardService(ListResponseMixin):
         """
         stmt = select(FiscalPeriod)
 
-        if organization_id:
-            stmt = stmt.where(
-                FiscalPeriod.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = stmt.where(
+            FiscalPeriod.organization_id == coerce_uuid(organization_id)
+        )
 
         if fiscal_year_id:
             stmt = stmt.where(

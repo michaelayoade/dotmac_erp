@@ -824,8 +824,8 @@ class SalesOrderWebService:
                 db,
                 so_id,
                 str(auth.user_id),
-                reason,
                 organization_id=str(auth.organization_id),
+                reason=reason,
             )
         except Exception:
             logger.exception("cancel_response: failed")

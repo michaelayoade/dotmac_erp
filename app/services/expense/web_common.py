@@ -6,14 +6,35 @@ import json
 import mimetypes
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.services.file_upload import get_expense_receipt_upload, resolve_safe_path
+
+if TYPE_CHECKING:
+    from app.models.people.hr.employee import Employee
 
 
 class ExpenseWebCommonMixin:
     """Small helper methods reused across expense web service mixins."""
+
+    @staticmethod
+    def get_employee_for_person(
+        db: Session, organization_id: UUID, person_id: UUID
+    ) -> Employee | None:
+        """Look up the Employee record linked to a person within an org."""
+        from app.models.people.hr.employee import Employee
+
+        return db.scalar(
+            select(Employee).where(
+                Employee.organization_id == organization_id,
+                Employee.person_id == person_id,
+            )
+        )
 
     _UNSAFE_FILENAME_RE = re.compile(r'[\x00-\x1f\x7f"\\]')
 

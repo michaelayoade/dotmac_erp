@@ -243,7 +243,7 @@ class TestDeactivateCustomer:
         )
 
         assert result.is_active is False
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_deactivate_nonexistent_customer_fails(self, mock_db, org_id):
         """Test deactivating non-existent customer fails."""
@@ -270,7 +270,7 @@ class TestActivateCustomer:
         )
 
         assert result.is_active is True
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestCheckCreditLimit:

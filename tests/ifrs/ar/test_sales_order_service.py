@@ -295,14 +295,16 @@ class TestSubmit:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.submit(
             db=mock_db,
             so_id=str(so_id),
             submitted_by=str(user_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.SUBMITTED
@@ -319,6 +321,7 @@ class TestSubmit:
                 db=mock_db,
                 so_id=str(uuid.uuid4()),
                 submitted_by=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -327,8 +330,9 @@ class TestSubmit:
         """Test submitting order in wrong status."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.APPROVED)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -336,6 +340,7 @@ class TestSubmit:
                 db=mock_db,
                 so_id=str(so_id),
                 submitted_by=str(uuid.uuid4()),
+                organization_id=str(org_id),
             )
 
         assert "Cannot submit" in str(exc_info.value)
@@ -349,14 +354,16 @@ class TestApprove:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.SUBMITTED)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.SUBMITTED)
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.approve(
             db=mock_db,
             so_id=str(so_id),
             approved_by=str(user_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.APPROVED
@@ -373,6 +380,7 @@ class TestApprove:
                 db=mock_db,
                 so_id=str(uuid.uuid4()),
                 approved_by=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -381,8 +389,9 @@ class TestApprove:
         """Test approving order in wrong status."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -390,6 +399,7 @@ class TestApprove:
                 db=mock_db,
                 so_id=str(so_id),
                 approved_by=str(uuid.uuid4()),
+                organization_id=str(org_id),
             )
 
         assert "Cannot approve" in str(exc_info.value)
@@ -402,13 +412,15 @@ class TestConfirm:
         """Test confirming an approved order."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.APPROVED)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.confirm(
             db=mock_db,
             so_id=str(so_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.CONFIRMED
@@ -423,6 +435,7 @@ class TestConfirm:
             SalesOrderService.confirm(
                 db=mock_db,
                 so_id=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -431,14 +444,16 @@ class TestConfirm:
         """Test confirming order in wrong status."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
             SalesOrderService.confirm(
                 db=mock_db,
                 so_id=str(so_id),
+                organization_id=str(org_id),
             )
 
         assert "Cannot confirm" in str(exc_info.value)
@@ -450,12 +465,14 @@ class TestConfirm:
         """Test confirmation calls stock reservation hook."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.APPROVED)
+        org_id = uuid.uuid4()
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
         mock_db.get.return_value = mock_so
 
         SalesOrderService.confirm(
             db=mock_db,
             so_id=str(so_id),
+            organization_id=str(org_id),
         )
 
         mock_reserve_hook.assert_called_once_with(mock_db, mock_so)
@@ -468,12 +485,14 @@ class TestConfirm:
         """Test confirmation emits sales.order.confirmed hook event."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.APPROVED)
+        org_id = uuid.uuid4()
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.APPROVED)
         mock_db.get.return_value = mock_so
 
         SalesOrderService.confirm(
             db=mock_db,
             so_id=str(so_id),
+            organization_id=str(org_id),
         )
 
         mock_emit_hook.assert_called_once()
@@ -752,13 +771,15 @@ class TestMarkDelivered:
         """Test marking shipment as delivered."""
         mock_db = MagicMock()
         shipment_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_shipment = MockShipment(shipment_id=shipment_id)
+        mock_shipment = MockShipment(shipment_id=shipment_id, organization_id=org_id)
         mock_db.get.return_value = mock_shipment
 
         result = SalesOrderService.mark_delivered(
             db=mock_db,
             shipment_id=str(shipment_id),
+            organization_id=str(org_id),
         )
 
         assert result.is_delivered is True
@@ -774,6 +795,7 @@ class TestMarkDelivered:
             SalesOrderService.mark_delivered(
                 db=mock_db,
                 shipment_id=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -905,10 +927,12 @@ class TestCancel:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_so_line = MockSalesOrderLine(so_id=so_id)
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.DRAFT,
             lines=[mock_so_line],
             shipments=[],
@@ -919,6 +943,7 @@ class TestCancel:
             db=mock_db,
             so_id=str(so_id),
             cancelled_by=str(user_id),
+            organization_id=str(org_id),
             reason="Customer request",
         )
 
@@ -936,6 +961,7 @@ class TestCancel:
                 db=mock_db,
                 so_id=str(uuid.uuid4()),
                 cancelled_by=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -944,8 +970,9 @@ class TestCancel:
         """Test cancelling shipped order fails."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.SHIPPED)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.SHIPPED)
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -953,6 +980,7 @@ class TestCancel:
                 db=mock_db,
                 so_id=str(so_id),
                 cancelled_by=str(uuid.uuid4()),
+                organization_id=str(org_id),
             )
 
         assert "Cannot cancel" in str(exc_info.value)
@@ -961,9 +989,11 @@ class TestCancel:
         """Test cancelling order with shipments fails."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.CONFIRMED,
             shipments=[MockShipment()],  # Has shipments
         )
@@ -974,6 +1004,7 @@ class TestCancel:
                 db=mock_db,
                 so_id=str(so_id),
                 cancelled_by=str(uuid.uuid4()),
+                organization_id=str(org_id),
             )
 
         assert "existing shipments" in str(exc_info.value)
@@ -988,9 +1019,11 @@ class TestCancel:
         """Test cancelling SO releases linked reservations."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
         mock_so_line = MockSalesOrderLine(so_id=so_id)
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.CONFIRMED,
             lines=[mock_so_line],
             shipments=[],
@@ -1009,6 +1042,7 @@ class TestCancel:
             db=mock_db,
             so_id=str(so_id),
             cancelled_by=str(uuid.uuid4()),
+            organization_id=str(org_id),
             reason="Customer request",
         )
 
@@ -1019,9 +1053,11 @@ class TestCancel:
         """Test cancelling SO emits sales.order.cancelled hook event."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
         mock_so_line = MockSalesOrderLine(so_id=so_id)
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.CONFIRMED,
             lines=[mock_so_line],
             shipments=[],
@@ -1032,6 +1068,7 @@ class TestCancel:
             db=mock_db,
             so_id=str(so_id),
             cancelled_by=str(uuid.uuid4()),
+            organization_id=str(org_id),
             reason="Customer request",
         )
 
@@ -1046,14 +1083,16 @@ class TestHold:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.CONFIRMED)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.CONFIRMED)
         mock_db.get.return_value = mock_so
 
         result = SalesOrderService.hold(
             db=mock_db,
             so_id=str(so_id),
             held_by=str(user_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.ON_HOLD
@@ -1069,6 +1108,7 @@ class TestHold:
                 db=mock_db,
                 so_id=str(uuid.uuid4()),
                 held_by=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -1077,8 +1117,9 @@ class TestHold:
         """Test holding completed order fails."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.COMPLETED)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.COMPLETED)
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -1086,6 +1127,7 @@ class TestHold:
                 db=mock_db,
                 so_id=str(so_id),
                 held_by=str(uuid.uuid4()),
+                organization_id=str(org_id),
             )
 
         assert "Cannot hold" in str(exc_info.value)
@@ -1099,6 +1141,7 @@ class TestReleaseHold:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_so_line = MockSalesOrderLine(
             so_id=so_id,
@@ -1106,6 +1149,7 @@ class TestReleaseHold:
         )
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.ON_HOLD,
             lines=[mock_so_line],
             confirmed_at=None,
@@ -1117,6 +1161,7 @@ class TestReleaseHold:
             db=mock_db,
             so_id=str(so_id),
             released_by=str(user_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.SUBMITTED
@@ -1127,6 +1172,7 @@ class TestReleaseHold:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_so_line = MockSalesOrderLine(
             so_id=so_id,
@@ -1134,6 +1180,7 @@ class TestReleaseHold:
         )
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.ON_HOLD,
             lines=[mock_so_line],
             confirmed_at=None,
@@ -1145,6 +1192,7 @@ class TestReleaseHold:
             db=mock_db,
             so_id=str(so_id),
             released_by=str(user_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.APPROVED
@@ -1154,6 +1202,7 @@ class TestReleaseHold:
         mock_db = MagicMock()
         so_id = uuid.uuid4()
         user_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
         mock_so_line = MockSalesOrderLine(
             so_id=so_id,
@@ -1162,6 +1211,7 @@ class TestReleaseHold:
         )
         mock_so = MockSalesOrder(
             so_id=so_id,
+            organization_id=org_id,
             status=SOStatus.ON_HOLD,
             lines=[mock_so_line],
         )
@@ -1171,6 +1221,7 @@ class TestReleaseHold:
             db=mock_db,
             so_id=str(so_id),
             released_by=str(user_id),
+            organization_id=str(org_id),
         )
 
         assert result.status == SOStatus.IN_PROGRESS
@@ -1185,6 +1236,7 @@ class TestReleaseHold:
                 db=mock_db,
                 so_id=str(uuid.uuid4()),
                 released_by=str(uuid.uuid4()),
+                organization_id=str(uuid.uuid4()),
             )
 
         assert "not found" in str(exc_info.value)
@@ -1193,8 +1245,9 @@ class TestReleaseHold:
         """Test releasing hold on order not on hold fails."""
         mock_db = MagicMock()
         so_id = uuid.uuid4()
+        org_id = uuid.uuid4()
 
-        mock_so = MockSalesOrder(so_id=so_id, status=SOStatus.DRAFT)
+        mock_so = MockSalesOrder(so_id=so_id, organization_id=org_id, status=SOStatus.DRAFT)
         mock_db.get.return_value = mock_so
 
         with pytest.raises(ValueError) as exc_info:
@@ -1202,6 +1255,7 @@ class TestReleaseHold:
                 db=mock_db,
                 so_id=str(so_id),
                 released_by=str(uuid.uuid4()),
+                organization_id=str(org_id),
             )
 
         assert "not on hold" in str(exc_info.value)

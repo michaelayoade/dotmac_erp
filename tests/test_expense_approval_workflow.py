@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
@@ -147,7 +148,9 @@ def test_approve_claim_requires_employee_backed_approver(db_session, engine):
 
     svc = ExpenseService(db_session)
     with pytest.raises(ExpenseServiceError, match="employee record"):
-        svc.approve_claim(org_id, claim.claim_id, approver_id=None, send_notification=False)
+        svc.approve_claim(
+            org_id, claim.claim_id, approver_id=None, send_notification=False
+        )
 
 
 def test_multi_approval_claim_remains_pending_until_all_steps_complete(
@@ -203,7 +206,9 @@ def test_multi_approval_claim_remains_pending_until_all_steps_complete(
     db_session.commit()
 
     svc = ExpenseService(db_session)
-    monkeypatch.setattr(svc, "_validate_approver_authority", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        svc, "_validate_approver_authority", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(
         svc,
         "_validate_approver_weekly_budget",
@@ -233,10 +238,11 @@ def test_multi_approval_claim_remains_pending_until_all_steps_complete(
 
     assert second.status == ExpenseClaimStatus.APPROVED
     steps = list(
-        db_session.query(ExpenseClaimApprovalStep)
-        .filter(ExpenseClaimApprovalStep.claim_id == claim.claim_id)
-        .order_by(ExpenseClaimApprovalStep.step_number)
-        .all()
+        db_session.scalars(
+            select(ExpenseClaimApprovalStep)
+            .where(ExpenseClaimApprovalStep.claim_id == claim.claim_id)
+            .order_by(ExpenseClaimApprovalStep.step_number)
+        ).all()
     )
     assert [step.decision for step in steps] == ["APPROVED", "APPROVED"]
 
@@ -320,24 +326,26 @@ def test_resubmit_preserves_prior_approval_round_and_submit_creates_new_round(
     assert resubmitted.claim.status == ExpenseClaimStatus.PENDING_APPROVAL
 
     rounds = list(
-        db_session.query(ExpenseClaimApprovalStep.submission_round, ExpenseClaimApprovalStep.decision)
-        .filter(ExpenseClaimApprovalStep.claim_id == claim.claim_id)
-        .order_by(
-            ExpenseClaimApprovalStep.submission_round,
-            ExpenseClaimApprovalStep.step_number,
-        )
-        .all()
+        db_session.execute(
+            select(
+                ExpenseClaimApprovalStep.submission_round,
+                ExpenseClaimApprovalStep.decision,
+            )
+            .where(ExpenseClaimApprovalStep.claim_id == claim.claim_id)
+            .order_by(
+                ExpenseClaimApprovalStep.submission_round,
+                ExpenseClaimApprovalStep.step_number,
+            )
+        ).all()
     )
     assert rounds[0] == (1, "REJECTED")
     assert rounds[-1] == (2, None)
 
-    submit_marker = (
-        db_session.query(ExpenseClaimAction)
-        .filter(
+    submit_marker = db_session.scalar(
+        select(ExpenseClaimAction).where(
             ExpenseClaimAction.claim_id == claim.claim_id,
             ExpenseClaimAction.action_type == ExpenseClaimActionType.SUBMIT,
         )
-        .one()
     )
     assert submit_marker.status == ExpenseClaimActionStatus.COMPLETED
 

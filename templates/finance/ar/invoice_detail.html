@@ -242,7 +242,7 @@
                 </div>
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Currency</div>
-                    <div class="mt-1 font-medium text-slate-900 dark:text-white">{{ invoice.currency | default("NGN") }}</div>
+                    <div class="mt-1 font-medium text-slate-900 dark:text-white">{{ invoice.currency if invoice.currency else "NGN" }}</div>
                 </div>
             </div>
         </div>
@@ -253,7 +253,7 @@
                 <div class="document-section-title">Bill To</div>
                 <div class="document-row">
                     <span class="document-row-label">Customer</span>
-                    <span class="document-row-value font-semibold">{{ customer.customer_name | default(invoice.customer_name) }}</span>
+                    <span class="document-row-value font-semibold">{{ customer.customer_name if customer.customer_name else (invoice.customer_name if invoice.customer_name else '') }}</span>
                 </div>
                 {% if customer.customer_code %}
                 <div class="document-row">
@@ -358,7 +358,7 @@
                 <div class="ml-auto max-w-xs space-y-2">
                     <div class="document-row">
                         <span class="document-row-label">Subtotal</span>
-                        <span class="document-row-value font-mono">{{ invoice.subtotal | default("0.00") }}</span>
+                        <span class="document-row-value font-mono">{{ invoice.subtotal if invoice.subtotal else "0.00" }}</span>
                     </div>
                     {% if invoice.discount_amount and invoice.discount_amount != 0 %}
                     <div class="document-row">
@@ -368,11 +368,11 @@
                     {% endif %}
                     <div class="document-row">
                         <span class="document-row-label">Tax (VAT)</span>
-                        <span class="document-row-value font-mono">{{ invoice.tax_amount | default("0.00") }}</span>
+                        <span class="document-row-value font-mono">{{ invoice.tax_amount if invoice.tax_amount else "0.00" }}</span>
                     </div>
                     <div class="document-total-row">
                         <span class="document-total-label">Total Amount</span>
-                        <span class="document-total-value font-mono">{{ invoice.total_amount | default("0.00") }}</span>
+                        <span class="document-total-value font-mono">{{ invoice.total_amount if invoice.total_amount else "0.00" }}</span>
                     </div>
                     {% if invoice.amount_paid_raw and invoice.amount_paid_raw > 0 %}
                     <div class="document-row">
@@ -389,7 +389,7 @@
             <div class="flex items-center justify-between">
                 <span class="document-total-label">Balance Due</span>
                 <span class="document-total-value document-total-value-large font-mono {% if invoice.is_overdue %}text-red-600 dark:text-red-400{% endif %}">
-                    {{ invoice.balance | default(invoice.total_amount) | default("0.00") }}
+                    {{ invoice.balance if invoice.balance else (invoice.total_amount if invoice.total_amount else "0.00") }}
                 </span>
             </div>
             {% if invoice.status == 'PAID' %}

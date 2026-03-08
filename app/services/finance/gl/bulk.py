@@ -11,6 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account, AccountType
@@ -76,11 +77,11 @@ class AccountBulkService(BulkActionService[Account]):
             )
 
         # Check for journal entry lines
-        journal_count = (
-            self.db.query(JournalEntryLine)
-            .filter(JournalEntryLine.account_id == entity.account_id)
-            .count()
-        )
+        journal_count = self.db.scalar(
+            select(func.count())
+            .select_from(JournalEntryLine)
+            .where(JournalEntryLine.account_id == entity.account_id)
+        ) or 0
 
         if journal_count > 0:
             return (

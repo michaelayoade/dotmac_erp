@@ -122,11 +122,11 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
             from app.models.email_profile import EmailModule
             from app.models.finance.core_org.organization import Organization
             from app.models.people.hr.employee import Employee
-            from app.models.people.payroll.salary_slip import SalarySlip
-            from app.models.people.payroll.salary_slip_component import (
+            from app.models.people.payroll.salary_slip import (
+                SalarySlip,
                 SalarySlipDeduction,
             )
-            from app.services.email import send_email
+            from app.services.email import employee_can_receive_email, send_email
             from app.services.people.payroll.payslip_pdf import PayslipPDFService
 
             slip_uuid = uuid.UUID(slip_id)
@@ -158,6 +158,13 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
             if not employee:
                 result["error"] = f"Employee not found for slip {slip_id}"
                 logger.warning(result["error"])
+                return result
+
+            if not employee_can_receive_email(employee):
+                result["error"] = (
+                    f"Employee {employee.employee_id} is inactive; email suppressed"
+                )
+                logger.info(result["error"])
                 return result
 
             # Get employee's work email
@@ -746,5 +753,3 @@ This is an automated message from {org_name}.
 
     except Exception as e:
         logger.warning("Failed to send email notifications: %s", e)
-
-    db.commit()

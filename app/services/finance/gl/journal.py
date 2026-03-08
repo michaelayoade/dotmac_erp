@@ -341,7 +341,7 @@ class JournalService(ListResponseMixin):
             )
             db.add(entry_line)
 
-        db.commit()
+        db.flush()
         db.refresh(journal)
 
         fire_audit_event(
@@ -501,7 +501,7 @@ class JournalService(ListResponseMixin):
             )
             db.add(entry_line)
 
-        db.commit()
+        db.flush()
         db.refresh(journal)
 
         return journal
@@ -527,7 +527,7 @@ class JournalService(ListResponseMixin):
             )
 
         db.delete(journal)
-        db.commit()
+        db.flush()
 
     @staticmethod
     def submit_journal(
@@ -582,7 +582,7 @@ class JournalService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
+        db.flush()
         db.refresh(journal)
 
         return journal
@@ -648,7 +648,7 @@ class JournalService(ListResponseMixin):
             user_id=user_id,
         )
 
-        db.commit()
+        db.flush()
         db.refresh(journal)
 
         return journal
@@ -795,7 +795,7 @@ class JournalService(ListResponseMixin):
             reason=reason,
         )
 
-        db.commit()
+        db.flush()
         db.refresh(journal)
 
         return journal
@@ -832,6 +832,7 @@ class JournalService(ListResponseMixin):
     def get_lines(
         db: Session,
         journal_entry_id: UUID,
+        organization_id: str,
     ) -> list[JournalEntryLine]:
         """
         Get lines for a journal entry.
@@ -839,16 +840,26 @@ class JournalService(ListResponseMixin):
         Args:
             db: Database session
             journal_entry_id: Journal ID
+            organization_id: Organization scope (required for multi-tenancy)
 
         Returns:
             List of JournalEntryLine records
         """
         journal_id = coerce_uuid(journal_entry_id)
+        org_id = coerce_uuid(organization_id)
 
         return list(
             db.scalars(
                 select(JournalEntryLine)
-                .where(JournalEntryLine.journal_entry_id == journal_id)
+                .join(
+                    JournalEntry,
+                    JournalEntryLine.journal_entry_id
+                    == JournalEntry.journal_entry_id,
+                )
+                .where(
+                    JournalEntryLine.journal_entry_id == journal_id,
+                    JournalEntry.organization_id == org_id,
+                )
                 .order_by(JournalEntryLine.line_number)
             ).all()
         )
@@ -856,7 +867,7 @@ class JournalService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         status: JournalStatus | None = None,
         journal_type: JournalType | None = None,
         fiscal_period_id: str | None = None,
@@ -870,7 +881,7 @@ class JournalService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization
+            organization_id: Filter by organization (required)
             status: Filter by status
             journal_type: Filter by type
             fiscal_period_id: Filter by period
@@ -884,10 +895,9 @@ class JournalService(ListResponseMixin):
         """
         stmt = select(JournalEntry)
 
-        if organization_id:
-            stmt = stmt.where(
-                JournalEntry.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = stmt.where(
+            JournalEntry.organization_id == coerce_uuid(organization_id)
+        )
 
         if status:
             stmt = stmt.where(JournalEntry.status == status)
@@ -1019,7 +1029,7 @@ class JournalService(ListResponseMixin):
             journal.reversal_journal_id = reversal.journal_entry_id
             journal.status = JournalStatus.REVERSED
             db.add(reversal)
-            db.commit()
+            db.flush()
             db.refresh(reversal)
             return reversal
 

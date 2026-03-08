@@ -224,7 +224,16 @@ class ContractService(ListResponseMixin):
 
             for idx, ob_input in enumerate(input.obligations, start=1):
                 # Allocate transaction price based on relative SSP
-                allocation_ratio = ob_input.standalone_selling_price / total_ssp
+                if total_ssp == 0:
+                    logger.warning(
+                        "Total SSP is zero for contract %s; using equal allocation",
+                        contract.contract_number,
+                    )
+                    allocation_ratio = Decimal("1") / Decimal(
+                        str(len(input.obligations))
+                    )
+                else:
+                    allocation_ratio = ob_input.standalone_selling_price / total_ssp
                 allocated_price = transaction_price * allocation_ratio
 
                 obligation = PerformanceObligation(
@@ -294,7 +303,8 @@ class ContractService(ListResponseMixin):
         # Verify contract has performance obligations
         obligation_count = db.scalar(
             select(func.count(PerformanceObligation.obligation_id)).where(
-                PerformanceObligation.contract_id == contract_id
+                PerformanceObligation.contract_id == contract_id,
+                PerformanceObligation.organization_id == org_id,
             )
         ) or 0
 
@@ -354,7 +364,8 @@ class ContractService(ListResponseMixin):
         # Get next obligation number
         max_number = db.scalar(
             select(func.count(PerformanceObligation.obligation_id)).where(
-                PerformanceObligation.contract_id == contract_id
+                PerformanceObligation.contract_id == contract_id,
+                PerformanceObligation.organization_id == org_id,
             )
         ) or 0
 
@@ -418,7 +429,8 @@ class ContractService(ListResponseMixin):
         obligations = list(
             db.scalars(
                 select(PerformanceObligation).where(
-                    PerformanceObligation.contract_id == contract_id
+                    PerformanceObligation.contract_id == contract_id,
+                    PerformanceObligation.organization_id == org_id,
                 )
             ).all()
         )
@@ -430,7 +442,14 @@ class ContractService(ListResponseMixin):
         transaction_price = contract.total_contract_value or total_ssp
 
         for obligation in obligations:
-            allocation_ratio = obligation.standalone_selling_price / total_ssp
+            if total_ssp == 0:
+                logger.warning(
+                    "Total SSP is zero for contract %s; using equal allocation",
+                    contract.contract_number,
+                )
+                allocation_ratio = Decimal("1") / Decimal(str(len(obligations)))
+            else:
+                allocation_ratio = obligation.standalone_selling_price / total_ssp
             obligation.allocated_transaction_price = (
                 transaction_price * allocation_ratio
             )
@@ -683,6 +702,8 @@ class ContractService(ListResponseMixin):
                 select(PerformanceObligation).where(
                     and_(
                         PerformanceObligation.contract_id == contract.contract_id,
+                        PerformanceObligation.organization_id
+                        == contract.organization_id,
                         PerformanceObligation.status != "SATISFIED",
                     )
                 )
@@ -698,6 +719,8 @@ class ContractService(ListResponseMixin):
                 select(PerformanceObligation).where(
                     and_(
                         PerformanceObligation.contract_id == contract.contract_id,
+                        PerformanceObligation.organization_id
+                        == contract.organization_id,
                         PerformanceObligation.status == "SATISFIED",
                     )
                 )
@@ -714,7 +737,14 @@ class ContractService(ListResponseMixin):
         # Reallocate to unsatisfied obligations
         total_ssp = sum((o.standalone_selling_price for o in obligations), Decimal("0"))
         for obligation in obligations:
-            allocation_ratio = obligation.standalone_selling_price / total_ssp
+            if total_ssp == 0:
+                logger.warning(
+                    "Total SSP is zero for contract %s; using equal allocation",
+                    contract.contract_number,
+                )
+                allocation_ratio = Decimal("1") / Decimal(str(len(obligations)))
+            else:
+                allocation_ratio = obligation.standalone_selling_price / total_ssp
             obligation.allocated_transaction_price = remaining_price * allocation_ratio
 
     @staticmethod
@@ -724,7 +754,9 @@ class ContractService(ListResponseMixin):
         obligations = list(
             db.scalars(
                 select(PerformanceObligation).where(
-                    PerformanceObligation.contract_id == contract.contract_id
+                    PerformanceObligation.contract_id == contract.contract_id,
+                    PerformanceObligation.organization_id
+                    == contract.organization_id,
                 )
             ).all()
         )
@@ -732,7 +764,14 @@ class ContractService(ListResponseMixin):
         total_ssp = sum((o.standalone_selling_price for o in obligations), Decimal("0"))
 
         for obligation in obligations:
-            allocation_ratio = obligation.standalone_selling_price / total_ssp
+            if total_ssp == 0:
+                logger.warning(
+                    "Total SSP is zero for contract %s; using equal allocation",
+                    contract.contract_number,
+                )
+                allocation_ratio = Decimal("1") / Decimal(str(len(obligations)))
+            else:
+                allocation_ratio = obligation.standalone_selling_price / total_ssp
             total_value = contract.total_contract_value or Decimal("0")
             new_allocated = total_value * allocation_ratio
 
@@ -796,6 +835,7 @@ class ContractService(ListResponseMixin):
             select(func.count(PerformanceObligation.obligation_id)).where(
                 and_(
                     PerformanceObligation.contract_id == contract_id,
+                    PerformanceObligation.organization_id == org_id,
                     PerformanceObligation.status != "SATISFIED",
                 )
             )
@@ -846,12 +886,17 @@ class ContractService(ListResponseMixin):
     def get_obligations(
         db: Session,
         contract_id: str,
+        organization_id: str,
     ) -> builtins.list[PerformanceObligation]:
         """Get all performance obligations for a contract."""
         return list(
             db.scalars(
                 select(PerformanceObligation)
-                .where(PerformanceObligation.contract_id == coerce_uuid(contract_id))
+                .where(
+                    PerformanceObligation.contract_id == coerce_uuid(contract_id),
+                    PerformanceObligation.organization_id
+                    == coerce_uuid(organization_id),
+                )
                 .order_by(PerformanceObligation.obligation_number)
             ).all()
         )
@@ -860,13 +905,17 @@ class ContractService(ListResponseMixin):
     def get_recognition_events(
         db: Session,
         obligation_id: str,
+        organization_id: str,
     ) -> builtins.list[RevenueRecognitionEvent]:
         """Get all recognition events for an obligation."""
         return list(
             db.scalars(
                 select(RevenueRecognitionEvent)
                 .where(
-                    RevenueRecognitionEvent.obligation_id == coerce_uuid(obligation_id)
+                    RevenueRecognitionEvent.obligation_id
+                    == coerce_uuid(obligation_id),
+                    RevenueRecognitionEvent.organization_id
+                    == coerce_uuid(organization_id),
                 )
                 .order_by(RevenueRecognitionEvent.event_date)
             ).all()

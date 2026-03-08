@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.domain_settings import SettingDomain
+from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.sales_order import (
@@ -33,7 +34,7 @@ from app.services.finance.ar.input_utils import (
     require_uuid,
     resolve_currency_code,
 )
-from app.services.finance.common import SyncNumberingService
+from app.services.finance.common import SyncNumberingService, get_org_scoped_entity
 from app.services.settings_cache import settings_cache
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,14 @@ class SalesOrderService:
     ) -> SalesOrder:
         """Create a new sales order."""
         org_id = coerce_uuid(organization_id)
+
+        get_org_scoped_entity(
+            db=db,
+            model_class=Customer,
+            entity_id=customer_id,
+            org_id=org_id,
+            entity_name="Customer",
+        )
 
         so = SalesOrder(
             organization_id=org_id,
@@ -280,13 +289,11 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         submitted_by: str,
-        organization_id: str | None = None,
+        organization_id: str,
     ) -> SalesOrder:
         """Submit SO for approval."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
-        if not so or (
-            organization_id and so.organization_id != coerce_uuid(organization_id)
-        ):
+        if not so or so.organization_id != coerce_uuid(organization_id):
             raise ValueError("Sales order not found")
 
         if so.status != SOStatus.DRAFT:
@@ -324,13 +331,11 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         approved_by: str,
-        organization_id: str | None = None,
+        organization_id: str,
     ) -> SalesOrder:
         """Approve SO."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
-        if not so or (
-            organization_id and so.organization_id != coerce_uuid(organization_id)
-        ):
+        if not so or so.organization_id != coerce_uuid(organization_id):
             raise ValueError("Sales order not found")
 
         if so.status != SOStatus.SUBMITTED:
@@ -367,13 +372,11 @@ class SalesOrderService:
     def confirm(
         db: Session,
         so_id: str,
-        organization_id: str | None = None,
+        organization_id: str,
     ) -> SalesOrder:
         """Confirm SO with customer."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
-        if not so or (
-            organization_id and so.organization_id != coerce_uuid(organization_id)
-        ):
+        if not so or so.organization_id != coerce_uuid(organization_id):
             raise ValueError("Sales order not found")
 
         if so.status != SOStatus.APPROVED:
@@ -557,13 +560,11 @@ class SalesOrderService:
     def mark_delivered(
         db: Session,
         shipment_id: str,
-        organization_id: str | None = None,
+        organization_id: str,
     ) -> Shipment:
         """Mark shipment as delivered."""
         shipment = db.get(Shipment, coerce_uuid(shipment_id))
-        if not shipment or (
-            organization_id and shipment.organization_id != coerce_uuid(organization_id)
-        ):
+        if not shipment or shipment.organization_id != coerce_uuid(organization_id):
             raise ValueError("Shipment not found")
 
         shipment.is_delivered = True
@@ -719,14 +720,12 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         cancelled_by: str,
+        organization_id: str,
         reason: str | None = None,
-        organization_id: str | None = None,
     ) -> SalesOrder:
         """Cancel a sales order."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
-        if not so or (
-            organization_id and so.organization_id != coerce_uuid(organization_id)
-        ):
+        if not so or so.organization_id != coerce_uuid(organization_id):
             raise ValueError("Sales order not found")
 
         if so.status in [SOStatus.SHIPPED, SOStatus.COMPLETED]:
@@ -799,13 +798,11 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         held_by: str,
-        organization_id: str | None = None,
+        organization_id: str,
     ) -> SalesOrder:
         """Put SO on hold."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
-        if not so or (
-            organization_id and so.organization_id != coerce_uuid(organization_id)
-        ):
+        if not so or so.organization_id != coerce_uuid(organization_id):
             raise ValueError("Sales order not found")
 
         if so.status in [SOStatus.COMPLETED, SOStatus.CANCELLED]:
@@ -823,13 +820,11 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         released_by: str,
-        organization_id: str | None = None,
+        organization_id: str,
     ) -> SalesOrder:
         """Release SO from hold."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
-        if not so or (
-            organization_id and so.organization_id != coerce_uuid(organization_id)
-        ):
+        if not so or so.organization_id != coerce_uuid(organization_id):
             raise ValueError("Sales order not found")
 
         if so.status != SOStatus.ON_HOLD:

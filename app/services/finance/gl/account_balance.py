@@ -449,14 +449,13 @@ class AccountBalanceService(ListResponseMixin):
                 db.add(balance)
                 count += 1
 
-            db.commit()
+            db.flush()
         except (SQLAlchemyError, InvalidOperation) as e:
-            db.rollback()
             logger.error(f"Failed to rebuild balances for period {period_id}: {e}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to rebuild balances: {str(e)}",
-            )
+            ) from e
 
         return count
 
@@ -550,7 +549,7 @@ class AccountBalanceService(ListResponseMixin):
 
             count += 1
 
-        db.commit()
+        db.flush()
 
         return count
 

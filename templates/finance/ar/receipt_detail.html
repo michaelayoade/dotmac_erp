@@ -56,7 +56,7 @@
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ receipt.receipt_number }}</h2>
-                <p class="text-sm text-slate-500">{{ receipt.customer_name | default("Customer") }}</p>
+                <p class="text-sm text-slate-500">{{ receipt.customer_name if receipt.customer_name else "Customer" }}</p>
             </div>
             <div class="flex items-center gap-3">
                 {{ status_badge(receipt.status) }}

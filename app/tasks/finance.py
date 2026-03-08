@@ -844,66 +844,66 @@ def auto_generate_aging_snapshots(
     with SessionLocal() as db:
         from sqlalchemy import delete as sa_delete
 
-        # AR aging snapshots
+        # AR aging snapshots — use savepoint so failure doesn't affect AP
         try:
-            from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
-            from app.services.finance.ar.ar_aging import ARAgingService
+            with db.begin_nested():
+                from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
+                from app.services.finance.ar.ar_aging import ARAgingService
 
-            # Delete existing snapshots for this period (unique constraint)
-            db.execute(
-                sa_delete(ARAgingSnapshot).where(
-                    ARAgingSnapshot.organization_id == org_id,
-                    ARAgingSnapshot.fiscal_period_id == period_id,
+                # Delete existing snapshots for this period (unique constraint)
+                db.execute(
+                    sa_delete(ARAgingSnapshot).where(
+                        ARAgingSnapshot.organization_id == org_id,
+                        ARAgingSnapshot.fiscal_period_id == period_id,
+                    )
                 )
-            )
-            db.flush()
+                db.flush()
 
-            ar_snaps = ARAgingService.create_aging_snapshot(
-                db,
-                organization_id=org_id,
-                fiscal_period_id=period_id,
-                created_by_user_id=uid,
-            )
-            results["ar_snapshots"] = len(ar_snaps)
+                ar_snaps = ARAgingService.create_aging_snapshot(
+                    db,
+                    organization_id=org_id,
+                    fiscal_period_id=period_id,
+                    created_by_user_id=uid,
+                )
+                results["ar_snapshots"] = len(ar_snaps)
         except Exception as e:
             logger.exception(
                 "Failed to generate AR aging snapshots for period %s", period_id
             )
             results["errors"].append(f"AR: {e}")
-            db.rollback()
 
-        # AP aging snapshots
+        # AP aging snapshots — use savepoint so failure doesn't affect AR
         try:
-            from app.models.finance.ap.ap_aging_snapshot import (
-                APAgingSnapshot,  # pragma: allowlist secret
-            )
-            from app.services.finance.ap.ap_aging import (
-                APAgingService,  # pragma: allowlist secret
-            )
-
-            db.execute(
-                sa_delete(APAgingSnapshot).where(
-                    APAgingSnapshot.organization_id == org_id,
-                    APAgingSnapshot.fiscal_period_id == period_id,
+            with db.begin_nested():
+                from app.models.finance.ap.ap_aging_snapshot import (
+                    APAgingSnapshot,  # pragma: allowlist secret
                 )
-            )
-            db.flush()
+                from app.services.finance.ap.ap_aging import (
+                    APAgingService,  # pragma: allowlist secret
+                )
 
-            ap_snaps = APAgingService.create_aging_snapshot(
-                db,
-                organization_id=org_id,
-                fiscal_period_id=period_id,
-                created_by_user_id=uid,
-            )
-            results["ap_snapshots"] = len(ap_snaps)
+                db.execute(
+                    sa_delete(APAgingSnapshot).where(
+                        APAgingSnapshot.organization_id == org_id,
+                        APAgingSnapshot.fiscal_period_id == period_id,
+                    )
+                )
+                db.flush()
+
+                ap_snaps = APAgingService.create_aging_snapshot(
+                    db,
+                    organization_id=org_id,
+                    fiscal_period_id=period_id,
+                    created_by_user_id=uid,
+                )
+                results["ap_snapshots"] = len(ap_snaps)
         except Exception as e:
             logger.exception(
                 "Failed to generate AP aging snapshots for period %s", period_id
             )
             results["errors"].append(f"AP: {e}")
-            db.rollback()
 
-        db.commit()
+        db.commit()  # commit whatever succeeded
 
     logger.info(
         "Aging snapshots complete: AR=%d, AP=%d, errors=%d",
