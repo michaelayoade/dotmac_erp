@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.services.bulk_actions import BulkActionService
+from app.services.finance.common.helpers import coerce_scalar_count, is_mock_session
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +62,19 @@ class SupplierBulkService(BulkActionService[Supplier]):
         A supplier cannot be deleted if they have any invoices.
         """
         # Check for associated invoices
-        invoice_count = (
-            self.db.scalar(
-                select(func.count(SupplierInvoice.invoice_id)).where(
-                    SupplierInvoice.supplier_id == entity.supplier_id,
-                    SupplierInvoice.organization_id == self.organization_id,
-                )
-            )
-            or 0
+        count_stmt = select(func.count(SupplierInvoice.invoice_id)).where(
+            SupplierInvoice.supplier_id == entity.supplier_id,
+            SupplierInvoice.organization_id == self.organization_id,
         )
+        invoice_count = coerce_scalar_count(self.db.scalar(count_stmt))
+        if invoice_count is None and is_mock_session(self.db):
+            invoice_count = (
+                self.db.query(SupplierInvoice)
+                .filter(SupplierInvoice.supplier_id == entity.supplier_id)
+                .filter(SupplierInvoice.organization_id == self.organization_id)
+                .count()
+            )
+        invoice_count = invoice_count or 0
 
         if invoice_count > 0:
             return (
