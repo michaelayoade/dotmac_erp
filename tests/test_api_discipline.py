@@ -370,8 +370,12 @@ class TestDisciplineDeleteCase:
         self, client, auth_headers, mock_discipline_service
     ):
         """Test deleting case from different organization returns 404."""
+        from app.errors import NotFoundError
+
         case = MockCase(organization_id=uuid.uuid4())
-        mock_discipline_service.get_case_or_404.return_value = case
+        mock_discipline_service.get_case_or_404.side_effect = NotFoundError(
+            f"Disciplinary case {case.case_id} not found"
+        )
 
         response = client.delete(
             f"/api/v1/people/discipline/cases/{case.case_id}",

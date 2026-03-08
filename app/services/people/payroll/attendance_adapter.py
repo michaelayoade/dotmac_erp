@@ -211,6 +211,7 @@ class AttendancePayrollAdapter:
         )
 
         # Iterate through each day in the period
+        total_expected_hours = Decimal("0")
         current_date = period_start
         while current_date <= period_end:
             summary.total_calendar_days += 1
@@ -220,6 +221,8 @@ class AttendancePayrollAdapter:
             expected_hours_per_day = self.get_expected_hours_per_day(
                 organization_id, employee_id, current_date
             )
+            if not is_weekend:
+                total_expected_hours += expected_hours_per_day
 
             attendance = attendance_by_date.get(current_date)
 
@@ -259,15 +262,10 @@ class AttendancePayrollAdapter:
             + Decimal(str(summary.work_from_home_days))
         ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-        # Calculate expected hours for the period (excluding weekends)
-        working_days_in_period = sum(
-            1
-            for d in self._date_range(period_start, period_end)
-            if d.weekday() < 5  # Exclude weekends
+        # Calculate expected hours for the period (accumulated per-day above)
+        summary.expected_working_hours = total_expected_hours.quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
         )
-        summary.expected_working_hours = (
-            expected_hours_per_day * Decimal(str(working_days_in_period))
-        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         logger.info(
             "Generated attendance summary for employee %s (period: %s to %s): "

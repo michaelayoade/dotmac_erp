@@ -36,7 +36,7 @@
     {% endif %}
 
     <form method="post" class="space-y-6">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ request.state.csrf_form | safe }}
 
         <!-- Employee & Leave Type -->
         <div class="card">
@@ -347,7 +347,7 @@ function confirmCancel() {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = window.location.pathname + '/cancel';
-        form.innerHTML = '<input type="hidden" name="csrf_token" value="{{ csrf_token }}">';
+        form.innerHTML = '{{ request.state.csrf_form | safe }}';
         document.body.appendChild(form);
         form.submit();
     }

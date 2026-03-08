@@ -204,6 +204,22 @@ class PayrollGLAdapter:
 
             functional_amount = deduction.amount * exchange_rate
 
+            # Employer pension: debit expense, credit liability (mirrors
+            # create_slip_journal logic at lines 458-481)
+            if component.component_code == EMPLOYER_PENSION_COMPONENT_CODE:
+                if component.expense_account_id:
+                    journal_lines.append(
+                        JournalLineInput(
+                            account_id=component.expense_account_id,
+                            debit_amount=deduction.amount,
+                            credit_amount=Decimal("0"),
+                            debit_amount_functional=functional_amount,
+                            credit_amount_functional=Decimal("0"),
+                            description=f"Employer Pension - {slip.employee_name}",
+                            cost_center_id=slip.cost_center_id or employee.cost_center_id,
+                        )
+                    )
+
             journal_lines.append(
                 JournalLineInput(
                     account_id=component.liability_account_id,

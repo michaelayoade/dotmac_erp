@@ -42,14 +42,12 @@
         {% endif %}
     </div>
 
+    <div id="results-container">
     {% if slips | length > 0 %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for slip in slips %}
         <a href="/people/self/payslips/{{ slip.slip_id }}"
-           <div id="results-container">
-
            class="card p-5 hover:shadow-lg hover:border-violet-300 dark:hover:border-violet-700 transition-all group">
-           </div>
 
             <div class="flex items-start justify-between mb-4">
                 <div>
@@ -118,5 +116,6 @@
         </p>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

@@ -29,23 +29,7 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            {% set status_colors = {
-                'NEW': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-                'SCREENING': 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
-                'SHORTLISTED': 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
-                'INTERVIEW_SCHEDULED': 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-                'INTERVIEW_COMPLETED': 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
-                'SELECTED': 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
-                'OFFER_EXTENDED': 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
-                'OFFER_ACCEPTED': 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-                'OFFER_DECLINED': 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-                'HIRED': 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-                'REJECTED': 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
-                'WITHDRAWN': 'bg-gray-50 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
-            } %}
-            <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium {{ status_colors.get(applicant.status.value, status_colors.NEW) }}">
-                {{ applicant.status.value | replace('_', ' ') | title }}
-            </span>
+            {{ status_badge(applicant.status.value, 'sm') }}
         </div>
     </div>
 

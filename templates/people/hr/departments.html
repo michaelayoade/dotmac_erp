@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg %}
+{% from "components/_badges.html" import status_badge %}
 
 {% block page_title %}Departments{% endblock %}
 
@@ -51,15 +52,7 @@
                         <p class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ dept.department_code }}</p>
                     </div>
                 </div>
-                {% if dept.is_active %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20">
-                    Active
-                </span>
-                {% else %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/20 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-400/20">
-                    Inactive
-                </span>
-                {% endif %}
+                {{ status_badge('ACTIVE' if dept.is_active else 'INACTIVE', 'sm') }}
             </div>
 
             {% if dept.description %}

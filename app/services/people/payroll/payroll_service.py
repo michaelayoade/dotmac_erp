@@ -1004,6 +1004,7 @@ class PayrollService:
                         repayment_date=entry.posting_date or now.date(),
                         created_by_id=approver_id,
                         skip_link_creation=True,
+                        organization_id=org_id,
                     )
                 except Exception as loan_err:
                     raise PayrollServiceError(
@@ -1553,8 +1554,8 @@ class PayrollService:
         year_end = date(year, 12, 31)
 
         # Base query: Employee-level aggregates
-        base_results = (
-            self.db.query(
+        base_stmt = (
+            select(
                 SalarySlip.employee_id,
                 Employee.employee_code,
                 Person.name_expr().label("employee_name"),
@@ -1567,7 +1568,7 @@ class PayrollService:
             .select_from(SalarySlip)
             .join(Employee, SalarySlip.employee_id == Employee.employee_id)
             .join(Person, Employee.person_id == Person.id)
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
                 SalarySlip.end_date <= year_end,
@@ -1580,12 +1581,12 @@ class PayrollService:
                 Employee.department_id,
             )
             .order_by(Person.first_name, Person.last_name)
-            .all()
         )
+        base_results = self.db.execute(base_stmt).all()
 
         # Query deduction breakdowns by component
-        deduction_results = (
-            self.db.query(
+        deduction_stmt = (
+            select(
                 SalarySlip.employee_id,
                 SalaryComponent.component_code.label("component_code"),
                 func.sum(SalarySlipDeduction.amount).label("total_amount"),
@@ -1596,15 +1597,15 @@ class PayrollService:
                 SalaryComponent,
                 SalarySlipDeduction.component_id == SalaryComponent.component_id,
             )
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
                 SalarySlip.end_date <= year_end,
                 SalaryComponent.component_code.in_(["PAYE", "PENSION", "NHF"]),
             )
             .group_by(SalarySlip.employee_id, SalaryComponent.component_code)
-            .all()
         )
+        deduction_results = self.db.execute(deduction_stmt).all()
 
         # Build deduction lookup by employee
         deductions_by_employee: dict[str, dict[str, Decimal]] = {}

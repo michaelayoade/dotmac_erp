@@ -125,9 +125,12 @@ class ProbationService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_employee(self, employee_id: UUID) -> Employee | None:
-        """Get employee by ID."""
-        return self.db.get(Employee, employee_id)
+    def get_employee(self, employee_id: UUID, organization_id: UUID | None = None) -> Employee | None:
+        """Get employee by ID with optional org isolation."""
+        employee = self.db.get(Employee, employee_id)
+        if employee and organization_id is not None and employee.organization_id != organization_id:
+            return None
+        return employee
 
     def is_on_probation(
         self, employee_id: UUID, as_of_date: date | None = None
@@ -272,7 +275,7 @@ class ProbationService:
             ProbationNotCompleteError: If probation not ended and early not allowed
         """
         confirm_date = confirmation_date or date.today()
-        employee = self.get_employee(employee_id)
+        employee = self.get_employee(employee_id, organization_id=organization_id)
 
         if not employee:
             raise ProbationServiceError(f"Employee {employee_id} not found")
@@ -332,7 +335,7 @@ class ProbationService:
         Raises:
             ProbationServiceError: If employee not found or already confirmed
         """
-        employee = self.get_employee(employee_id)
+        employee = self.get_employee(employee_id, organization_id=organization_id)
 
         if not employee:
             raise ProbationServiceError(f"Employee {employee_id} not found")
@@ -522,15 +525,10 @@ class ProbationService:
         Returns:
             Updated Employee record
         """
-        employee = self.get_employee(employee_id)
+        employee = self.get_employee(employee_id, organization_id=organization_id)
 
         if not employee:
             raise ProbationServiceError(f"Employee {employee_id} not found")
-
-        if employee.organization_id != organization_id:
-            raise ProbationServiceError(
-                f"Employee {employee_id} not found in organization"
-            )
 
         if employee.confirmation_date is not None:
             raise EmployeeAlreadyConfirmedError(employee_id, employee.confirmation_date)

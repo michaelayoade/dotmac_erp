@@ -71,12 +71,12 @@
     </div>
     {% endcall %}
 
-    {% if applications %}
     <div id="results-container">
+    {% if applications %}
 
     <div class="card overflow-hidden">
         <form method="post" id="bulkForm">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {{ request.state.csrf_form | safe }}
 
             {# Floating Bulk Action Toolbar #}
             <div x-show="selectedCount > 0"
@@ -207,7 +207,6 @@
         </div>
         </form>
     </div>
-    </div>
 
     {% else %}
     <div class="card p-8 text-center">
@@ -223,6 +222,7 @@
         show_size_selector=false,
         filters={"employee_id": employee_id, "end_date": end_date, "leave_type_id": leave_type_id, "start_date": start_date, "status": status}
     ) }}
+    </div>{# /results-container #}
 
 </div>
 

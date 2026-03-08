@@ -337,10 +337,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         try:
             due_date = parse_date(response_due_date)
@@ -417,10 +414,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         try:
             data = ScheduleHearingRequest(
@@ -461,10 +455,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         service.record_hearing_notes(case_id, hearing_notes, recorded_by_id=person_id)
         db.commit()
@@ -490,10 +481,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         try:
             actions = []
@@ -545,10 +533,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         service.close_case(case_id, closed_by_id=person_id)
         db.commit()
@@ -569,10 +554,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         service.withdraw_case(case_id, withdrawn_by_id=person_id)
         db.commit()
@@ -593,10 +575,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         try:
             service.delete_case(case_id, deleted_by_id=person_id)
@@ -631,10 +610,7 @@ class DisciplineWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         data = CaseWitnessCreate(
             employee_id=parse_uuid(employee_id),
@@ -662,10 +638,7 @@ class DisciplineWebService:
         person_id = auth.person_id
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        service.get_case_or_404(case_id, organization_id=org_id)
 
         service.acknowledge_response(response_id, acknowledged_by_id=person_id)
         db.commit()

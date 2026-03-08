@@ -102,16 +102,18 @@ class DisciplineService:
     # Case CRUD Operations
     # =========================================================================
 
-    def get_case(self, case_id: UUID) -> DisciplinaryCase | None:
+    def get_case(self, case_id: UUID, organization_id: UUID | None = None) -> DisciplinaryCase | None:
         """Get a single case by ID."""
         case = self.db.get(DisciplinaryCase, case_id)
         if case and case.is_deleted:
             return None
+        if case and organization_id is not None and case.organization_id != organization_id:
+            return None
         return case
 
-    def get_case_or_404(self, case_id: UUID) -> DisciplinaryCase:
+    def get_case_or_404(self, case_id: UUID, organization_id: UUID | None = None) -> DisciplinaryCase:
         """Get case or raise NotFoundError."""
-        case = self.get_case(case_id)
+        case = self.get_case(case_id, organization_id=organization_id)
         if not case:
             raise NotFoundError(f"Disciplinary case {case_id} not found")
         return case

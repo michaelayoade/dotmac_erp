@@ -212,6 +212,7 @@ class LeavePayrollAdapter:
                 LeaveApplication.employee_id,
                 LeaveApplication.from_date,
                 LeaveApplication.to_date,
+                LeaveApplication.half_day,
             )
             .join(LeaveType, LeaveApplication.leave_type_id == LeaveType.leave_type_id)
             .where(
@@ -233,8 +234,13 @@ class LeavePayrollAdapter:
         for row in results:
             overlap_start = max(row.from_date, period_start)
             overlap_end = min(row.to_date, period_end)
-            overlap_days = Decimal(str((overlap_end - overlap_start).days + 1))
-            lwp_by_emp[row.employee_id] += overlap_days
+            overlap_days = (overlap_end - overlap_start).days + 1
+
+            # Adjust for half-day leaves (matching get_lwp_days logic)
+            if row.half_day and overlap_days == 1:
+                lwp_by_emp[row.employee_id] += Decimal("0.5")
+            else:
+                lwp_by_emp[row.employee_id] += Decimal(str(overlap_days))
 
         return lwp_by_emp
 

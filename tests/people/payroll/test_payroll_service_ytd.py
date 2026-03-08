@@ -14,19 +14,16 @@ from app.services.people.payroll.payroll_service import (
 )
 
 
-def _make_query(return_rows):
-    query = MagicMock()
-    query.select_from.return_value = query
-    query.join.return_value = query
-    query.outerjoin.return_value = query
-    query.filter.return_value = query
-    query.group_by.return_value = query
-    query.order_by.return_value = query
-    query.all.return_value = return_rows
-    return query
+def _make_execute_result(return_rows):
+    """Mock db.execute() result — .all() returns list of rows."""
+    result = MagicMock()
+    result.all.return_value = return_rows
+    return result
 
 
 def test_get_payroll_ytd_report_aggregates_totals_and_names():
+    org_id = uuid4()
+
     base_rows = [
         SimpleNamespace(
             employee_id="emp-1",
@@ -63,13 +60,13 @@ def test_get_payroll_ytd_report_aggregates_totals_and_names():
     ]
 
     db = MagicMock()
-    db.query.side_effect = [
-        _make_query(base_rows),
-        _make_query(deduction_rows),
+    db.execute.side_effect = [
+        _make_execute_result(base_rows),
+        _make_execute_result(deduction_rows),
     ]
 
     service = PayrollService(db)
-    result = service.get_payroll_ytd_report("org-1", year=2026)
+    result = service.get_payroll_ytd_report(str(org_id), year=2026)
 
     assert result["totals"]["total_gross"] == Decimal("3000.00")
     assert result["totals"]["total_deductions"] == Decimal("350.00")

@@ -2414,7 +2414,7 @@ class SelfServiceWebService:
         from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
-        case = discipline_service.get_case_or_404(case_id)
+        case = discipline_service.get_case_or_404(case_id, organization_id=coerce_uuid(org_id))
 
         # Verify this is the employee's own case
         if case.employee_id != employee_id:
@@ -2447,7 +2447,7 @@ class SelfServiceWebService:
         from app.services.people.discipline import DisciplineService
 
         discipline_service = DisciplineService(db)
-        case = discipline_service.get_case_or_404(case_id)
+        case = discipline_service.get_case_or_404(case_id, organization_id=coerce_uuid(org_id))
 
         # Verify this is the employee's own case
         if case.employee_id != employee_id:
@@ -2862,9 +2862,7 @@ class SelfServiceWebService:
         report_ids = {emp.employee_id for emp in reports}
 
         service = DisciplineService(db)
-        case = service.get_case_or_404(case_id)
-        if case.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Case not found")
+        case = service.get_case_or_404(case_id, organization_id=coerce_uuid(org_id))
         if case.employee_id not in report_ids:
             raise HTTPException(status_code=403, detail="Forbidden")
 

@@ -172,7 +172,7 @@ class LifecycleService:
         onboarding = self.get_onboarding(org_id, onboarding_id)
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(onboarding, key):
+            if hasattr(onboarding, key):
                 setattr(onboarding, key, value)
 
         if activities is not None:
@@ -381,7 +381,7 @@ class LifecycleService:
         separation = self.get_separation(org_id, separation_id)
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(separation, key):
+            if hasattr(separation, key):
                 setattr(separation, key, value)
 
         if activities is not None:
@@ -525,7 +525,7 @@ class LifecycleService:
         promotion = self.get_promotion(org_id, promotion_id)
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(promotion, key):
+            if hasattr(promotion, key):
                 setattr(promotion, key, value)
 
         if details is not None:
@@ -645,7 +645,7 @@ class LifecycleService:
         transfer = self.get_transfer(org_id, transfer_id)
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(transfer, key):
+            if hasattr(transfer, key):
                 setattr(transfer, key, value)
 
         if details is not None:

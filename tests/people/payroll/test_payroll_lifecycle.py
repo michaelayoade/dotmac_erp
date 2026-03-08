@@ -840,7 +840,7 @@ class TestPostSlipToGL:
         assert result.new_status == "POSTED"
         assert slip.status == SalarySlipStatus.POSTED
         assert slip.journal_entry_id == mock_gl_result.journal_entry_id
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
         assert len(events_received) == 1
         assert events_received[0].journal_entry_id == mock_gl_result.journal_entry_id
 
@@ -980,7 +980,7 @@ class TestPostRunToGL:
             assert slip.status == SalarySlipStatus.POSTED
             assert slip.journal_entry_id == mock_gl_result.journal_entry_id
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
         assert len(events_received) == 1
 
     def test_post_run_to_gl_no_approved_slips(

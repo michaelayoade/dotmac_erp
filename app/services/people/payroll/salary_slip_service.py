@@ -522,14 +522,49 @@ class SalarySlipService:
 
         # Calculate PAYE tax and statutory deductions using NTA 2025 rules
         if not skip_deductions and gross_pay > 0:
+            # For pro-rated months (mid-month joiners/leavers), pass the
+            # full (un-prorated) gross and basic to the PAYE calculator so
+            # it annualises correctly, then pro-rate the resulting amounts.
+            if (
+                total_working_days > 0
+                and payment_days < total_working_days
+            ):
+                proration_factor = Decimal(str(payment_days)) / Decimal(
+                    str(total_working_days)
+                )
+                full_gross = gross_pay / proration_factor
+                full_basic = basic_pay / proration_factor
+            else:
+                proration_factor = Decimal("1")
+                full_gross = gross_pay
+                full_basic = basic_pay
+
             calculator = PAYECalculator(db)
             paye_breakdown = calculator.calculate(
                 organization_id=org_id,
-                gross_monthly=gross_pay,
-                basic_monthly=basic_pay,
+                gross_monthly=full_gross,
+                basic_monthly=full_basic,
                 employee_id=emp_id,
                 as_of_date=input.start_date,
             )
+
+            # Pro-rate the statutory deduction amounts for partial months
+            if proration_factor < Decimal("1"):
+                paye_breakdown.monthly_tax = (
+                    paye_breakdown.monthly_tax * proration_factor
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                paye_breakdown.monthly_pension = (
+                    paye_breakdown.monthly_pension * proration_factor
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                paye_breakdown.monthly_nhf = (
+                    paye_breakdown.monthly_nhf * proration_factor
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                paye_breakdown.monthly_nhis = (
+                    paye_breakdown.monthly_nhis * proration_factor
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                paye_breakdown.monthly_employer_pension = (
+                    paye_breakdown.monthly_employer_pension * proration_factor
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             # Get or create statutory components (include employer contributions
             # so EMPLOYER_PENSION_COMPONENT_CODE is available in the dict)

@@ -41,7 +41,7 @@
             <p class="text-sm text-slate-500 dark:text-slate-400">Today</p>
             <p class="mt-2 text-lg font-semibold text-slate-900 dark:text-white">
                 {% if today_record %}
-                    {{ today_record.status.value if today_record.status else "Recorded" }}
+                    {{ today_record.status.value | replace('_', ' ') | title if today_record.status else "Recorded" }}
                 {% else %}
                     No record
                 {% endif %}
@@ -84,7 +84,7 @@
                     {% for rec in recent_records %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ rec.attendance_date }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ rec.status.value }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ rec.status.value | replace('_', ' ') | title }}</td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
                             {{ rec.check_in_display }}
                         </td>

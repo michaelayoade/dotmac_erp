@@ -128,7 +128,7 @@
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ app.from_date }} → {{ app.to_date }}</td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">{{ app.total_leave_days }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ app.status.value }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ app.status.value | replace('_', ' ') | title }}</td>
                         <td class="px-4 py-3 text-right text-sm">
                             {% if app.status.value in ["DRAFT", "SUBMITTED", "APPROVED"] %}
                             <form method="post" action="/people/self/leave/{{ app.application_id }}/cancel">
@@ -140,12 +140,13 @@
                             {% endif %}
                         </td>
                     </tr>
-                    {% endfor %}
-                    {% if applications | length == 0 %}
+                    {% else %}
                     <tr>
-                        <td colspan="6" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No leave applications found.</td>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No leave applications", "No leave applications found matching your filters.", "calendar") }}
+                        </td>
                     </tr>
-                    {% endif %}
+                    {% endfor %}
                 </tbody>
             </table>
         </div>

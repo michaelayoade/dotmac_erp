@@ -91,19 +91,19 @@
             <div class="flex flex-wrap gap-3">
                 {% if employee.status.value != 'ACTIVE' %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/activate">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <button type="submit" class="btn btn-primary">Activate</button>
                 </form>
                 {% endif %}
                 {% if employee.status.value != 'ON_LEAVE' and employee.status.value != 'TERMINATED' %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/on-leave">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <button type="submit" class="btn btn-secondary">Set On Leave</button>
                 </form>
                 {% endif %}
                 {% if employee.status.value not in ['SUSPENDED', 'TERMINATED'] %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/suspend" class="flex items-center gap-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <input type="text" name="reason" placeholder="Reason (optional)" class="form-input w-56">
                     <button type="submit" class="btn btn-secondary">Suspend</button>
                 </form>
@@ -113,7 +113,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {% if employee.status.value != 'RESIGNED' and employee.status.value != 'TERMINATED' %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/resign" class="space-y-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <label for="resign_date" class="form-label">Resignation Date</label>
                     <div class="flex items-center gap-3">
                         <input type="date" id="resign_date" name="date_of_leaving" class="form-input w-full">
@@ -124,7 +124,7 @@
 
                 {% if employee.status.value != 'TERMINATED' %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/terminate" class="space-y-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <label for="terminate_date" class="form-label">Termination Date</label>
                     <div class="flex flex-col gap-2">
                         <input type="date" id="terminate_date" name="date_of_leaving" class="form-input w-full">
@@ -136,7 +136,7 @@
 
                 {% if employee.status.value in ['RESIGNED', 'TERMINATED', 'RETIRED'] %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/rehire" class="space-y-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <label for="rehire_date" class="form-label">Rehire Date</label>
                     <div class="flex flex-col gap-2">
                         <input type="date" id="rehire_date" name="date_of_rejoining" class="form-input w-full">
@@ -169,17 +169,11 @@
                 </div>
                 <div class="flex items-center gap-2">
                     {% if any_active_cred %}
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                        Login Active
-                    </span>
+                    {{ status_badge('ACTIVE', 'sm') }}
                     {% elif credentials %}
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">
-                        Login Disabled
-                    </span>
+                    {{ status_badge('INACTIVE', 'sm') }}
                     {% else %}
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                        No Credentials
-                    </span>
+                    {{ status_badge('PENDING', 'sm') }}
                     {% endif %}
                 </div>
             </div>
@@ -191,14 +185,10 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="font-medium text-slate-900 dark:text-white">{{ cred.provider.value }}</span>
                         <span class="text-slate-500 dark:text-slate-400">{{ cred.username or '-' }}</span>
-                        {% if cred.is_active %}
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">active</span>
-                        {% else %}
-                        <span class="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">inactive</span>
-                        {% endif %}
+                        {{ status_badge('ACTIVE' if cred.is_active else 'INACTIVE', 'sm') }}
                     </div>
                     <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/credentials/{{ cred.id }}/toggle">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        {{ request.state.csrf_form | safe }}
                         {% if cred.is_active %}
                         <button type="submit" class="btn btn-secondary" onclick="return confirm('Disable this user\\'s login? This will sign them out.');">
                             Disable Login
@@ -216,7 +206,7 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/user-credentials" class="space-y-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <label class="form-label">Create Local Login</label>
                     <input type="text" name="username" placeholder="Leave blank to use employee email" class="form-input w-full">
                     <input type="password" name="password" placeholder="Leave blank to use default (Dotmac@123)" class="form-input w-full">
@@ -228,7 +218,7 @@
                 </form>
 
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/link-user" class="space-y-2" x-data="{ open: false, results: [], selectedId: '' }">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <input type="hidden" name="person_id" x-model="selectedId">
                     <label class="form-label">Link Existing User</label>
                     <div class="relative">
@@ -275,11 +265,6 @@
         <div class="card-header cursor-pointer flex items-center justify-between" @click="expanded = !expanded">
             <div class="flex items-center gap-3">
                 <h3 class="font-medium text-slate-900 dark:text-white">Onboarding Checklist</h3>
-                {% set status_colors = {
-                    'PENDING': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
-                    'IN_PROGRESS': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-                    'COMPLETED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                } %}
                 {{ status_badge(onboarding.status.value, size="sm") }}
             </div>
             <div class="flex items-center gap-2">
@@ -296,7 +281,7 @@
             <div class="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
                 <span class="text-sm text-slate-600 dark:text-slate-400">Onboarding not yet started</span>
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/onboarding/start">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <button type="submit" class="btn btn-primary btn-sm">Start Onboarding</button>
                 </form>
             </div>
@@ -308,7 +293,7 @@
                 <div class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     {% if onboarding.status.value != 'COMPLETED' %}
                     <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/onboarding/activity/{{ activity.activity_id }}/toggle" class="flex items-center">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        {{ request.state.csrf_form | safe }}
                         <input type="hidden" name="completed" value="{{ 'false' if activity.status == 'completed' else 'true' }}">
                         <button type="submit" class="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
                             {% if activity.status == 'completed' %}
@@ -352,7 +337,7 @@
             {% if onboarding.status.value == 'IN_PROGRESS' and completed == total and total > 0 %}
             <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/onboarding/complete">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {{ request.state.csrf_form | safe }}
                     <button type="submit" class="btn btn-primary">
                         {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
                         Complete Onboarding
@@ -628,9 +613,7 @@
                                 {{ assignment.salary_structure.structure_name }}
                             </span>
                             {% if not assignment.to_date %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-800 dark:text-teal-300">
-                                Current
-                            </span>
+                            {{ status_badge('ACTIVE', 'sm') }}
                             {% endif %}
                         </div>
                         <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">

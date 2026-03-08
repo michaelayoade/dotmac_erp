@@ -679,7 +679,7 @@ async def delete_expense_claim(
     """Delete a draft expense claim owned by the current employee."""
     form = getattr(request.state, "csrf_form", None)
     if form is None:
-        await request.form()
+        form = await request.form()
 
     return self_service_web_service.expense_claim_delete_response(
         auth,

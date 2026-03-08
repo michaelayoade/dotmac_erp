@@ -172,10 +172,7 @@ def update_case(
 ):
     """Update a disciplinary case (only in DRAFT status)."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.update_case(case_id, data)
     return DisciplinaryCaseRead.model_validate(case)
@@ -190,10 +187,7 @@ def delete_case(
 ):
     """Delete a disciplinary case (only in DRAFT status)."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    service.get_case_or_404(case_id, organization_id=org_id)
 
     person_id = UUID(auth["person_id"])
     service.delete_case(case_id, deleted_by_id=person_id)
@@ -213,10 +207,7 @@ def issue_query(
 ):
     """Issue a formal query to the employee."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.issue_query(case_id, data)
     return DisciplinaryCaseRead.model_validate(case)
@@ -231,10 +222,7 @@ def submit_response(
 ):
     """Submit employee response to a query."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    service.get_case_or_404(case_id, organization_id=org_id)
 
     response = service.record_response(case_id, data)
     return CaseResponseRead.model_validate(response)
@@ -249,10 +237,7 @@ def schedule_hearing(
 ):
     """Schedule a disciplinary hearing."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.schedule_hearing(case_id, data)
     return DisciplinaryCaseRead.model_validate(case)
@@ -267,10 +252,7 @@ def record_hearing_notes(
 ):
     """Record hearing notes and mark hearing as completed."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.record_hearing_notes(case_id, data.hearing_notes)
     return DisciplinaryCaseRead.model_validate(case)
@@ -285,10 +267,7 @@ def record_decision(
 ):
     """Record the decision after hearing."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.record_decision(case_id, data)
     return DisciplinaryCaseRead.model_validate(case)
@@ -303,10 +282,7 @@ def file_appeal(
 ):
     """File an appeal against the decision."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.file_appeal(case_id, data)
     return DisciplinaryCaseRead.model_validate(case)
@@ -321,10 +297,7 @@ def decide_appeal(
 ):
     """Record the decision on an appeal."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.decide_appeal(case_id, data)
     return DisciplinaryCaseRead.model_validate(case)
@@ -338,10 +311,7 @@ def close_case(
 ):
     """Close a case after decision or appeal."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.close_case(case_id)
     return DisciplinaryCaseRead.model_validate(case)
@@ -355,10 +325,7 @@ def withdraw_case(
 ):
     """Withdraw a case."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = service.get_case_or_404(case_id, organization_id=org_id)
 
     case = service.withdraw_case(case_id)
     return DisciplinaryCaseRead.model_validate(case)
@@ -382,10 +349,7 @@ def add_witness(
 ):
     """Add a witness to a case."""
     service = DisciplineService(db)
-    case = service.get_case_or_404(case_id)
-
-    if case.organization_id != org_id:
-        raise HTTPException(status_code=404, detail="Case not found")
+    service.get_case_or_404(case_id, organization_id=org_id)
 
     witness = service.add_witness(case_id, data)
     return CaseWitnessRead.model_validate(witness)

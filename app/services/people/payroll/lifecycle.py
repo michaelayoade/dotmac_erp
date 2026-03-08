@@ -272,11 +272,11 @@ class PayrollLifecycle:
         except Exception:
             logger.exception("Ignored exception")
 
-        # Commit before emitting event so handlers see committed state
+        # Flush to make changes visible within session; caller commits
         event_org_id = slip.organization_id
         event_slip_id = slip.slip_id
         event_slip_number = slip.slip_number
-        self.db.commit()
+        self.db.flush()
 
         # Emit event
         self.dispatcher.dispatch(
@@ -362,11 +362,11 @@ class PayrollLifecycle:
         except Exception:
             logger.exception("Ignored exception")
 
-        # Commit before emitting event so handlers see committed state
+        # Flush to make changes visible within session; caller commits
         event_org_id = slip.organization_id
         event_slip_id = slip.slip_id
         event_slip_number = slip.slip_number
-        self.db.commit()
+        self.db.flush()
 
         # Emit event
         self.dispatcher.dispatch(
@@ -450,8 +450,8 @@ class PayrollLifecycle:
         slip.posted_at = datetime.now(UTC)
         slip.posted_by_id = user_id
 
-        # 4. Commit
-        self.db.commit()
+        # 4. Flush to make changes visible within session; caller commits
+        self.db.flush()
 
         logger.info(
             "Slip %s posted to GL: %s → %s by user %s (journal: %s)",
@@ -757,11 +757,11 @@ class PayrollLifecycle:
         except Exception:
             logger.exception("Ignored exception")
 
-        # Commit before emitting event so handlers see committed state
+        # Flush to make changes visible within session; caller commits
         event_org_id = run.organization_id
         event_run_id = run.entry_id
         event_run_number = run.entry_number
-        self.db.commit()
+        self.db.flush()
 
         # Emit event
         self.dispatcher.dispatch(
@@ -845,11 +845,11 @@ class PayrollLifecycle:
         except Exception:
             logger.exception("Ignored exception")
 
-        # Commit before emitting event so handlers see committed state
+        # Flush to make changes visible within session; caller commits
         event_org_id = run.organization_id
         event_run_id = run.entry_id
         event_run_number = run.entry_number
-        self.db.commit()
+        self.db.flush()
 
         # Emit event
         self.dispatcher.dispatch(
@@ -991,8 +991,8 @@ class PayrollLifecycle:
         previous = self._update_run_status(run, PayrollEntryStatus.POSTED, user_id)
         run.journal_entry_id = gl_result.journal_entry_id
 
-        # 6. Commit
-        self.db.commit()
+        # 6. Flush to make changes visible within session; caller commits
+        self.db.flush()
 
         logger.info(
             "Run %s posted to GL: %s → %s by user %s (journal: %s, %d slips)",

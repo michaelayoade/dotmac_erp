@@ -351,7 +351,7 @@
         <select name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All</option>
             {% for s in slip_statuses %}
-            <option value="{{ s }}" {{ 'selected' if slip_status == s else '' }}>{{ s | title }}</option>
+            <option value="{{ s }}" {{ 'selected' if slip_status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
     {% endcall %}

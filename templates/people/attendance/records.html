@@ -85,7 +85,7 @@
             </div>
 
             <form method="post" action="/people/attendance/records/bulk-mark">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                {{ request.state.csrf_form | safe }}
 
                 <div class="space-y-6">
                     {# Date and Status #}
@@ -186,8 +186,6 @@
         {% endcall %}
     </div>
 
-    <div id="results-container">
-
     <div class="card p-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Reports</h2>
         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Analyze attendance data with detailed reports.</p>
@@ -218,9 +216,8 @@
             </a>
         </div>
     </div>
-    </div>
 
-
+    <div id="results-container">
     {% if records %}
     <div class="card overflow-hidden">
         <div class="table-container">
@@ -268,11 +265,17 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <form method="post" action="/people/attendance/records/{{ rec.attendance_id }}/delete" onsubmit="return confirm('Delete this attendance record?');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                {{ request.state.csrf_form | safe }}
                                 <button type="submit" class="text-xs font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">
                                     Delete
                                 </button>
                             </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No attendance records", "No records match your current filters.", "clock") }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -294,6 +297,7 @@
         show_size_selector=false,
         filters={"employee_id": employee_id, "end_date": end_date, "start_date": start_date, "status": status}
     ) }}
+    </div>{# /results-container #}
 
 </div>
 

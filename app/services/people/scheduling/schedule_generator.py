@@ -494,7 +494,8 @@ class ScheduleGenerator:
 
         days_since_start = max((current_date - assignment.effective_from).days, 0)
         week_number = days_since_start // 7
-        adjusted_week = (week_number + assignment.rotation_week_offset) % 2
+        cycle_length = pattern.cycle_weeks or 2
+        adjusted_week = (week_number + assignment.rotation_week_offset) % cycle_length
         week_index = adjusted_week + 1
         weekday_name = list(DAY_TO_WEEKDAY.keys())[current_date.weekday()]
 

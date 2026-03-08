@@ -473,6 +473,11 @@ class LoanService:
             stmt = stmt.where(
                 EmployeeLoan.organization_id == coerce_uuid(organization_id)
             )
+        else:
+            logger.warning(
+                "get_active_loans_for_employee called without organization_id for employee %s",
+                emp_id,
+            )
 
         return list(self.db.scalars(stmt).all())
 
@@ -544,12 +549,23 @@ class LoanService:
             if amount <= 0:
                 continue
 
-            # Calculate principal/interest split (simplified for FLAT/NONE)
+            # Calculate principal/interest split
             if loan.interest_rate == 0 or loan.total_interest == 0:
                 principal_portion = amount
                 interest_portion = Decimal("0")
+            elif (
+                loan.loan_type
+                and loan.loan_type.interest_method == InterestMethod.REDUCING_BALANCE
+            ):
+                # Reducing-balance: interest on current outstanding balance
+                interest_portion = _round_currency(
+                    balance * (loan.interest_rate / Decimal("100") / Decimal("12"))
+                )
+                if interest_portion > amount:
+                    interest_portion = amount
+                principal_portion = amount - interest_portion
             else:
-                # Approximate split based on remaining balance ratio
+                # Flat interest: constant ratio across all installments
                 interest_portion = _round_currency(
                     amount * (loan.total_interest / loan.total_repayable)
                 )
@@ -623,6 +639,7 @@ class LoanService:
         repayment_date: date,
         created_by_id: UUID | None = None,
         skip_link_creation: bool = False,
+        organization_id: UUID | None = None,
     ) -> LoanRepayment:
         """
         Record a loan deduction from payroll.
@@ -635,6 +652,8 @@ class LoanService:
         loan = self.db.get(EmployeeLoan, l_id)
         if not loan:
             raise ValueError(f"Loan {loan_id} not found")
+        if organization_id is not None and loan.organization_id != organization_id:
+            raise ValueError(f"Loan {loan_id} does not belong to organization {organization_id}")
 
         if loan.status != LoanStatus.DISBURSED:
             raise RuntimeError(
@@ -725,10 +744,22 @@ class LoanService:
             )
             amount = loan.outstanding_balance
 
-        # Calculate split (simplified)
+        # Calculate split
         if loan.interest_rate == 0:
             principal_portion = amount
             interest_portion = Decimal("0")
+        elif (
+            loan.loan_type
+            and loan.loan_type.interest_method == InterestMethod.REDUCING_BALANCE
+        ):
+            # Reducing-balance: interest on current outstanding balance
+            interest_portion = _round_currency(
+                loan.outstanding_balance
+                * (loan.interest_rate / Decimal("100") / Decimal("12"))
+            )
+            if interest_portion > amount:
+                interest_portion = amount
+            principal_portion = amount - interest_portion
         else:
             interest_portion = _round_currency(
                 amount * (loan.total_interest / loan.total_repayable)
