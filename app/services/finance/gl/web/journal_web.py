@@ -77,9 +77,7 @@ class JournalWebService:
             end_date=end_date,
         )
 
-        total_count = (
-            db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         column_map = {
             "entry_date": JournalEntry.entry_date,
             "journal_number": JournalEntry.journal_number,
@@ -99,8 +97,7 @@ class JournalWebService:
             end_date=end_date,
         )
         stats_total = (
-            db.scalar(select(func.count()).select_from(stats_query.subquery()))
-            or 0
+            db.scalar(select(func.count()).select_from(stats_query.subquery())) or 0
         )
         draft_count = (
             db.scalar(

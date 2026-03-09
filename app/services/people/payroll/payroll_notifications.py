@@ -183,8 +183,7 @@ class PayrollNotificationService:
             notification_type=NotificationType.INFO,
             title="Payroll batch processed",
             message=(
-                f"{slip_count} payslips processed. "
-                f"Total disbursement: {amount_label}"
+                f"{slip_count} payslips processed. Total disbursement: {amount_label}"
             ),
             channel=NotificationChannel.IN_APP,
             action_url=f"/people/payroll/runs/{entry_id}",

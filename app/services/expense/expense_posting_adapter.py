@@ -1203,8 +1203,10 @@ class ExpensePostingAdapter:
                 success=False,
                 message="Employee payable account not configured",
             )
-        resolved_currency_code = claim.currency_code or bank_account.currency_code or (
-            org_context_service.get_functional_currency(db, org_id)
+        resolved_currency_code = (
+            claim.currency_code
+            or bank_account.currency_code
+            or (org_context_service.get_functional_currency(db, org_id))
         )
 
         # Build journal lines
@@ -1511,8 +1513,10 @@ class ExpensePostingAdapter:
             return ExpensePostingResult(
                 success=False, message="Bank account not found or has no GL account"
             )
-        resolved_currency_code = claim.currency_code or bank_account.currency_code or (
-            org_context_service.get_functional_currency(db, org_id)
+        resolved_currency_code = (
+            claim.currency_code
+            or bank_account.currency_code
+            or (org_context_service.get_functional_currency(db, org_id))
         )
 
         # Get employee payable account

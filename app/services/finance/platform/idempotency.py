@@ -60,8 +60,7 @@ class IdempotencyService(ListResponseMixin):
         now = datetime.now(UTC)
 
         record = db.scalars(
-            select(IdempotencyRecord)
-            .where(
+            select(IdempotencyRecord).where(
                 and_(
                     IdempotencyRecord.organization_id == org_id,
                     IdempotencyRecord.idempotency_key == idempotency_key,
@@ -357,11 +356,13 @@ class IdempotencyService(ListResponseMixin):
             now = datetime.now(UTC)
             stmt = stmt.where(IdempotencyRecord.expires_at > now)
 
-        return list(db.scalars(
-            stmt.order_by(IdempotencyRecord.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        ).all())
+        return list(
+            db.scalars(
+                stmt.order_by(IdempotencyRecord.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
 
 # Module-level singleton instance

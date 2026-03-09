@@ -344,17 +344,13 @@ class TaxCodeService(ListResponseMixin):
         stmt = select(TaxCode)
 
         if organization_id:
-            stmt = stmt.where(
-                TaxCode.organization_id == coerce_uuid(organization_id)
-            )
+            stmt = stmt.where(TaxCode.organization_id == coerce_uuid(organization_id))
 
         if tax_type:
             stmt = stmt.where(TaxCode.tax_type == tax_type)
 
         if jurisdiction_id:
-            stmt = stmt.where(
-                TaxCode.jurisdiction_id == coerce_uuid(jurisdiction_id)
-            )
+            stmt = stmt.where(TaxCode.jurisdiction_id == coerce_uuid(jurisdiction_id))
 
         if is_active is not None:
             stmt = stmt.where(TaxCode.is_active == is_active)
@@ -644,9 +640,7 @@ class TaxJurisdictionService(ListResponseMixin):
             stmt = stmt.where(TaxJurisdiction.country_code == country_code)
 
         if jurisdiction_level:
-            stmt = stmt.where(
-                TaxJurisdiction.jurisdiction_level == jurisdiction_level
-            )
+            stmt = stmt.where(TaxJurisdiction.jurisdiction_level == jurisdiction_level)
 
         if is_active is not None:
             stmt = stmt.where(TaxJurisdiction.is_active == is_active)

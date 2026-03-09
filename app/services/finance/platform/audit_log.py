@@ -181,9 +181,11 @@ class AuditLogService(ListResponseMixin):
         if to_date:
             stmt = stmt.where(AuditLog.occurred_at <= to_date)
 
-        return list(db.scalars(
-            stmt.order_by(AuditLog.occurred_at.desc()).limit(limit).offset(offset)
-        ).all())
+        return list(
+            db.scalars(
+                stmt.order_by(AuditLog.occurred_at.desc()).limit(limit).offset(offset)
+            ).all()
+        )
 
     @staticmethod
     def get_record_history(
@@ -208,18 +210,20 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        return list(db.scalars(
-            select(AuditLog)
-            .where(
-                and_(
-                    AuditLog.organization_id == org_id,
-                    AuditLog.table_schema == table_schema,
-                    AuditLog.table_name == table_name,
-                    AuditLog.record_id == record_id,
+        return list(
+            db.scalars(
+                select(AuditLog)
+                .where(
+                    and_(
+                        AuditLog.organization_id == org_id,
+                        AuditLog.table_schema == table_schema,
+                        AuditLog.table_name == table_name,
+                        AuditLog.record_id == record_id,
+                    )
                 )
-            )
-            .order_by(AuditLog.occurred_at.asc())
-        ).all())
+                .order_by(AuditLog.occurred_at.asc())
+            ).all()
+        )
 
     @staticmethod
     def build_hash_chain(
@@ -244,17 +248,19 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        records = list(db.scalars(
-            select(AuditLog)
-            .where(
-                and_(
-                    AuditLog.organization_id == org_id,
-                    AuditLog.occurred_at >= from_date,
-                    AuditLog.occurred_at <= to_date,
+        records = list(
+            db.scalars(
+                select(AuditLog)
+                .where(
+                    and_(
+                        AuditLog.organization_id == org_id,
+                        AuditLog.occurred_at >= from_date,
+                        AuditLog.occurred_at <= to_date,
+                    )
                 )
-            )
-            .order_by(AuditLog.occurred_at.asc())
-        ).all())
+                .order_by(AuditLog.occurred_at.asc())
+            ).all()
+        )
 
         if not records:
             return ""
@@ -298,17 +304,19 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        records = list(db.scalars(
-            select(AuditLog)
-            .where(
-                and_(
-                    AuditLog.organization_id == org_id,
-                    AuditLog.occurred_at >= from_date,
-                    AuditLog.occurred_at <= to_date,
+        records = list(
+            db.scalars(
+                select(AuditLog)
+                .where(
+                    and_(
+                        AuditLog.organization_id == org_id,
+                        AuditLog.occurred_at >= from_date,
+                        AuditLog.occurred_at <= to_date,
+                    )
                 )
-            )
-            .order_by(AuditLog.occurred_at.asc())
-        ).all())
+                .order_by(AuditLog.occurred_at.asc())
+            ).all()
+        )
 
         if not records:
             return (True, None)
@@ -434,9 +442,11 @@ class AuditLogService(ListResponseMixin):
         if table_name:
             stmt = stmt.where(AuditLog.table_name == table_name)
 
-        return list(db.scalars(
-            stmt.order_by(AuditLog.occurred_at.desc()).limit(limit).offset(offset)
-        ).all())
+        return list(
+            db.scalars(
+                stmt.order_by(AuditLog.occurred_at.desc()).limit(limit).offset(offset)
+            ).all()
+        )
 
 
 # Module-level singleton instance

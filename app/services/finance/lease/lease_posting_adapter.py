@@ -89,7 +89,9 @@ class LeasePostingAdapter:
         liability = (
             select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
         )
-        asset = db.scalars(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not liability or not asset:
             return LeasePostingResult(
@@ -554,7 +556,9 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load asset
-        asset = db.scalars(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not asset:
             return LeasePostingResult(
@@ -711,7 +715,9 @@ class LeasePostingAdapter:
         liability = (
             select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
         )
-        asset = db.scalars(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not liability or not asset:
             return LeasePostingResult(

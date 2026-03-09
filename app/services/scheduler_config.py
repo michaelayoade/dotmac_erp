@@ -35,13 +35,12 @@ def _env_int(name: str) -> int | None:
 
 def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
     try:
-        setting = (
+        setting = db.scalars(
             select(DomainSetting)
             .where(DomainSetting.domain == domain)
             .where(DomainSetting.key == key)
             .where(DomainSetting.is_active.is_(True))
-            .first()
-        )
+        ).first()
     except Exception:
         setting = db.scalar(
             select(DomainSetting).where(
@@ -363,8 +362,8 @@ def build_beat_schedule() -> dict:
     schedule: dict[str, dict] = _builtin_beat_schedule()
     session = SessionLocal()
     try:
-        tasks = (
-            select(ScheduledTask).where(ScheduledTask.enabled.is_(True)).all()
+        tasks = list(
+            session.scalars(select(ScheduledTask).where(ScheduledTask.enabled.is_(True))).all()
         )
         for task in tasks:
             task_schedule = None

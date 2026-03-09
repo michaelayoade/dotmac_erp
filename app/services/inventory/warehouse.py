@@ -426,9 +426,7 @@ class WarehouseService(ListResponseMixin):
         """List locations in a warehouse."""
         wh_id = coerce_uuid(warehouse_id)
 
-        query = select(WarehouseLocation).where(
-            WarehouseLocation.warehouse_id == wh_id
-        )
+        query = select(WarehouseLocation).where(WarehouseLocation.warehouse_id == wh_id)
 
         if is_active is not None:
             query = query.where(WarehouseLocation.is_active == is_active)

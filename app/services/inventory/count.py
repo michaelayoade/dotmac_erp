@@ -653,9 +653,7 @@ class InventoryCountService(ListResponseMixin):
         """List count lines with optional filters."""
         cnt_id = coerce_uuid(count_id)
 
-        query = select(InventoryCountLine).where(
-            InventoryCountLine.count_id == cnt_id
-        )
+        query = select(InventoryCountLine).where(InventoryCountLine.count_id == cnt_id)
 
         if has_variance is True:
             query = query.where(

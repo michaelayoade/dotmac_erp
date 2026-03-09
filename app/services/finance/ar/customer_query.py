@@ -34,9 +34,7 @@ def build_customer_query(
     elif status == "inactive":
         is_active = False
 
-    query = select(Customer).where(
-        Customer.organization_id == org_id
-    )
+    query = select(Customer).where(Customer.organization_id == org_id)
 
     if is_active is not None:
         query = query.where(Customer.is_active == is_active)

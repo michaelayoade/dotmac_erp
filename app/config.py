@@ -1,34 +1,26 @@
+import locale
 import os
 from dataclasses import dataclass
 
-from babel import Locale
-from babel.core import default_locale, get_global
-from babel.numbers import get_territory_currencies
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 def _derive_default_currency_code() -> str:
-    """Infer a default currency from the host monetary locale."""
-    locale_code = default_locale("LC_MONETARY") or default_locale()
-    if locale_code:
-        try:
-            locale = Locale.parse(locale_code)
-        except Exception:
-            locale = None
-        if locale and locale.territory:
-            currencies = get_territory_currencies(locale.territory, tender=True)
-            if currencies:
-                return currencies[0]
-
-    territory_currencies = get_global("territory_currencies")
-    for territory in sorted(territory_currencies):
-        for currency_code, _from, to, tender in territory_currencies[territory]:
-            if tender and to is None:
-                return currency_code
-
-    raise RuntimeError("Unable to derive a default currency code")
+    """Infer a default currency from the host locale with safe fallback."""
+    code = (
+        locale.getlocale(locale.LC_MONETARY)[0] or locale.getdefaultlocale()[0] or ""
+    ).upper()
+    if "NG" in code:
+        return "NGN"
+    if "US" in code:
+        return "USD"
+    if "GB" in code:
+        return "GBP"
+    if "EU" in code or "DE" in code or "FR" in code:
+        return "EUR"
+    return "NGN"
 
 
 DEFAULT_CURRENCY_CODE = _derive_default_currency_code()

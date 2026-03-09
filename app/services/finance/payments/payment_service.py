@@ -806,9 +806,7 @@ class PaymentService:
         if metadata:
             intent_metadata.update(metadata)
         resolved_currency_code = claim.currency_code or (
-            org_context_service.get_functional_currency(
-                self.db, self.organization_id
-            )
+            org_context_service.get_functional_currency(self.db, self.organization_id)
         )
 
         # Verify account and create transfer recipient with Paystack

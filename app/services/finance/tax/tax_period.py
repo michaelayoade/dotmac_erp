@@ -435,9 +435,7 @@ class TaxPeriodService(ListResponseMixin):
         organization_id: UUID | None = None,
     ) -> TaxPeriod | None:
         """Get a tax period by ID."""
-        stmt = select(TaxPeriod).where(
-            TaxPeriod.period_id == coerce_uuid(period_id)
-        )
+        stmt = select(TaxPeriod).where(TaxPeriod.period_id == coerce_uuid(period_id))
         period = db.scalars(stmt).first()
         if not period:
             return None
@@ -477,14 +475,10 @@ class TaxPeriodService(ListResponseMixin):
         stmt = select(TaxPeriod)
 
         if organization_id:
-            stmt = stmt.where(
-                TaxPeriod.organization_id == coerce_uuid(organization_id)
-            )
+            stmt = stmt.where(TaxPeriod.organization_id == coerce_uuid(organization_id))
 
         if jurisdiction_id:
-            stmt = stmt.where(
-                TaxPeriod.jurisdiction_id == coerce_uuid(jurisdiction_id)
-            )
+            stmt = stmt.where(TaxPeriod.jurisdiction_id == coerce_uuid(jurisdiction_id))
 
         if status:
             stmt = stmt.where(TaxPeriod.status == status)
@@ -500,9 +494,7 @@ class TaxPeriodService(ListResponseMixin):
 
         return list(
             db.scalars(
-                stmt.order_by(TaxPeriod.start_date.desc())
-                .offset(offset)
-                .limit(limit)
+                stmt.order_by(TaxPeriod.start_date.desc()).offset(offset).limit(limit)
             ).all()
         )
 

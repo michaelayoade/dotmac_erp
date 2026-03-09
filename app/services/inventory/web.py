@@ -467,15 +467,15 @@ class InventoryWebService:
         # Pre-computed stat-card counts (across ALL items, not just the page)
         active_count = (
             db.scalar(
-                select(func.count(Item.item_id))
-                .where(Item.organization_id == org_id, Item.is_active.is_(True))
+                select(func.count(Item.item_id)).where(
+                    Item.organization_id == org_id, Item.is_active.is_(True)
+                )
             )
             or 0
         )
         stock_count = (
             db.scalar(
-                select(func.count(Item.item_id))
-                .where(
+                select(func.count(Item.item_id)).where(
                     Item.organization_id == org_id,
                     Item.item_type == ItemType.INVENTORY,
                 )
@@ -533,10 +533,7 @@ class InventoryWebService:
             )
             query = query.where(search_filter)
 
-        total_count = (
-            db.scalar(select(func.count()).select_from(query.subquery()))
-            or 0
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         rows = db.execute(
             query.order_by(InventoryTransaction.transaction_date.desc())
             .limit(limit)

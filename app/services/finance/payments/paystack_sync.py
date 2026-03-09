@@ -687,9 +687,10 @@ class PaystackSyncService:
         try:
             balance_data = client.get_balance()
             for b in balance_data:
-                if b.get(
-                    "currency", settings.default_functional_currency_code
-                ) == settings.default_functional_currency_code:
+                if (
+                    b.get("currency", settings.default_functional_currency_code)
+                    == settings.default_functional_currency_code
+                ):
                     balance_kobo = b.get("balance", 0)
                     balance_naira = Decimal(balance_kobo) / Decimal("100")
                     account.last_statement_balance = balance_naira

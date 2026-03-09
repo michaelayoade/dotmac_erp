@@ -552,9 +552,7 @@ class CRMPurchaseOrderPayload(BaseModel):
     vendor_name: str | None = Field(None, max_length=255)
     vendor_code: str | None = Field(None, max_length=30)
     title: str = Field(..., max_length=500)
-    currency: str = Field(
-        settings.default_functional_currency_code, max_length=3
-    )
+    currency: str = Field(settings.default_functional_currency_code, max_length=3)
     subtotal: Decimal
     tax_total: Decimal = Decimal("0")
     total: Decimal

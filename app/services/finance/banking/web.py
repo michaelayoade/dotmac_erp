@@ -5466,8 +5466,9 @@ class BankingWebService:
                 bank_acct = gl_to_bank.get(line.account_id)
                 if not bank_acct:
                     continue
-                currency = bank_acct.currency_code or org_context_service.get_functional_currency(
-                    db, org_id
+                currency = (
+                    bank_acct.currency_code
+                    or org_context_service.get_functional_currency(db, org_id)
                 )
                 doc_id = getattr(entry, "source_document_id", None)
                 meta = metadata_map.get(doc_id) if doc_id else None

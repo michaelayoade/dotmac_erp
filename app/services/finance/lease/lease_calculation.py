@@ -395,7 +395,9 @@ class LeaseCalculationService(ListResponseMixin):
         """
         ls_id = coerce_uuid(lease_id)
 
-        asset = db.scalars(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not asset:
             raise HTTPException(status_code=404, detail="Lease asset not found")

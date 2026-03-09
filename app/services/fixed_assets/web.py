@@ -613,9 +613,7 @@ class FixedAssetWebService:
         if period_id:
             query = query.where(DepreciationRun.fiscal_period_id == period_id)
 
-        total_count = (
-            db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         rows = db.execute(
             query.order_by(DepreciationRun.created_at.desc())
             .limit(limit)

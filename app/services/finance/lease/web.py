@@ -245,9 +245,7 @@ class LeaseWebService:
         status_value = _parse_status(status)
         classification = _parse_classification(lease_type)
 
-        query = select(LeaseContract).where(
-            LeaseContract.organization_id == org_id
-        )
+        query = select(LeaseContract).where(LeaseContract.organization_id == org_id)
 
         if status_value:
             query = query.where(LeaseContract.status == status_value)
@@ -263,9 +261,7 @@ class LeaseWebService:
                 )
             )
 
-        total_count = (
-            db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         contracts = list(
             db.scalars(
                 query.order_by(LeaseContract.commencement_date.desc())

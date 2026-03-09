@@ -121,9 +121,11 @@ class OutboxPublisher(ListResponseMixin):
             (EventOutbox.next_retry_at.is_(None)) | (EventOutbox.next_retry_at <= now)
         )
 
-        return list(db.scalars(
-            stmt.order_by(EventOutbox.occurred_at.asc()).limit(batch_size)
-        ).all())
+        return list(
+            db.scalars(
+                stmt.order_by(EventOutbox.occurred_at.asc()).limit(batch_size)
+            ).all()
+        )
 
     @staticmethod
     def mark_published(
@@ -239,12 +241,14 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        return list(db.scalars(
-            select(EventOutbox)
-            .where(EventOutbox.status == status)
-            .order_by(EventOutbox.occurred_at.desc())
-            .limit(limit)
-        ).all())
+        return list(
+            db.scalars(
+                select(EventOutbox)
+                .where(EventOutbox.status == status)
+                .order_by(EventOutbox.occurred_at.desc())
+                .limit(limit)
+            ).all()
+        )
 
     @staticmethod
     def retry_dead_event(
@@ -313,17 +317,19 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        return list(db.scalars(
-            select(EventOutbox)
-            .where(
-                and_(
-                    EventOutbox.aggregate_type == aggregate_type,
-                    EventOutbox.aggregate_id == aggregate_id,
+        return list(
+            db.scalars(
+                select(EventOutbox)
+                .where(
+                    and_(
+                        EventOutbox.aggregate_type == aggregate_type,
+                        EventOutbox.aggregate_id == aggregate_id,
+                    )
                 )
-            )
-            .order_by(EventOutbox.occurred_at.desc())
-            .limit(limit)
-        ).all())
+                .order_by(EventOutbox.occurred_at.desc())
+                .limit(limit)
+            ).all()
+        )
 
     @staticmethod
     def get_events_by_correlation(
@@ -342,12 +348,14 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        return list(db.scalars(
-            select(EventOutbox)
-            .where(EventOutbox.correlation_id == correlation_id)
-            .order_by(EventOutbox.occurred_at.asc())
-            .limit(limit)
-        ).all())
+        return list(
+            db.scalars(
+                select(EventOutbox)
+                .where(EventOutbox.correlation_id == correlation_id)
+                .order_by(EventOutbox.occurred_at.asc())
+                .limit(limit)
+            ).all()
+        )
 
     @staticmethod
     def list(
@@ -378,11 +386,13 @@ class OutboxPublisher(ListResponseMixin):
         if producer_module:
             stmt = stmt.where(EventOutbox.producer_module == producer_module)
 
-        return list(db.scalars(
-            stmt.order_by(EventOutbox.occurred_at.desc())
-            .limit(limit)
-            .offset(offset)
-        ).all())
+        return list(
+            db.scalars(
+                stmt.order_by(EventOutbox.occurred_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
 
 # Module-level singleton instance

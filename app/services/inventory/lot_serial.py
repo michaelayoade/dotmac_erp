@@ -196,7 +196,9 @@ class LotSerialService(ListResponseMixin):
             lot_id_value = coerce_uuid(cast(UUID, lot_id))
             quantity_value = quantity
 
-        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)).first()
+        lot = db.scalars(
+            select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)
+        ).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -262,7 +264,9 @@ class LotSerialService(ListResponseMixin):
             lot_id_value = coerce_uuid(cast(UUID, lot_id))
             quantity_value = quantity
 
-        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)).first()
+        lot = db.scalars(
+            select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)
+        ).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -315,7 +319,9 @@ class LotSerialService(ListResponseMixin):
             lot_id_value = coerce_uuid(cast(UUID, lot_id))
             quantity_value = quantity
 
-        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)).first()
+        lot = db.scalars(
+            select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)
+        ).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -377,7 +383,9 @@ class LotSerialService(ListResponseMixin):
 
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id)).first()
+        lot = db.scalars(
+            select(InventoryLot).where(InventoryLot.lot_id == lot_id)
+        ).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -432,7 +440,9 @@ class LotSerialService(ListResponseMixin):
 
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id)).first()
+        lot = db.scalars(
+            select(InventoryLot).where(InventoryLot.lot_id == lot_id)
+        ).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -540,7 +550,9 @@ class LotSerialService(ListResponseMixin):
 
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id)).first()
+        lot = db.scalars(
+            select(InventoryLot).where(InventoryLot.lot_id == lot_id)
+        ).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -605,9 +617,7 @@ class LotSerialService(ListResponseMixin):
         include_inactive: bool = False,
     ) -> list[InventoryLot]:
         """List all lots for an item."""
-        query = select(InventoryLot).where(
-            InventoryLot.item_id == coerce_uuid(item_id)
-        )
+        query = select(InventoryLot).where(InventoryLot.item_id == coerce_uuid(item_id))
 
         if not include_inactive:
             query = query.where(InventoryLot.is_active.is_(True))

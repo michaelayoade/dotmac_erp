@@ -581,11 +581,13 @@ class FXService(ListResponseMixin):
             if rate_type:
                 stmt = stmt.where(ExchangeRate.rate_type_id == rate_type.rate_type_id)
 
-        return list(db.scalars(
-            stmt.order_by(ExchangeRate.effective_date.desc())
-            .limit(limit)
-            .offset(offset)
-        ).all())
+        return list(
+            db.scalars(
+                stmt.order_by(ExchangeRate.effective_date.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
 
 # Module-level singleton instance

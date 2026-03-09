@@ -512,8 +512,10 @@ class DotMacCRMSyncService:
             item.purchase_uom = item.base_uom
             item.sales_uom = item.base_uom
             item.currency_code = (
-                data.currency_code or settings.default_functional_currency_code
-            ).strip().upper()
+                (data.currency_code or settings.default_functional_currency_code)
+                .strip()
+                .upper()
+            )
             item.list_price = data.list_price
             item.reorder_point = data.reorder_point
             item.barcode = data.barcode
@@ -536,7 +538,9 @@ class DotMacCRMSyncService:
                 costing_method=CostingMethod.WEIGHTED_AVERAGE,
                 currency_code=(
                     data.currency_code or settings.default_functional_currency_code
-                ).strip().upper(),
+                )
+                .strip()
+                .upper(),
                 list_price=data.list_price,
                 reorder_point=data.reorder_point,
                 barcode=data.barcode,

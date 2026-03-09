@@ -625,9 +625,7 @@ class DeferredTaxService(ListResponseMixin):
 
         return list(
             db.scalars(
-                stmt.order_by(DeferredTaxBasis.basis_code)
-                .limit(limit)
-                .offset(offset)
+                stmt.order_by(DeferredTaxBasis.basis_code).limit(limit).offset(offset)
             ).all()
         )
 

@@ -28,9 +28,7 @@ def build_journal_query(
     from_date = parse_date(start_date)
     to_date = parse_date(end_date)
 
-    query = select(JournalEntry).where(
-        JournalEntry.organization_id == org_id
-    )
+    query = select(JournalEntry).where(JournalEntry.organization_id == org_id)
 
     if status_value:
         query = query.where(JournalEntry.status == status_value)

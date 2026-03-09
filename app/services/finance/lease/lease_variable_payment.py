@@ -172,7 +172,9 @@ class LeaseVariablePaymentService(ListResponseMixin):
         liability = (
             select(LeaseLiability).where(LeaseLiability.lease_id == lease_id).first()
         )
-        asset = db.scalars(select(LeaseAsset).where(LeaseAsset.lease_id == lease_id)).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == lease_id)
+        ).first()
 
         if not liability or not asset:
             return IndexAdjustmentResult(
