@@ -411,9 +411,7 @@ class SupportWebService:
                 "assigned_to": {
                     str(emp["employee_id"]): emp["full_name"] for emp in employees
                 },
-                "category": {
-                    str(c.category_id): c.category_name for c in categories
-                },
+                "category": {str(c.category_id): c.category_name for c in categories},
                 "team": {str(t.team_id): t.team_name for t in teams},
             },
         )

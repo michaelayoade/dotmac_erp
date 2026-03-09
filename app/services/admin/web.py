@@ -11,7 +11,7 @@ import logging
 import re
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -36,6 +36,9 @@ from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
 from app.templates import templates
 from app.web.deps import WebAuthContext, resolve_brand_context
+
+if TYPE_CHECKING:
+    from app.models.rbac import Permission, Role
 
 logger = logging.getLogger(__name__)
 

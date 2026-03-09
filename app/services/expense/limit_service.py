@@ -1303,9 +1303,10 @@ class ExpenseLimitService(ExpenseServiceBase):
         requester: Employee,
     ) -> list[Employee]:
         """Find employees who have this approver limit."""
+        from importlib import import_module
+
         from app.models.people.hr.employee import Employee as EmployeeModel
         from app.models.people.hr.employee import EmployeeStatus
-        from importlib import import_module
 
         PersonRole = import_module("app.models.rbac").PersonRole
 

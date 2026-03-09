@@ -26,8 +26,14 @@ from app.services.response import ListResponseMixin
 if TYPE_CHECKING:
     from app.models.rbac import (
         Permission as PermissionModel,
+    )
+    from app.models.rbac import (
         PersonRole as PersonRoleModel,
+    )
+    from app.models.rbac import (
         Role as RoleModel,
+    )
+    from app.models.rbac import (
         RolePermission as RolePermissionModel,
     )
 else:
@@ -354,9 +360,7 @@ class PersonRoles(ListResponseMixin):
         return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
-    def update(
-        db: Session, link_id: str, payload: PersonRoleUpdate
-    ) -> PersonRoleModel:
+    def update(db: Session, link_id: str, payload: PersonRoleUpdate) -> PersonRoleModel:
         _, PersonRole, Role, _ = _rbac_models()
         link = db.get(PersonRole, coerce_uuid(link_id))
         if not link:

@@ -115,7 +115,9 @@ class AccountWebService:
             count_stmt = (
                 select(func.count(Account.account_id))
                 .select_from(Account)
-                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .join(
+                    AccountCategory, Account.category_id == AccountCategory.category_id
+                )
                 .where(Account.organization_id == org_id)
             )
             if is_active is not None:
