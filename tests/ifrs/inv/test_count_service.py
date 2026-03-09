@@ -205,7 +205,11 @@ def mock_warehouse(org_id, warehouse_id):
 def mock_db():
     """Create a mock database session."""
     session = MagicMock()
-    session.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None), all=MagicMock(return_value=[])))
+    session.scalars = MagicMock(
+        return_value=MagicMock(
+            first=MagicMock(return_value=None), all=MagicMock(return_value=[])
+        )
+    )
     session.scalar = MagicMock(return_value=None)
     session.execute = MagicMock()
     session.add = MagicMock()
@@ -419,9 +423,7 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.scalars.return_value.first.return_value = (
-            existing_line
-        )
+        mock_db.scalars.return_value.first.return_value = existing_line
         mock_db.scalar.return_value = 1
 
         input = CountLineInput(
@@ -451,9 +453,7 @@ class TestRecordCount:
             unit_cost=Decimal("25.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.scalars.return_value.first.return_value = (
-            existing_line
-        )
+        mock_db.scalars.return_value.first.return_value = existing_line
         mock_db.scalar.return_value = 1
 
         input = CountLineInput(
@@ -482,9 +482,7 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.scalars.return_value.first.return_value = (
-            existing_line
-        )
+        mock_db.scalars.return_value.first.return_value = existing_line
         mock_db.scalar.return_value = 1
 
         input = CountLineInput(
@@ -506,9 +504,7 @@ class TestRecordCount:
         mock_db.get.side_effect = lambda model, id: (
             mock_count if id == mock_count.count_id else mock_item
         )
-        mock_db.scalars.return_value.first.return_value = (
-            None  # No existing line
-        )
+        mock_db.scalars.return_value.first.return_value = None  # No existing line
         mock_db.scalar.return_value = 0
 
         input = CountLineInput(
@@ -536,9 +532,7 @@ class TestRecordCount:
             counted_quantity=None,
         )
         mock_db.get.return_value = mock_count
-        mock_db.scalars.return_value.first.return_value = (
-            existing_line
-        )
+        mock_db.scalars.return_value.first.return_value = existing_line
         mock_db.scalar.return_value = 0
 
         input = CountLineInput(
@@ -566,9 +560,7 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.scalars.return_value.first.return_value = (
-            existing_line
-        )
+        mock_db.scalars.return_value.first.return_value = existing_line
         mock_db.scalar.return_value = 0
 
         input = CountLineInput(
@@ -728,9 +720,7 @@ class TestPostCount:
         mock_db.get.side_effect = lambda model, id: (
             mock_count if id == mock_count.count_id else mock_item
         )
-        mock_db.scalars.return_value.all.return_value = [
-            variance_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [variance_line]
 
         with patch(
             "app.services.inventory.transaction.InventoryTransactionService.create_adjustment"

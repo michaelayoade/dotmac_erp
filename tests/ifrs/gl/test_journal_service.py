@@ -434,7 +434,9 @@ class TestGetJournalLines:
         # Service uses db.scalars(select(...).where(...).order_by(...)).all()
         mock_db.scalars.return_value.all.return_value = lines
 
-        result = JournalService.get_lines(mock_db, str(journal_id), organization_id=str(org_id))
+        result = JournalService.get_lines(
+            mock_db, str(journal_id), organization_id=str(org_id)
+        )
 
         assert result == lines
 
@@ -1572,7 +1574,9 @@ class TestGetLinesEmpty:
         # Service uses db.scalars(select(...).where(...).order_by(...)).all()
         mock_db.scalars.return_value.all.return_value = []
 
-        result = JournalService.get_lines(mock_db, journal_id, organization_id=str(org_id))
+        result = JournalService.get_lines(
+            mock_db, journal_id, organization_id=str(org_id)
+        )
 
         assert result == []
 

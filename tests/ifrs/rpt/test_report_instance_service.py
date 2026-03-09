@@ -4,6 +4,7 @@ Tests for ReportInstanceService.
 
 import uuid
 from datetime import UTC, datetime, timedelta
+
 import pytest
 from fastapi import HTTPException
 
@@ -330,7 +331,10 @@ class TestReportInstanceServiceQueries:
             status=ReportStatus.FAILED,
         )
 
-        mock_db.scalars.return_value.all.return_value = [completed_instance, failed_instance]
+        mock_db.scalars.return_value.all.return_value = [
+            completed_instance,
+            failed_instance,
+        ]
 
         result = ReportInstanceService.get_generation_statistics(mock_db, str(org_id))
 

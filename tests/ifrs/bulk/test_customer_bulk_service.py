@@ -414,9 +414,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_headers(self, mock_db, mock_customer, organization_id):
         """CSV export should include correct headers."""
-        mock_db.scalars.return_value.all.return_value = [
-            mock_customer
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_customer]
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -439,9 +437,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_customer, organization_id):
         """CSV export should include entity data."""
-        mock_db.scalars.return_value.all.return_value = [
-            mock_customer
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_customer]
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService

@@ -376,9 +376,7 @@ class TestBulkDelete:
             account_name="AR Control", is_control_account=True
         )
 
-        mock_db.scalars.return_value.all.return_value = [
-            control_account
-        ]
+        mock_db.scalars.return_value.all.return_value = [control_account]
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService

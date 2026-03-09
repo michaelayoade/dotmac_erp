@@ -55,9 +55,7 @@ class TestAssetCategoryService:
         )
 
         existing_category = MockAssetCategory(organization_id=org_id)
-        mock_db.scalars.return_value.first.return_value = (
-            existing_category
-        )
+        mock_db.scalars.return_value.first.return_value = existing_category
 
         input_data = AssetCategoryInput(
             category_code="EQUIPMENT",

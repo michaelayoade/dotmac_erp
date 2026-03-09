@@ -361,9 +361,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -402,9 +400,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -460,9 +456,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -517,9 +511,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -581,9 +573,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -638,9 +628,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -698,9 +686,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -747,9 +733,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         mock_create_and_approve.return_value = (
             None,
@@ -795,9 +779,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -845,9 +827,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -905,9 +885,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            line
-        ]
+        mock_db.scalars.return_value.all.return_value = [line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -958,9 +936,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.all.return_value = [
-            mock_invoice_line
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_invoice_line]
 
         journal = MockJournal()
         mock_create_and_approve.return_value = (journal, None)
@@ -1425,9 +1401,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1453,9 +1427,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),  # But zero amount
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1483,9 +1455,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         tax_txn_id = uuid.uuid4()
         mock_tax_txn = MagicMock()
@@ -1525,9 +1495,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("50.00"),
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         mock_tax_txn = MagicMock()
         mock_tax_txn.transaction_id = uuid.uuid4()
@@ -1560,9 +1528,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         mock_tax_service.create_from_invoice_line.side_effect = Exception(
             "Tax service error"
@@ -1610,9 +1576,7 @@ class TestCreateTaxTransactions:
             ),
         ]
 
-        mock_db.scalars.return_value.first.return_value = (
-            fiscal_period
-        )
+        mock_db.scalars.return_value.first.return_value = fiscal_period
 
         # Return different IDs for each call
         mock_tax_service.create_from_invoice_line.side_effect = [

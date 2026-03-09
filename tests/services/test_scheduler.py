@@ -168,9 +168,7 @@ class TestScheduledTasksList:
 
     def test_list_all_tasks(self, mock_db, mock_scheduled_task):
         """Should list all tasks when no filters applied."""
-        mock_db.scalars.return_value.all.return_value = [
-            mock_scheduled_task
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_scheduled_task]
 
         result = ScheduledTasks.list(
             mock_db,

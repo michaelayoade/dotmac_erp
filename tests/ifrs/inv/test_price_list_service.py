@@ -144,7 +144,11 @@ def mock_price_list(org_id, price_list_id):
 def mock_db():
     """Create a mock database session."""
     session = MagicMock()
-    session.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None), all=MagicMock(return_value=[])))
+    session.scalars = MagicMock(
+        return_value=MagicMock(
+            first=MagicMock(return_value=None), all=MagicMock(return_value=[])
+        )
+    )
     session.scalar = MagicMock(return_value=None)
     session.execute = MagicMock()
     session.add = MagicMock()
@@ -391,9 +395,7 @@ class TestAddItemPrice:
         mock_db.get.side_effect = lambda model, id: (
             mock_price_list if id == mock_price_list.price_list_id else mock_item
         )
-        mock_db.scalars.return_value.first.return_value = (
-            existing_item
-        )
+        mock_db.scalars.return_value.first.return_value = existing_item
 
         input = PriceListItemInput(
             item_id=mock_item.item_id,
@@ -509,9 +511,7 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.scalars.return_value.all.return_value = [
-            mock_price_list
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_price_list]
         mock_db.scalars.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -533,9 +533,7 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.scalars.return_value.all.return_value = [
-            mock_price_list
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_price_list]
         mock_db.scalars.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -554,9 +552,7 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.scalars.return_value.all.return_value = [
-            mock_price_list
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_price_list]
         mock_db.scalars.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -574,9 +570,7 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.scalars.return_value.all.return_value = [
-            mock_price_list
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_price_list]
         mock_db.scalars.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(mock_db, org_id, mock_item.item_id)
@@ -593,9 +587,7 @@ class TestResolvePrice:
             min_quantity=Decimal("10"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.scalars.return_value.all.return_value = [
-            mock_price_list
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_price_list]
         mock_db.scalars.return_value.first.return_value = bulk_price
 
         result = PriceListService.resolve_price(
@@ -652,9 +644,7 @@ class TestResolvePrice:
             min_quantity=Decimal("1"),
         )
         mock_db.get.return_value = mock_item
-        mock_db.scalars.return_value.all.return_value = [
-            mock_price_list
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_price_list]
         mock_db.scalars.return_value.first.return_value = item_price
 
         result = PriceListService.resolve_price(

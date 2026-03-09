@@ -30,6 +30,7 @@ _fx_modules_patch = patch.dict(
 )
 _fx_modules_patch.start()
 from app.services.finance.platform.fx import FXService  # noqa: E402
+
 # NOTE: do NOT call _fx_modules_patch.stop() — the patch must remain active
 # so that subsequent patch() calls can resolve module paths without re-importing
 # app.services.finance (which would cause MetaData table redefinition errors).
@@ -374,9 +375,7 @@ class TestFXService:
             type_code="SPOT",
             is_default=True,
         )
-        mock_db_session.scalars.return_value.first.return_value = (
-            default_type
-        )
+        mock_db_session.scalars.return_value.first.return_value = default_type
 
         with (
             patch("app.services.finance.platform.fx.ExchangeRateType"),
@@ -421,9 +420,7 @@ class TestFXService:
             organization_id=organization_id,
             type_code="SPOT",
         )
-        mock_db_session.scalars.return_value.first.return_value = (
-            rate_type
-        )
+        mock_db_session.scalars.return_value.first.return_value = rate_type
 
         with patch("app.services.finance.platform.fx.ExchangeRateType"):
             with patch("app.services.finance.platform.fx.ExchangeRate") as MockRate:

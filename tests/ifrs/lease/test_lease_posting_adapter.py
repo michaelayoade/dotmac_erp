@@ -120,9 +120,7 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         result = LeasePostingAdapter.post_interest_accrual(
             mock_db,
@@ -143,9 +141,7 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         result = LeasePostingAdapter.post_interest_accrual(
             mock_db,
@@ -211,9 +207,7 @@ class TestLeasePostingAdapterPayment:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         result = LeasePostingAdapter.post_lease_payment(
             mock_db,
@@ -448,9 +442,7 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         with (
             patch(
@@ -489,9 +481,7 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         with (
             patch(

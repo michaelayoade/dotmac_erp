@@ -4,7 +4,6 @@ Tests for LeaseModificationService.
 
 import uuid
 from datetime import date
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -52,9 +51,7 @@ class TestLeaseModificationService:
         )
 
         mock_contract.status = LeaseStatus.DRAFT
-        mock_db.scalars.return_value.first.return_value = (
-            mock_contract
-        )
+        mock_db.scalars.return_value.first.return_value = mock_contract
 
         input_data = ModificationInput(
             lease_id=mock_contract.lease_id,
@@ -133,9 +130,7 @@ class TestLeaseModificationService:
         )
 
         mock_modification.created_by_user_id = user_id
-        mock_db.scalars.return_value.first.return_value = (
-            mock_modification
-        )
+        mock_db.scalars.return_value.first.return_value = mock_modification
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseModificationService.approve_modification(
@@ -156,9 +151,7 @@ class TestLeaseModificationService:
             LeaseModificationService,
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            mock_modification
-        )
+        mock_db.scalars.return_value.first.return_value = mock_modification
 
         result = LeaseModificationService.approve_modification(
             mock_db,
@@ -176,9 +169,7 @@ class TestLeaseModificationService:
             LeaseModificationService,
         )
 
-        mock_db.scalars.return_value.first.return_value = (
-            mock_modification
-        )
+        mock_db.scalars.return_value.first.return_value = mock_modification
 
         result = LeaseModificationService.get(
             mock_db, str(mock_modification.modification_id)

@@ -324,9 +324,7 @@ class TestCreateReceipt:
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.scalar.return_value = Decimal(
-            "100"
-        )
+        mock_db.scalar.return_value = Decimal("100")
 
         input_data = create_transaction_input(
             transaction_type=TransactionType.RECEIPT,
@@ -973,9 +971,7 @@ class TestConsumeFifo:
             unit_cost=Decimal("10.00"),
         )
 
-        mock_db.scalars.return_value.all.return_value = [
-            mock_lot
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_lot]
 
         result = InventoryTransactionService._consume_fifo(
             db=mock_db,
@@ -1039,9 +1035,7 @@ class TestConsumeFifo:
             unit_cost=Decimal("10.00"),
         )
 
-        mock_db.scalars.return_value.all.return_value = [
-            mock_lot
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_lot]
 
         with pytest.raises(HTTPException) as exc_info:
             InventoryTransactionService._consume_fifo(

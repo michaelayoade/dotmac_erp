@@ -3,6 +3,7 @@ Tests for ReportDefinitionService.
 """
 
 import uuid
+
 import pytest
 from fastapi import HTTPException
 
@@ -286,9 +287,7 @@ class TestReportDefinitionServiceQueries:
         """Test getting definition by code."""
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_db.scalars.return_value.first.return_value = (
-            mock_report_definition
-        )
+        mock_db.scalars.return_value.first.return_value = mock_report_definition
 
         result = ReportDefinitionService.get_by_code(mock_db, str(org_id), "RPT-001")
 
@@ -311,9 +310,7 @@ class TestReportDefinitionServiceQueries:
         from app.models.finance.rpt.report_definition import ReportType
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_db.scalars.return_value.all.return_value = [
-            mock_report_definition
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_report_definition]
 
         result = ReportDefinitionService.get_by_type(
             mock_db, str(org_id), ReportType.BALANCE_SHEET

@@ -102,16 +102,12 @@ class TestAuditLogService:
         mock_model.return_value = mock_instance
 
         with (
-            patch(
-                "app.services.finance.platform.audit_log.AuditLog", mock_model
-            ),
+            patch("app.services.finance.platform.audit_log.AuditLog", mock_model),
             patch(
                 "app.services.finance.platform.audit_log.coerce_uuid",
                 side_effect=lambda x: x,
             ),
-            patch.object(
-                service, "_get_previous_hash", return_value=None
-            ),
+            patch.object(service, "_get_previous_hash", return_value=None),
             patch(
                 "app.services.finance.platform.audit_log.select",
                 return_value=MagicMock(),

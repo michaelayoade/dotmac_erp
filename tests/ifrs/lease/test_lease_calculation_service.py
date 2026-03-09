@@ -236,9 +236,7 @@ class TestLeaseCalculationService:
         mock_contract.discount_rate_used = Decimal("0.06")  # 6% annual
         mock_liability.current_liability_balance = Decimal("120000.00")
         mock_db.get.return_value = mock_contract
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         result = LeaseCalculationService.calculate_interest_accrual(
             mock_db,

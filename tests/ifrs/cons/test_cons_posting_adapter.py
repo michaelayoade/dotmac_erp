@@ -297,9 +297,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -346,9 +344,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -393,9 +389,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -437,9 +431,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         mock_journal_service.create_entry.side_effect = HTTPException(
             status_code=400, detail="Period closed"
@@ -481,9 +473,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -712,9 +702,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -759,9 +747,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -807,9 +793,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -856,9 +840,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         mock_journal_service.create_entry.side_effect = HTTPException(
             status_code=400, detail="Invalid period"
@@ -957,9 +939,7 @@ class TestPostNCIAllocation:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         journal = MockJournalEntry()
         mock_journal_service.create_entry.return_value = journal
@@ -1007,9 +987,7 @@ class TestPostNCIAllocation:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.scalars.return_value.first.return_value = (
-            mock_parent_entity
-        )
+        mock_db.scalars.return_value.first.return_value = mock_parent_entity
 
         mock_journal_service.create_entry.side_effect = HTTPException(
             status_code=400, detail="Account inactive"

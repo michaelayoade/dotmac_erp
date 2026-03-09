@@ -232,9 +232,7 @@ class TestAssetRevaluationService:
         prior_reval.deficit_to_pl = Decimal("0")
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.scalars.return_value.all.return_value = [
-            prior_reval
-        ]
+        mock_db.scalars.return_value.all.return_value = [prior_reval]
 
         input_data = RevaluationInput(
             asset_id=mock_asset.asset_id,
@@ -273,9 +271,7 @@ class TestAssetRevaluationService:
         prior_reval.deficit_to_pl = Decimal("1000")
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.scalars.return_value.all.return_value = [
-            prior_reval
-        ]
+        mock_db.scalars.return_value.all.return_value = [prior_reval]
 
         input_data = RevaluationInput(
             asset_id=mock_asset.asset_id,

@@ -291,9 +291,7 @@ class TestLeaseContractService:
         """Test getting lease liability."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
-        mock_db.scalars.return_value.first.return_value = (
-            mock_liability
-        )
+        mock_db.scalars.return_value.first.return_value = mock_liability
 
         result = LeaseContractService.get_liability(
             mock_db, str(mock_liability.lease_id)

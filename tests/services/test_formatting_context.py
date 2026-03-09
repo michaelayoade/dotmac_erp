@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.config import settings
 from app.services.formatters import (
     _format_number_with_seps,
     format_currency,
@@ -29,7 +30,6 @@ from app.services.formatters import (
     format_number,
     parse_decimal,
 )
-from app.config import settings
 from app.services.formatting_context import (
     DATE_FORMAT_MAP,
     NUMBER_FORMAT_MAP,

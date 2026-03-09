@@ -23,6 +23,7 @@ _idem_modules_patch = patch.dict(
 )
 _idem_modules_patch.start()
 from app.services.finance.platform.idempotency import IdempotencyService  # noqa: E402
+
 # NOTE: do NOT call stop() — patch must remain active for module path resolution.
 
 
@@ -103,9 +104,7 @@ class TestIdempotencyService:
             response_status=201,
             expires_at=future_expiry,
         )
-        mock_db_session.scalars.return_value.first.return_value = (
-            mock_record
-        )
+        mock_db_session.scalars.return_value.first.return_value = mock_record
 
         with (
             patch("app.services.finance.platform.idempotency.IdempotencyRecord"),
@@ -142,9 +141,7 @@ class TestIdempotencyService:
             request_hash="original-hash",
             expires_at=future_expiry,
         )
-        mock_db_session.scalars.return_value.first.return_value = (
-            mock_record
-        )
+        mock_db_session.scalars.return_value.first.return_value = mock_record
 
         with (
             patch("app.services.finance.platform.idempotency.IdempotencyRecord"),
@@ -181,9 +178,7 @@ class TestIdempotencyService:
             request_hash="abc123",
             expires_at=past_expiry,
         )
-        mock_db_session.scalars.return_value.first.return_value = (
-            mock_record
-        )
+        mock_db_session.scalars.return_value.first.return_value = mock_record
 
         with (
             patch("app.services.finance.platform.idempotency.IdempotencyRecord"),
@@ -253,9 +248,7 @@ class TestIdempotencyService:
             response_body={"data": "test"},
             expires_at=future_expiry,
         )
-        mock_db_session.scalars.return_value.first.return_value = (
-            mock_record
-        )
+        mock_db_session.scalars.return_value.first.return_value = mock_record
 
         with patch_idempotency_service():
             result = service.get_cached_response(

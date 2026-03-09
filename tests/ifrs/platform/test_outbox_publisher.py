@@ -21,6 +21,7 @@ _outbox_modules_patch = patch.dict(
 )
 _outbox_modules_patch.start()
 from app.services.finance.platform.outbox_publisher import OutboxPublisher  # noqa: E402
+
 # NOTE: do NOT call stop() — patch must remain active for module path resolution.
 
 

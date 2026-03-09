@@ -372,7 +372,11 @@ def user_id() -> uuid.UUID:
 def mock_db():
     """Create a mock database session."""
     session = MagicMock()
-    session.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None), all=MagicMock(return_value=[])))
+    session.scalars = MagicMock(
+        return_value=MagicMock(
+            first=MagicMock(return_value=None), all=MagicMock(return_value=[])
+        )
+    )
     session.scalar = MagicMock(return_value=None)
     session.execute = MagicMock()
     session.add = MagicMock()

@@ -3,7 +3,6 @@ Tests for TaxPeriodService - Tax period management.
 """
 
 from datetime import date
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -155,7 +154,10 @@ class TestTaxPeriodServiceCreatePeriod:
         )
         existing_period = MockTaxPeriod(period_name="2024-01")
 
-        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, existing_period]
+        mock_db.scalars.return_value.first.side_effect = [
+            mock_jurisdiction,
+            existing_period,
+        ]
 
         input_data = TaxPeriodInput(
             jurisdiction_id=jur_id,
@@ -187,7 +189,10 @@ class TestTaxPeriodServiceGeneratePeriods:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, None] * 12  # For each month
+        mock_db.scalars.return_value.first.side_effect = [
+            mock_jurisdiction,
+            None,
+        ] * 12  # For each month
 
         TaxPeriodService.generate_periods(
             db=mock_db,
@@ -212,7 +217,10 @@ class TestTaxPeriodServiceGeneratePeriods:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, None] * 4  # For each quarter
+        mock_db.scalars.return_value.first.side_effect = [
+            mock_jurisdiction,
+            None,
+        ] * 4  # For each quarter
 
         TaxPeriodService.generate_periods(
             db=mock_db,

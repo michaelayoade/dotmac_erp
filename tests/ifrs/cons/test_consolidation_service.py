@@ -545,12 +545,8 @@ class TestGenerateInvestmentEliminations:
 
         # Setup queries
         mock_db.get.return_value = mock_consolidation_run
-        mock_db.scalars.return_value.all.return_value = [
-            mock_legal_entity
-        ]
-        mock_db.scalars.return_value.first.return_value = (
-            mock_ownership_interest
-        )
+        mock_db.scalars.return_value.all.return_value = [mock_legal_entity]
+        mock_db.scalars.return_value.first.return_value = mock_ownership_interest
 
         ConsolidationService.generate_investment_eliminations(
             db=mock_db,
@@ -572,12 +568,8 @@ class TestGenerateInvestmentEliminations:
         mock_legal_entity.consolidation_method = ConsolidationMethod.FULL
 
         mock_db.get.return_value = mock_consolidation_run
-        mock_db.scalars.return_value.all.return_value = [
-            mock_legal_entity
-        ]
-        mock_db.scalars.return_value.first.return_value = (
-            None  # No ownership
-        )
+        mock_db.scalars.return_value.all.return_value = [mock_legal_entity]
+        mock_db.scalars.return_value.first.return_value = None  # No ownership
 
         result = ConsolidationService.generate_investment_eliminations(
             db=mock_db,
