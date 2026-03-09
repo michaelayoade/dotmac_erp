@@ -87,7 +87,7 @@ class TestCreateWarehouse:
     ):
         """Test successful warehouse creation."""
         # No existing warehouse
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_warehouse(mock_db, org_id, sample_warehouse_input)
 
@@ -106,7 +106,7 @@ class TestCreateWarehouse:
             organization_id=org_id,
             warehouse_code=sample_warehouse_input.warehouse_code,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             service.create_warehouse(mock_db, org_id, sample_warehouse_input)
@@ -170,7 +170,7 @@ class TestCreateLocation:
             warehouse_id=sample_location_input.warehouse_id,
             location_code=sample_location_input.location_code,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             service.create_location(mock_db, org_id, sample_location_input)
@@ -209,7 +209,7 @@ class TestListWarehouses:
     def test_list_all_warehouses(self, service, mock_db, org_id):
         """Test listing all warehouses."""
         warehouses = [MockWarehouse(organization_id=org_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = warehouses
+        mock_db.scalars.return_value.all.return_value = warehouses
 
         result = service.list(mock_db, str(org_id))
 
@@ -218,7 +218,7 @@ class TestListWarehouses:
     def test_list_with_active_filter(self, service, mock_db, org_id):
         """Test listing warehouses with active filter."""
         warehouses = [MockWarehouse(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = warehouses
+        mock_db.scalars.return_value.all.return_value = warehouses
 
         result = service.list(mock_db, str(org_id), is_active=True)
 
@@ -227,7 +227,7 @@ class TestListWarehouses:
     def test_list_with_receiving_filter(self, service, mock_db, org_id):
         """Test listing warehouses with receiving filter."""
         warehouses = [MockWarehouse(organization_id=org_id, is_receiving=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = warehouses
+        mock_db.scalars.return_value.all.return_value = warehouses
 
         result = service.list(mock_db, str(org_id), is_receiving=True)
 
@@ -241,7 +241,7 @@ class TestListLocations:
         """Test listing locations in a warehouse."""
         warehouse_id = uuid4()
         locations = [MockWarehouseLocation(warehouse_id=warehouse_id) for _ in range(2)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = locations
+        mock_db.scalars.return_value.all.return_value = locations
 
         result = service.list_locations(mock_db, str(warehouse_id))
 

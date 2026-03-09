@@ -290,7 +290,7 @@ class TestPostJournalEntry:
 
         assert result.success is True
         assert result.posted_lines == 2
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
 
 class TestPostingResult:

@@ -28,7 +28,7 @@
     </div>
 
     <!-- Hero Stats -->
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dashboard-stats">
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="dashboard-stats">
         {{ stats_card("Total Claims", stats.total_claims | default(0), icon="document", color="amber", trend="%s%% vs last period" | format(stats.claims_trend | abs) if stats.claims_trend else none) }}
         {{ stats_card("Total Amount", stats.total_amount | default(currency_zero), icon="currency", color="amber", subtitle="%s avg per claim" | format(stats.avg_claim_amount | default(currency_zero))) }}
         {{ stats_card("Pending Approval", stats.pending_approval | default(0), icon="clock", color="amber", subtitle="%s total" | format(stats.pending_amount | default(currency_zero))) }}

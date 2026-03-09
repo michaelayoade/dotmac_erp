@@ -92,7 +92,7 @@ class FiscalYearService(ListResponseMixin):
         )
 
         db.add(year)
-        db.commit()
+        db.flush()
         db.refresh(year)
 
         return year
@@ -148,7 +148,7 @@ class FiscalYearService(ListResponseMixin):
             if period_start > input.end_date:
                 break
 
-        db.commit()
+        db.flush()
         db.refresh(year)
 
         return year
@@ -210,7 +210,7 @@ class FiscalYearService(ListResponseMixin):
         year.closed_at = datetime.now(UTC)
         year.closed_by_user_id = user_id
 
-        db.commit()
+        db.flush()
         db.refresh(year)
 
         return year

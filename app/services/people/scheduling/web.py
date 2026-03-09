@@ -216,6 +216,8 @@ class SchedulingWebService:
                 "success": success,
                 "error": error,
                 "page": page,
+                "total": result.total,
+                "limit": pagination.limit,
                 "total_pages": total_pages,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,

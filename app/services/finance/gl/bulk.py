@@ -19,7 +19,7 @@ from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
-from app.services.finance.common.helpers import coerce_scalar_count, is_mock_session
+from app.services.finance.common.helpers import coerce_scalar_count
 from app.services.finance.gl.journal import JournalService
 
 logger = logging.getLogger(__name__)
@@ -83,18 +83,7 @@ class AccountBulkService(BulkActionService[Account]):
             .select_from(JournalEntryLine)
             .where(JournalEntryLine.account_id == entity.account_id)
         )
-        journal_count = coerce_scalar_count(self.db.scalar(count_stmt))
-        if journal_count is None and is_mock_session(self.db):
-            journal_count = len(
-                list(
-                    self.db.scalars(
-                        select(JournalEntryLine).where(
-                            JournalEntryLine.account_id == entity.account_id,
-                        )
-                    ).all()
-                )
-            )
-        journal_count = journal_count or 0
+        journal_count = coerce_scalar_count(self.db.scalar(count_stmt)) or 0
 
         if journal_count > 0:
             return (

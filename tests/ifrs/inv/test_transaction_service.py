@@ -101,9 +101,7 @@ class TestCreateReceipt:
         )
 
         mock_db.get.side_effect = [item, warehouse]
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "0"
-        )
+        mock_db.scalar.return_value = Decimal("0")
 
         with (
             patch.object(
@@ -514,7 +512,7 @@ class TestListTransactions:
         transactions = [
             MockInventoryTransaction(organization_id=org_id) for _ in range(5)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = transactions
+        mock_db.scalars.return_value.all.return_value = transactions
 
         result = service.list(mock_db, str(org_id))
 
@@ -526,7 +524,7 @@ class TestListTransactions:
         transactions = [
             MockInventoryTransaction(organization_id=org_id, item_id=item_id)
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = transactions
+        mock_db.scalars.return_value.all.return_value = transactions
 
         result = service.list(mock_db, str(org_id), item_id=str(item_id))
 
@@ -540,7 +538,7 @@ class TestListTransactions:
                 transaction_type="RECEIPT",
             )
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = transactions
+        mock_db.scalars.return_value.all.return_value = transactions
 
         result = service.list(
             mock_db, str(org_id), transaction_type=TransactionType.RECEIPT

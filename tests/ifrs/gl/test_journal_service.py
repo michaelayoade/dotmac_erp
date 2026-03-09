@@ -268,7 +268,7 @@ class TestSubmitJournal:
         )
 
         assert result.status == MockJournalStatus.SUBMITTED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_submit_non_draft_fails(self, mock_db, org_id, user_id):
         """Test submitting non-draft journal fails."""
@@ -305,7 +305,7 @@ class TestApproveJournal:
         )
 
         assert result.status == MockJournalStatus.APPROVED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_approve_not_submitted_fails(self, mock_db, org_id, user_id):
         """Test approving non-submitted journal fails."""
@@ -363,7 +363,7 @@ class TestVoidJournal:
         )
 
         assert result.status == MockJournalStatus.VOID
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_void_posted_journal_fails(self, mock_db, org_id, user_id):
         """Test that voiding posted journal fails."""
@@ -434,7 +434,7 @@ class TestGetJournalLines:
         # Service uses db.scalars(select(...).where(...).order_by(...)).all()
         mock_db.scalars.return_value.all.return_value = lines
 
-        result = JournalService.get_lines(mock_db, str(journal_id))
+        result = JournalService.get_lines(mock_db, str(journal_id), organization_id=str(org_id))
 
         assert result == lines
 
@@ -479,7 +479,7 @@ class TestCreateJournalSuccess:
 
         mock_db.add.assert_called()
         mock_db.flush.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_create_journal_with_dimensions(self, mock_db, org_id, user_id):
         """Test creating journal with analytical dimensions."""
@@ -540,7 +540,7 @@ class TestCreateJournalSuccess:
                         )
 
         mock_db.add.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_create_journal_with_exchange_rate(self, mock_db, org_id, user_id):
         """Test creating journal with foreign currency exchange rate."""
@@ -592,7 +592,7 @@ class TestCreateJournalSuccess:
                             mock_db, org_id, journal_input, user_id
                         )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestUpdateJournal:
@@ -634,7 +634,7 @@ class TestUpdateJournal:
             )
 
         assert result.description == "Updated description"
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_update_non_draft_fails(self, mock_db, org_id, user_id, sample_lines):
         """Test updating a non-draft journal fails."""
@@ -992,7 +992,7 @@ class TestReverseEntry:
             call.args and call.args[0] is mock_reversal
             for call in mock_db.add.call_args_list
         )
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_reverse_non_posted_journal_fails(self, mock_db, org_id, user_id):
         """Test reversing a non-posted journal fails."""
@@ -1169,7 +1169,7 @@ class TestVoidSubmittedJournal:
         )
 
         assert result.status == MockJournalStatus.VOID
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestVoidReversedJournalFails:
@@ -1230,7 +1230,7 @@ class TestCreateEntry:
                             mock_db, org_id, journal_input, user_id
                         )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestPostDraftJournal:
@@ -1451,13 +1451,14 @@ class TestListJournalsEmpty:
         assert result == []
 
     def test_list_without_organization(self, mock_db):
-        """Test listing journals without organization filter."""
-        journals = [MockJournalEntry()]
-        mock_db.scalars.return_value.all.return_value = journals
+        """Test listing journals without organization raises error."""
+        from fastapi import HTTPException
 
-        result = JournalService.list(mock_db)
+        with pytest.raises(HTTPException) as exc:
+            JournalService.list(mock_db)
 
-        assert result == journals
+        assert exc.value.status_code == 400
+        assert "organization_id is required" in exc.value.detail
 
 
 class TestJournalLineInputDefaults:
@@ -1565,13 +1566,13 @@ class TestJournalInputDefaults:
 class TestGetLinesEmpty:
     """Test getting lines for journal with no lines."""
 
-    def test_get_lines_empty_result(self, mock_db):
+    def test_get_lines_empty_result(self, mock_db, org_id):
         """Test getting lines returns empty list when journal has no lines."""
         journal_id = uuid4()
         # Service uses db.scalars(select(...).where(...).order_by(...)).all()
         mock_db.scalars.return_value.all.return_value = []
 
-        result = JournalService.get_lines(mock_db, journal_id)
+        result = JournalService.get_lines(mock_db, journal_id, organization_id=str(org_id))
 
         assert result == []
 

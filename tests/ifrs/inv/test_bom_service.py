@@ -176,20 +176,15 @@ def mock_bom(org_id, bom_id, item_id):
 def mock_db():
     """Create a mock database session."""
     session = MagicMock()
-    session.query = MagicMock(return_value=session)
-    session.filter = MagicMock(return_value=session)
-    session.first = MagicMock(return_value=None)
-    session.all = MagicMock(return_value=[])
+    session.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None), all=MagicMock(return_value=[])))
+    session.scalar = MagicMock(return_value=None)
+    session.execute = MagicMock()
     session.add = MagicMock()
     session.commit = MagicMock()
     session.flush = MagicMock()
     session.refresh = MagicMock()
     session.delete = MagicMock()
     session.get = MagicMock(return_value=None)
-    session.order_by = MagicMock(return_value=session)
-    session.limit = MagicMock(return_value=session)
-    session.offset = MagicMock(return_value=session)
-    session.update = MagicMock()
     return session
 
 
@@ -202,7 +197,7 @@ class TestCreateBOM:
     def test_raises_error_on_duplicate_code(self, mock_db, org_id, item_id):
         """Should raise HTTPException when BOM code already exists."""
         existing = MockBOM(organization_id=org_id, bom_code="BOM-001")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         input = BOMInput(
             bom_code="BOM-001",
@@ -220,7 +215,7 @@ class TestCreateBOM:
 
     def test_raises_error_when_item_not_found(self, mock_db, org_id, item_id):
         """Should raise HTTPException when output item not found."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
         mock_db.get.return_value = None
 
         input = BOMInput(
@@ -239,7 +234,7 @@ class TestCreateBOM:
 
     def test_creates_bom_successfully(self, mock_db, org_id, mock_finished_item):
         """Should create BOM when inputs are valid."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
         mock_db.get.return_value = mock_finished_item
 
         input = BOMInput(
@@ -261,7 +256,7 @@ class TestCreateBOM:
         self, mock_db, org_id, mock_finished_item
     ):
         """Should clear other default BOMs for same item when setting as default."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
         mock_db.get.return_value = mock_finished_item
 
         input = BOMInput(
@@ -276,11 +271,11 @@ class TestCreateBOM:
         BOMService.create_bom(mock_db, org_id, input)
 
         # Should have called update to clear other defaults
-        mock_db.query.return_value.filter.return_value.update.assert_called()
+        mock_db.execute.assert_called()
 
     def test_creates_kit_type_bom(self, mock_db, org_id, mock_finished_item):
         """Should create BOM with KIT type."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
         mock_db.get.return_value = mock_finished_item
 
         input = BOMInput(
@@ -454,7 +449,7 @@ class TestProcessAssembly:
     ):
         """Should raise HTTPException when BOM has no components."""
         mock_db.get.return_value = mock_bom
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         input = AssemblyInput(
             bom_id=mock_bom.bom_id,
@@ -489,7 +484,7 @@ class TestProcessAssembly:
         mock_db.get.side_effect = lambda model, id: (
             mock_bom if id == mock_bom.bom_id else mock_component_item
         )
-        mock_db.query.return_value.filter.return_value.all.return_value = [component]
+        mock_db.scalars.return_value.all.return_value = [component]
 
         input = AssemblyInput(
             bom_id=mock_bom.bom_id,
@@ -535,7 +530,7 @@ class TestProcessAssembly:
             if id == mock_bom.item_id
             else mock_component_item
         )
-        mock_db.query.return_value.filter.return_value.all.return_value = [component]
+        mock_db.scalars.return_value.all.return_value = [component]
 
         input = AssemblyInput(
             bom_id=mock_bom.bom_id,
@@ -598,7 +593,7 @@ class TestProcessAssembly:
             if id == mock_bom.item_id
             else mock_component_item
         )
-        mock_db.query.return_value.filter.return_value.all.return_value = [component]
+        mock_db.scalars.return_value.all.return_value = [component]
 
         input = AssemblyInput(
             bom_id=mock_bom.bom_id,
@@ -656,7 +651,7 @@ class TestProcessAssembly:
             if id == mock_bom.item_id
             else mock_component_item
         )
-        mock_db.query.return_value.filter.return_value.all.return_value = [component]
+        mock_db.scalars.return_value.all.return_value = [component]
 
         input = AssemblyInput(
             bom_id=mock_bom.bom_id,
@@ -763,7 +758,7 @@ class TestProcessDisassembly:
             if id == mock_bom.item_id
             else mock_component_item
         )
-        mock_db.query.return_value.filter.return_value.all.return_value = [component]
+        mock_db.scalars.return_value.all.return_value = [component]
 
         input = AssemblyInput(
             bom_id=mock_bom.bom_id,
@@ -828,7 +823,7 @@ class TestGetDefaultForItem:
 
     def test_returns_none_when_no_default(self, mock_db, org_id, item_id):
         """Should return None when no default BOM exists."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = BOMService.get_default_for_item(mock_db, org_id, item_id)
 
@@ -838,7 +833,7 @@ class TestGetDefaultForItem:
         """Should return default BOM for item."""
         mock_bom.is_default = True
         mock_bom.is_active = True
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_bom
+        mock_db.scalars.return_value.first.return_value = mock_bom
 
         result = BOMService.get_default_for_item(mock_db, org_id, mock_bom.item_id)
 
@@ -853,9 +848,7 @@ class TestListBOMs:
 
     def test_returns_all_when_no_filters(self, mock_db, mock_bom):
         """Should return all BOMs when no filters applied."""
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = [
-            mock_bom
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_bom]
 
         result = BOMService.list(mock_db)
 
@@ -863,35 +856,35 @@ class TestListBOMs:
 
     def test_filters_by_organization(self, mock_db, org_id):
         """Should filter by organization_id."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         BOMService.list(mock_db, organization_id=str(org_id))
 
-        mock_db.query.return_value.filter.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_filters_by_item(self, mock_db, item_id):
         """Should filter by item_id."""
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         BOMService.list(mock_db, item_id=str(item_id))
 
-        assert mock_db.query.return_value.filter.called
+        mock_db.scalars.assert_called()
 
     def test_filters_by_type(self, mock_db):
         """Should filter by bom_type."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         BOMService.list(mock_db, bom_type=BOMType.KIT)
 
-        mock_db.query.return_value.filter.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_filters_by_active_status(self, mock_db):
         """Should filter by is_active."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         BOMService.list(mock_db, is_active=True)
 
-        mock_db.query.return_value.filter.assert_called()
+        mock_db.scalars.assert_called()
 
 
 # ============ Tests for list_components ============
@@ -904,10 +897,7 @@ class TestListComponents:
         """Should return components for specified BOM."""
         comp1 = MockBOMComponent(bom_id=bom_id, line_number=1)
         comp2 = MockBOMComponent(bom_id=bom_id, line_number=2)
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
-            comp1,
-            comp2,
-        ]
+        mock_db.scalars.return_value.all.return_value = [comp1, comp2]
 
         result = BOMService.list_components(mock_db, str(bom_id))
 

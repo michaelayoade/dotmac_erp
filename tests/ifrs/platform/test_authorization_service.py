@@ -47,6 +47,10 @@ def patch_authorization_service():
                                 "app.services.finance.platform.authorization.coerce_uuid",
                                 side_effect=lambda x: x,
                             ),
+                            patch(
+                                "app.services.finance.platform.authorization.select",
+                                return_value=MagicMock(),
+                            ),
                         ):
                             yield mock_perm, mock_role, mock_pr, mock_rp
 
@@ -94,7 +98,7 @@ class TestAuthorizationService:
 
     @pytest.fixture
     def service(self):
-        """Import the service with mocked dependencies."""
+        """Import AuthorizationService with mocked model modules."""
         with patch.dict(
             "sys.modules",
             {
@@ -118,18 +122,24 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """check_permission should return False when user has no roles."""
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db_session.scalars.return_value.all.return_value = []
 
-        with patch("app.services.finance.platform.authorization.PersonRole"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.authorization.PersonRole"),
+            patch(
                 "app.services.finance.platform.authorization.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                result = service.check_permission(
-                    mock_db_session,
-                    user_id=user_id,
-                    permission_key="gl.journal.post",
-                )
+            ),
+            patch(
+                "app.services.finance.platform.authorization.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.check_permission(
+                mock_db_session,
+                user_id=user_id,
+                permission_key="gl.journal.post",
+            )
 
         assert result is False
 
@@ -138,22 +148,28 @@ class TestAuthorizationService:
     ):
         """check_permission should return False when permission doesn't exist."""
         person_role = MockPersonRole(person_id=user_id)
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [
-            person_role
-        ]
-        mock_db_session.query.return_value.filter.return_value.first.return_value = None
+        # First scalars call: PersonRole query -> returns roles
+        # Second scalars call: Permission query -> returns None
+        mock_db_session.scalars.return_value.all.return_value = [person_role]
+        mock_db_session.scalars.return_value.first.return_value = None
 
-        with patch("app.services.finance.platform.authorization.Permission"):
-            with patch("app.services.finance.platform.authorization.PersonRole"):
-                with patch(
-                    "app.services.finance.platform.authorization.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    result = service.check_permission(
-                        mock_db_session,
-                        user_id=user_id,
-                        permission_key="nonexistent.permission",
-                    )
+        with (
+            patch("app.services.finance.platform.authorization.Permission"),
+            patch("app.services.finance.platform.authorization.PersonRole"),
+            patch(
+                "app.services.finance.platform.authorization.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+            patch(
+                "app.services.finance.platform.authorization.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.check_permission(
+                mock_db_session,
+                user_id=user_id,
+                permission_key="nonexistent.permission",
+            )
 
         assert result is False
 
@@ -192,22 +208,28 @@ class TestAuthorizationService:
         role = MockRole(id=role_id, name="admin")
         person_role = MockPersonRole(person_id=user_id, role_id=role_id)
 
-        mock_db_session.query.return_value.filter.return_value.first.side_effect = [
+        mock_db_session.scalars.return_value.first.side_effect = [
             role,  # Role lookup
             person_role,  # PersonRole lookup
         ]
 
-        with patch("app.services.finance.platform.authorization.Role"):
-            with patch("app.services.finance.platform.authorization.PersonRole"):
-                with patch(
-                    "app.services.finance.platform.authorization.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    result = service.check_role(
-                        mock_db_session,
-                        user_id=user_id,
-                        role_name="admin",
-                    )
+        with (
+            patch("app.services.finance.platform.authorization.Role"),
+            patch("app.services.finance.platform.authorization.PersonRole"),
+            patch(
+                "app.services.finance.platform.authorization.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+            patch(
+                "app.services.finance.platform.authorization.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.check_role(
+                mock_db_session,
+                user_id=user_id,
+                role_name="admin",
+            )
 
         assert result is True
 
@@ -216,22 +238,28 @@ class TestAuthorizationService:
     ):
         """check_role should return False when role is not assigned."""
         role = MockRole(name="admin")
-        mock_db_session.query.return_value.filter.return_value.first.side_effect = [
+        mock_db_session.scalars.return_value.first.side_effect = [
             role,  # Role lookup
             None,  # PersonRole not found
         ]
 
-        with patch("app.services.finance.platform.authorization.Role"):
-            with patch("app.services.finance.platform.authorization.PersonRole"):
-                with patch(
-                    "app.services.finance.platform.authorization.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    result = service.check_role(
-                        mock_db_session,
-                        user_id=user_id,
-                        role_name="admin",
-                    )
+        with (
+            patch("app.services.finance.platform.authorization.Role"),
+            patch("app.services.finance.platform.authorization.PersonRole"),
+            patch(
+                "app.services.finance.platform.authorization.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+            patch(
+                "app.services.finance.platform.authorization.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.check_role(
+                mock_db_session,
+                user_id=user_id,
+                role_name="admin",
+            )
 
         assert result is False
 
@@ -370,19 +398,17 @@ class TestAuthorizationService:
         role_permission = MockRolePermission(role_id=role_id, permission_id=perm_id)
         permission = MockPermission(id=perm_id, key="gl.journal.post")
 
-        # Setup mock query chain:
-        # 1. First query for PersonRole.filter.all -> person_roles
-        # 2. Second query for RolePermission.join.filter.all -> role_permissions
-        # 3. Third query for Permission.filter.all -> permissions
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.join.return_value = mock_query
-        mock_query.all.side_effect = [
+        # Setup mock scalars chain:
+        # 1. First scalars call: PersonRole query -> all() returns person_roles
+        # 2. Second scalars call: RolePermission query -> all() returns role_permissions
+        # 3. Third scalars call: Permission query -> all() returns permissions
+        mock_scalars = MagicMock()
+        mock_scalars.all.side_effect = [
             [person_role],  # PersonRole query
             [role_permission],  # RolePermission query with join
             [permission],  # Permission query
         ]
-        mock_db_session.query.return_value = mock_query
+        mock_db_session.scalars.return_value = mock_scalars
 
         with patch_authorization_service():
             result = service.get_user_permissions(
@@ -396,17 +422,23 @@ class TestAuthorizationService:
         self, service, mock_db_session, user_id
     ):
         """get_user_permissions should return empty list for user with no roles."""
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db_session.scalars.return_value.all.return_value = []
 
-        with patch("app.services.finance.platform.authorization.PersonRole"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.authorization.PersonRole"),
+            patch(
                 "app.services.finance.platform.authorization.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                result = service.get_user_permissions(
-                    mock_db_session,
-                    user_id=user_id,
-                )
+            ),
+            patch(
+                "app.services.finance.platform.authorization.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.get_user_permissions(
+                mock_db_session,
+                user_id=user_id,
+            )
 
         assert result == []
 
@@ -416,21 +448,35 @@ class TestAuthorizationService:
         person_role = MockPersonRole(person_id=user_id, role_id=role_id)
         role = MockRole(id=role_id, name="admin")
 
-        mock_db_session.query.return_value.join.return_value.filter.return_value.all.return_value = [
-            person_role
+        # First scalars: PersonRole with join -> all() returns person_roles
+        # Second scalars: Role query -> all() returns roles
+        mock_scalars = MagicMock()
+        mock_scalars.all.side_effect = [
+            [person_role],
+            [role],
         ]
-        mock_db_session.query.return_value.filter.return_value.all.return_value = [role]
+        mock_db_session.scalars.return_value = mock_scalars
 
-        with patch("app.services.finance.platform.authorization.Role"):
-            with patch("app.services.finance.platform.authorization.PersonRole"):
-                with patch(
-                    "app.services.finance.platform.authorization.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    result = service.get_user_roles(
-                        mock_db_session,
-                        user_id=user_id,
-                    )
+        with (
+            patch("app.services.finance.platform.authorization.Role"),
+            patch("app.services.finance.platform.authorization.PersonRole"),
+            patch(
+                "app.services.finance.platform.authorization.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+            patch(
+                "app.services.finance.platform.authorization.select",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.services.finance.platform.authorization.and_",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.get_user_roles(
+                mock_db_session,
+                user_id=user_id,
+            )
 
         assert "admin" in result
 

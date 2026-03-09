@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg %}
+{% from "components/macros.html" import empty_state, icon_svg, compact_filters %}
 {% block page_title %}Recruitment Overview{% endblock %}
 
 {% block breadcrumbs %}
@@ -27,23 +27,25 @@
         </a>
     </div>
 
-    <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="w-48">
-                    <label for="start_date" class="form-label">Start Date</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}" class="form-input w-full">
-                </div>
-                <div class="w-48">
-                    <label for="end_date" class="form-label">End Date</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}" class="form-input w-full">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
-    </div>
+    {% set active_filters = [] %}
+    {% if start_date %}
+        {% set _ = active_filters.append({"name": "start_date", "value": start_date, "display_value": "Start Date: " ~ start_date}) %}
+    {% endif %}
+    {% if end_date %}
+        {% set _ = active_filters.append({"name": "end_date", "value": end_date, "display_value": "End Date: " ~ end_date}) %}
+    {% endif %}
 
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/recruit/reports/overview",
+        active_filters=active_filters,
+        date_range=true,
+        start_date=start_date,
+        end_date=end_date,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}{% endcall %}
+
+    <div id="results-container">
     <!-- Job Openings Summary -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card p-5">
@@ -269,6 +271,7 @@
         <a href="/people/recruit/reports/pipeline" class="btn btn-secondary">Pipeline</a>
         <a href="/people/recruit/reports/time-to-hire" class="btn btn-secondary">Time to Hire</a>
         <a href="/people/recruit/reports/sources" class="btn btn-secondary">Source Analysis</a>
+    </div>
     </div>
 </div>
 {% endblock %}

@@ -22,20 +22,6 @@ from app.services.common import coerce_uuid
 T = TypeVar("T")
 
 
-def is_mock_session(db: Session) -> bool:
-    """Return True for unittest mock sessions used in legacy IFRS tests."""
-    return isinstance(db, Mock) or db.__class__.__module__.startswith("unittest.mock")
-
-
-def mock_safe_commit(db: Session) -> None:
-    """
-    Preserve flush-only transactional behavior in production while satisfying
-    legacy tests that still assert commit() on mocked sessions.
-    """
-    if is_mock_session(db):
-        db.commit()
-
-
 def coerce_scalar_count(value: Any) -> int | None:
     """Convert scalar count results to int, returning None for unusable mocks."""
     if value is None:
@@ -48,13 +34,6 @@ def coerce_scalar_count(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-
-
-def is_mock_value(value: Any) -> bool:
-    """Return True for unittest mock values/classes used in legacy tests."""
-    return isinstance(value, Mock) or value.__class__.__module__.startswith(
-        "unittest.mock"
-    )
 
 
 def get_model_pk_column(model_class: type[T]) -> str:
@@ -128,16 +107,6 @@ def validate_unique_code(
     """
     org_id = coerce_uuid(org_id)
 
-    if is_mock_value(db) or is_mock_value(model_class):
-        existing = db.query(model_class).filter().first()
-        if existing:
-            display_name = entity_name or str(getattr(model_class, "__name__", "Entity"))
-            raise HTTPException(
-                status_code=400,
-                detail=f"{display_name} code '{code_value}' already exists",
-            )
-        return
-
     # Build base filter
     code_column = getattr(model_class, code_field_name, None)
     if code_column is None:
@@ -167,10 +136,7 @@ def validate_unique_code(
         if pk_column is not None:
             filters.append(pk_column != coerce_uuid(exclude_id))
 
-    try:
-        existing = db.scalars(select(model_class).where(and_(*filters))).first()
-    except Exception:
-        existing = db.scalar(select(model_class).where(and_(*filters)))
+    existing = db.scalars(select(model_class).where(and_(*filters))).first()
 
     if existing:
         display_name = entity_name or get_entity_display_name(model_class)
@@ -257,18 +223,11 @@ def get_org_scoped_entity_by_field(
     if org_column is None:
         raise ValueError(f"Model {model_class.__name__} has no 'organization_id' field")
 
-    try:
-        entity = db.scalars(
-            select(model_class).where(
-                and_(org_column == org_id, field_column == field_value)
-            )
-        ).first()
-    except Exception:
-        entity = db.scalar(
-            select(model_class).where(
-                and_(org_column == org_id, field_column == field_value)
-            )
+    entity = db.scalars(
+        select(model_class).where(
+            and_(org_column == org_id, field_column == field_value)
         )
+    ).first()
 
     if entity is None and raise_on_missing:
         display_name = entity_name or get_entity_display_name(model_class)
@@ -326,7 +285,6 @@ def toggle_entity_status(
     setattr(entity, status_field, is_active)
 
     db.flush()
-    mock_safe_commit(db)
     db.refresh(entity)
 
     return entity

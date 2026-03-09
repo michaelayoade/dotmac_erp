@@ -75,13 +75,10 @@ class TestTaxPeriodServiceCreatePeriod:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_jurisdiction,
             None,
         ]  # Found jurisdiction, no overlap
-        mock_db.query.return_value = mock_query
 
         input_data = TaxPeriodInput(
             jurisdiction_id=jur_id,
@@ -101,10 +98,7 @@ class TestTaxPeriodServiceCreatePeriod:
         """Test period creation with missing jurisdiction."""
         from app.models.finance.tax.tax_period import TaxPeriodFrequency
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = TaxPeriodInput(
             jurisdiction_id=uuid4(),
@@ -132,10 +126,7 @@ class TestTaxPeriodServiceCreatePeriod:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_jurisdiction
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_jurisdiction
 
         input_data = TaxPeriodInput(
             jurisdiction_id=jur_id,
@@ -164,10 +155,7 @@ class TestTaxPeriodServiceCreatePeriod:
         )
         existing_period = MockTaxPeriod(period_name="2024-01")
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_jurisdiction, existing_period]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, existing_period]
 
         input_data = TaxPeriodInput(
             jurisdiction_id=jur_id,
@@ -199,10 +187,7 @@ class TestTaxPeriodServiceGeneratePeriods:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_jurisdiction, None] * 12  # For each month
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, None] * 12  # For each month
 
         TaxPeriodService.generate_periods(
             db=mock_db,
@@ -227,10 +212,7 @@ class TestTaxPeriodServiceGeneratePeriods:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_jurisdiction, None] * 4  # For each quarter
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, None] * 4  # For each quarter
 
         TaxPeriodService.generate_periods(
             db=mock_db,
@@ -254,10 +236,7 @@ class TestTaxPeriodServiceGeneratePeriods:
             jurisdiction_id=jur_id, organization_id=org_id
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.side_effect = [mock_jurisdiction, None]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.side_effect = [mock_jurisdiction, None]
 
         TaxPeriodService.generate_periods(
             db=mock_db,
@@ -288,10 +267,7 @@ class TestTaxPeriodServiceFileExtension:
             due_date=date(2024, 3, 1),
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         TaxPeriodService.file_extension(
             db=mock_db,
@@ -306,10 +282,7 @@ class TestTaxPeriodServiceFileExtension:
 
     def test_file_extension_period_not_found(self, mock_db):
         """Test filing extension for non-existent period."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             TaxPeriodService.file_extension(
@@ -330,10 +303,7 @@ class TestTaxPeriodServiceFileExtension:
             organization_id=org_id, status=TaxPeriodStatus.FILED
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         with pytest.raises(HTTPException) as exc:
             TaxPeriodService.file_extension(
@@ -357,10 +327,7 @@ class TestTaxPeriodServiceFileExtension:
             due_date=date(2024, 3, 1),
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         with pytest.raises(HTTPException) as exc:
             TaxPeriodService.file_extension(
@@ -384,10 +351,7 @@ class TestTaxPeriodServiceStatusTransitions:
         org_id = uuid4()
         mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.OPEN)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         TaxPeriodService.mark_filed(mock_db, org_id, uuid4())
 
@@ -403,10 +367,7 @@ class TestTaxPeriodServiceStatusTransitions:
             organization_id=org_id, status=TaxPeriodStatus.FILED
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         with pytest.raises(HTTPException) as exc:
             TaxPeriodService.mark_filed(mock_db, org_id, uuid4())
@@ -422,10 +383,7 @@ class TestTaxPeriodServiceStatusTransitions:
             organization_id=org_id, status=TaxPeriodStatus.FILED
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         TaxPeriodService.mark_paid(mock_db, org_id, uuid4())
 
@@ -438,10 +396,7 @@ class TestTaxPeriodServiceStatusTransitions:
         org_id = uuid4()
         mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.PAID)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         TaxPeriodService.close_period(mock_db, org_id, uuid4())
 
@@ -457,10 +412,7 @@ class TestTaxPeriodServiceQueries:
         jur_id = uuid4()
         mock_period = MockTaxPeriod()
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         result = TaxPeriodService.get_current_period(
             mock_db, org_id, jur_id, as_of_date=date(2024, 1, 15)
@@ -470,10 +422,7 @@ class TestTaxPeriodServiceQueries:
 
     def test_get_current_period_none(self, mock_db):
         """Test getting current period when none exists."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         result = TaxPeriodService.get_current_period(
             mock_db, uuid4(), uuid4(), as_of_date=date(2024, 1, 15)
@@ -491,11 +440,7 @@ class TestTaxPeriodServiceQueries:
             MockTaxPeriod(due_date=date(2024, 1, 1), status=TaxPeriodStatus.OPEN),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.all.return_value = overdue_periods
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = overdue_periods
 
         result = TaxPeriodService.get_overdue_periods(
             mock_db, org_id, as_of_date=date(2024, 2, 1)
@@ -508,10 +453,7 @@ class TestTaxPeriodServiceQueries:
         period_id = uuid4()
         mock_period = MockTaxPeriod(period_id=period_id)
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = mock_period
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = mock_period
 
         result = TaxPeriodService.get(mock_db, str(period_id))
 
@@ -527,13 +469,7 @@ class TestTaxPeriodServiceQueries:
 
         periods = [MockTaxPeriod(), MockTaxPeriod()]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = periods
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = periods
 
         result = TaxPeriodService.list(
             mock_db,

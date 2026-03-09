@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import icon_svg, status_badge %}
+{% from "components/macros.html" import icon_svg, status_badge, compact_filters %}
 
 {% block page_title %}Payroll Summary{% endblock %}
 
@@ -27,25 +27,25 @@
         </a>
     </div>
 
-    <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="w-44">
-                    <label for="start_date" class="form-label">From</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
-                        class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="end_date" class="form-label">To</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
-                        class="form-input w-full">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
-    </div>
+    {% set active_filters = [] %}
+    {% if start_date %}
+        {% set _ = active_filters.append({"name": "start_date", "value": start_date, "display_value": "From: " ~ start_date}) %}
+    {% endif %}
+    {% if end_date %}
+        {% set _ = active_filters.append({"name": "end_date", "value": end_date, "display_value": "To: " ~ end_date}) %}
+    {% endif %}
 
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/payroll/reports/summary",
+        active_filters=active_filters,
+        date_range=true,
+        start_date=start_date,
+        end_date=end_date,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}{% endcall %}
+
+    <div id="results-container">
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="card p-5">
@@ -182,6 +182,7 @@
         <a href="/people/payroll/reports/by-department" class="btn btn-secondary">By Department</a>
         <a href="/people/payroll/reports/tax-summary" class="btn btn-secondary">Tax Summary</a>
         <a href="/people/payroll/reports/trends" class="btn btn-secondary">View Trends</a>
+    </div>
     </div>
 </div>
 {% endblock %}

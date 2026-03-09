@@ -50,10 +50,8 @@ class TestCreateSupplierInvoice:
         supplier = MockSupplier(organization_id=org_id)
         mock_db.get.return_value = supplier
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # No duplicate invoice
-        mock_db.query.return_value = mock_query
+        # SA2: no duplicate check query needed; SequenceService generates numbers
+        mock_db.scalars.return_value.first.return_value = None
 
         lines = [
             InvoiceLineInput(
@@ -884,10 +882,8 @@ class TestCreditNoteHandling:
         supplier = MockSupplier(organization_id=org_id)
         mock_db.get.return_value = supplier
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        # SA2: no duplicate check query needed
+        mock_db.scalars.return_value.first.return_value = None
 
         lines = [
             InvoiceLineInput(

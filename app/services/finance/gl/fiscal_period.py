@@ -10,7 +10,6 @@ import builtins
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -22,10 +21,6 @@ from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
-
-
-def _is_mock_session(db: Session) -> bool:
-    return isinstance(db, Mock)
 
 
 @dataclass
@@ -78,15 +73,12 @@ class FiscalPeriodService(ListResponseMixin):
             )
 
         # Check for duplicate period number
-        if _is_mock_session(db):
-            existing = db.query(FiscalPeriod).filter().first()
-        else:
-            existing = db.scalars(
-                select(FiscalPeriod).where(
-                    FiscalPeriod.fiscal_year_id == year_id,
-                    FiscalPeriod.period_number == input.period_number,
-                )
-            ).first()
+        existing = db.scalars(
+            select(FiscalPeriod).where(
+                FiscalPeriod.fiscal_year_id == year_id,
+                FiscalPeriod.period_number == input.period_number,
+            )
+        ).first()
         if existing:
             raise HTTPException(
                 status_code=400,
@@ -96,20 +88,17 @@ class FiscalPeriodService(ListResponseMixin):
         # Normal posting periods must not overlap each other within an organization.
         # Adjustment/closing periods are excluded from this guard.
         if not input.is_adjustment_period and not input.is_closing_period:
-            if _is_mock_session(db):
-                overlap = db.query(FiscalPeriod).filter().first()
-            else:
-                overlap = db.scalars(
-                    select(FiscalPeriod).where(
-                        and_(
-                            FiscalPeriod.organization_id == org_id,
-                            FiscalPeriod.is_adjustment_period.is_(False),
-                            FiscalPeriod.is_closing_period.is_(False),
-                            FiscalPeriod.start_date <= input.end_date,
-                            FiscalPeriod.end_date >= input.start_date,
-                        )
+            overlap = db.scalars(
+                select(FiscalPeriod).where(
+                    and_(
+                        FiscalPeriod.organization_id == org_id,
+                        FiscalPeriod.is_adjustment_period.is_(False),
+                        FiscalPeriod.is_closing_period.is_(False),
+                        FiscalPeriod.start_date <= input.end_date,
+                        FiscalPeriod.end_date >= input.start_date,
                     )
-                ).first()
+                )
+            ).first()
             if overlap:
                 raise HTTPException(
                     status_code=400,
@@ -132,7 +121,7 @@ class FiscalPeriodService(ListResponseMixin):
         )
 
         db.add(period)
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -175,7 +164,7 @@ class FiscalPeriodService(ListResponseMixin):
 
         period.status = PeriodStatus.OPEN
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -244,7 +233,7 @@ class FiscalPeriodService(ListResponseMixin):
         period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         # Trigger aging snapshot generation (non-blocking, via Celery)
@@ -302,7 +291,7 @@ class FiscalPeriodService(ListResponseMixin):
         period.hard_closed_at = datetime.now(UTC)
         period.hard_closed_by_user_id = user_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -355,7 +344,7 @@ class FiscalPeriodService(ListResponseMixin):
         period.reopen_count += 1
         period.last_reopen_session_id = session_id
 
-        db.commit()
+        db.flush()
         db.refresh(period)
 
         return period
@@ -427,13 +416,6 @@ class FiscalPeriodService(ListResponseMixin):
             query = query.where(FiscalPeriod.status == status)
 
         query = query.order_by(FiscalPeriod.period_number)
-        if _is_mock_session(db):
-            mock_query = db.query(FiscalPeriod).filter()
-            if fiscal_year_id:
-                mock_query = mock_query.filter()
-            if status:
-                mock_query = mock_query.filter()
-            return list(mock_query.order_by().limit(limit).offset(offset).all())
         return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 

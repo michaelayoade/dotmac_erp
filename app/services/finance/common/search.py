@@ -10,8 +10,8 @@ from collections.abc import Sequence
 from typing import Any, TypeVar
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Query
 from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.sql import Select
 
 T = TypeVar("T")
 
@@ -40,11 +40,11 @@ def build_search_pattern(term: str, match_type: str = "contains") -> str:
 
 
 def apply_search_filter(
-    query: Query,
+    query: Select,
     search_term: str | None,
     fields: Sequence[InstrumentedAttribute],
     match_type: str = "contains",
-) -> Query:
+) -> Select:
     """
     Apply a search filter across multiple fields.
 
@@ -78,12 +78,12 @@ def apply_search_filter(
 
 
 def apply_code_name_search(
-    query: Query,
+    query: Select,
     search_term: str | None,
     code_field: InstrumentedAttribute,
     name_field: InstrumentedAttribute,
     additional_fields: Sequence[InstrumentedAttribute] | None = None,
-) -> Query:
+) -> Select:
     """
     Apply a common code/name search pattern.
 
@@ -111,9 +111,9 @@ def apply_code_name_search(
 
 
 def apply_multi_field_filter(
-    query: Query,
+    query: Select,
     filters: dict[InstrumentedAttribute, Any],
-) -> Query:
+) -> Select:
     """
     Apply multiple equality filters to a query.
 
@@ -143,11 +143,11 @@ def apply_multi_field_filter(
 
 
 def apply_date_range_filter(
-    query: Query,
+    query: Select,
     date_field: InstrumentedAttribute,
     start_date: Any | None = None,
     end_date: Any | None = None,
-) -> Query:
+) -> Select:
     """
     Apply a date range filter to a query.
 
@@ -169,11 +169,11 @@ def apply_date_range_filter(
 
 
 def apply_amount_range_filter(
-    query: Query,
+    query: Select,
     amount_field: InstrumentedAttribute,
     min_amount: Any | None = None,
     max_amount: Any | None = None,
-) -> Query:
+) -> Select:
     """
     Apply an amount range filter to a query.
 
@@ -195,10 +195,10 @@ def apply_amount_range_filter(
 
 
 def apply_status_filter(
-    query: Query,
+    query: Select,
     status_field: InstrumentedAttribute,
     statuses: Sequence[Any] | None,
-) -> Query:
+) -> Select:
     """
     Apply a status filter (multiple values using IN).
 

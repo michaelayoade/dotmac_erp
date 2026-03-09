@@ -121,7 +121,7 @@ class TestGenerateExpenseNumber:
 
     def test_generate_first_expense_number(self, mock_db, org_id):
         """Test generating first expense number of the month."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = ExpenseService.generate_expense_number(mock_db, org_id)
 
@@ -136,7 +136,7 @@ class TestGenerateExpenseNumber:
         last_expense = MagicMock()
         last_expense.expense_number = f"EXP-{today.strftime('%Y%m')}-0005"
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = last_expense
+        mock_db.scalars.return_value.first.return_value = last_expense
 
         result = ExpenseService.generate_expense_number(mock_db, org_id)
 
@@ -148,7 +148,7 @@ class TestGenerateExpenseNumber:
         last_expense = MagicMock()
         last_expense.expense_number = f"EXP-{today.strftime('%Y%m')}-INVALID"
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = last_expense
+        mock_db.scalars.return_value.first.return_value = last_expense
 
         result = ExpenseService.generate_expense_number(mock_db, org_id)
 
@@ -161,7 +161,7 @@ class TestCreateExpense:
 
     def test_create_expense_success(self, mock_db, org_id, user_id):
         """Test successful expense creation."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         expense_account_id = uuid4()
 
@@ -181,7 +181,7 @@ class TestCreateExpense:
 
     def test_create_expense_with_tax(self, mock_db, org_id, user_id):
         """Test expense creation with tax."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         expense_account_id = uuid4()
         tax_code_id = uuid4()
@@ -203,7 +203,7 @@ class TestCreateExpense:
 
     def test_create_expense_with_payment_account(self, mock_db, org_id, user_id):
         """Test expense creation with payment account."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         expense_account_id = uuid4()
         payment_account_id = uuid4()
@@ -224,7 +224,7 @@ class TestCreateExpense:
 
     def test_create_expense_with_all_fields(self, mock_db, org_id, user_id):
         """Test expense creation with all optional fields."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         ExpenseService.create(
             db=mock_db,
@@ -256,7 +256,7 @@ class TestSubmitExpense:
     def test_submit_expense_success(self, mock_db, user_id):
         """Test successful expense submission."""
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         ExpenseService.submit(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
@@ -269,7 +269,7 @@ class TestSubmitExpense:
 
     def test_submit_expense_not_found(self, mock_db, user_id):
         """Test submitting non-existent expense."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.submit(mock_db, str(uuid4()), str(uuid4()), str(user_id))
@@ -279,7 +279,7 @@ class TestSubmitExpense:
     def test_submit_expense_wrong_status(self, mock_db, user_id):
         """Test submitting expense in wrong status."""
         expense = MockExpenseEntry(status=ExpenseStatus.APPROVED)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.submit(
@@ -298,7 +298,7 @@ class TestApproveExpense:
     def test_approve_expense_success(self, mock_db, user_id):
         """Test successful expense approval."""
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         ExpenseService.approve(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
@@ -311,7 +311,7 @@ class TestApproveExpense:
 
     def test_approve_expense_not_found(self, mock_db, user_id):
         """Test approving non-existent expense."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.approve(mock_db, str(uuid4()), str(uuid4()), str(user_id))
@@ -321,7 +321,7 @@ class TestApproveExpense:
     def test_approve_expense_wrong_status(self, mock_db, user_id):
         """Test approving expense in wrong status."""
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.approve(
@@ -340,7 +340,7 @@ class TestRejectExpense:
     def test_reject_submitted_expense(self, mock_db, user_id):
         """Test rejecting submitted expense."""
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         ExpenseService.reject(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
@@ -353,7 +353,7 @@ class TestRejectExpense:
     def test_reject_approved_expense(self, mock_db, user_id):
         """Test rejecting approved expense."""
         expense = MockExpenseEntry(status=ExpenseStatus.APPROVED)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         ExpenseService.reject(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
@@ -363,7 +363,7 @@ class TestRejectExpense:
 
     def test_reject_expense_not_found(self, mock_db, user_id):
         """Test rejecting non-existent expense."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.reject(mock_db, str(uuid4()), str(uuid4()), str(user_id))
@@ -373,7 +373,7 @@ class TestRejectExpense:
     def test_reject_expense_wrong_status(self, mock_db, user_id):
         """Test rejecting expense in wrong status."""
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.reject(
@@ -400,7 +400,7 @@ class TestPostExpense:
         )
 
         # Mock expense lookup via query().filter().first()
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         # Mock fiscal period lookup via db.get()
         fiscal_period_id = uuid4()
@@ -460,7 +460,7 @@ class TestPostExpense:
         )
 
         # Mock expense lookup via query().filter().first()
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         # Mock fiscal period and tax code lookups via db.get()
         tax_code = MockTaxCode(tax_code_id=tax_code_id)
@@ -517,7 +517,7 @@ class TestPostExpense:
 
     def test_post_expense_not_found(self, mock_db, user_id):
         """Test posting non-existent expense."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.post(
@@ -529,7 +529,7 @@ class TestPostExpense:
     def test_post_expense_wrong_status(self, mock_db, user_id):
         """Test posting expense in wrong status."""
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.post(
@@ -548,7 +548,7 @@ class TestPostExpense:
             status=ExpenseStatus.APPROVED,
             payment_account_id=None,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         with pytest.raises(ValueError) as exc:
             ExpenseService.post(
@@ -619,11 +619,11 @@ class TestExpenseWorkflow:
 
     def test_full_expense_workflow(self, mock_db, org_id, user_id):
         """Test complete expense workflow: create -> submit -> approve."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         # Create
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         # Submit
         ExpenseService.submit(
@@ -644,7 +644,7 @@ class TestExpenseWorkflow:
     def test_rejection_workflow(self, mock_db, user_id):
         """Test expense rejection workflow."""
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
-        mock_db.query.return_value.filter.return_value.first.return_value = expense
+        mock_db.scalars.return_value.first.return_value = expense
 
         # Reject
         ExpenseService.reject(

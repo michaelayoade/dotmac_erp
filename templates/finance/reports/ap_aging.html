@@ -33,6 +33,7 @@
     {{ filter_date_field("as_of_date", "As of date", as_of_date_iso) }}
     {% endcall %}
 
+    <div id="results-container">
     <!-- Report Header -->
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "Accounts payable aging report" %}
@@ -303,6 +304,7 @@
             <p class="empty-state-description">All supplier invoices have been paid.</p>
         </div>
         {% endif %}
+    </div>
     </div>
 </div>
 {% endblock %}

@@ -36,7 +36,7 @@ class TestAssetRevaluationService:
         # db.get called for asset first, then category
         mock_db.get.side_effect = [mock_asset, mock_category]
         # Mock prior revaluations query
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         input_data = RevaluationInput(
             asset_id=mock_asset.asset_id,
@@ -69,7 +69,7 @@ class TestAssetRevaluationService:
         mock_category.revaluation_model_allowed = True
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         input_data = RevaluationInput(
             asset_id=mock_asset.asset_id,
@@ -232,7 +232,7 @@ class TestAssetRevaluationService:
         prior_reval.deficit_to_pl = Decimal("0")
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             prior_reval
         ]
 
@@ -273,7 +273,7 @@ class TestAssetRevaluationService:
         prior_reval.deficit_to_pl = Decimal("1000")
 
         mock_db.get.side_effect = [mock_asset, mock_category]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             prior_reval
         ]
 

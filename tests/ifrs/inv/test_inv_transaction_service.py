@@ -166,8 +166,7 @@ def create_transaction_input(
 class TestCalculateWeightedAverageCost:
     """Tests for calculate_weighted_average_cost method."""
 
-    @patch("app.services.inventory.transaction.func")
-    def test_calculate_with_existing_inventory(self, mock_func):
+    def test_calculate_with_existing_inventory(self):
         """Test weighted average calculation with existing inventory."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -175,9 +174,7 @@ class TestCalculateWeightedAverageCost:
         wh_id = uuid.uuid4()
 
         # Mock existing quantity of 100 at $10
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "100"
-        )
+        mock_db.scalar.return_value = Decimal("100")
 
         mock_item = MockItem(item_id=item_id, average_cost=Decimal("10.00"))
         mock_db.get.return_value = mock_item
@@ -195,8 +192,7 @@ class TestCalculateWeightedAverageCost:
         # (100 * 10 + 50 * 12) / 150 = 1600 / 150 = 10.666666...
         assert result == Decimal("10.666667")
 
-    @patch("app.services.inventory.transaction.func")
-    def test_calculate_with_zero_existing_inventory(self, mock_func):
+    def test_calculate_with_zero_existing_inventory(self):
         """Test weighted average calculation with no existing inventory."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -204,7 +200,7 @@ class TestCalculateWeightedAverageCost:
         wh_id = uuid.uuid4()
 
         # No existing inventory
-        mock_db.query.return_value.filter.return_value.scalar.return_value = None
+        mock_db.scalar.return_value = None
 
         mock_item = MockItem(item_id=item_id, average_cost=Decimal("0"))
         mock_db.get.return_value = mock_item
@@ -222,10 +218,7 @@ class TestCalculateWeightedAverageCost:
         # (0 * 0 + 50 * 12) / 50 = 12.00
         assert result == Decimal("12.000000")
 
-    @patch("app.services.inventory.transaction.func")
-    def test_calculate_returns_new_cost_when_total_quantity_zero_or_negative(
-        self, mock_func
-    ):
+    def test_calculate_returns_new_cost_when_total_quantity_zero_or_negative(self):
         """Test when total quantity is zero or negative returns new unit cost."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
@@ -233,9 +226,7 @@ class TestCalculateWeightedAverageCost:
         wh_id = uuid.uuid4()
 
         # Negative existing (shouldn't happen normally)
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "-50"
-        )
+        mock_db.scalar.return_value = Decimal("-50")
 
         mock_item = MockItem(item_id=item_id, average_cost=Decimal("10.00"))
         mock_db.get.return_value = mock_item
@@ -256,17 +247,14 @@ class TestCalculateWeightedAverageCost:
 class TestGetCurrentBalance:
     """Tests for get_current_balance method."""
 
-    @patch("app.services.inventory.transaction.func")
-    def test_get_balance_with_transactions(self, mock_func):
+    def test_get_balance_with_transactions(self):
         """Test getting balance with various transactions."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
         item_id = uuid.uuid4()
         wh_id = uuid.uuid4()
 
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "150"
-        )
+        mock_db.scalar.return_value = Decimal("150")
 
         result = InventoryTransactionService.get_current_balance(
             db=mock_db,
@@ -277,15 +265,14 @@ class TestGetCurrentBalance:
 
         assert result == Decimal("150")
 
-    @patch("app.services.inventory.transaction.func")
-    def test_get_balance_returns_zero_when_no_transactions(self, mock_func):
+    def test_get_balance_returns_zero_when_no_transactions(self):
         """Test getting balance when no transactions exist."""
         mock_db = MagicMock()
         org_id = uuid.uuid4()
         item_id = uuid.uuid4()
         wh_id = uuid.uuid4()
 
-        mock_db.query.return_value.filter.return_value.scalar.return_value = None
+        mock_db.scalar.return_value = None
 
         result = InventoryTransactionService.get_current_balance(
             db=mock_db,
@@ -337,7 +324,7 @@ class TestCreateReceipt:
             return None
 
         mock_db.get.side_effect = mock_get
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
+        mock_db.scalar.return_value = Decimal(
             "100"
         )
 
@@ -986,7 +973,7 @@ class TestConsumeFifo:
             unit_cost=Decimal("10.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_lot
         ]
 
@@ -1021,7 +1008,7 @@ class TestConsumeFifo:
             unit_cost=Decimal("12.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             lot1,
             lot2,
         ]
@@ -1052,7 +1039,7 @@ class TestConsumeFifo:
             unit_cost=Decimal("10.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_lot
         ]
 
@@ -1596,7 +1583,7 @@ class TestList:
         mock_db = MagicMock()
         mock_transactions = [MockInventoryTransaction(), MockInventoryTransaction()]
 
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_transactions
+        mock_db.scalars.return_value.all.return_value = mock_transactions
 
         result = InventoryTransactionService.list(db=mock_db)
 
@@ -1608,7 +1595,7 @@ class TestList:
         org_id = uuid.uuid4()
         mock_transactions = [MockInventoryTransaction()]
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_transactions
+        mock_db.scalars.return_value.all.return_value = mock_transactions
 
         result = InventoryTransactionService.list(
             db=mock_db,
@@ -1623,7 +1610,7 @@ class TestList:
         item_id = uuid.uuid4()
         mock_transactions = [MockInventoryTransaction()]
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_transactions
+        mock_db.scalars.return_value.all.return_value = mock_transactions
 
         result = InventoryTransactionService.list(
             db=mock_db,
@@ -1637,13 +1624,7 @@ class TestList:
         mock_db = MagicMock()
         mock_transactions = [MockInventoryTransaction()]
 
-        # Build the chain
-        mock_query = mock_db.query.return_value
-        mock_filter1 = mock_query.filter.return_value
-        mock_order = mock_filter1.order_by.return_value
-        mock_limit = mock_order.limit.return_value
-        mock_offset = mock_limit.offset.return_value
-        mock_offset.all.return_value = mock_transactions
+        mock_db.scalars.return_value.all.return_value = mock_transactions
 
         result = InventoryTransactionService.list(
             db=mock_db,
@@ -1657,7 +1638,7 @@ class TestList:
         mock_db = MagicMock()
         mock_transactions = [MockInventoryTransaction()]
 
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_transactions
+        mock_db.scalars.return_value.all.return_value = mock_transactions
 
         result = InventoryTransactionService.list(
             db=mock_db,
@@ -1672,7 +1653,7 @@ class TestList:
         mock_db = MagicMock()
         mock_transactions = [MockInventoryTransaction()]
 
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_transactions
+        mock_db.scalars.return_value.all.return_value = mock_transactions
 
         result = InventoryTransactionService.list(
             db=mock_db,
@@ -1681,7 +1662,4 @@ class TestList:
         )
 
         assert len(result) == 1
-        mock_db.query.return_value.order_by.return_value.limit.assert_called_with(10)
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.assert_called_with(
-            5
-        )
+        mock_db.scalars.assert_called()

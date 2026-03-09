@@ -176,22 +176,13 @@
 
             {# Pagination #}
             {{ render_pagination(
-                page=page,
-                total_pages=total_pages,
-                total_count=total_count,
-                limit=limit,
-                search=search
+                page=pagination.page,
+                total_pages=pagination.total_pages,
+                total_count=pagination.total,
+                limit=pagination.limit,
+                search=search,
+                filters={"action": action_filter, "entity": entity_filter, "module": module_filter}
             ) }}
-
-        {{ pagination(
-            page=page | default(1),
-            total_pages=total_pages | default(1),
-            total_count=total | default(0),
-            limit=20,
-            show_size_selector=false,
-            search=search | default(''),
-            filters={"action": action_filter, "entity": entity_filter, "module": module_filter, "search": search}
-        ) }}
 
     </div>
     </div>

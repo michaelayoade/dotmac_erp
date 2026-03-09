@@ -245,7 +245,7 @@ class TestLeaseContractService:
         from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contracts = [MockLeaseContract(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_contracts
+        mock_db.scalars.return_value.all.return_value = mock_contracts
 
         result = LeaseContractService.list(mock_db, str(org_id))
 
@@ -260,7 +260,7 @@ class TestLeaseContractService:
                 organization_id=org_id, classification=LeaseClassification.FINANCE
             )
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_contracts
+        mock_db.scalars.return_value.all.return_value = mock_contracts
 
         result = LeaseContractService.list(
             mock_db,
@@ -277,7 +277,7 @@ class TestLeaseContractService:
         mock_contracts = [
             MockLeaseContract(organization_id=org_id, status=LeaseStatus.ACTIVE)
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_contracts
+        mock_db.scalars.return_value.all.return_value = mock_contracts
 
         result = LeaseContractService.list(
             mock_db,
@@ -291,7 +291,7 @@ class TestLeaseContractService:
         """Test getting lease liability."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -306,7 +306,7 @@ class TestLeaseContractService:
         """Test getting non-existent liability returns None."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeaseContractService.get_liability(mock_db, str(uuid.uuid4()))
 
@@ -316,7 +316,7 @@ class TestLeaseContractService:
         """Test getting ROU asset."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseContractService.get_asset(mock_db, str(mock_asset.lease_id))
 
@@ -327,7 +327,7 @@ class TestLeaseContractService:
         """Test getting non-existent asset returns None."""
         from app.services.finance.lease.lease_contract import LeaseContractService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeaseContractService.get_asset(mock_db, str(uuid.uuid4()))
 

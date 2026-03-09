@@ -181,7 +181,7 @@ class TestLeaseCalculationService:
         from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseCalculationService.generate_amortization_schedule(
@@ -216,7 +216,7 @@ class TestLeaseCalculationService:
         from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseCalculationService.calculate_interest_accrual(
@@ -236,7 +236,7 @@ class TestLeaseCalculationService:
         mock_contract.discount_rate_used = Decimal("0.06")  # 6% annual
         mock_liability.current_liability_balance = Decimal("120000.00")
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -258,7 +258,7 @@ class TestLeaseCalculationService:
 
         from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseCalculationService.calculate_rou_depreciation(
@@ -273,7 +273,7 @@ class TestLeaseCalculationService:
         from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_asset.useful_life_months = 0
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseCalculationService.calculate_rou_depreciation(
             mock_db,
@@ -290,7 +290,7 @@ class TestLeaseCalculationService:
         mock_asset.residual_value = Decimal("0")
         mock_asset.useful_life_months = 60
         mock_asset.carrying_amount = Decimal("120000.00")
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseCalculationService.calculate_rou_depreciation(
             mock_db,
@@ -309,7 +309,7 @@ class TestLeaseCalculationService:
         mock_asset.residual_value = Decimal("0")
         mock_asset.useful_life_months = 60
         mock_asset.carrying_amount = Decimal("120000.00")
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseCalculationService.calculate_rou_depreciation(
             mock_db,
@@ -328,7 +328,7 @@ class TestLeaseCalculationService:
         mock_asset.residual_value = Decimal("20000.00")
         mock_asset.useful_life_months = 60
         mock_asset.carrying_amount = Decimal("120000.00")
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseCalculationService.calculate_rou_depreciation(
             mock_db,
@@ -348,7 +348,7 @@ class TestLeaseCalculationService:
         mock_asset.residual_value = Decimal("0")
         mock_asset.useful_life_months = 60
         mock_asset.carrying_amount = Decimal("1000.00")  # Almost fully depreciated
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseCalculationService.calculate_rou_depreciation(
             mock_db,
@@ -367,7 +367,7 @@ class TestLeaseCalculationService:
         mock_asset.residual_value = Decimal("10000.00")
         mock_asset.useful_life_months = 60
         mock_asset.carrying_amount = Decimal("10000.00")  # At residual value
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeaseCalculationService.calculate_rou_depreciation(
             mock_db,

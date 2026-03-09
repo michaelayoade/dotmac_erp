@@ -167,6 +167,8 @@ class TestInvWebServiceListItems:
 
     def test_list_items_context_success(self):
         """Test successful items list context."""
+        from unittest.mock import patch
+
         from app.services.inventory.web import InventoryWebService
 
         mock_db = MagicMock()
@@ -175,25 +177,25 @@ class TestInvWebServiceListItems:
         mock_item = MockItem(organization_id=org_id)
         mock_category = MockItemCategory(organization_id=org_id)
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 1
-        mock_query.all.return_value = [(mock_item, mock_category)]
+        # SA2: db.scalar() called 3 times (total_count, active_count, stock_count)
+        mock_db.scalar.side_effect = [1, 1, 1]
+        # SA2: db.execute().all() returns rows (item, category)
+        mock_db.execute.return_value.all.return_value = [(mock_item, mock_category)]
+        # SA2: db.scalars().all() returns categories
+        mock_db.scalars.return_value.all.return_value = []
 
-        mock_db.query.return_value = mock_query
-
-        result = InventoryWebService.list_items_context(
-            mock_db,
-            str(org_id),
-            search=None,
-            category=None,
-            page=1,
-        )
+        # Patch _get_batch_stock_quantities to avoid nested db.execute calls
+        with patch(
+            "app.services.inventory.web._get_batch_stock_quantities",
+            return_value={},
+        ):
+            result = InventoryWebService.list_items_context(
+                mock_db,
+                str(org_id),
+                search=None,
+                category=None,
+                page=1,
+            )
 
         assert "items" in result
         assert len(result["items"]) == 1
@@ -207,17 +209,10 @@ class TestInvWebServiceListItems:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        # SA2: db.scalar() called 3 times (total_count, active_count, stock_count)
+        mock_db.scalar.side_effect = [0, 0, 0]
+        mock_db.execute.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = InventoryWebService.list_items_context(
             mock_db,
@@ -237,17 +232,9 @@ class TestInvWebServiceListItems:
         org_id = uuid.uuid4()
         category_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.side_effect = [0, 0, 0]
+        mock_db.execute.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = InventoryWebService.list_items_context(
             mock_db,
@@ -266,17 +253,9 @@ class TestInvWebServiceListItems:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.side_effect = [0, 0, 0]
+        mock_db.execute.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = InventoryWebService.list_items_context(
             mock_db,
@@ -303,17 +282,11 @@ class TestInvWebServiceListTransactions:
         mock_item = MockItem(organization_id=org_id)
         mock_warehouse = MockWarehouse(organization_id=org_id)
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 1
-        mock_query.all.return_value = [(mock_txn, mock_item, mock_warehouse)]
-
-        mock_db.query.return_value = mock_query
+        # SA2: db.scalar() for count, db.execute().all() for rows
+        mock_db.scalar.return_value = 1
+        mock_db.execute.return_value.all.return_value = [
+            (mock_txn, mock_item, mock_warehouse)
+        ]
 
         result = InventoryWebService.list_transactions_context(
             mock_db,
@@ -334,17 +307,8 @@ class TestInvWebServiceListTransactions:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryWebService.list_transactions_context(
             mock_db,
@@ -363,17 +327,8 @@ class TestInvWebServiceListTransactions:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryWebService.list_transactions_context(
             mock_db,
@@ -392,17 +347,8 @@ class TestInvWebServiceListTransactions:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 100
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 100
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryWebService.list_transactions_context(
             mock_db,

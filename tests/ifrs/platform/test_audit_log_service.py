@@ -30,8 +30,17 @@ def patch_audit_log_service():
                 "app.services.finance.platform.audit_log.coerce_uuid",
                 side_effect=lambda x: x,
             ),
+            patch(
+                "app.services.finance.platform.audit_log.select",
+                return_value=MagicMock(),
+            ),
         ):
             yield mock_log
+
+
+_SELECT_PATCH = "app.services.finance.platform.audit_log.select"
+_COERCE_PATCH = "app.services.finance.platform.audit_log.coerce_uuid"
+_MODEL_PATCH = "app.services.finance.platform.audit_log.AuditLog"
 
 
 class MockAuditLog:
@@ -87,20 +96,27 @@ class TestAuditLogService:
         self, service, mock_db_session, organization_id, user_id, mock_audit_action
     ):
         """log_change should create an audit log record."""
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
-
         mock_model = MagicMock()
         mock_instance = MagicMock()
         mock_instance.audit_id = uuid.uuid4()
         mock_model.return_value = mock_instance
 
-        # Patch AuditLog in the function's own globals so LOAD_GLOBAL resolves it
-        fn_globals = service.log_change.__globals__
-        original = fn_globals["AuditLog"]
-        fn_globals["AuditLog"] = mock_model
-        original_coerce = fn_globals["coerce_uuid"]
-        fn_globals["coerce_uuid"] = lambda x: x
-        try:
+        with (
+            patch(
+                "app.services.finance.platform.audit_log.AuditLog", mock_model
+            ),
+            patch(
+                "app.services.finance.platform.audit_log.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+            patch.object(
+                service, "_get_previous_hash", return_value=None
+            ),
+            patch(
+                "app.services.finance.platform.audit_log.select",
+                return_value=MagicMock(),
+            ),
+        ):
             result = service.log_change(
                 mock_db_session,
                 organization_id=organization_id,
@@ -112,9 +128,6 @@ class TestAuditLogService:
                 new_values={"status": "POSTED"},
                 user_id=user_id,
             )
-        finally:
-            fn_globals["AuditLog"] = original
-            fn_globals["coerce_uuid"] = original_coerce
 
         mock_db_session.add.assert_called_once()
         mock_db_session.flush.assert_called_once()
@@ -124,25 +137,23 @@ class TestAuditLogService:
         self, service, mock_db_session, organization_id, mock_audit_action
     ):
         """log_change should compute changed fields."""
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
-
-        with patch("app.services.finance.platform.audit_log.AuditLog") as MockModel:
+        with (
+            patch(_MODEL_PATCH) as MockModel,
+            patch(_COERCE_PATCH, side_effect=lambda x: x),
+            patch(_SELECT_PATCH, return_value=MagicMock()),
+        ):
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch(
-                "app.services.finance.platform.audit_log.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                service.log_change(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    table_schema="gl",
-                    table_name="account",
-                    record_id="456",
-                    action=mock_audit_action,
-                    old_values={"name": "Old Name", "code": "A001"},
-                    new_values={"name": "New Name", "code": "A001"},
-                )
+            service.log_change(
+                mock_db_session,
+                organization_id=organization_id,
+                table_schema="gl",
+                table_name="account",
+                record_id="456",
+                action=mock_audit_action,
+                old_values={"name": "Old Name", "code": "A001"},
+                new_values={"name": "New Name", "code": "A001"},
+            )
 
         # Check that changed_fields was set correctly
         call_kwargs = MockModel.call_args[1]
@@ -157,24 +168,24 @@ class TestAuditLogService:
             organization_id=organization_id,
             hash_chain="previous_hash_value",
         )
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = prev_log
+        mock_db_session.scalars.return_value.first.return_value = prev_log
 
-        with patch("app.services.finance.platform.audit_log.AuditLog") as MockModel:
+        with (
+            patch(_MODEL_PATCH) as MockModel,
+            patch(_COERCE_PATCH, side_effect=lambda x: x),
+            patch(_SELECT_PATCH, return_value=MagicMock()),
+        ):
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch(
-                "app.services.finance.platform.audit_log.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                service.log_change(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    table_schema="gl",
-                    table_name="journal_entry",
-                    record_id="789",
-                    action=mock_audit_action,
-                    compute_hash=True,
-                )
+            service.log_change(
+                mock_db_session,
+                organization_id=organization_id,
+                table_schema="gl",
+                table_name="journal_entry",
+                record_id="789",
+                action=mock_audit_action,
+                compute_hash=True,
+            )
 
         call_kwargs = MockModel.call_args[1]
         assert call_kwargs.get("hash_chain") is not None
@@ -183,22 +194,22 @@ class TestAuditLogService:
         self, service, mock_db_session, organization_id, mock_audit_action
     ):
         """log_change should skip hash computation when disabled."""
-        with patch("app.services.finance.platform.audit_log.AuditLog") as MockModel:
+        with (
+            patch(_MODEL_PATCH) as MockModel,
+            patch(_COERCE_PATCH, side_effect=lambda x: x),
+            patch(_SELECT_PATCH, return_value=MagicMock()),
+        ):
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch(
-                "app.services.finance.platform.audit_log.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                service.log_change(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    table_schema="gl",
-                    table_name="journal_entry",
-                    record_id="123",
-                    action=mock_audit_action,
-                    compute_hash=False,
-                )
+            service.log_change(
+                mock_db_session,
+                organization_id=organization_id,
+                table_schema="gl",
+                table_name="journal_entry",
+                record_id="123",
+                action=mock_audit_action,
+                compute_hash=False,
+            )
 
         call_kwargs = MockModel.call_args[1]
         assert call_kwargs.get("hash_chain") is None
@@ -208,14 +219,12 @@ class TestAuditLogService:
     ):
         """get_audit_trail should filter by organization."""
         mock_logs = [MockAuditLog(organization_id=organization_id)]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_logs
+        mock_db_session.scalars.return_value.all.return_value = mock_logs
 
         with (
-            patch("app.services.finance.platform.audit_log.AuditLog"),
-            patch(
-                "app.services.finance.platform.audit_log.coerce_uuid",
-                side_effect=lambda x: x,
-            ),
+            patch(_MODEL_PATCH),
+            patch(_COERCE_PATCH, side_effect=lambda x: x),
+            patch(_SELECT_PATCH, return_value=MagicMock()),
         ):
             result = service.get_audit_trail(
                 mock_db_session,
@@ -232,14 +241,12 @@ class TestAuditLogService:
             MockAuditLog(organization_id=organization_id),
             MockAuditLog(organization_id=organization_id),
         ]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_logs
+        mock_db_session.scalars.return_value.all.return_value = mock_logs
 
         with (
-            patch("app.services.finance.platform.audit_log.AuditLog"),
-            patch(
-                "app.services.finance.platform.audit_log.coerce_uuid",
-                side_effect=lambda x: x,
-            ),
+            patch(_MODEL_PATCH),
+            patch(_COERCE_PATCH, side_effect=lambda x: x),
+            patch(_SELECT_PATCH, return_value=MagicMock()),
         ):
             result = service.get_record_history(
                 mock_db_session,
@@ -267,7 +274,7 @@ class TestAuditLogService:
                 new_values={"field": "value2"},
             ),
         ]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_logs
+        mock_db_session.scalars.return_value.all.return_value = mock_logs
 
         with patch_audit_log_service():
             result = service.build_hash_chain(
@@ -284,7 +291,7 @@ class TestAuditLogService:
         self, service, mock_db_session, organization_id
     ):
         """build_hash_chain should return empty string for no records."""
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db_session.scalars.return_value.all.return_value = []
 
         with patch_audit_log_service():
             result = service.build_hash_chain(
@@ -301,7 +308,7 @@ class TestAuditLogService:
     ):
         """verify_hash_chain should return True for valid chain."""
         # Empty chain is valid
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db_session.scalars.return_value.all.return_value = []
 
         with patch_audit_log_service():
             result = service.verify_hash_chain(
@@ -348,7 +355,7 @@ class TestAuditLogService:
             prev_hash = record.hash_chain
 
         records[1].hash_chain = "tampered"
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = records
+        mock_db_session.scalars.return_value.all.return_value = records
 
         with patch_audit_log_service():
             result = service.verify_hash_chain(
@@ -403,14 +410,12 @@ class TestAuditLogService:
             MockAuditLog(organization_id=organization_id),
             MockAuditLog(organization_id=organization_id),
         ]
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_logs
+        mock_db_session.scalars.return_value.all.return_value = mock_logs
 
         with (
-            patch("app.services.finance.platform.audit_log.AuditLog"),
-            patch(
-                "app.services.finance.platform.audit_log.coerce_uuid",
-                side_effect=lambda x: x,
-            ),
+            patch(_MODEL_PATCH),
+            patch(_COERCE_PATCH, side_effect=lambda x: x),
+            patch(_SELECT_PATCH, return_value=MagicMock()),
         ):
             result = service.list(
                 mock_db_session,

@@ -372,8 +372,8 @@ def mock_db():
     """Create a mock database session."""
     db = MagicMock()
     db.get = MagicMock(return_value=None)
-    db.query.return_value.filter.return_value.first.return_value = None
-    db.query.return_value.filter.return_value.all.return_value = []
+    db.scalars.return_value.first.return_value = None
+    db.scalars.return_value.all.return_value = []
     return db
 
 

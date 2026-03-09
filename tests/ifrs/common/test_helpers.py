@@ -198,7 +198,7 @@ class TestToggleEntityStatus:
         )
 
         assert result.is_active is False
-        mock_db_session.commit.assert_called_once()
+        mock_db_session.flush.assert_called_once()
         mock_db_session.refresh.assert_called_once()
 
     def test_activate_entity(self, mock_db_session, organization_id, entity_id):

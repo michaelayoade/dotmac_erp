@@ -129,10 +129,6 @@ def mock_db():
     """Create a mock database session."""
     db = MagicMock()
     db.get = MagicMock(return_value=None)
-    db.query = MagicMock(return_value=db)
-    db.filter = MagicMock(return_value=db)
-    db.all = MagicMock(return_value=[])
-    db.first = MagicMock(return_value=None)
     return db
 
 
@@ -263,7 +259,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = CONSPostingAdapter.post_elimination_entry(
             db=mock_db,
@@ -301,7 +297,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -350,7 +346,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -397,7 +393,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -441,7 +437,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -485,7 +481,7 @@ class TestPostEliminationEntry:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -541,7 +537,7 @@ class TestPostAllEliminations:
         ]
 
         mock_db.get.return_value = mock_run
-        mock_db.query.return_value.filter.return_value.all.return_value = entries
+        mock_db.scalars.return_value.all.return_value = entries
 
         mock_post_entry.return_value = CONSPostingResult(success=True)
 
@@ -568,7 +564,7 @@ class TestPostAllEliminations:
         ]
 
         mock_db.get.return_value = mock_run
-        mock_db.query.return_value.filter.return_value.all.return_value = entries
+        mock_db.scalars.return_value.all.return_value = entries
 
         # First succeeds, second fails
         mock_post_entry.side_effect = [
@@ -594,7 +590,7 @@ class TestPostAllEliminations:
     ):
         """Test posting when no entries exist."""
         mock_db.get.return_value = mock_run
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         results = CONSPostingAdapter.post_all_eliminations(
             db=mock_db,
@@ -674,7 +670,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = CONSPostingAdapter.post_translation_adjustment(
             db=mock_db,
@@ -716,7 +712,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -763,7 +759,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -811,7 +807,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -860,7 +856,7 @@ class TestPostTranslationAdjustment:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -961,7 +957,7 @@ class TestPostNCIAllocation:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 
@@ -1011,7 +1007,7 @@ class TestPostNCIAllocation:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_parent_entity
         )
 

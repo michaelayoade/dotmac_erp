@@ -8,7 +8,7 @@
 <div class="space-y-6">
     <!-- Stats Grid -->
     <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {{ stats_card("Total Users", stats.total_users | default(0), icon="users", color="blue", trend="+%s this week" | format(stats.new_users_week | default(0))) }}
+        {{ stats_card("Total Users", stats.total_users | default(0), icon="users", color="blue", subtitle="+%s this week" | format(stats.new_users_week | default(0))) }}
         {{ stats_card("Active Sessions", stats.active_sessions | default(0), icon="chart", color="emerald", subtitle="%s unique users today" | format(stats.unique_users_today | default(0))) }}
         {{ stats_card("Organizations", stats.total_organizations | default(0), icon="building", color="violet", subtitle="%s active" | format(stats.active_organizations | default(0))) }}
         {{ stats_card("System Health", stats.system_health | default("Good"), icon="check-circle", color="emerald", subtitle="All services operational") }}

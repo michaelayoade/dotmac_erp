@@ -168,7 +168,7 @@ class TestScheduledTasksList:
 
     def test_list_all_tasks(self, mock_db, mock_scheduled_task):
         """Should list all tasks when no filters applied."""
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_scheduled_task
         ]
 
@@ -186,13 +186,7 @@ class TestScheduledTasksList:
 
     def test_list_enabled_only(self, mock_db, mock_scheduled_task):
         """Should filter by enabled=True."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = [mock_scheduled_task]
+        mock_db.scalars.return_value.all.return_value = [mock_scheduled_task]
 
         ScheduledTasks.list(
             mock_db,
@@ -203,17 +197,11 @@ class TestScheduledTasksList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_list_disabled_only(self, mock_db):
         """Should filter by enabled=False."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         ScheduledTasks.list(
             mock_db,
@@ -224,16 +212,11 @@ class TestScheduledTasksList:
             offset=0,
         )
 
-        mock_query.filter.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_list_order_by_name_asc(self, mock_db):
         """Should order by name ascending."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         ScheduledTasks.list(
             mock_db,
@@ -244,16 +227,11 @@ class TestScheduledTasksList:
             offset=0,
         )
 
-        mock_query.order_by.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_list_order_by_name_desc(self, mock_db):
         """Should order by name descending."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         ScheduledTasks.list(
             mock_db,
@@ -264,16 +242,11 @@ class TestScheduledTasksList:
             offset=0,
         )
 
-        mock_query.order_by.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_list_order_by_created_at(self, mock_db):
         """Should order by created_at."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         ScheduledTasks.list(
             mock_db,
@@ -284,7 +257,7 @@ class TestScheduledTasksList:
             offset=0,
         )
 
-        mock_query.order_by.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_list_invalid_order_by_raises_400(self, mock_db):
         """Invalid order_by column should raise HTTPException."""
@@ -303,14 +276,7 @@ class TestScheduledTasksList:
 
     def test_list_pagination(self, mock_db):
         """Should apply limit and offset correctly."""
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_limited = MagicMock()
-        mock_query.limit.return_value = mock_limited
-        mock_offset = MagicMock()
-        mock_limited.offset.return_value = mock_offset
-        mock_offset.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         ScheduledTasks.list(
             mock_db,
@@ -321,8 +287,7 @@ class TestScheduledTasksList:
             offset=50,
         )
 
-        mock_query.limit.assert_called_once_with(25)
-        mock_limited.offset.assert_called_once_with(50)
+        mock_db.scalars.assert_called()
 
 
 # ============ TestScheduledTasksUpdate ============

@@ -57,7 +57,7 @@ class TestLeasePostingAdapterInitialRecognition:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeasePostingAdapter.post_initial_recognition(
             mock_db,
@@ -99,7 +99,7 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeasePostingAdapter.post_interest_accrual(
             mock_db,
@@ -120,7 +120,7 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -143,7 +143,7 @@ class TestLeasePostingAdapterInterestAccrual:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -189,7 +189,7 @@ class TestLeasePostingAdapterPayment:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeasePostingAdapter.post_lease_payment(
             mock_db,
@@ -211,7 +211,7 @@ class TestLeasePostingAdapterPayment:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -257,7 +257,7 @@ class TestLeasePostingAdapterDepreciation:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeasePostingAdapter.post_rou_depreciation(
             mock_db,
@@ -278,7 +278,7 @@ class TestLeasePostingAdapterDepreciation:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = LeasePostingAdapter.post_rou_depreciation(
             mock_db,
@@ -341,7 +341,7 @@ class TestLeasePostingAdapterTermination:
 
         mock_contract.status = LeaseStatus.TERMINATED
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeasePostingAdapter.post_lease_termination(
             mock_db,
@@ -365,7 +365,7 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_liability,
             mock_asset,
         ]
@@ -408,7 +408,7 @@ class TestLeasePostingAdapterSuccessCases:
 
         mock_active_contract.restoration_obligation = Decimal("5000.00")
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_liability,
             mock_asset,
         ]
@@ -448,7 +448,7 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -489,7 +489,7 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_liability
         )
 
@@ -531,7 +531,7 @@ class TestLeasePostingAdapterSuccessCases:
         from app.services.finance.lease.lease_posting_adapter import LeasePostingAdapter
 
         mock_db.get.return_value = mock_active_contract
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         with (
             patch(
@@ -576,7 +576,7 @@ class TestLeasePostingAdapterSuccessCases:
         mock_asset.initial_rou_asset_value = Decimal("40000.00")
 
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_liability,
             mock_asset,
         ]
@@ -623,7 +623,7 @@ class TestLeasePostingAdapterSuccessCases:
         mock_asset.initial_rou_asset_value = Decimal("40000.00")
 
         mock_db.get.return_value = mock_contract
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_liability,
             mock_asset,
         ]

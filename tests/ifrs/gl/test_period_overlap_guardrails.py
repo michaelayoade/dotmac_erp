@@ -26,7 +26,7 @@ def test_create_period_rejects_overlapping_normal_period(mock_db, org_id):
         start_date=date(2024, 1, 1),
         end_date=date(2024, 1, 31),
     )
-    mock_db.query.return_value.filter.return_value.first.side_effect = [None, overlap]
+    mock_db.scalars.return_value.first.side_effect = [None, overlap]
 
     with pytest.raises(HTTPException) as exc:
         FiscalPeriodService.create_period(mock_db, org_id, input_data)

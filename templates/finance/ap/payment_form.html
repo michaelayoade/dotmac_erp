@@ -27,19 +27,47 @@
             <!-- Row 1: Supplier & Date -->
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="form-label">Supplier <span class="text-red-500">*</span></label>
-                    <select class="form-select form-input" name="supplier_id" required
-                            x-model="supplierId" @change="onSupplierChange()">
-                        <option value="">Select supplier</option>
-                        {% for supplier in suppliers_list %}
-                        <option value="{{ supplier.supplier_id }}"
-                                data-wht-applicable="{{ (supplier.withholding_tax_applicable if supplier.withholding_tax_applicable else false)|lower }}"
-                                data-wht-code-id="{{ supplier.withholding_tax_code_id if supplier.withholding_tax_code_id else '' }}"
-                                {% if invoice and invoice.supplier_id|string == supplier.supplier_id|string %}selected{% endif %}>
-                            {{ supplier.supplier_name }} ({{ supplier.supplier_code }})
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <label for="supplier_search" class="form-label">Supplier <span class="text-red-500">*</span></label>
+                    <div class="relative" @click.outside="supplierOpen = false">
+                        <div class="relative">
+                            <input type="text"
+                                   id="supplier_search"
+                                   class="form-input pr-10"
+                                   x-model="supplierSearch"
+                                   @focus="supplierOpen = true"
+                                   @click="supplierOpen = true"
+                                   @input="onSupplierSearch()"
+                                   @keydown.escape.prevent="supplierOpen = false"
+                                   placeholder="Search supplier..."
+                                   autocomplete="off"
+                                   role="combobox"
+                                   :aria-expanded="supplierOpen ? 'true' : 'false'"
+                                   aria-haspopup="listbox">
+                            <button type="button"
+                                    @click="supplierOpen = !supplierOpen"
+                                    class="absolute inset-y-0 right-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                                {{ icon_svg("chevron-down", "h-4 w-4") }}
+                            </button>
+                        </div>
+                        <input type="hidden" name="supplier_id" x-model="supplierId">
+                        <div x-cloak
+                             x-show="supplierOpen"
+                             x-transition
+                             class="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                             role="listbox">
+                            <template x-for="supplier in filteredSuppliers()" :key="supplier.supplier_id">
+                                <button type="button"
+                                        class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                                        @click="selectSupplier(supplier)">
+                                    <span x-text="supplierLabel(supplier)"></span>
+                                    <span class="text-xs text-slate-400" x-text="supplier.currency_code || ''"></span>
+                                </button>
+                            </template>
+                            <div x-show="filteredSuppliers().length === 0" class="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+                                No suppliers match your search.
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <label class="form-label">Payment Date <span class="text-red-500">*</span></label>
@@ -298,12 +326,16 @@ function paymentForm() {
         {% endfor %}
     };
 
+    const suppliers = {{ suppliers_list | tojson }};
+
     // Pre-selected invoice data
     const invoiceData = {{ invoice|tojson if invoice else 'null' }};
 
     return {
         // Form fields
         supplierId: '{{ invoice.supplier_id if invoice else "" }}',
+        supplierSearch: '',
+        supplierOpen: false,
         paymentDate: new Date().toISOString().split('T')[0],
         bankAccountId: '',
         paymentMethod: 'BANK_TRANSFER',
@@ -351,18 +383,68 @@ function paymentForm() {
                    (!this.hasWht || this.whtCodeId);
         },
 
-        onSupplierChange() {
-            const option = document.querySelector(`select[name="supplier_id"] option[value="${this.supplierId}"]`);
-            if (option) {
-                const whtApplicable = option.dataset.whtApplicable === 'true';
-                const whtCodeId = option.dataset.whtCodeId;
+        supplierLabel(supplier) {
+            if (!supplier) return '';
+            const parts = [supplier.supplier_code, supplier.supplier_name].filter(Boolean);
+            return parts.join(' - ');
+        },
 
-                if (whtApplicable && whtCodeId) {
-                    this.hasWht = true;
-                    this.whtCodeId = whtCodeId;
-                    this.calculateAmounts();
-                }
+        filteredSuppliers() {
+            const query = (this.supplierSearch || '').trim().toLowerCase();
+            if (!query) {
+                return suppliers;
             }
+            return suppliers.filter((supplier) => {
+                const haystacks = [
+                    supplier.supplier_code,
+                    supplier.supplier_name,
+                    supplier.currency_code
+                ]
+                    .filter(Boolean)
+                    .map((value) => value.toLowerCase());
+                return haystacks.some((value) => value.includes(query));
+            });
+        },
+
+        onSupplierSearch() {
+            this.supplierOpen = true;
+            const selected = suppliers.find((supplier) => supplier.supplier_id === this.supplierId);
+            if (selected && this.supplierSearch !== this.supplierLabel(selected)) {
+                this.supplierId = '';
+                this.hasWht = false;
+                this.whtCodeId = '';
+                this.calculateAmounts();
+            }
+        },
+
+        selectSupplier(supplier) {
+            this.supplierId = supplier.supplier_id;
+            this.supplierSearch = this.supplierLabel(supplier);
+            this.supplierOpen = false;
+            this.onSupplierChange();
+        },
+
+        onSupplierChange() {
+            const supplier = suppliers.find((option) => option.supplier_id === this.supplierId);
+            if (!supplier) {
+                this.hasWht = false;
+                this.whtCodeId = '';
+                this.calculateAmounts();
+                return;
+            }
+
+            this.supplierSearch = this.supplierLabel(supplier);
+            const whtApplicable = !!supplier.withholding_tax_applicable;
+            const whtCodeId = supplier.withholding_tax_code_id;
+
+            if (whtApplicable && whtCodeId) {
+                this.hasWht = true;
+                this.whtCodeId = whtCodeId;
+            } else {
+                this.hasWht = false;
+                this.whtCodeId = '';
+            }
+            this.calculateAmounts();
         },
 
         updateAllocation(invoiceId, balance) {
@@ -412,6 +494,8 @@ function paymentForm() {
             // Check if supplier has default WHT
             if (this.supplierId) {
                 this.onSupplierChange();
+            } else {
+                this.supplierSearch = '';
             }
         }
     };

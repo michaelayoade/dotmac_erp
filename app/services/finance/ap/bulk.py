@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
 from app.services.bulk_actions import BulkActionService
-from app.services.finance.common.helpers import coerce_scalar_count, is_mock_session
+from app.services.finance.common.helpers import coerce_scalar_count
 
 logger = logging.getLogger(__name__)
 
@@ -66,19 +66,7 @@ class SupplierBulkService(BulkActionService[Supplier]):
             SupplierInvoice.supplier_id == entity.supplier_id,
             SupplierInvoice.organization_id == self.organization_id,
         )
-        invoice_count = coerce_scalar_count(self.db.scalar(count_stmt))
-        if invoice_count is None and is_mock_session(self.db):
-            invoice_count = len(
-                list(
-                    self.db.scalars(
-                        select(SupplierInvoice).where(
-                            SupplierInvoice.supplier_id == entity.supplier_id,
-                            SupplierInvoice.organization_id == self.organization_id,
-                        )
-                    ).all()
-                )
-            )
-        invoice_count = invoice_count or 0
+        invoice_count = coerce_scalar_count(self.db.scalar(count_stmt)) or 0
 
         if invoice_count > 0:
             return (

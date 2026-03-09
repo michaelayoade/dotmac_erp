@@ -38,12 +38,12 @@ class TestCreateYear:
 
     def test_create_year_success(self, service, mock_db, org_id, sample_year_input):
         """Test successful fiscal year creation."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_year(mock_db, org_id, sample_year_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         mock_db.refresh.assert_called_once()
 
     def test_create_year_duplicate_fails(
@@ -56,7 +56,7 @@ class TestCreateYear:
             organization_id=org_id,
             year_code=sample_year_input.year_code,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             service.create_year(mock_db, org_id, sample_year_input)
@@ -73,7 +73,7 @@ class TestCreateYear:
             end_date=date(2024, 12, 31),
             is_adjustment_year=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_year(mock_db, org_id, input_data)
 
@@ -89,7 +89,7 @@ class TestCreateYear:
             end_date=date(2024, 12, 31),
             retained_earnings_account_id=re_account_id,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_year(mock_db, org_id, input_data)
 
@@ -103,11 +103,11 @@ class TestCloseYear:
         """Test successful fiscal year closing."""
         year = MockFiscalYear(organization_id=org_id, is_closed=False)
         mock_db.get.return_value = year
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         result = service.close_year(mock_db, org_id, year.fiscal_year_id, user_id)
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         assert result.is_closed is True
 
     def test_close_year_not_found(self, service, mock_db, org_id, user_id):
@@ -154,9 +154,7 @@ class TestCloseYear:
 
         year = MockFiscalYear(organization_id=org_id, is_closed=False)
         mock_db.get.return_value = year
-        mock_db.query.return_value.filter.return_value.count.return_value = (
-            3  # 3 open periods
-        )
+        mock_db.scalar.return_value = 3  # 3 open periods
 
         with pytest.raises(HTTPException) as exc:
             service.close_year(mock_db, org_id, year.fiscal_year_id, user_id)
@@ -195,7 +193,7 @@ class TestGetYearByCode:
     def test_get_by_code_success(self, service, mock_db, org_id):
         """Test getting fiscal year by code."""
         year = MockFiscalYear(organization_id=org_id, year_code="FY2024")
-        mock_db.query.return_value.filter.return_value.first.return_value = year
+        mock_db.scalars.return_value.first.return_value = year
 
         result = service.get_by_code(mock_db, org_id, "FY2024")
 
@@ -205,7 +203,7 @@ class TestGetYearByCode:
         """Test getting non-existent fiscal year by code."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.get_by_code(mock_db, org_id, "FY9999")
@@ -219,7 +217,7 @@ class TestListYears:
     def test_list_all_years(self, service, mock_db, org_id):
         """Test listing all fiscal years."""
         years = [MockFiscalYear(organization_id=org_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
+        mock_db.scalars.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id))
 
@@ -228,7 +226,7 @@ class TestListYears:
     def test_list_open_years(self, service, mock_db, org_id):
         """Test listing only open fiscal years."""
         years = [MockFiscalYear(organization_id=org_id, is_closed=False)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
+        mock_db.scalars.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id), is_closed=False)
 
@@ -237,7 +235,7 @@ class TestListYears:
     def test_list_closed_years(self, service, mock_db, org_id):
         """Test listing only closed fiscal years."""
         years = [MockFiscalYear(organization_id=org_id, is_closed=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
+        mock_db.scalars.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id), is_closed=True)
 
@@ -246,7 +244,7 @@ class TestListYears:
     def test_list_with_pagination(self, service, mock_db, org_id):
         """Test listing fiscal years with pagination."""
         years = [MockFiscalYear(organization_id=org_id)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = years
+        mock_db.scalars.return_value.all.return_value = years
 
         result = service.list(mock_db, organization_id=str(org_id), limit=10, offset=5)
 

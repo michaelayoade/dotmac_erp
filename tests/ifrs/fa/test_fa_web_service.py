@@ -170,18 +170,9 @@ class TestFAWebServiceListAssets:
         mock_asset = MockAsset(organization_id=org_id)
         mock_category = MockAssetCategory(organization_id=org_id)
 
-        # Mock the query chain
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 1
-        mock_query.all.return_value = [(mock_asset, mock_category)]
-
-        mock_db.query.return_value = mock_query
+        # Mock SA2 patterns: db.scalar() for count, db.execute().all() for rows
+        mock_db.scalar.return_value = 1
+        mock_db.execute.return_value.all.return_value = [(mock_asset, mock_category)]
 
         result = FixedAssetWebService.list_assets_context(
             mock_db,
@@ -204,17 +195,8 @@ class TestFAWebServiceListAssets:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = FixedAssetWebService.list_assets_context(
             mock_db,
@@ -235,17 +217,8 @@ class TestFAWebServiceListAssets:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = FixedAssetWebService.list_assets_context(
             mock_db,
@@ -266,17 +239,8 @@ class TestFAWebServiceListAssets:
         org_id = uuid.uuid4()
         category_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = FixedAssetWebService.list_assets_context(
             mock_db,
@@ -296,17 +260,8 @@ class TestFAWebServiceListAssets:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = FixedAssetWebService.list_assets_context(
             mock_db,
@@ -333,17 +288,8 @@ class TestFAWebServiceDepreciation:
         mock_run = MockDepreciationRun(organization_id=org_id)
         mock_period = MockFiscalPeriod()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 1
-        mock_query.all.return_value = [(mock_run, mock_period)]
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 1
+        mock_db.execute.return_value.all.return_value = [(mock_run, mock_period)]
 
         result = FixedAssetWebService.depreciation_context(
             mock_db,
@@ -364,17 +310,8 @@ class TestFAWebServiceDepreciation:
         org_id = uuid.uuid4()
         period_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 0
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 0
+        mock_db.execute.return_value.all.return_value = []
 
         result = FixedAssetWebService.depreciation_context(
             mock_db,
@@ -392,17 +329,8 @@ class TestFAWebServiceDepreciation:
         mock_db = MagicMock()
         org_id = uuid.uuid4()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.with_entities.return_value = mock_query
-        mock_query.scalar.return_value = 100
-        mock_query.all.return_value = []
-
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 100
+        mock_db.execute.return_value.all.return_value = []
 
         result = FixedAssetWebService.depreciation_context(
             mock_db,

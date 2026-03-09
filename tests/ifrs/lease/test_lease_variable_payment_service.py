@@ -28,7 +28,7 @@ class TestLeaseVariablePaymentService:
             VariablePaymentInput,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = VariablePaymentInput(
             schedule_id=uuid.uuid4(),
@@ -54,7 +54,7 @@ class TestLeaseVariablePaymentService:
         )
 
         mock_payment_schedule.status = PaymentStatus.PAID
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_payment_schedule
         )
 
@@ -83,7 +83,7 @@ class TestLeaseVariablePaymentService:
         mock_payment_schedule.status = PaymentStatus.SCHEDULED
         mock_payment_schedule.principal_portion = Decimal("4000.00")
         mock_payment_schedule.interest_portion = Decimal("1000.00")
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_payment_schedule
         )
 
@@ -107,7 +107,7 @@ class TestLeaseVariablePaymentService:
             LeaseVariablePaymentService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = IndexAdjustmentInput(
             lease_id=uuid.uuid4(),
@@ -134,7 +134,7 @@ class TestLeaseVariablePaymentService:
         )
 
         mock_contract.status = LeaseStatus.DRAFT
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_contract
         )
 
@@ -163,13 +163,11 @@ class TestLeaseVariablePaymentService:
         )
 
         # Service queries contract, then liability, then asset
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_active_contract,  # Contract
             None,  # Liability
             None,  # Asset
         ]
-        mock_db.query.return_value = mock_query
 
         input_data = IndexAdjustmentInput(
             lease_id=mock_active_contract.lease_id,
@@ -196,7 +194,7 @@ class TestLeaseVariablePaymentService:
             MockLeasePaymentSchedule(lease_id=mock_contract.lease_id, payment_number=i)
             for i in range(1, 6)
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = mock_payments
+        mock_db.scalars.return_value.all.return_value = mock_payments
 
         result = LeaseVariablePaymentService.get_scheduled_payments(
             mock_db, mock_contract.lease_id
@@ -218,7 +216,7 @@ class TestLeaseVariablePaymentService:
             )
             for i in range(1, 6)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_payments
+        mock_db.scalars.return_value.all.return_value = mock_payments
 
         result = LeaseVariablePaymentService.get_scheduled_payments(
             mock_db, mock_contract.lease_id, include_paid=True
@@ -234,7 +232,7 @@ class TestLeaseVariablePaymentService:
             LeaseVariablePaymentService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseVariablePaymentService.mark_payment_paid(
@@ -255,7 +253,7 @@ class TestLeaseVariablePaymentService:
         )
 
         mock_payment_schedule.status = PaymentStatus.PAID
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_payment_schedule
         )
 
@@ -276,7 +274,7 @@ class TestLeaseVariablePaymentService:
         )
 
         mock_payment_schedule.status = PaymentStatus.SCHEDULED
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_payment_schedule
         )
 

@@ -10,6 +10,7 @@ import json
 import logging
 import re
 from datetime import UTC, datetime, timedelta
+from importlib import import_module
 from typing import TypedDict
 from urllib.parse import urlencode
 from uuid import UUID
@@ -28,7 +29,6 @@ from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.employee import Employee
 from app.models.person import Person, PersonStatus
-from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
@@ -45,6 +45,17 @@ _ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _UUID_SEGMENT_PATTERN = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 )
+
+
+def _rbac_models():
+    """Resolve RBAC models lazily to avoid stale mocked globals between tests."""
+    module = import_module("app.models.rbac")
+    return (
+        module.Permission,
+        module.PersonRole,
+        module.Role,
+        module.RolePermission,
+    )
 
 
 class Pagination(TypedDict):
@@ -495,6 +506,7 @@ class AdminWebService:
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         """Get context for users list page."""
+        _, PersonRole, Role, _ = _rbac_models()
         offset = (page - 1) * limit
 
         conditions = []
@@ -597,6 +609,7 @@ class AdminWebService:
     @staticmethod
     def user_form_context(db: Session, user_id: str | None = None) -> dict:
         """Get context for user create/edit form."""
+        _, PersonRole, Role, _ = _rbac_models()
         # Get organizations
         organizations = list(
             db.scalars(
@@ -708,6 +721,7 @@ class AdminWebService:
         role_ids: list[str] = None,
     ) -> tuple[Person | None, str | None]:
         """Create a new user. Returns (person, error)."""
+        _, PersonRole, _, _ = _rbac_models()
         role_ids = role_ids or []
         if isinstance(role_ids, str):
             role_ids = [role_ids]
@@ -825,6 +839,7 @@ class AdminWebService:
         role_ids: list[str] = None,
     ) -> tuple[Person | None, str | None]:
         """Update an existing user. Returns (person, error)."""
+        _, PersonRole, _, _ = _rbac_models()
         role_ids = role_ids or []
         if isinstance(role_ids, str):
             role_ids = [role_ids]
@@ -971,6 +986,7 @@ class AdminWebService:
     @staticmethod
     def delete_user(db: Session, user_id: str) -> str | None:
         """Delete a user. Returns error message or None on success."""
+        _, PersonRole, _, _ = _rbac_models()
         person = db.get(Person, coerce_uuid(user_id))
         if not person:
             raise HTTPException(status_code=404, detail="User not found")
@@ -1011,6 +1027,7 @@ class AdminWebService:
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
+        _, PersonRole, Role, RolePermission = _rbac_models()
         offset = (page - 1) * limit
 
         conditions = []
@@ -1114,6 +1131,7 @@ class AdminWebService:
         """Get context for role create/edit form."""
         from app.services.common import coerce_uuid
 
+        Permission, PersonRole, Role, RolePermission = _rbac_models()
         role_data = None
         if role_id:
             role = db.get(Role, coerce_uuid(role_id))
@@ -1195,6 +1213,7 @@ class AdminWebService:
         """Get context for role profile/detail view."""
         from app.services.common import coerce_uuid
 
+        Permission, PersonRole, Role, RolePermission = _rbac_models()
         role = db.get(Role, coerce_uuid(role_id))
         if not role:
             return {"role": None}
@@ -1335,6 +1354,7 @@ class AdminWebService:
         """Create a new role. Returns (role, error)."""
         from app.services.common import coerce_uuid
 
+        _, _, Role, RolePermission = _rbac_models()
         # Check if role name already exists
         existing = db.scalar(select(Role).where(Role.name == name))
         if existing:
@@ -1377,6 +1397,7 @@ class AdminWebService:
         """Update an existing role. Returns (role, error)."""
         from app.services.common import coerce_uuid
 
+        _, _, Role, RolePermission = _rbac_models()
         role = db.get(Role, coerce_uuid(role_id))
         if not role:
             return None, "Role not found"
@@ -1417,6 +1438,7 @@ class AdminWebService:
         """Delete a role. Returns error message or None on success."""
         from app.services.common import coerce_uuid
 
+        _, PersonRole, Role, RolePermission = _rbac_models()
         role = db.get(Role, coerce_uuid(role_id))
         if not role:
             return "Role not found"
@@ -1446,6 +1468,7 @@ class AdminWebService:
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
         """Get context for permissions list page."""
+        Permission, _, _, RolePermission = _rbac_models()
         offset = (page - 1) * limit
 
         conditions = []
@@ -1541,6 +1564,7 @@ class AdminWebService:
         permission_id: str | None = None,
     ) -> dict:
         """Get context for permission create/edit form."""
+        Permission, _, Role, RolePermission = _rbac_models()
         permission_data = None
         if permission_id:
             perm = db.get(Permission, coerce_uuid(permission_id))
@@ -1572,6 +1596,7 @@ class AdminWebService:
         is_active: bool,
     ) -> tuple[Permission | None, str | None]:
         """Create a new permission. Returns (permission, error)."""
+        Permission, _, _, _ = _rbac_models()
         # Check if key already exists
         existing = db.scalar(select(Permission).where(Permission.key == key))
         if existing:
@@ -1600,6 +1625,7 @@ class AdminWebService:
         is_active: bool,
     ) -> tuple[Permission | None, str | None]:
         """Update an existing permission. Returns (permission, error)."""
+        Permission, _, _, _ = _rbac_models()
         permission = db.get(Permission, coerce_uuid(permission_id))
         if not permission:
             return None, "Permission not found"
@@ -1632,6 +1658,7 @@ class AdminWebService:
         permission_id: str,
     ) -> str | None:
         """Delete a permission. Returns error message or None on success."""
+        Permission, _, _, RolePermission = _rbac_models()
         permission = db.get(Permission, coerce_uuid(permission_id))
         if not permission:
             return "Permission not found"

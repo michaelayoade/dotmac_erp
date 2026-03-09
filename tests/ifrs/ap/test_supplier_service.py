@@ -59,24 +59,14 @@ class TestCreateSupplier:
 
     def test_create_supplier_success(self, mock_db, org_id, sample_supplier_input):
         """Test successful supplier creation."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # No duplicate
-        mock_db.query.return_value = mock_query
+        # validate_unique_code uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = None  # No duplicate
 
-        with patch("app.services.finance.ap.supplier.Supplier") as MockSupplierClass:
-            mock_supplier = MockSupplier(
-                organization_id=org_id,
-                supplier_code=sample_supplier_input.supplier_code,
-                legal_name=sample_supplier_input.supplier_name,
-            )
-            MockSupplierClass.return_value = mock_supplier
+        SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
 
-            SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
-
-            mock_db.add.assert_called_once()
-            mock_db.commit.assert_called_once()
-            mock_db.refresh.assert_called_once()
+        mock_db.add.assert_called_once()
+        mock_db.flush.assert_called_once()
+        mock_db.refresh.assert_called_once()
 
     def test_create_duplicate_supplier_code_fails(
         self, mock_db, org_id, sample_supplier_input
@@ -90,14 +80,11 @@ class TestCreateSupplier:
             supplier_code=sample_supplier_input.supplier_code,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = existing
-        mock_db.query.return_value = mock_query
+        # validate_unique_code uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = existing
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
-            with pytest.raises(HTTPException) as exc:
-                SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
+        with pytest.raises(HTTPException) as exc:
+            SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
 
         assert exc.value.status_code == 400
         assert "already exists" in exc.value.detail
@@ -114,23 +101,14 @@ class TestUpdateSupplier:
         )
         mock_db.get.return_value = supplier
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # No duplicate
-        mock_db.query.return_value = mock_query
+        # validate_unique_code uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = None  # No duplicate
 
-        with (
-            patch("app.services.finance.ap.supplier.Supplier"),
-            patch(
-                "app.services.finance.common.helpers.get_model_pk_column",
-                return_value="supplier_id",
-            ),
-        ):
-            result = SupplierService.update_supplier(
-                mock_db, org_id, supplier.supplier_id, sample_supplier_input
-            )
+        result = SupplierService.update_supplier(
+            mock_db, org_id, supplier.supplier_id, sample_supplier_input
+        )
 
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
         assert result.supplier_code == sample_supplier_input.supplier_code
 
     def test_update_nonexistent_supplier_fails(
@@ -185,7 +163,7 @@ class TestDeactivateSupplier:
         )
 
         assert result.is_active is False
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_deactivate_nonexistent_supplier_fails(self, mock_db, org_id):
         """Test deactivating non-existent supplier fails."""
@@ -214,7 +192,7 @@ class TestActivateSupplier:
             )
 
         assert result.is_active is True
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 class TestGetSupplier:
@@ -274,46 +252,26 @@ class TestListSuppliers:
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing suppliers with filters."""
         suppliers = [MockSupplier(organization_id=org_id)]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = suppliers
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = suppliers
 
-        with patch("app.services.finance.ap.supplier.Supplier"):
-            result = SupplierService.list(
-                mock_db,
-                organization_id=str(org_id),
-                is_active=True,
-            )
+        result = SupplierService.list(
+            mock_db,
+            organization_id=str(org_id),
+            is_active=True,
+        )
 
         assert result == suppliers
 
     def test_list_with_search(self, mock_db, org_id):
         """Test listing suppliers with search."""
         suppliers = [MockSupplier(organization_id=org_id, legal_name="Acme Corp")]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = suppliers
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = suppliers
 
-        with (
-            patch("app.services.finance.ap.supplier.Supplier"),
-            patch(
-                "app.services.finance.ap.supplier.apply_search_filter",
-                return_value=mock_query,
-            ),
-        ):
-            result = SupplierService.list(
-                mock_db,
-                organization_id=str(org_id),
-                search="Acme",
-            )
+        result = SupplierService.list(
+            mock_db,
+            organization_id=str(org_id),
+            search="Acme",
+        )
 
         assert result == suppliers
 

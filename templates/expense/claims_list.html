@@ -1,6 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import empty_state, live_search, pagination, icon_svg, status_badge %}
+{% from "components/macros.html" import empty_state, compact_filters, filter_select_field, filter_date_field, pagination, icon_svg, status_badge %}
 {% block page_title %}Expense Claims{% endblock %}
 
 {% block breadcrumbs %}
@@ -29,16 +29,18 @@
         </a>
     </div>
 
-    {% call(search_attrs) live_search(search=search, base_url="/expense/claims/list", placeholder="Search claims...") %}
+    {% call(filter_attrs) compact_filters(
+        base_url="/expense/claims/list",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search claims...",
+        auto_submit=true
+    ) %}
         <input type="hidden" name="view" value="{{ filter_view }}">
-        <select name="status" class="form-select" {{ search_attrs }}>
-            <option value="">All Status</option>
-            {% for s in statuses %}
-            <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
-        <input type="date" name="start_date" value="{{ filter_start_date }}" class="form-input" {{ search_attrs }}>
-        <input type="date" name="end_date" value="{{ filter_end_date }}" class="form-input" {{ search_attrs }}>
+        {{ filter_select_field("status", "Status", filter_status, statuses, filter_attrs, "All Status", true) }}
+        {{ filter_date_field("start_date", "Start date", filter_start_date or '', filter_attrs) }}
+        {{ filter_date_field("end_date", "End date", filter_end_date or '', filter_attrs) }}
     {% endcall %}
 
     <!-- Status Summary -->
@@ -117,9 +119,16 @@
             {{ pagination(
                 page=page,
                 total_pages=total_pages,
-                total_count=total_count,
+                total_count=total,
                 limit=limit,
-                search=search
+                search=search,
+                filters={
+                    "view": filter_view,
+                    "status": filter_status,
+                    "start_date": filter_start_date,
+                    "end_date": filter_end_date,
+                    "employee_id": filter_employee_id
+                }
             ) }}
         {% else %}
         <div class="empty-state p-12">

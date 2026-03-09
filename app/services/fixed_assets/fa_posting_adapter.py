@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from unittest.mock import Mock
 from uuid import UUID
 
 from sqlalchemy import select
@@ -36,10 +35,6 @@ from app.services.finance.platform.org_context import org_context_service
 from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
-
-
-def _is_mock_session(db: Session) -> bool:
-    return isinstance(db, Mock)
 
 
 @dataclass
@@ -218,14 +213,11 @@ class FAPostingAdapter:
             )
 
         # Load schedules
-        if _is_mock_session(db):
-            schedules = list(db.query(DepreciationSchedule).filter().all())
-        else:
-            schedules = list(
-                db.scalars(
-                    select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
-                ).all()
-            )
+        schedules = list(
+            db.scalars(
+                select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
+            ).all()
+        )
 
         if not schedules:
             return FAPostingResult(

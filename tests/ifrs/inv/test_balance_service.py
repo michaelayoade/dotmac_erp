@@ -87,8 +87,7 @@ class TestGetOnHand:
     def test_returns_zero_when_no_transactions(self, mock_db, org_id, item_id):
         """Should return 0 when no transactions exist."""
         # Configure mock to return None (no transactions)
-        mock_scalar = MagicMock(return_value=None)
-        mock_db.query.return_value.filter.return_value.scalar = mock_scalar
+        mock_db.scalar.return_value = None
 
         with patch.object(
             InventoryBalanceService, "get_on_hand", return_value=Decimal("0")
@@ -365,7 +364,7 @@ class TestGetItemStockSummary:
         wh1_id = uuid.uuid4()
         wh2_id = uuid.uuid4()
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.execute.return_value.all.return_value = [
             (wh1_id,),
             (wh2_id,),
         ]
@@ -413,9 +412,7 @@ class TestGetItemStockSummary:
         """Should set below_reorder when available <= reorder_point."""
         mock_item.reorder_point = Decimal("100")
         mock_db.get.return_value = mock_item
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.all
-        ).return_value = []
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryBalanceService.get_item_stock_summary(
             mock_db, org_id, item_id
@@ -428,7 +425,7 @@ class TestGetItemStockSummary:
         """Should set below_minimum when available < minimum_stock."""
         mock_item.minimum_stock = Decimal("50")
         mock_db.get.return_value = mock_item
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryBalanceService.get_item_stock_summary(
             mock_db, org_id, item_id
@@ -441,7 +438,7 @@ class TestGetItemStockSummary:
         mock_item.maximum_stock = Decimal("50")
         mock_db.get.return_value = mock_item
         wh_id = uuid.uuid4()
-        mock_db.query.return_value.filter.return_value.all.return_value = [(wh_id,)]
+        mock_db.execute.return_value.all.return_value = [(wh_id,)]
 
         balance = InventoryBalance(
             item_id=item_id,
@@ -474,7 +471,7 @@ class TestGetLowStockItems:
 
     def test_returns_empty_when_no_items_below_reorder(self, mock_db, org_id):
         """Should return empty list when no items below reorder point."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
@@ -483,9 +480,7 @@ class TestGetLowStockItems:
     def test_returns_items_at_reorder_point(self, mock_db, org_id, mock_item):
         """Should include items at exactly reorder point."""
         mock_item.reorder_point = Decimal("50")
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.all
-        ).return_value = [(mock_item, None)]
+        mock_db.execute.return_value.all.return_value = [(mock_item, None)]
 
         with (
             patch.object(
@@ -503,9 +498,7 @@ class TestGetLowStockItems:
     def test_returns_items_below_reorder_point(self, mock_db, org_id, mock_item):
         """Should include items below reorder point."""
         mock_item.reorder_point = Decimal("50")
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.all
-        ).return_value = [(mock_item, None)]
+        mock_db.execute.return_value.all.return_value = [(mock_item, None)]
 
         with (
             patch.object(
@@ -525,9 +518,7 @@ class TestGetLowStockItems:
         """Should include items below minimum when include_below_minimum=True."""
         mock_item.reorder_point = Decimal("10")
         mock_item.minimum_stock = Decimal("50")
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.all
-        ).return_value = [(mock_item, None)]
+        mock_db.execute.return_value.all.return_value = [(mock_item, None)]
 
         # Available = 20, which is below minimum (50) but above reorder (10)
         with (
@@ -549,9 +540,7 @@ class TestGetLowStockItems:
         mock_item.reorder_point = Decimal("50")
         mock_item.reorder_quantity = Decimal("100")
         mock_item.maximum_stock = Decimal("200")
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.all
-        ).return_value = [(mock_item, None)]
+        mock_db.execute.return_value.all.return_value = [(mock_item, None)]
 
         with (
             patch.object(
@@ -572,9 +561,7 @@ class TestGetLowStockItems:
         mock_item.reorder_point = Decimal("50")
         mock_item.default_supplier_id = supplier_id
         mock_item.lead_time_days = 7
-        (
-            mock_db.query.return_value.join.return_value.filter.return_value.all
-        ).return_value = [(mock_item, None)]
+        mock_db.execute.return_value.all.return_value = [(mock_item, None)]
 
         with (
             patch.object(
@@ -598,7 +585,7 @@ class TestGetWarehouseInventory:
 
     def test_returns_empty_when_no_items(self, mock_db, org_id, warehouse_id):
         """Should return empty list when no items in warehouse."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.execute.return_value.all.return_value = []
 
         result = InventoryBalanceService.get_warehouse_inventory(
             mock_db, org_id, warehouse_id
@@ -610,7 +597,7 @@ class TestGetWarehouseInventory:
         self, mock_db, org_id, warehouse_id, item_id
     ):
         """Should return items with non-zero on_hand quantity."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [(item_id,)]
+        mock_db.execute.return_value.all.return_value = [(item_id,)]
 
         balance = InventoryBalance(
             item_id=item_id,
@@ -639,7 +626,7 @@ class TestGetWarehouseInventory:
         self, mock_db, org_id, warehouse_id, item_id
     ):
         """Should exclude items with zero on_hand quantity."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [(item_id,)]
+        mock_db.execute.return_value.all.return_value = [(item_id,)]
 
         balance = InventoryBalance(
             item_id=item_id,

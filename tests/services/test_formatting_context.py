@@ -29,6 +29,7 @@ from app.services.formatters import (
     format_number,
     parse_decimal,
 )
+from app.config import settings
 from app.services.formatting_context import (
     DATE_FORMAT_MAP,
     NUMBER_FORMAT_MAP,
@@ -78,7 +79,7 @@ class TestOrgFormattingPrefs:
         assert prefs.date_strftime == "%Y-%m-%d"
         assert prefs.thousand_sep == ","
         assert prefs.decimal_sep == "."
-        assert prefs.currency_code == "NGN"
+        assert prefs.currency_code == settings.default_presentation_currency_code
         assert prefs.timezone_name is None
 
     def test_frozen(self):

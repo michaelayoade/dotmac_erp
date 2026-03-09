@@ -140,7 +140,7 @@ class TestDepreciationRunService:
         from app.services.fixed_assets.depreciation import DepreciationService
 
         fiscal_period_id = uuid.uuid4()
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 0
+        mock_db.scalar.return_value = 0
 
         DepreciationService.create_depreciation_run(
             mock_db,
@@ -151,7 +151,7 @@ class TestDepreciationRunService:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         mock_db.refresh.assert_called_once()
 
     def test_get_depreciation_run(self, mock_db, mock_depreciation_run):
@@ -183,7 +183,7 @@ class TestDepreciationRunService:
         from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_runs = [MockDepreciationRun(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         result = DepreciationService.list(mock_db, str(org_id))
 
@@ -194,7 +194,7 @@ class TestDepreciationRunService:
         from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_runs = [MockDepreciationRun(organization_id=org_id, status="POSTED")]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         result = DepreciationService.list(mock_db, str(org_id), status="POSTED")
 
@@ -210,7 +210,7 @@ class TestDepreciationRunService:
             MockDepreciationSchedule(run_id=mock_depreciation_run.run_id)
             for _ in range(5)
         ]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
+        mock_db.scalars.return_value.all.return_value = mock_schedules
 
         result = DepreciationService.get_run_schedules(
             mock_db, org_id, mock_depreciation_run.run_id

@@ -4,8 +4,6 @@ Tests for ReportSchedulerService.
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
-
 import pytest
 from fastapi import HTTPException
 
@@ -304,11 +302,7 @@ class TestReportSchedulerServiceQueries:
         """Test getting due schedules."""
         from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.all.return_value = [mock_report_schedule]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_schedule]
 
         result = ReportSchedulerService.get_due_schedules(mock_db)
 
@@ -320,11 +314,7 @@ class TestReportSchedulerServiceQueries:
         """Test getting due schedules with organization filter."""
         from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.all.return_value = [mock_report_schedule]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_schedule]
 
         result = ReportSchedulerService.get_due_schedules(
             mock_db, organization_id=str(org_id)
@@ -340,11 +330,7 @@ class TestReportSchedulerServiceQueries:
 
         mock_report_schedule.report_def_id = mock_report_definition.report_def_id
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [mock_report_schedule]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_schedule]
         mock_db.get.return_value = mock_report_definition
 
         result = ReportSchedulerService.get_upcoming_schedules(
@@ -381,13 +367,7 @@ class TestReportSchedulerServiceQueries:
         """Test listing schedules."""
         from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = [mock_report_schedule]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_schedule]
 
         result = ReportSchedulerService.list(
             mock_db,
@@ -401,13 +381,7 @@ class TestReportSchedulerServiceQueries:
         from app.models.finance.rpt.report_schedule import ScheduleFrequency
         from app.services.finance.rpt.report_scheduler import ReportSchedulerService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = [mock_report_schedule]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_schedule]
 
         result = ReportSchedulerService.list(
             mock_db,

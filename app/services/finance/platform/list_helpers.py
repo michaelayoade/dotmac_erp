@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 from urllib.parse import urlencode
 
-from sqlalchemy.orm import Query
+from sqlalchemy.sql import Select
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class ListResult:
         return urlencode(params) if params else ""
 
 
-def paginate_query(query: Query, params: ListParams) -> ListResult:
+def paginate_query(query: Select, params: ListParams) -> ListResult:
     """
     Apply pagination to a SQLAlchemy query and return results.
 
@@ -141,10 +141,11 @@ def paginate_query(query: Query, params: ListParams) -> ListResult:
         ListResult with items and pagination metadata
     """
     # Get total count before pagination
-    total_count = query.count()
+    query_obj = cast(Any, query)
+    total_count = int(query_obj.count())
 
     # Apply pagination
-    items = query.offset(params.offset).limit(params.limit).all()
+    items = list(query_obj.offset(params.offset).limit(params.limit).all())
 
     return ListResult(
         items=items,

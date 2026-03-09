@@ -17,6 +17,23 @@ from tests.ifrs.platform.conftest import (
     MockOrganization,
 )
 
+# ---------------------------------------------------------------------------
+# Import FXService once at module level with model mocks active
+# ---------------------------------------------------------------------------
+_fx_modules_patch = patch.dict(
+    "sys.modules",
+    {
+        "app.models.ifrs.core_fx.exchange_rate": MagicMock(),
+        "app.models.ifrs.core_fx.exchange_rate_type": MagicMock(),
+        "app.models.ifrs.core_org.organization": MagicMock(),
+    },
+)
+_fx_modules_patch.start()
+from app.services.finance.platform.fx import FXService  # noqa: E402
+# NOTE: do NOT call _fx_modules_patch.stop() — the patch must remain active
+# so that subsequent patch() calls can resolve module paths without re-importing
+# app.services.finance (which would cause MetaData table redefinition errors).
+
 
 @contextmanager
 def patch_fx_service():
@@ -39,6 +56,10 @@ def patch_fx_service():
                     "app.services.finance.platform.fx.coerce_uuid",
                     side_effect=lambda x: x,
                 ),
+                patch(
+                    "app.services.finance.platform.fx.select",
+                    return_value=MagicMock(),
+                ),
             ):
                 yield mock_rate_type, mock_rate
 
@@ -48,18 +69,8 @@ class TestFXService:
 
     @pytest.fixture
     def service(self):
-        """Import the service with mocked dependencies."""
-        with patch.dict(
-            "sys.modules",
-            {
-                "app.models.ifrs.core_fx.exchange_rate": MagicMock(),
-                "app.models.ifrs.core_fx.exchange_rate_type": MagicMock(),
-                "app.models.ifrs.core_org.organization": MagicMock(),
-            },
-        ):
-            from app.services.finance.platform.fx import FXService
-
-            return FXService
+        """Return the pre-imported FXService class."""
+        return FXService
 
     def test_get_rate_same_currency_returns_one(
         self, service, mock_db_session, organization_id
@@ -80,7 +91,7 @@ class TestFXService:
 
         # Result should be an ExchangeRate object (mocked)
         # No database queries should have been made
-        mock_db_session.query.assert_not_called()
+        mock_db_session.scalars.assert_not_called()
 
     def test_get_rate_direct_rate_found(
         self, service, mock_db_session, organization_id
@@ -99,10 +110,10 @@ class TestFXService:
         )
 
         # rate_type query, then direct rate query
-        mock_db_session.query.return_value.filter.return_value.first.return_value = (
-            rate_type
-        )
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = mock_rate
+        mock_db_session.scalars.return_value.first.side_effect = [
+            rate_type,
+            mock_rate,
+        ]
 
         with patch_fx_service():
             result = service.get_rate(
@@ -135,10 +146,8 @@ class TestFXService:
         # First call: rate_type lookup
         # Second call: direct rate (returns None)
         # Third call: inverse rate
-        mock_db_session.query.return_value.filter.return_value.first.return_value = (
-            rate_type
-        )
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.side_effect = [
+        mock_db_session.scalars.return_value.first.side_effect = [
+            rate_type,
             None,  # No direct rate
             inverse_rate,  # Inverse rate found
         ]
@@ -162,13 +171,14 @@ class TestFXService:
         self, service, mock_db_session, organization_id
     ):
         """get_rate should raise 404 when rate type not found."""
-        mock_db_session.query.return_value.filter.return_value.first.return_value = None
+        mock_db_session.scalars.return_value.first.return_value = None
 
         with (
             patch("app.services.finance.platform.fx.ExchangeRateType"),
             patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
             ),
+            patch("app.services.finance.platform.fx.select", return_value=MagicMock()),
             pytest.raises(HTTPException) as exc_info,
         ):
             service.get_rate(
@@ -191,10 +201,11 @@ class TestFXService:
             organization_id=organization_id,
             type_code="SPOT",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = (
-            rate_type
-        )
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        mock_db_session.scalars.return_value.first.side_effect = [
+            rate_type,
+            None,  # No direct rate
+            None,  # No inverse rate
+        ]
 
         with patch_fx_service(), pytest.raises(HTTPException) as exc_info:
             service.get_rate(
@@ -244,10 +255,10 @@ class TestFXService:
             effective_date=date.today(),
         )
 
-        mock_db_session.query.return_value.filter.return_value.first.return_value = (
-            rate_type
-        )
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = mock_rate
+        mock_db_session.scalars.return_value.first.side_effect = [
+            rate_type,
+            mock_rate,
+        ]
 
         with patch_fx_service():
             result = service.convert(
@@ -363,7 +374,7 @@ class TestFXService:
             type_code="SPOT",
             is_default=True,
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+        mock_db_session.scalars.return_value.first.return_value = (
             default_type
         )
 
@@ -372,6 +383,7 @@ class TestFXService:
             patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
             ),
+            patch("app.services.finance.platform.fx.select", return_value=MagicMock()),
         ):
             result = service.get_default_rate_type(
                 mock_db_session,
@@ -384,13 +396,14 @@ class TestFXService:
         self, service, mock_db_session, organization_id
     ):
         """get_default_rate_type should raise 404 if no default."""
-        mock_db_session.query.return_value.filter.return_value.first.return_value = None
+        mock_db_session.scalars.return_value.first.return_value = None
 
         with (
             patch("app.services.finance.platform.fx.ExchangeRateType"),
             patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
             ),
+            patch("app.services.finance.platform.fx.select", return_value=MagicMock()),
             pytest.raises(HTTPException) as exc_info,
         ):
             service.get_default_rate_type(
@@ -408,7 +421,7 @@ class TestFXService:
             organization_id=organization_id,
             type_code="SPOT",
         )
-        mock_db_session.query.return_value.filter.return_value.first.return_value = (
+        mock_db_session.scalars.return_value.first.return_value = (
             rate_type
         )
 
@@ -416,9 +429,15 @@ class TestFXService:
             with patch("app.services.finance.platform.fx.ExchangeRate") as MockRate:
                 mock_instance = MagicMock()
                 MockRate.return_value = mock_instance
-                with patch(
-                    "app.services.finance.platform.fx.coerce_uuid",
-                    side_effect=lambda x: x,
+                with (
+                    patch(
+                        "app.services.finance.platform.fx.coerce_uuid",
+                        side_effect=lambda x: x,
+                    ),
+                    patch(
+                        "app.services.finance.platform.fx.select",
+                        return_value=MagicMock(),
+                    ),
                 ):
                     service.create_rate(
                         mock_db_session,
@@ -484,13 +503,14 @@ class TestFXService:
             MockExchangeRate(organization_id=organization_id),
             MockExchangeRate(organization_id=organization_id),
         ]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_rates
+        mock_db_session.scalars.return_value.all.return_value = mock_rates
 
         with (
             patch("app.services.finance.platform.fx.ExchangeRate"),
             patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
             ),
+            patch("app.services.finance.platform.fx.select", return_value=MagicMock()),
         ):
             result = service.list(
                 mock_db_session,

@@ -34,6 +34,7 @@
     {{ period_shortcuts(mode="range") }}
     {% endcall %}
 
+    <div id="results-container">
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "Cash flow statement" %}
         {% set doc_number = start_date ~ " to " ~ end_date %}
@@ -50,6 +51,7 @@
           ], totals={"account_name": "Totals", "inflow": total_inflow, "outflow": total_outflow,
                      "net": net_cash_flow}, container=false,
           empty_title="No cash movements", empty_description="No cash movements for this period.") }}
+    </div>
     </div>
 </div>
 {% endblock %}

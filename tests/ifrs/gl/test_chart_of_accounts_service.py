@@ -2,9 +2,7 @@
 Tests for ChartOfAccountsService.
 
 Mocking strategy: The service uses SQLAlchemy 2.0 select()-based queries.
-We mock db.scalar() / db.scalars() directly. For create_account, the
-validate_unique_code helper still uses db.query() internally, so we keep
-the mock_db.query chain for that specific case.
+We mock db.scalar() / db.scalars() directly.
 """
 
 from __future__ import annotations
@@ -51,10 +49,8 @@ class TestCreateAccount:
         self, service, mock_db, org_id, sample_account_input
     ):
         """Test successful account creation."""
-        # validate_unique_code uses db.query().filter().first() internally
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        # Fallback in validate_unique_code also uses db.scalar
-        mock_db.scalar.return_value = None
+        # validate_unique_code uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_account(mock_db, org_id, sample_account_input)
 
@@ -72,8 +68,8 @@ class TestCreateAccount:
             organization_id=org_id,
             account_code=sample_account_input.account_code,
         )
-        # validate_unique_code uses db.query().filter().first()
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        # validate_unique_code uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             service.create_account(mock_db, org_id, sample_account_input)
@@ -91,9 +87,8 @@ class TestCreateAccount:
             is_multi_currency=True,
             default_currency_code="EUR",
         )
-        # validate_unique_code uses db.query().filter().first()
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_db.scalar.return_value = None
+        # validate_unique_code uses db.scalars(select(...)).first()
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_account(mock_db, org_id, input_data)
 

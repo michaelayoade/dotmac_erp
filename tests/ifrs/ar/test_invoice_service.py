@@ -50,10 +50,7 @@ class TestCreateInvoice:
         mock_account = MagicMock(organization_id=org_id)
         mock_db.get.side_effect = [customer, mock_account]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None  # No duplicate invoice
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None  # No duplicate invoice
 
         lines = [
             ARInvoiceLineInput(
@@ -743,10 +740,7 @@ class TestCreditNoteHandling:
         mock_account = MagicMock(organization_id=org_id)
         mock_db.get.side_effect = [customer, mock_account]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
         lines = [
             ARInvoiceLineInput(

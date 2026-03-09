@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -43,10 +42,6 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
-
-
-def _is_mock_session(db: Session) -> bool:
-    return isinstance(db, Mock)
 
 
 def _safe_form_text(value: object) -> str:
@@ -180,24 +175,13 @@ class FixedAssetWebService:
             status=status,
         )
 
-        if _is_mock_session(db):
-            mock_query = db.query(Asset).join().filter()
-            if search:
-                mock_query = mock_query.filter()
-            if category:
-                mock_query = mock_query.filter()
-            if status:
-                mock_query = mock_query.filter()
-            total_count = mock_query.with_entities().scalar() or 0
-            rows = mock_query.order_by().limit(limit).offset(offset).all()
-        else:
-            total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-            rows = db.execute(
-                query.add_columns(AssetCategory)
-                .order_by(Asset.asset_number)
-                .limit(limit)
-                .offset(offset)
-            ).all()
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.execute(
+            query.add_columns(AssetCategory)
+            .order_by(Asset.asset_number)
+            .limit(limit)
+            .offset(offset)
+        ).all()
 
         assets_view = []
         for asset, category_row in rows:
@@ -221,17 +205,14 @@ class FixedAssetWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
-        if _is_mock_session(db):
-            categories = []
-        else:
-            categories = db.scalars(
-                select(AssetCategory)
-                .where(
-                    AssetCategory.organization_id == org_id,
-                    AssetCategory.is_active.is_(True),
-                )
-                .order_by(AssetCategory.category_code)
-            ).all()
+        categories = db.scalars(
+            select(AssetCategory)
+            .where(
+                AssetCategory.organization_id == org_id,
+                AssetCategory.is_active.is_(True),
+            )
+            .order_by(AssetCategory.category_code)
+        ).all()
 
         active_filters = build_active_filters(
             params={"search": search, "category": category, "status": status},
@@ -343,17 +324,10 @@ class FixedAssetWebService:
                 else AssetCategory.is_active.is_(False)
             )
 
-        if _is_mock_session(db):
-            mock_query = db.query(AssetCategory).filter()
-            if is_active is not None:
-                mock_query = mock_query.filter()
-            total_count = mock_query.with_entities().scalar() or 0
-            rows = mock_query.order_by().limit(limit).offset(offset).all()
-        else:
-            total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-            rows = db.scalars(
-                query.order_by(AssetCategory.category_code).limit(limit).offset(offset)
-            ).all()
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.scalars(
+            query.order_by(AssetCategory.category_code).limit(limit).offset(offset)
+        ).all()
 
         categories_view = []
         for category in rows:
@@ -373,7 +347,9 @@ class FixedAssetWebService:
         total_pages = max(1, (total_count + limit - 1) // limit)
 
         active_filters = build_active_filters(
-            params={"is_active": str(is_active).lower() if is_active is not None else ""},
+            params={
+                "is_active": str(is_active).lower() if is_active is not None else ""
+            },
             labels={"is_active": "Status"},
             options={"is_active": {"true": "Active", "false": "Inactive"}},
         )
@@ -658,19 +634,12 @@ class FixedAssetWebService:
         if period_id:
             query = query.where(DepreciationRun.fiscal_period_id == period_id)
 
-        if _is_mock_session(db):
-            mock_query = db.query(DepreciationRun).join().filter()
-            if period_id:
-                mock_query = mock_query.filter()
-            total_count = mock_query.with_entities().scalar() or 0
-            rows = mock_query.order_by().limit(limit).offset(offset).all()
-        else:
-            total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-            rows = db.execute(
-                query.order_by(DepreciationRun.created_at.desc())
-                .limit(limit)
-                .offset(offset)
-            ).all()
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.execute(
+            query.order_by(DepreciationRun.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        ).all()
 
         runs_view = []
         for run, fiscal_period in rows:

@@ -408,7 +408,7 @@ class TestApprovalWorkflowService:
             MockApprovalRequest(organization_id=organization_id, workflow=workflow),
             MockApprovalRequest(organization_id=organization_id, workflow=workflow),
         ]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = requests
+        mock_db_session.scalars.return_value.all.return_value = requests
 
         with patch(
             "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"

@@ -4,8 +4,6 @@ Tests for ReportInstanceService.
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
-
 import pytest
 from fastapi import HTTPException
 
@@ -297,12 +295,7 @@ class TestReportInstanceServiceQueries:
         """Test getting queued reports."""
         from app.services.finance.rpt.report_instance import ReportInstanceService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = [mock_report_instance]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_instance]
 
         result = ReportInstanceService.get_queued_reports(mock_db)
 
@@ -314,12 +307,7 @@ class TestReportInstanceServiceQueries:
         """Test getting queued reports with organization filter."""
         from app.services.finance.rpt.report_instance import ReportInstanceService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = [mock_report_instance]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_instance]
 
         result = ReportInstanceService.get_queued_reports(
             mock_db, organization_id=str(org_id)
@@ -342,10 +330,7 @@ class TestReportInstanceServiceQueries:
             status=ReportStatus.FAILED,
         )
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [completed_instance, failed_instance]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [completed_instance, failed_instance]
 
         result = ReportInstanceService.get_generation_statistics(mock_db, str(org_id))
 
@@ -380,13 +365,7 @@ class TestReportInstanceServiceQueries:
         """Test listing instances."""
         from app.services.finance.rpt.report_instance import ReportInstanceService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = [mock_report_instance]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_instance]
 
         result = ReportInstanceService.list(
             mock_db,
@@ -450,10 +429,7 @@ class TestReportInstanceServiceCleanup:
         """Test cleanup of old instances."""
         from app.services.finance.rpt.report_instance import ReportInstanceService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.all.return_value = [mock_report_instance]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_instance]
 
         result = ReportInstanceService.cleanup_old_instances(
             mock_db, org_id, retention_days=30

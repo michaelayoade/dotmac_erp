@@ -331,7 +331,7 @@ class TestPeriodOperations:
             result = PeriodGuardService.open_period(mock_db, org_id, period_id, user_id)
 
         assert result.status == MockPeriodStatus.OPEN
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_open_period_not_found_raises(self, mock_db, org_id, user_id):
         """Test opening non-existent period raises error."""
@@ -361,7 +361,7 @@ class TestPeriodOperations:
             )
 
         assert result.status == MockPeriodStatus.SOFT_CLOSED
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_hard_close_period(self, mock_db, org_id, user_id):
         """Test hard-closing a soft-closed period."""
@@ -379,7 +379,7 @@ class TestPeriodOperations:
             )
 
         assert result.status == MockPeriodStatus.HARD_CLOSED
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_reopen_period(self, mock_db, org_id, user_id):
         """Test reopening a soft-closed period."""
@@ -400,7 +400,7 @@ class TestPeriodOperations:
         assert result.status == MockPeriodStatus.REOPENED
         assert result.reopen_count == 1
         assert session_id is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_close_reopen_session(self, mock_db, org_id, user_id):
         """Test closing a reopen session."""
@@ -420,7 +420,7 @@ class TestPeriodOperations:
             )
 
         assert result.status == MockPeriodStatus.SOFT_CLOSED
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
 
 class TestGetPeriodMethods:

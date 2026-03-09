@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
-from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -29,16 +28,6 @@ from app.services.response import ListResponseMixin
 logger = logging.getLogger(__name__)
 
 ASSET_STATUS_UPDATE_ERROR = "Cannot update '{key}' after asset activation"
-
-
-def _is_mock_session(db: Session) -> bool:
-    return isinstance(db, Mock)
-
-
-def _query_first(db: Session, model, stmt):
-    if _is_mock_session(db):
-        return db.query(model).filter().first()
-    return db.scalars(stmt).first()
 
 
 @dataclass
@@ -122,16 +111,14 @@ class AssetCategoryService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate category code
-        existing = _query_first(
-            db,
-            AssetCategory,
+        existing = db.scalars(
             select(AssetCategory).where(
                 and_(
                     AssetCategory.organization_id == org_id,
                     AssetCategory.category_code == input.category_code,
                 )
-            ),
-        )
+            )
+        ).first()
 
         if existing:
             raise HTTPException(
@@ -160,7 +147,7 @@ class AssetCategoryService(ListResponseMixin):
         )
 
         db.add(category)
-        db.commit()
+        db.flush()
         db.refresh(category)
 
         return category
@@ -201,11 +188,6 @@ class AssetCategoryService(ListResponseMixin):
             query = query.where(AssetCategory.is_active == is_active)
 
         query = query.order_by(AssetCategory.category_code)
-        if _is_mock_session(db):
-            mock_query = db.query(AssetCategory).filter()
-            if is_active is not None:
-                mock_query = mock_query.filter()
-            return list(mock_query.order_by().limit(limit).offset(offset).all())
         return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
@@ -225,16 +207,14 @@ class AssetCategoryService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Asset category not found")
 
         if category.category_code != input.category_code:
-            existing = _query_first(
-                db,
-                AssetCategory,
+            existing = db.scalars(
                 select(AssetCategory).where(
                     and_(
                         AssetCategory.organization_id == org_id,
                         AssetCategory.category_code == input.category_code,
                     )
-                ),
-            )
+                )
+            ).first()
             if existing:
                 raise HTTPException(
                     status_code=400,
@@ -261,7 +241,7 @@ class AssetCategoryService(ListResponseMixin):
         if is_active is not None:
             category.is_active = is_active
 
-        db.commit()
+        db.flush()
         db.refresh(category)
         return category
 
@@ -280,7 +260,7 @@ class AssetCategoryService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Asset category not found")
 
         category.is_active = not category.is_active
-        db.commit()
+        db.flush()
         db.refresh(category)
         return category
 
@@ -391,7 +371,7 @@ class AssetService(ListResponseMixin):
         )
 
         db.add(asset)
-        db.commit()
+        db.flush()
         db.refresh(asset)
 
         return asset
@@ -434,7 +414,7 @@ class AssetService(ListResponseMixin):
         asset.in_service_date = in_service_date or asset.acquisition_date
         asset.depreciation_start_date = depreciation_start_date or asset.in_service_date
 
-        db.commit()
+        db.flush()
         db.refresh(asset)
 
         return asset
@@ -505,7 +485,7 @@ class AssetService(ListResponseMixin):
                     )
                 setattr(asset, key, value)
 
-        db.commit()
+        db.flush()
         db.refresh(asset)
 
         return asset
@@ -533,7 +513,7 @@ class AssetService(ListResponseMixin):
         asset.status = AssetStatus.FULLY_DEPRECIATED
         asset.remaining_life_months = 0
 
-        db.commit()
+        db.flush()
         db.refresh(asset)
 
         return asset
@@ -563,16 +543,14 @@ class AssetService(ListResponseMixin):
         """Get an asset by asset number."""
         org_id = coerce_uuid(organization_id)
 
-        return _query_first(
-            db,
-            Asset,
+        return db.scalars(
             select(Asset).where(
                 and_(
                     Asset.organization_id == org_id,
                     Asset.asset_number == asset_number,
                 )
-            ),
-        )
+            )
+        ).first()
 
     @staticmethod
     def get_depreciable_assets(
@@ -607,8 +585,6 @@ class AssetService(ListResponseMixin):
             )
             .order_by(Asset.asset_number)
         )
-        if _is_mock_session(db):
-            return list(db.query(Asset).filter().order_by().all())
         return list(db.scalars(stmt).all())
 
     @staticmethod
@@ -653,19 +629,6 @@ class AssetService(ListResponseMixin):
             )
 
         query = query.order_by(Asset.asset_number)
-        if _is_mock_session(db):
-            mock_query = db.query(Asset).filter()
-            if category_id:
-                mock_query = mock_query.filter()
-            if status:
-                mock_query = mock_query.filter()
-            if location_id:
-                mock_query = mock_query.filter()
-            if cost_center_id:
-                mock_query = mock_query.filter()
-            if search:
-                mock_query = mock_query.filter()
-            return list(mock_query.order_by().limit(limit).offset(offset).all())
         return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
@@ -692,13 +655,7 @@ class AssetService(ListResponseMixin):
         if category_id:
             query = query.where(Asset.category_id == coerce_uuid(category_id))
 
-        if _is_mock_session(db):
-            mock_query = db.query(Asset).filter()
-            if category_id:
-                mock_query = mock_query.filter()
-            assets = list(mock_query.all())
-        else:
-            assets = list(db.scalars(query).all())
+        assets = list(db.scalars(query).all())
 
         total_cost = Decimal("0")
         total_accum_dep = Decimal("0")

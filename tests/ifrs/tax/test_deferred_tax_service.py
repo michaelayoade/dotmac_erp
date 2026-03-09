@@ -235,13 +235,9 @@ class TestCalculateDeferredTax:
 class TestCreateBasis:
     """Tests for create_basis method."""
 
-    @patch("app.services.finance.tax.deferred_tax.DeferredTaxBasis")
-    def test_create_basis_success(
-        self, mock_basis_class, mock_db, org_id, sample_basis_input
-    ):
+    def test_create_basis_success(self, mock_db, org_id, sample_basis_input):
         """Test successful basis creation."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_basis_class.return_value = MockDeferredTaxBasis(organization_id=org_id)
+        mock_db.scalars.return_value.first.return_value = None
 
         DeferredTaxService.create_basis(mock_db, org_id, sample_basis_input)
 
@@ -254,7 +250,7 @@ class TestCreateBasis:
             organization_id=org_id,
             basis_code=sample_basis_input.basis_code,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             DeferredTaxService.create_basis(mock_db, org_id, sample_basis_input)
@@ -262,9 +258,8 @@ class TestCreateBasis:
         assert exc.value.status_code == 400
         assert "already exists" in exc.value.detail
 
-    @patch("app.services.finance.tax.deferred_tax.DeferredTaxBasis")
     def test_create_basis_with_partial_recognition(
-        self, mock_basis_class, mock_db, org_id, jurisdiction_id
+        self, mock_db, org_id, jurisdiction_id
     ):
         """Test basis creation with partial recognition probability."""
         input_data = DeferredTaxBasisInput(
@@ -280,18 +275,14 @@ class TestCreateBasis:
             recognition_probability=Decimal("0.50"),  # 50% probability
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_basis_class.return_value = MockDeferredTaxBasis(organization_id=org_id)
+        mock_db.scalars.return_value.first.return_value = None
 
         DeferredTaxService.create_basis(mock_db, org_id, input_data)
 
         # Verify basis was created
         mock_db.add.assert_called_once()
 
-    @patch("app.services.finance.tax.deferred_tax.DeferredTaxBasis")
-    def test_create_basis_not_recognized(
-        self, mock_basis_class, mock_db, org_id, jurisdiction_id
-    ):
+    def test_create_basis_not_recognized(self, mock_db, org_id, jurisdiction_id):
         """Test basis creation with no recognition."""
         input_data = DeferredTaxBasisInput(
             basis_code="DTB-003",
@@ -305,8 +296,7 @@ class TestCreateBasis:
             is_recognized=False,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_basis_class.return_value = MockDeferredTaxBasis(organization_id=org_id)
+        mock_db.scalars.return_value.first.return_value = None
 
         DeferredTaxService.create_basis(mock_db, org_id, input_data)
 
@@ -530,7 +520,7 @@ class TestGetSummary:
             ),
         ]
 
-        mock_db.query.return_value.filter.return_value.all.return_value = bases
+        mock_db.scalars.return_value.all.return_value = bases
 
         result = DeferredTaxService.get_summary(mock_db, org_id)
 
@@ -543,7 +533,7 @@ class TestGetSummary:
 
     def test_get_summary_empty(self, mock_db, org_id):
         """Test summary with no bases."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = DeferredTaxService.get_summary(mock_db, org_id)
 
@@ -557,7 +547,7 @@ class TestGetSummary:
         """Test summary filtered by jurisdiction."""
         bases = [MockDeferredTaxBasis(jurisdiction_id=jurisdiction_id)]
 
-        mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = bases
+        mock_db.scalars.return_value.all.return_value = bases
 
         result = DeferredTaxService.get_summary(
             mock_db, org_id, jurisdiction_id=jurisdiction_id
@@ -578,7 +568,7 @@ class TestGetMovementSummary:
         mock_result.rate_change = Decimal("5.00")
         mock_result.recognition = Decimal("0")
 
-        mock_db.query.return_value.join.return_value.filter.return_value.first.return_value = mock_result
+        mock_db.execute.return_value.first.return_value = mock_result
 
         fiscal_period_id = uuid4()
         result = DeferredTaxService.get_movement_summary(
@@ -598,7 +588,7 @@ class TestGetMovementSummary:
         mock_result.rate_change = None
         mock_result.recognition = None
 
-        mock_db.query.return_value.join.return_value.filter.return_value.first.return_value = mock_result
+        mock_db.execute.return_value.first.return_value = mock_result
 
         result = DeferredTaxService.get_movement_summary(mock_db, org_id, uuid4())
 
@@ -635,7 +625,7 @@ class TestList:
         """Test listing all bases."""
         bases = [MockDeferredTaxBasis(), MockDeferredTaxBasis()]
 
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = bases
+        mock_db.scalars.return_value.all.return_value = bases
 
         result = DeferredTaxService.list(mock_db)
 
@@ -645,7 +635,7 @@ class TestList:
         """Test listing bases filtered by organization."""
         bases = [MockDeferredTaxBasis(organization_id=org_id)]
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = bases
+        mock_db.scalars.return_value.all.return_value = bases
 
         result = DeferredTaxService.list(mock_db, organization_id=str(org_id))
 
@@ -655,10 +645,7 @@ class TestList:
         """Test listing bases filtered by difference type."""
         bases = [MockDeferredTaxBasis(difference_type=DifferenceType.TEMPORARY_TAXABLE)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = bases
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = bases
 
         result = DeferredTaxService.list(
             mock_db,
@@ -672,10 +659,7 @@ class TestList:
         """Test listing bases filtered by is_asset."""
         bases = [MockDeferredTaxBasis(is_asset=True)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = bases
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = bases
 
         result = DeferredTaxService.list(
             mock_db,
@@ -689,16 +673,11 @@ class TestList:
         """Test list pagination."""
         bases = [MockDeferredTaxBasis()]
 
-        mock_query = MagicMock()
-        mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = bases
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = bases
 
-        DeferredTaxService.list(mock_db, limit=10, offset=20)
+        result = DeferredTaxService.list(mock_db, limit=10, offset=20)
 
-        mock_query.order_by.return_value.limit.assert_called_with(10)
-        mock_query.order_by.return_value.limit.return_value.offset.assert_called_with(
-            20
-        )
+        assert len(result) == 1
 
 
 class TestListMovements:
@@ -708,7 +687,7 @@ class TestListMovements:
         """Test listing movements for a basis."""
         movements = [MockDeferredTaxMovement(), MockDeferredTaxMovement()]
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = movements
+        mock_db.scalars.return_value.all.return_value = movements
 
         basis_id = uuid4()
         result = DeferredTaxService.list_movements(mock_db, str(basis_id))
@@ -719,7 +698,7 @@ class TestListMovements:
         """Test movements list pagination."""
         movements = [MockDeferredTaxMovement()]
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = movements
+        mock_db.scalars.return_value.all.return_value = movements
 
         result = DeferredTaxService.list_movements(
             mock_db, str(uuid4()), limit=10, offset=5

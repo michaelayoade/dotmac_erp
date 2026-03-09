@@ -40,12 +40,12 @@ class TestCreatePeriod:
 
     def test_create_period_success(self, service, mock_db, org_id, sample_period_input):
         """Test successful period creation."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_period(mock_db, org_id, sample_period_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         mock_db.refresh.assert_called_once()
 
     def test_create_period_duplicate_fails(
@@ -58,7 +58,7 @@ class TestCreatePeriod:
             fiscal_year_id=sample_period_input.fiscal_year_id,
             period_number=sample_period_input.period_number,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             service.create_period(mock_db, org_id, sample_period_input)
@@ -76,7 +76,7 @@ class TestCreatePeriod:
             end_date=date(2024, 12, 31),
             is_adjustment_period=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         service.create_period(mock_db, org_id, input_data)
 
@@ -96,7 +96,7 @@ class TestOpenPeriod:
 
         result = service.open_period(mock_db, org_id, period.fiscal_period_id, user_id)
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         assert result.status == PeriodStatus.OPEN
 
     def test_open_period_from_soft_closed(self, service, mock_db, org_id, user_id):
@@ -165,7 +165,7 @@ class TestSoftClosePeriod:
             mock_db, org_id, period.fiscal_period_id, user_id
         )
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         assert result.status == PeriodStatus.SOFT_CLOSED
 
     def test_soft_close_reopened_period(self, service, mock_db, org_id, user_id):
@@ -224,7 +224,7 @@ class TestHardClosePeriod:
             mock_db, org_id, period.fiscal_period_id, user_id
         )
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         assert result.status == PeriodStatus.HARD_CLOSED
 
     def test_hard_close_open_period_fails(self, service, mock_db, org_id, user_id):
@@ -261,7 +261,7 @@ class TestReopenPeriod:
             mock_db, org_id, period.fiscal_period_id, user_id, session_id
         )
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         assert result.status == PeriodStatus.REOPENED
         assert result.reopen_count == 1
         assert result.last_reopen_session_id == session_id
@@ -315,7 +315,7 @@ class TestListPeriods:
     def test_list_all_periods(self, service, mock_db, org_id):
         """Test listing all periods."""
         periods = [MockFiscalPeriod(organization_id=org_id) for _ in range(12)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = periods
+        mock_db.scalars.return_value.all.return_value = periods
 
         result = service.list(mock_db, organization_id=str(org_id))
 
@@ -325,7 +325,7 @@ class TestListPeriods:
         """Test listing periods by fiscal year."""
         year_id = uuid4()
         periods = [MockFiscalPeriod(organization_id=org_id, fiscal_year_id=year_id)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = periods
+        mock_db.scalars.return_value.all.return_value = periods
 
         result = service.list(
             mock_db, organization_id=str(org_id), fiscal_year_id=str(year_id)
@@ -336,7 +336,7 @@ class TestListPeriods:
     def test_list_by_status(self, service, mock_db, org_id):
         """Test listing periods by status."""
         periods = [MockFiscalPeriod(organization_id=org_id, status=PeriodStatus.OPEN)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = periods
+        mock_db.scalars.return_value.all.return_value = periods
 
         result = service.list(
             mock_db, organization_id=str(org_id), status=PeriodStatus.OPEN

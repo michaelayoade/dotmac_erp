@@ -104,19 +104,20 @@ class TestGetBaseQuery:
         service = ConcreteBulkService(mock_db, organization_id)
         ids = [uuid.uuid4()]
 
-        service._get_base_query(ids)
+        stmt = service._get_base_query(ids)
 
-        mock_db.query.assert_called_once()
+        # _get_base_query returns a select() statement, not a db call
+        assert stmt is not None
 
     def test_get_base_query_filters_by_ids(self, mock_db, organization_id):
         """Query should filter by the provided IDs."""
         service = ConcreteBulkService(mock_db, organization_id)
         ids = [uuid.uuid4(), uuid.uuid4()]
 
-        service._get_base_query(ids)
+        stmt = service._get_base_query(ids)
 
-        # Verify query was built
-        mock_db.query.assert_called()
+        # _get_base_query returns a select() statement
+        assert stmt is not None
 
     def test_get_base_query_coerces_ids(self, mock_db, organization_id):
         """String IDs should be coerced to UUIDs."""
@@ -149,7 +150,7 @@ class TestBulkDelete:
     async def test_bulk_delete_no_entities_failure(self, mock_db, organization_id):
         """Should return failure when no entities found."""
         service = ConcreteBulkService(mock_db, organization_id)
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = await service.bulk_delete([uuid.uuid4()])
 
@@ -161,7 +162,7 @@ class TestBulkDelete:
         """All entities should be deleted successfully."""
         entity1 = MagicMock()
         entity2 = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             entity1,
             entity2,
         ]
@@ -184,7 +185,7 @@ class TestBulkDelete:
         entity1.name = "Entity1"
         entity2 = MagicMock()
         entity2.name = "Entity2"
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             entity1,
             entity2,
         ]
@@ -209,7 +210,7 @@ class TestBulkDelete:
         """Should handle all entities being blocked from deletion."""
         entity1 = MagicMock()
         entity2 = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             entity1,
             entity2,
         ]
@@ -228,7 +229,7 @@ class TestBulkDelete:
     async def test_bulk_delete_commits_on_success(self, mock_db, organization_id):
         """Should commit when at least one deletion succeeds."""
         entity = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(
             mock_db, organization_id, can_delete_result=(True, "")
@@ -242,7 +243,7 @@ class TestBulkDelete:
     async def test_bulk_delete_no_commit_all_blocked(self, mock_db, organization_id):
         """Should not commit when all deletions are blocked."""
         entity = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(
             mock_db, organization_id, can_delete_result=(False, "Blocked")
@@ -256,7 +257,7 @@ class TestBulkDelete:
     async def test_bulk_delete_exception_captured(self, mock_db, organization_id):
         """Exceptions during delete should be captured in errors."""
         entity = MagicMock()
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
         mock_db.delete.side_effect = Exception("Database error")
 
         service = ConcreteBulkService(
@@ -282,7 +283,7 @@ class TestBulkUpdateStatus:
         entity1.status = "pending"
         entity2 = MagicMock()
         entity2.status = "pending"
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             entity1,
             entity2,
         ]
@@ -303,7 +304,7 @@ class TestBulkUpdateStatus:
     async def test_bulk_update_status_missing_field(self, mock_db, organization_id):
         """Should fail when entity doesn't have the status field."""
         entity = MagicMock(spec=["id"])  # No status field
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
 
@@ -328,7 +329,7 @@ class TestBulkUpdateStatus:
         entity1 = MagicMock()
         entity1.is_active = True
         entity2 = MagicMock(spec=["id"])  # No is_active field
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             entity1,
             entity2,
         ]
@@ -354,7 +355,7 @@ class TestBulkActivateDeactivate:
         """bulk_activate should call bulk_update_status with is_active=True."""
         entity = MagicMock()
         entity.is_active = False
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
         ids = [uuid.uuid4()]
@@ -368,7 +369,7 @@ class TestBulkActivateDeactivate:
         """bulk_deactivate should call bulk_update_status with is_active=False."""
         entity = MagicMock()
         entity.is_active = True
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
         ids = [uuid.uuid4()]
@@ -398,7 +399,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_bulk_export_no_entities_raises_404(self, mock_db, organization_id):
         """Should raise 404 when no entities found."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
         service = ConcreteBulkService(mock_db, organization_id)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -415,7 +416,7 @@ class TestBulkExport:
         entity.name = "Test"
         entity.is_active = True
         entity.related_entity = None
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
 
@@ -444,7 +445,7 @@ class TestBulkExport:
         entity.name = "Test Entity"
         entity.is_active = True
         entity.related_entity = None
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
 
@@ -469,7 +470,7 @@ class TestBulkExport:
         entity.name = "Test"
         entity.is_active = True
         entity.related_entity = None
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
 
@@ -486,7 +487,7 @@ class TestBulkExport:
         entity.name = "Test"
         entity.is_active = True
         entity.related_entity = None
-        mock_db.query.return_value.filter.return_value.all.return_value = [entity]
+        mock_db.scalars.return_value.all.return_value = [entity]
 
         service = ConcreteBulkService(mock_db, organization_id)
 

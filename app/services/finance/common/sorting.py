@@ -10,17 +10,16 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import asc, desc
-from sqlalchemy.orm import Query
 from sqlalchemy.sql import Select
 
 
 def apply_sort(
-    query: Query | Select,
+    query: Select,
     sort: str | None,
     sort_dir: str | None,
     column_map: dict[str, Any],
     default: Any | None = None,
-) -> Query | Select:
+) -> Select:
     """Apply user-requested sorting to a SQLAlchemy query.
 
     Args:

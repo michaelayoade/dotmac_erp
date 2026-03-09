@@ -1071,10 +1071,7 @@ class TestWebhookIdempotency:
             status=WebhookStatus.PROCESSED,
             paystack_event_id="transfer.success:REF-1",
         )
-        query = MagicMock()
-        query.filter.return_value = query
-        query.first.return_value = existing_webhook
-        db.query.return_value = query
+        db.scalar.return_value = existing_webhook
 
         client_cls = MagicMock()
         client_cls.return_value.verify_webhook_signature.return_value = True

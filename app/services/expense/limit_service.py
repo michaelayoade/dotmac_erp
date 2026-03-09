@@ -1305,7 +1305,9 @@ class ExpenseLimitService(ExpenseServiceBase):
         """Find employees who have this approver limit."""
         from app.models.people.hr.employee import Employee as EmployeeModel
         from app.models.people.hr.employee import EmployeeStatus
-        from app.models.rbac import PersonRole
+        from importlib import import_module
+
+        PersonRole = import_module("app.models.rbac").PersonRole
 
         if limit.scope_type == "EMPLOYEE":
             if limit.scope_id:
@@ -1502,7 +1504,9 @@ class ExpenseLimitService(ExpenseServiceBase):
         employee: Employee,
     ) -> tuple[Decimal, UUID] | None:
         """Get weekly approval budget in priority: employee -> grade -> designation -> role."""
-        from app.models.rbac import PersonRole
+        from importlib import import_module
+
+        PersonRole = import_module("app.models.rbac").PersonRole
 
         def _lookup(
             scope_type: str, scope_id: UUID | None

@@ -25,7 +25,7 @@ class TestLeaseModificationService:
             ModificationInput,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = ModificationInput(
             lease_id=uuid.uuid4(),
@@ -52,7 +52,7 @@ class TestLeaseModificationService:
         )
 
         mock_contract.status = LeaseStatus.DRAFT
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_contract
         )
 
@@ -81,13 +81,11 @@ class TestLeaseModificationService:
         )
 
         # Service queries contract, then liability, then asset
-        mock_query = MagicMock()
-        mock_query.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             mock_active_contract,  # Contract query
             None,  # Liability query
             None,  # Asset query
         ]
-        mock_db.query.return_value = mock_query
 
         input_data = ModificationInput(
             lease_id=mock_active_contract.lease_id,
@@ -112,7 +110,7 @@ class TestLeaseModificationService:
             LeaseModificationService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc_info:
             LeaseModificationService.approve_modification(
@@ -135,7 +133,7 @@ class TestLeaseModificationService:
         )
 
         mock_modification.created_by_user_id = user_id
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_modification
         )
 
@@ -158,7 +156,7 @@ class TestLeaseModificationService:
             LeaseModificationService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_modification
         )
 
@@ -178,7 +176,7 @@ class TestLeaseModificationService:
             LeaseModificationService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_modification
         )
 
@@ -195,7 +193,7 @@ class TestLeaseModificationService:
             LeaseModificationService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = LeaseModificationService.get(mock_db, str(uuid.uuid4()))
 
@@ -210,7 +208,7 @@ class TestLeaseModificationService:
         mock_modifications = [
             MockLeaseModification(lease_id=mock_contract.lease_id) for _ in range(3)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_modifications
+        mock_db.scalars.return_value.all.return_value = mock_modifications
 
         result = LeaseModificationService.list_by_lease(mock_db, mock_contract.lease_id)
 
@@ -223,7 +221,7 @@ class TestLeaseModificationService:
         )
 
         mock_modifications = [MockLeaseModification() for _ in range(5)]
-        mock_db.query.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = mock_modifications
+        mock_db.scalars.return_value.all.return_value = mock_modifications
 
         result = LeaseModificationService.list(mock_db)
 
@@ -238,7 +236,7 @@ class TestLeaseModificationService:
         mock_modifications = [
             MockLeaseModification(modification_type=ModificationType.TERM_EXTENSION)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = mock_modifications
+        mock_db.scalars.return_value.all.return_value = mock_modifications
 
         result = LeaseModificationService.list(
             mock_db,
@@ -254,7 +252,7 @@ class TestLeaseModificationService:
         )
 
         mock_modifications = [MockLeaseModification()]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = mock_modifications
+        mock_db.scalars.return_value.all.return_value = mock_modifications
 
         result = LeaseModificationService.list(
             mock_db,

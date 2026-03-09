@@ -10,6 +10,19 @@ import pytest
 
 from tests.ifrs.platform.conftest import MockColumn, MockEventOutbox
 
+# ---------------------------------------------------------------------------
+# Import OutboxPublisher once at module level with model mocks active
+# ---------------------------------------------------------------------------
+_outbox_modules_patch = patch.dict(
+    "sys.modules",
+    {
+        "app.models.ifrs.platform.event_outbox": MagicMock(),
+    },
+)
+_outbox_modules_patch.start()
+from app.services.finance.platform.outbox_publisher import OutboxPublisher  # noqa: E402
+# NOTE: do NOT call stop() — patch must remain active for module path resolution.
+
 
 @contextmanager
 def patch_outbox_publisher():
@@ -21,6 +34,10 @@ def patch_outbox_publisher():
         mock_outbox.next_retry_at = MockColumn()
         mock_outbox.retry_count = MockColumn()
         mock_outbox.producer_module = MockColumn()
+        mock_outbox.occurred_at = MockColumn()
+        mock_outbox.correlation_id = MockColumn()
+        mock_outbox.aggregate_type = MockColumn()
+        mock_outbox.aggregate_id = MockColumn()
         with (
             patch(
                 "app.services.finance.platform.outbox_publisher.and_",
@@ -34,6 +51,10 @@ def patch_outbox_publisher():
                 "app.services.finance.platform.outbox_publisher.coerce_uuid",
                 side_effect=lambda x: x,
             ),
+            patch(
+                "app.services.finance.platform.outbox_publisher.select",
+                return_value=MagicMock(),
+            ),
         ):
             yield mock_outbox
 
@@ -43,16 +64,8 @@ class TestOutboxPublisher:
 
     @pytest.fixture
     def service(self):
-        """Import the service with mocked dependencies."""
-        with patch.dict(
-            "sys.modules",
-            {
-                "app.models.ifrs.platform.event_outbox": MagicMock(),
-            },
-        ):
-            from app.services.finance.platform.outbox_publisher import OutboxPublisher
-
-            return OutboxPublisher
+        """Return the pre-imported OutboxPublisher class."""
+        return OutboxPublisher
 
     @pytest.fixture
     def mock_event_status(self):
@@ -269,17 +282,23 @@ class TestOutboxPublisher:
     ):
         """get_failed_events should return failed events."""
         mock_events = [MockEventOutbox(status="FAILED")]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_events
+        mock_db_session.scalars.return_value.all.return_value = mock_events
 
-        with patch("app.services.finance.platform.outbox_publisher.EventOutbox"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.outbox_publisher.EventOutbox"),
+            patch(
                 "app.services.finance.platform.outbox_publisher.EventStatus",
                 mock_event_status,
-            ):
-                result = service.get_failed_events(
-                    mock_db_session,
-                    status=mock_event_status.FAILED,
-                )
+            ),
+            patch(
+                "app.services.finance.platform.outbox_publisher.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.get_failed_events(
+                mock_db_session,
+                status=mock_event_status.FAILED,
+            )
 
         assert len(result) == 1
 
@@ -355,9 +374,15 @@ class TestOutboxPublisher:
         mock_events = [
             MockEventOutbox(aggregate_type="JournalEntry", aggregate_id="123")
         ]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_events
+        mock_db_session.scalars.return_value.all.return_value = mock_events
 
-        with patch("app.services.finance.platform.outbox_publisher.EventOutbox"):
+        with (
+            patch("app.services.finance.platform.outbox_publisher.EventOutbox"),
+            patch(
+                "app.services.finance.platform.outbox_publisher.select",
+                return_value=MagicMock(),
+            ),
+        ):
             result = service.get_events_by_aggregate(
                 mock_db_session,
                 aggregate_type="JournalEntry",
@@ -371,9 +396,15 @@ class TestOutboxPublisher:
     ):
         """get_events_by_correlation should filter by correlation ID."""
         mock_events = [MockEventOutbox(correlation_id="corr-123")]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = mock_events
+        mock_db_session.scalars.return_value.all.return_value = mock_events
 
-        with patch("app.services.finance.platform.outbox_publisher.EventOutbox"):
+        with (
+            patch("app.services.finance.platform.outbox_publisher.EventOutbox"),
+            patch(
+                "app.services.finance.platform.outbox_publisher.select",
+                return_value=MagicMock(),
+            ),
+        ):
             result = service.get_events_by_correlation(
                 mock_db_session,
                 correlation_id="corr-123",
@@ -384,19 +415,25 @@ class TestOutboxPublisher:
     def test_list_returns_events(self, service, mock_db_session, mock_event_status):
         """list should return filtered events."""
         mock_events = [MockEventOutbox(), MockEventOutbox()]
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_events
+        mock_db_session.scalars.return_value.all.return_value = mock_events
 
-        with patch("app.services.finance.platform.outbox_publisher.EventOutbox"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.outbox_publisher.EventOutbox"),
+            patch(
                 "app.services.finance.platform.outbox_publisher.EventStatus",
                 mock_event_status,
-            ):
-                result = service.list(
-                    mock_db_session,
-                    status=mock_event_status.PENDING,
-                    producer_module="GL",
-                    limit=50,
-                    offset=0,
-                )
+            ),
+            patch(
+                "app.services.finance.platform.outbox_publisher.select",
+                return_value=MagicMock(),
+            ),
+        ):
+            result = service.list(
+                mock_db_session,
+                status=mock_event_status.PENDING,
+                producer_module="GL",
+                limit=50,
+                offset=0,
+            )
 
         assert len(result) == 2

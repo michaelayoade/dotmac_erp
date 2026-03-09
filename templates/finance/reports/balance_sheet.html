@@ -37,6 +37,7 @@
     {{ filter_date_field("as_of_date", "As of date", as_of_date_iso) }}
     {% endcall %}
 
+    <div id="results-container">
     <!-- Report -->
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "Statement of financial position" %}
@@ -344,6 +345,7 @@
         </div>
         {% endif %}
         {% endif %}
+    </div>
     </div>
 </div>
 {% endblock %}

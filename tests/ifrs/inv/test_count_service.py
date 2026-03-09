@@ -205,20 +205,15 @@ def mock_warehouse(org_id, warehouse_id):
 def mock_db():
     """Create a mock database session."""
     session = MagicMock()
-    session.query = MagicMock(return_value=session)
-    session.filter = MagicMock(return_value=session)
-    session.first = MagicMock(return_value=None)
-    session.all = MagicMock(return_value=[])
+    session.scalars = MagicMock(return_value=MagicMock(first=MagicMock(return_value=None), all=MagicMock(return_value=[])))
+    session.scalar = MagicMock(return_value=None)
+    session.execute = MagicMock()
     session.add = MagicMock()
     session.commit = MagicMock()
     session.flush = MagicMock()
     session.refresh = MagicMock()
     session.delete = MagicMock()
     session.get = MagicMock(return_value=None)
-    session.order_by = MagicMock(return_value=session)
-    session.limit = MagicMock(return_value=session)
-    session.offset = MagicMock(return_value=session)
-    session.scalar = MagicMock(return_value=None)
     return session
 
 
@@ -233,7 +228,7 @@ class TestCreateCount:
     ):
         """Should raise HTTPException when count number already exists."""
         existing = MockInventoryCount(organization_id=org_id, count_number="CNT-001")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         input = CountInput(
             count_number="CNT-001",
@@ -251,8 +246,8 @@ class TestCreateCount:
         self, mock_db, org_id, user_id, fiscal_period_id
     ):
         """Should create count in DRAFT status."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_db.query.return_value.filter.return_value.all.return_value = []  # No items
+        mock_db.scalars.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = []  # No items
 
         input = CountInput(
             count_number="CNT-NEW",
@@ -274,8 +269,8 @@ class TestCreateCount:
         self, mock_db, org_id, user_id, fiscal_period_id, warehouse_id, mock_warehouse
     ):
         """Should create count scoped to specific warehouse."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_db.query.return_value.filter.return_value.all.return_value = []  # No items
+        mock_db.scalars.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = []  # No items
         mock_db.get.return_value = mock_warehouse
 
         input = CountInput(
@@ -297,8 +292,8 @@ class TestCreateCount:
         self, mock_db, org_id, user_id, fiscal_period_id, mock_item, mock_warehouse
     ):
         """Should create count lines for items with stock."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        mock_db.scalars.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.side_effect = [
             [mock_item],  # Items query
             [mock_warehouse],  # Warehouses query
         ]
@@ -322,8 +317,8 @@ class TestCreateCount:
         self, mock_db, org_id, user_id, fiscal_period_id, mock_item, mock_warehouse
     ):
         """Should include zero-stock items in full count."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        mock_db.scalars.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.side_effect = [
             [mock_item],  # Items query
             [mock_warehouse],  # Warehouses query
         ]
@@ -424,10 +419,10 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             existing_line
         )
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 1
+        mock_db.scalar.return_value = 1
 
         input = CountLineInput(
             item_id=item_id,
@@ -456,10 +451,10 @@ class TestRecordCount:
             unit_cost=Decimal("25.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             existing_line
         )
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 1
+        mock_db.scalar.return_value = 1
 
         input = CountLineInput(
             item_id=item_id,
@@ -487,10 +482,10 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             existing_line
         )
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 1
+        mock_db.scalar.return_value = 1
 
         input = CountLineInput(
             item_id=item_id,
@@ -511,10 +506,10 @@ class TestRecordCount:
         mock_db.get.side_effect = lambda model, id: (
             mock_count if id == mock_count.count_id else mock_item
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             None  # No existing line
         )
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 0
+        mock_db.scalar.return_value = 0
 
         input = CountLineInput(
             item_id=mock_item.item_id,
@@ -541,10 +536,10 @@ class TestRecordCount:
             counted_quantity=None,
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             existing_line
         )
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 0
+        mock_db.scalar.return_value = 0
 
         input = CountLineInput(
             item_id=item_id,
@@ -571,10 +566,10 @@ class TestRecordCount:
             unit_cost=Decimal("10.00"),
         )
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             existing_line
         )
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 0
+        mock_db.scalar.return_value = 0
 
         input = CountLineInput(
             item_id=item_id,
@@ -733,7 +728,7 @@ class TestPostCount:
         mock_db.get.side_effect = lambda model, id: (
             mock_count if id == mock_count.count_id else mock_item
         )
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             variance_line
         ]
 
@@ -750,7 +745,7 @@ class TestPostCount:
         """Should set status to POSTED and record poster."""
         mock_count.status = CountStatus.COMPLETED
         mock_db.get.return_value = mock_count
-        mock_db.query.return_value.filter.return_value.all.return_value = []  # No lines
+        mock_db.scalars.return_value.all.return_value = []  # No lines
 
         with patch(
             "app.services.inventory.transaction.InventoryTransactionService.create_adjustment"
@@ -865,9 +860,7 @@ class TestListCounts:
 
     def test_returns_all_when_no_filters(self, mock_db, mock_count):
         """Should return all counts when no filters applied."""
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = [
-            mock_count
-        ]
+        mock_db.scalars.return_value.all.return_value = [mock_count]
 
         result = InventoryCountService.list(mock_db)
 
@@ -875,27 +868,27 @@ class TestListCounts:
 
     def test_filters_by_organization(self, mock_db, org_id):
         """Should filter by organization_id."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         InventoryCountService.list(mock_db, organization_id=str(org_id))
 
-        mock_db.query.return_value.filter.assert_called()
+        mock_db.scalars.assert_called()
 
     def test_filters_by_warehouse(self, mock_db, warehouse_id):
         """Should filter by warehouse_id."""
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         InventoryCountService.list(mock_db, warehouse_id=str(warehouse_id))
 
-        assert mock_db.query.return_value.filter.called
+        mock_db.scalars.assert_called()
 
     def test_filters_by_status(self, mock_db):
         """Should filter by status."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         InventoryCountService.list(mock_db, status=CountStatus.DRAFT)
 
-        mock_db.query.return_value.filter.assert_called()
+        mock_db.scalars.assert_called()
 
 
 # ============ Tests for list_lines ============
@@ -908,10 +901,7 @@ class TestListLines:
         """Should return lines for specified count."""
         line1 = MockCountLine(count_id=count_id)
         line2 = MockCountLine(count_id=count_id)
-        mock_db.query.return_value.filter.return_value.limit.return_value.offset.return_value.all.return_value = [
-            line1,
-            line2,
-        ]
+        mock_db.scalars.return_value.all.return_value = [line1, line2]
 
         result = InventoryCountService.list_lines(mock_db, str(count_id))
 
@@ -919,20 +909,19 @@ class TestListLines:
 
     def test_filters_by_has_variance(self, mock_db, count_id):
         """Should filter by has_variance flag."""
-        mock_db.query.return_value.filter.return_value.filter.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         InventoryCountService.list_lines(mock_db, str(count_id), has_variance=True)
 
-        # Should call filter multiple times
-        assert mock_db.query.return_value.filter.return_value.filter.called
+        mock_db.scalars.assert_called()
 
     def test_filters_by_is_counted(self, mock_db, count_id):
         """Should filter by is_counted flag."""
-        mock_db.query.return_value.filter.return_value.filter.return_value.limit.return_value.offset.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         InventoryCountService.list_lines(mock_db, str(count_id), is_counted=True)
 
-        assert mock_db.query.return_value.filter.return_value.filter.called
+        mock_db.scalars.assert_called()
 
 
 # ============ Tests for module-level instance ============

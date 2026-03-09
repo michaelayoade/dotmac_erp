@@ -25,7 +25,6 @@ from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, Jou
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
-from app.services.finance.common.helpers import is_mock_session, mock_safe_commit
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.org_context import org_context_service
@@ -343,7 +342,6 @@ class JournalService(ListResponseMixin):
             db.add(entry_line)
 
         db.flush()
-        mock_safe_commit(db)
         db.refresh(journal)
 
         fire_audit_event(
@@ -504,7 +502,6 @@ class JournalService(ListResponseMixin):
             db.add(entry_line)
 
         db.flush()
-        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -586,7 +583,6 @@ class JournalService(ListResponseMixin):
         )
 
         db.flush()
-        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -653,7 +649,6 @@ class JournalService(ListResponseMixin):
         )
 
         db.flush()
-        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -801,7 +796,6 @@ class JournalService(ListResponseMixin):
         )
 
         db.flush()
-        mock_safe_commit(db)
         db.refresh(journal)
 
         return journal
@@ -861,7 +855,7 @@ class JournalService(ListResponseMixin):
                 JournalEntry,
                 JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
             ).where(JournalEntry.organization_id == org_id)
-        elif not is_mock_session(db):
+        else:
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         return list(db.scalars(stmt.order_by(JournalEntryLine.line_number)).all())
@@ -901,7 +895,7 @@ class JournalService(ListResponseMixin):
             stmt = stmt.where(
                 JournalEntry.organization_id == coerce_uuid(organization_id)
             )
-        elif not is_mock_session(db):
+        else:
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         if status:
@@ -1035,7 +1029,6 @@ class JournalService(ListResponseMixin):
             journal.status = JournalStatus.REVERSED
             db.add(reversal)
             db.flush()
-            mock_safe_commit(db)
             db.refresh(reversal)
             return reversal
 

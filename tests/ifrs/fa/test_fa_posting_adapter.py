@@ -70,7 +70,7 @@ class TestFAPostingAdapterDepreciation:
         mock_run.status = DepreciationRunStatus.POSTING
 
         mock_db.get.return_value = mock_run
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = FAPostingAdapter.post_depreciation_run(
             mock_db,
@@ -205,7 +205,7 @@ class TestFAPostingAdapterDepreciationSuccess:
         ]
 
         mock_db.get.return_value = mock_run
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
+        mock_db.scalars.return_value.all.return_value = mock_schedules
 
         with (
             patch(
@@ -270,7 +270,7 @@ class TestFAPostingAdapterDepreciationSuccess:
         ]
 
         mock_db.get.return_value = mock_run
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_schedules
+        mock_db.scalars.return_value.all.return_value = mock_schedules
 
         with (
             patch(

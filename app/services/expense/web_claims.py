@@ -76,8 +76,16 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
 
         from datetime import date as date_type
 
-        start = date_type.fromisoformat(start_date) if start_date else None
-        end = date_type.fromisoformat(end_date) if end_date else None
+        def _parse_date(value: str | None):
+            if not value:
+                return None
+            try:
+                return date_type.fromisoformat(value)
+            except ValueError:
+                return None
+
+        start = _parse_date(start_date)
+        end = _parse_date(end_date)
 
         stmt = (
             select(ExpenseClaim)
@@ -200,6 +208,8 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "total": total or 0,
                 "offset": offset,
                 "limit": limit,
+                "page": (offset // limit) + 1 if limit > 0 else 1,
+                "total_pages": ((total or 0) + limit - 1) // limit if limit > 0 else 1,
                 "can_delete_claim": can_delete_claim,
                 "active_filters": build_active_filters(
                     params={

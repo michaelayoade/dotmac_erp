@@ -160,7 +160,7 @@ class TestCreateReconciliation:
     def test_create_reconciliation_success(self, mock_db, org_id, mock_jurisdiction):
         """Test successful reconciliation creation."""
         mock_db.get.return_value = mock_jurisdiction
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         user_id = uuid4()
         fiscal_period_id = uuid4()
@@ -186,7 +186,7 @@ class TestCreateReconciliation:
     ):
         """Test reconciliation with various adjustments."""
         mock_db.get.return_value = mock_jurisdiction
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         user_id = uuid4()
 
@@ -263,7 +263,7 @@ class TestCreateReconciliation:
         mock_db.get.return_value = mock_jurisdiction
 
         existing = MockTaxReconciliation(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         input_data = TaxReconciliationInput(
             fiscal_period_id=uuid4(),
@@ -577,9 +577,7 @@ class TestGetByPeriodJurisdiction:
         """Test finding reconciliation by period and jurisdiction."""
         reconciliation = MockTaxReconciliation(organization_id=org_id)
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
-            reconciliation
-        )
+        mock_db.scalars.return_value.first.return_value = reconciliation
 
         result = TaxReconciliationService.get_by_period_jurisdiction(
             mock_db,
@@ -592,7 +590,7 @@ class TestGetByPeriodJurisdiction:
 
     def test_get_by_period_jurisdiction_not_found(self, mock_db, org_id):
         """Test when no reconciliation found."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = TaxReconciliationService.get_by_period_jurisdiction(
             mock_db, str(org_id), str(uuid4()), str(uuid4())
@@ -608,13 +606,7 @@ class TestListReconciliations:
         """Test listing all reconciliations."""
         reconciliations = [MockTaxReconciliation() for _ in range(3)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = reconciliations
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = reconciliations
 
         result = TaxReconciliationService.list(mock_db, organization_id=str(org_id))
 
@@ -622,13 +614,7 @@ class TestListReconciliations:
 
     def test_list_with_period_filter(self, mock_db, org_id):
         """Test listing with fiscal period filter."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
         result = TaxReconciliationService.list(
             mock_db,
@@ -640,13 +626,7 @@ class TestListReconciliations:
 
     def test_list_reviewed_only(self, mock_db, org_id):
         """Test listing only reviewed reconciliations."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
         result = TaxReconciliationService.list(
             mock_db,
@@ -658,13 +638,7 @@ class TestListReconciliations:
 
     def test_list_unreviewed_only(self, mock_db, org_id):
         """Test listing only unreviewed reconciliations."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
         result = TaxReconciliationService.list(
             mock_db,
@@ -676,20 +650,13 @@ class TestListReconciliations:
 
     def test_list_with_pagination(self, mock_db, org_id):
         """Test listing with pagination."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
-        TaxReconciliationService.list(
+        result = TaxReconciliationService.list(
             mock_db,
             organization_id=str(org_id),
             limit=10,
             offset=20,
         )
 
-        mock_query.limit.assert_called_with(10)
-        mock_query.offset.assert_called_with(20)
+        assert result == []

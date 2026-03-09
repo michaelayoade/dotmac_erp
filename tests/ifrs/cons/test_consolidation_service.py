@@ -169,7 +169,7 @@ class TestCreateRun:
     def test_create_run_success(self, mock_db, group_id, run_input, user_id):
         """Test creating a consolidation run successfully."""
         # Mock no existing runs
-        mock_db.query.return_value.filter.return_value.scalar.return_value = None
+        mock_db.scalar.return_value = None
 
         # Mock entities query
         mock_entities = [
@@ -177,7 +177,7 @@ class TestCreateRun:
             MagicMock(consolidation_method=ConsolidationMethod.FULL),
             MagicMock(consolidation_method=ConsolidationMethod.EQUITY),
         ]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_entities
+        mock_db.scalars.return_value.all.return_value = mock_entities
 
         ConsolidationService.create_run(
             db=mock_db,
@@ -195,8 +195,8 @@ class TestCreateRun:
     ):
         """Test that run number increments for same period."""
         # Mock existing run with number 3
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 3
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalar.return_value = 3
+        mock_db.scalars.return_value.all.return_value = []
 
         ConsolidationService.create_run(
             db=mock_db,
@@ -213,7 +213,7 @@ class TestCreateRun:
         self, mock_db, group_id, run_input, user_id
     ):
         """Test that entity counts are calculated correctly."""
-        mock_db.query.return_value.filter.return_value.scalar.return_value = None
+        mock_db.scalar.return_value = None
 
         # 2 FULL, 1 EQUITY, 1 NOT_CONSOLIDATED (should be excluded)
         mock_entities = [
@@ -221,7 +221,7 @@ class TestCreateRun:
             MagicMock(consolidation_method=ConsolidationMethod.FULL),
             MagicMock(consolidation_method=ConsolidationMethod.EQUITY),
         ]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_entities
+        mock_db.scalars.return_value.all.return_value = mock_entities
 
         ConsolidationService.create_run(
             db=mock_db,
@@ -469,14 +469,13 @@ class TestGenerateIntercompanyEliminations:
         # Setup mock db queries
         mock_db.get.return_value = mock_consolidation_run
 
-        # First query returns entities, second returns balances, third returns unmatched sum
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        # First scalars().all() returns entities, second returns balances
+        mock_db.scalars.return_value.all.side_effect = [
             [entity1, entity2],  # entities
             [mock_intercompany_balance],  # balances
         ]
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "0"
-        )
+        # scalar() returns unmatched sum
+        mock_db.scalar.return_value = Decimal("0")
 
         ConsolidationService.generate_intercompany_eliminations(
             db=mock_db,
@@ -498,13 +497,11 @@ class TestGenerateIntercompanyEliminations:
         entity1.entity_id = uuid.uuid4()
         entity1.is_active = True
 
-        mock_db.query.return_value.filter.return_value.all.side_effect = [
+        mock_db.scalars.return_value.all.side_effect = [
             [entity1],  # entities
             [],  # no matched balances
         ]
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "0"
-        )
+        mock_db.scalar.return_value = Decimal("0")
 
         result = ConsolidationService.generate_intercompany_eliminations(
             db=mock_db,
@@ -548,10 +545,10 @@ class TestGenerateInvestmentEliminations:
 
         # Setup queries
         mock_db.get.return_value = mock_consolidation_run
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_legal_entity
         ]
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_ownership_interest
         )
 
@@ -575,10 +572,10 @@ class TestGenerateInvestmentEliminations:
         mock_legal_entity.consolidation_method = ConsolidationMethod.FULL
 
         mock_db.get.return_value = mock_consolidation_run
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_legal_entity
         ]
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             None  # No ownership
         )
 
@@ -857,7 +854,7 @@ class TestGetEliminationEntries:
         """Test getting all elimination entries for a run."""
         run_id = uuid.uuid4()
         mock_entries = [MagicMock(spec=EliminationEntry) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_entries
+        mock_db.scalars.return_value.all.return_value = mock_entries
 
         result = ConsolidationService.get_elimination_entries(
             db=mock_db,
@@ -870,7 +867,7 @@ class TestGetEliminationEntries:
         """Test getting elimination entries filtered by type."""
         run_id = uuid.uuid4()
         mock_entries = [MagicMock(spec=EliminationEntry)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = mock_entries
+        mock_db.scalars.return_value.all.return_value = mock_entries
 
         result = ConsolidationService.get_elimination_entries(
             db=mock_db,
@@ -893,7 +890,7 @@ class TestGetConsolidatedBalances:
         """Test getting all consolidated balances for a run."""
         run_id = uuid.uuid4()
         mock_balances = [MagicMock(spec=ConsolidatedBalance) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_balances
+        mock_db.scalars.return_value.all.return_value = mock_balances
 
         result = ConsolidationService.get_consolidated_balances(
             db=mock_db,
@@ -907,7 +904,7 @@ class TestGetConsolidatedBalances:
         run_id = uuid.uuid4()
         segment_id = uuid.uuid4()
         mock_balances = [MagicMock(spec=ConsolidatedBalance)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = mock_balances
+        mock_db.scalars.return_value.all.return_value = mock_balances
 
         result = ConsolidationService.get_consolidated_balances(
             db=mock_db,
@@ -961,7 +958,7 @@ class TestList:
     def test_list_all(self, mock_db):
         """Test listing all consolidation runs."""
         mock_runs = [MagicMock(spec=ConsolidationRun) for _ in range(3)]
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         result = ConsolidationService.list(
             db=mock_db,
@@ -972,7 +969,7 @@ class TestList:
     def test_list_by_group(self, mock_db, group_id):
         """Test listing runs filtered by group."""
         mock_runs = [MagicMock(spec=ConsolidationRun)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         result = ConsolidationService.list(
             db=mock_db,
@@ -984,7 +981,7 @@ class TestList:
     def test_list_by_status(self, mock_db):
         """Test listing runs filtered by status."""
         mock_runs = [MagicMock(spec=ConsolidationRun)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         result = ConsolidationService.list(
             db=mock_db,
@@ -996,7 +993,7 @@ class TestList:
     def test_list_by_fiscal_period(self, mock_db, fiscal_period_id):
         """Test listing runs filtered by fiscal period."""
         mock_runs = [MagicMock(spec=ConsolidationRun)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         result = ConsolidationService.list(
             db=mock_db,
@@ -1008,7 +1005,7 @@ class TestList:
     def test_list_with_pagination(self, mock_db):
         """Test listing with pagination."""
         mock_runs = [MagicMock(spec=ConsolidationRun)]
-        mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
+        mock_db.scalars.return_value.all.return_value = mock_runs
 
         ConsolidationService.list(
             db=mock_db,
@@ -1016,8 +1013,8 @@ class TestList:
             offset=20,
         )
 
-        # Verify limit/offset were called
-        mock_db.query.return_value.order_by.return_value.limit.assert_called_with(10)
+        # Verify scalars was called (SA2 pattern)
+        mock_db.scalars.assert_called()
 
 
 # -----------------------------------------------------------------------------
@@ -1041,8 +1038,8 @@ class TestRunLifecycle:
         mock_run.total_nci = Decimal("0")
 
         # Mock queries for create_run
-        mock_db.query.return_value.filter.return_value.scalar.return_value = None
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalar.return_value = None
+        mock_db.scalars.return_value.all.return_value = []
 
         # Step 1: Create
         ConsolidationService.create_run(

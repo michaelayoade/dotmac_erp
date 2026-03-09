@@ -37,12 +37,12 @@ class TestAssetCategoryService:
         )
 
         # Mock no existing category with same code
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         AssetCategoryService.create_category(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         mock_db.refresh.assert_called_once()
 
     def test_create_category_duplicate_code(self, mock_db, org_id):
@@ -55,7 +55,7 @@ class TestAssetCategoryService:
         )
 
         existing_category = MockAssetCategory(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             existing_category
         )
 
@@ -105,7 +105,7 @@ class TestAssetCategoryService:
         from app.services.fixed_assets.asset import AssetCategoryService
 
         mock_categories = [MockAssetCategory(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_categories
+        mock_db.scalars.return_value.all.return_value = mock_categories
 
         result = AssetCategoryService.list(mock_db, str(org_id))
 
@@ -116,7 +116,7 @@ class TestAssetCategoryService:
         from app.services.fixed_assets.asset import AssetCategoryService
 
         mock_categories = [MockAssetCategory(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_categories
+        mock_db.scalars.return_value.all.return_value = mock_categories
 
         result = AssetCategoryService.list(mock_db, str(org_id), is_active=True)
 
@@ -148,7 +148,7 @@ class TestAssetService:
             AssetService.create_asset(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
         mock_db.refresh.assert_called_once()
 
     def test_create_asset_category_not_found(self, mock_db, org_id, user_id):
@@ -250,7 +250,7 @@ class TestAssetService:
         """Test getting asset by asset number."""
         from app.services.fixed_assets.asset import AssetService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_asset
+        mock_db.scalars.return_value.first.return_value = mock_asset
 
         result = AssetService.get_by_number(mock_db, org_id, "FA-0001")
 
@@ -262,7 +262,7 @@ class TestAssetService:
         from app.services.fixed_assets.asset import AssetService
 
         mock_assets = [MockAsset(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_assets
+        mock_db.scalars.return_value.all.return_value = mock_assets
 
         result = AssetService.list(mock_db, str(org_id))
 
@@ -275,7 +275,7 @@ class TestAssetService:
         mock_assets = [
             MockAsset(organization_id=org_id, category_id=mock_category.category_id)
         ]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_assets
+        mock_db.scalars.return_value.all.return_value = mock_assets
 
         result = AssetService.list(
             mock_db, str(org_id), category_id=str(mock_category.category_id)
@@ -291,7 +291,7 @@ class TestAssetService:
             MockAsset(organization_id=org_id, status=MockAssetStatus.ACTIVE)
             for _ in range(3)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_assets
+        mock_db.scalars.return_value.all.return_value = mock_assets
 
         result = AssetService.get_depreciable_assets(mock_db, org_id)
 
@@ -311,7 +311,7 @@ class TestAssetService:
             {"asset_name": "Updated Computer"},
         )
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_update_asset_not_found(self, mock_db, org_id):
         """Test updating non-existent asset fails."""
@@ -362,7 +362,7 @@ class TestAssetService:
 
         AssetService.activate_asset(mock_db, org_id, mock_asset.asset_id)
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_activate_asset_wrong_status(self, mock_db, org_id, mock_asset):
         """Test activating asset with wrong status fails."""
@@ -392,7 +392,7 @@ class TestAssetService:
             )
             for _ in range(3)
         ]
-        mock_db.query.return_value.filter.return_value.all.return_value = mock_assets
+        mock_db.scalars.return_value.all.return_value = mock_assets
 
         result = AssetService.get_asset_summary(mock_db, org_id)
 
@@ -410,4 +410,4 @@ class TestAssetService:
 
         AssetService.mark_fully_depreciated(mock_db, org_id, mock_asset.asset_id)
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()

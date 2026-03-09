@@ -102,10 +102,53 @@
         </div>
     </div>
 
+    {% set saved_view = request.query_params.get('view') or 'all' %}
+    {% set compact_active_filters = active_filters %}
+    {% if saved_view != 'all' %}
+        {% set compact_active_filters = active_filters | rejectattr('name', 'equalto', 'status') | list %}
+    {% endif %}
+    <div class="card p-4 md:p-5">
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+                <p class="text-sm font-semibold text-slate-900 dark:text-white">Saved Views</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Jump to common employee segments without rebuilding filters.</p>
+            </div>
+            <a href="/people/hr/employees"
+               class="text-xs font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
+                Reset views
+            </a>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+            <a href="/people/hr/employees"
+               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900/30 dark:text-teal-300' if saved_view == 'all' else 'border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:text-teal-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-teal-800 dark:hover:text-teal-300' }}">
+                <span>All</span>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-mono tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ stats.total | default(0) }}</span>
+            </a>
+            <a href="/people/hr/employees?status=active&view=active"
+               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' if saved_view == 'active' else 'border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-emerald-800 dark:hover:text-emerald-300' }}">
+                <span>Active</span>
+                <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-mono tabular-nums text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ stats.active | default(0) }}</span>
+            </a>
+            <a href="/people/hr/employees?status=on_leave&view=on_leave"
+               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300' if saved_view == 'on_leave' else 'border-slate-200 bg-white text-slate-600 hover:border-amber-200 hover:text-amber-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-amber-800 dark:hover:text-amber-300' }}">
+                <span>On Leave</span>
+                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-mono tabular-nums text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">{{ stats.on_leave | default(0) }}</span>
+            </a>
+            <a href="/people/hr/employees?status=suspended&view=suspended"
+               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-300' if saved_view == 'suspended' else 'border-slate-200 bg-white text-slate-600 hover:border-rose-200 hover:text-rose-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-rose-800 dark:hover:text-rose-300' }}">
+                <span>Suspended</span>
+            </a>
+            <a href="/people/hr/employees?status=resigned&view=resigned"
+               class="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-colors {{ 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-300' if saved_view == 'resigned' else 'border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:border-sky-800 dark:hover:text-sky-300' }}">
+                <span>Resigned</span>
+            </a>
+        </div>
+    </div>
+
     {# Compact Filters #}
     {% call(filter_attrs) compact_filters(
         base_url="/people/hr/employees",
-        active_filters=active_filters,
+        active_filters=compact_active_filters,
         show_search=false,
         search=search,
         search_placeholder="Search by name, email, or employee code...",
@@ -273,7 +316,7 @@
             </div>
 
             {# Delete Confirmation Dialog #}
-            <div x-show="showDeleteDialog" x-trap="showDeleteDialog"
+            <div x-show="showDeleteDialog" x-trap="showDeleteDialog" x-cloak
                  x-transition:enter="transition ease-out duration-200"
                  x-transition:enter-start="opacity-0"
                  x-transition:enter-end="opacity-100"

@@ -23,7 +23,7 @@ class TestTaxCodeService:
         from app.services.finance.tax.tax_master import TaxCodeInput, TaxCodeService
 
         # No existing tax code
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = TaxCodeInput(
             tax_code="VAT20",
@@ -47,7 +47,7 @@ class TestTaxCodeService:
         from app.services.finance.tax.tax_master import TaxCodeInput, TaxCodeService
 
         existing = MockTaxCode(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         input_data = TaxCodeInput(
             tax_code="VAT20",
@@ -222,7 +222,7 @@ class TestTaxCodeService:
         from app.services.finance.tax.tax_master import TaxCodeService
 
         mock_codes = [MockTaxCode(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_codes
+        mock_db.scalars.return_value.all.return_value = mock_codes
 
         result = TaxCodeService.list(mock_db, str(org_id))
 
@@ -233,7 +233,7 @@ class TestTaxCodeService:
         from app.services.finance.tax.tax_master import TaxCodeService
 
         mock_codes = [MockTaxCode(organization_id=org_id, tax_type=TaxType.VAT)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_codes
+        mock_db.scalars.return_value.all.return_value = mock_codes
 
         result = TaxCodeService.list(mock_db, str(org_id), tax_type=TaxType.VAT)
 
@@ -250,7 +250,7 @@ class TestTaxJurisdictionService:
             TaxJurisdictionService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = TaxJurisdictionInput(
             jurisdiction_code="US-CA",
@@ -282,7 +282,7 @@ class TestTaxJurisdictionService:
         )
 
         existing = MockTaxJurisdiction(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         input_data = TaxJurisdictionInput(
             jurisdiction_code="US-CA",
@@ -337,7 +337,7 @@ class TestTaxJurisdictionService:
         mock_jurisdictions = [
             MockTaxJurisdiction(organization_id=org_id) for _ in range(3)
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_jurisdictions
+        mock_db.scalars.return_value.all.return_value = mock_jurisdictions
 
         result = TaxJurisdictionService.list(mock_db, str(org_id))
 

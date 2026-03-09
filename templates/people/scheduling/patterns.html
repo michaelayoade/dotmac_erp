@@ -126,9 +126,10 @@
     {{ pagination(
         page=page,
         total_pages=total_pages,
-        total_count=total_count,
+        total_count=total,
         limit=limit,
-        search=search
+        search=search,
+        filters={"is_active": is_active}
     ) }}
     </div>{# /results-container #}
 </div>

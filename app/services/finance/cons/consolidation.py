@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -37,28 +36,6 @@ from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
-
-
-def _is_mock_session(db: Session) -> bool:
-    return isinstance(db, Mock)
-
-
-def _query_all(db: Session, model, stmt):
-    if _is_mock_session(db):
-        return list(db.query(model).filter().all())
-    return list(db.scalars(stmt).all())
-
-
-def _query_first(db: Session, model, stmt):
-    if _is_mock_session(db):
-        return db.query(model).filter().first()
-    return db.scalars(stmt).first()
-
-
-def _query_scalar(db: Session, model, stmt):
-    if _is_mock_session(db):
-        return db.query(model).filter().scalar()
-    return db.scalar(stmt)
 
 
 @dataclass
@@ -140,26 +117,24 @@ class ConsolidationService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Get next run number for this period
-        max_run = _query_scalar(
-            db,
-            ConsolidationRun,
+        max_run = db.scalar(
             select(func.max(ConsolidationRun.run_number)).where(
                 ConsolidationRun.group_id == grp_id,
                 ConsolidationRun.fiscal_period_id == input.fiscal_period_id,
-            ),
+            )
         )
         run_number = (max_run or 0) + 1
 
         # Count entities
-        entities = _query_all(
-            db,
-            LegalEntity,
-            select(LegalEntity).where(
-                LegalEntity.group_id == grp_id,
-                LegalEntity.is_active == True,
-                LegalEntity.consolidation_method
-                != ConsolidationMethod.NOT_CONSOLIDATED,
-            ),
+        entities = list(
+            db.scalars(
+                select(LegalEntity).where(
+                    LegalEntity.group_id == grp_id,
+                    LegalEntity.is_active == True,
+                    LegalEntity.consolidation_method
+                    != ConsolidationMethod.NOT_CONSOLIDATED,
+                )
+            ).all()
         )
 
         subsidiaries_count = len(
@@ -329,27 +304,27 @@ class ConsolidationService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Consolidation run not found")
 
         # Get entities in group
-        entities = _query_all(
-            db,
-            LegalEntity,
-            select(LegalEntity).where(
-                LegalEntity.group_id == grp_id,
-                LegalEntity.is_active == True,
-            ),
+        entities = list(
+            db.scalars(
+                select(LegalEntity).where(
+                    LegalEntity.group_id == grp_id,
+                    LegalEntity.is_active == True,
+                )
+            ).all()
         )
         entity_ids = [e.entity_id for e in entities]
         entity_map = {e.entity_id: e for e in entities}
 
         # Get matched intercompany balances
-        balances = _query_all(
-            db,
-            IntercompanyBalance,
-            select(IntercompanyBalance).where(
-                IntercompanyBalance.fiscal_period_id == run.fiscal_period_id,
-                IntercompanyBalance.from_entity_id.in_(entity_ids),
-                IntercompanyBalance.is_matched == True,
-                IntercompanyBalance.is_eliminated == False,
-            ),
+        balances = list(
+            db.scalars(
+                select(IntercompanyBalance).where(
+                    IntercompanyBalance.fiscal_period_id == run.fiscal_period_id,
+                    IntercompanyBalance.from_entity_id.in_(entity_ids),
+                    IntercompanyBalance.is_matched == True,
+                    IntercompanyBalance.is_eliminated == False,
+                )
+            ).all()
         )
 
         entries = []
@@ -394,14 +369,12 @@ class ConsolidationService(ListResponseMixin):
             balance.elimination_entry_id = entry.entry_id
 
         # Update intercompany differences on run
-        unmatched = _query_scalar(
-            db,
-            IntercompanyBalance,
+        unmatched = db.scalar(
             select(func.sum(IntercompanyBalance.difference_amount)).where(
                 IntercompanyBalance.fiscal_period_id == run.fiscal_period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
                 IntercompanyBalance.is_matched == False,
-            ),
+            )
         )
         run.intercompany_differences = unmatched or Decimal("0")
 
@@ -441,27 +414,25 @@ class ConsolidationService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Consolidation run not found")
 
         # Get subsidiaries with ownership
-        subsidiaries = _query_all(
-            db,
-            LegalEntity,
-            select(LegalEntity).where(
-                LegalEntity.group_id == grp_id,
-                LegalEntity.is_active == True,
-                LegalEntity.consolidation_method == ConsolidationMethod.FULL,
-            ),
+        subsidiaries = list(
+            db.scalars(
+                select(LegalEntity).where(
+                    LegalEntity.group_id == grp_id,
+                    LegalEntity.is_active == True,
+                    LegalEntity.consolidation_method == ConsolidationMethod.FULL,
+                )
+            ).all()
         )
 
         entries = []
 
         for subsidiary in subsidiaries:
-            ownership = _query_first(
-                db,
-                OwnershipInterest,
+            ownership = db.scalars(
                 select(OwnershipInterest).where(
                     OwnershipInterest.investee_entity_id == subsidiary.entity_id,
                     OwnershipInterest.is_current == True,
-                ),
-            )
+                )
+            ).first()
 
             if not ownership or not ownership.investment_cost:
                 continue
@@ -719,11 +690,6 @@ class ConsolidationService(ListResponseMixin):
         if elimination_type:
             query = query.where(EliminationEntry.elimination_type == elimination_type)
 
-        if _is_mock_session(db):
-            mock_query = db.query(EliminationEntry).filter()
-            if elimination_type:
-                mock_query = mock_query.filter()
-            return list(mock_query.order_by().all())
         return list(db.scalars(query.order_by(EliminationEntry.created_at)).all())
 
     @staticmethod
@@ -744,11 +710,6 @@ class ConsolidationService(ListResponseMixin):
                 ConsolidatedBalance.segment_id == coerce_uuid(segment_id)
             )
 
-        if _is_mock_session(db):
-            mock_query = db.query(ConsolidatedBalance).filter()
-            if segment_id:
-                mock_query = mock_query.filter()
-            return list(mock_query.all())
         return list(db.scalars(query).all())
 
     @staticmethod
@@ -789,15 +750,6 @@ class ConsolidationService(ListResponseMixin):
             query = query.where(ConsolidationRun.status == status)
 
         query = query.order_by(ConsolidationRun.created_at.desc())
-        if _is_mock_session(db):
-            mock_query = db.query(ConsolidationRun)
-            if group_id:
-                mock_query = mock_query.filter()
-            if fiscal_period_id:
-                mock_query = mock_query.filter()
-            if status:
-                mock_query = mock_query.filter()
-            return list(mock_query.order_by().limit(limit).offset(offset).all())
         return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 

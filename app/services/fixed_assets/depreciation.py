@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -28,10 +27,6 @@ from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
-
-
-def _is_mock_session(db: Session) -> bool:
-    return isinstance(db, Mock)
 
 
 @dataclass
@@ -304,7 +299,7 @@ class DepreciationService(ListResponseMixin):
         )
 
         db.add(run)
-        db.commit()
+        db.flush()
         db.refresh(run)
 
         return run
@@ -533,8 +528,6 @@ class DepreciationService(ListResponseMixin):
         if not run or run.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Depreciation run not found")
 
-        if _is_mock_session(db):
-            return list(db.query(DepreciationSchedule).filter().all())
         return list(
             db.scalars(
                 select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
@@ -582,11 +575,6 @@ class DepreciationService(ListResponseMixin):
         if status:
             query = query.where(DepreciationRun.status == status)
 
-        if _is_mock_session(db):
-            mock_query = db.query(DepreciationRun).filter()
-            if status:
-                mock_query = mock_query.filter()
-            return list(mock_query.order_by().limit(limit).offset(offset).all())
         return list(
             db.scalars(
                 query.order_by(DepreciationRun.created_at.desc())

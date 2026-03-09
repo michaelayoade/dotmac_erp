@@ -3,8 +3,6 @@ Tests for ReportDefinitionService.
 """
 
 import uuid
-from unittest.mock import MagicMock
-
 import pytest
 from fastapi import HTTPException
 
@@ -24,7 +22,7 @@ class TestReportDefinitionServiceCreate:
             ReportDefinitionService,
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         input_data = ReportDefinitionInput(
             report_code="RPT-001",
@@ -47,7 +45,7 @@ class TestReportDefinitionServiceCreate:
         )
 
         existing = MockReportDefinition(report_code="RPT-001")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         input_data = ReportDefinitionInput(
             report_code="RPT-001",
@@ -225,7 +223,7 @@ class TestReportDefinitionServiceClone:
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.get.return_value = mock_report_definition
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         ReportDefinitionService.clone_definition(
             mock_db,
@@ -265,7 +263,7 @@ class TestReportDefinitionServiceClone:
 
         mock_db.get.return_value = mock_report_definition
         existing = MockReportDefinition(report_code="RPT-CLONE")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             ReportDefinitionService.clone_definition(
@@ -288,7 +286,7 @@ class TestReportDefinitionServiceQueries:
         """Test getting definition by code."""
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             mock_report_definition
         )
 
@@ -300,7 +298,7 @@ class TestReportDefinitionServiceQueries:
         """Test getting non-existent code."""
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = ReportDefinitionService.get_by_code(
             mock_db, str(org_id), "NONEXISTENT"
@@ -313,7 +311,7 @@ class TestReportDefinitionServiceQueries:
         from app.models.finance.rpt.report_definition import ReportType
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_report_definition
         ]
 
@@ -351,13 +349,7 @@ class TestReportDefinitionServiceQueries:
         from app.models.finance.rpt.report_definition import ReportType
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = [mock_report_definition]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_definition]
 
         result = ReportDefinitionService.list(
             mock_db,
@@ -373,13 +365,7 @@ class TestReportDefinitionServiceQueries:
         """Test listing definitions without filters."""
         from app.services.finance.rpt.report_definition import ReportDefinitionService
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = [mock_report_definition]
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = [mock_report_definition]
 
         result = ReportDefinitionService.list(mock_db)
 

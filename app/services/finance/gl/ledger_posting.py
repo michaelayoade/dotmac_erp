@@ -25,7 +25,6 @@ from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.models.finance.gl.posting_batch import BatchStatus, PostingBatch
 from app.services.common import coerce_uuid
-from app.services.finance.common.helpers import mock_safe_commit
 from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.platform.outbox_publisher import OutboxPublisher
 from app.services.response import ListResponseMixin
@@ -393,7 +392,6 @@ class LedgerPostingService(ListResponseMixin):
 
         # 15. Flush the transaction (journal + ledger lines + outbox event)
         db.flush()
-        mock_safe_commit(db)
         db.refresh(batch)
 
         return PostingResult(

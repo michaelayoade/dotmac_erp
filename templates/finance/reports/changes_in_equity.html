@@ -34,6 +34,7 @@
     {{ period_shortcuts(mode="range") }}
     {% endcall %}
 
+    <div id="results-container">
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "Changes in equity" %}
         {% set doc_number = start_date ~ " to " ~ end_date %}
@@ -68,6 +69,7 @@
             {"key": "closing_balance", "label": "Closing", "type": "currency"},
           ], container=false,
           empty_title="No equity activity", empty_description="No equity activity for this period.") }}
+    </div>
     </div>
 </div>
 {% endblock %}
