@@ -11,6 +11,7 @@ import logging
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.domain_settings import SettingDomain
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -327,7 +328,9 @@ class PaymentWebService:
             "active_filters": active_filters,
             # Stat card data
             "stat_total_count": total_count,
-            "stat_total_amount": format_currency(total_amount, "NGN"),
+            "stat_total_amount": format_currency(
+                total_amount, settings.default_functional_currency_code
+            ),
             "stat_pending": pending_count,
             "stat_processing": processing_count,
             "stat_completed": completed_count,

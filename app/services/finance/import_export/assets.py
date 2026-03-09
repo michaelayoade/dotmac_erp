@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 
@@ -158,7 +159,7 @@ class AssetImporter(BaseImporter[Asset]):
     - Asset Category / Asset Class / Category: Category for the asset
     - Acquisition Date / Purchase Date / Date Acquired: Date of acquisition
     - Acquisition Cost / Cost / Purchase Price: Original cost
-    - Currency Code / Currency: Currency (default: NGN)
+    - Currency Code / Currency: Currency (defaults to configured organization currency)
     - Useful Life / Life (Years) / Useful Life Months: Depreciation period
     - Residual Value / Salvage Value: Residual/salvage value
     - Depreciation Method / Method: SL, DB, etc.
@@ -241,7 +242,10 @@ class AssetImporter(BaseImporter[Asset]):
             ),
             # Currency
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Depreciation
@@ -385,9 +389,11 @@ class AssetImporter(BaseImporter[Asset]):
             or Decimal("0")
         )
 
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
-            :3
-        ]
+        currency_code = (
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
+        )[:3]
 
         # Get depreciation parameters
         useful_life_months = row.get("useful_life_months")

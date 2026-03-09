@@ -19,6 +19,7 @@ from app.models.expense import (
     ExpenseClaimActionType,
     ExpenseClaimStatus,
 )
+from app.services.finance.platform.org_context import org_context_service
 
 if TYPE_CHECKING:
     from app.models.expense import CashAdvance, ExpenseCategory, ExpenseLimitRule
@@ -169,6 +170,16 @@ class ExpenseServiceBase:
     def __init__(self, db: Session, ctx: WebAuthContext | None = None) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _resolve_currency_code(
+        self,
+        org_id: UUID,
+        currency_code: str | None = None,
+    ) -> str:
+        """Resolve currency code from caller input or org functional currency."""
+        if currency_code:
+            return currency_code
+        return org_context_service.get_functional_currency(self.db, org_id)
 
     @staticmethod
     def _action_key(claim_id: UUID, action: ExpenseClaimActionType) -> str:

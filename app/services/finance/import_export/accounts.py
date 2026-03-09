@@ -177,7 +177,7 @@ class AccountImporter(BaseImporter[Account]):
     - Description: Account description
     - Account Type: Zoho account type (mapped to IFRS category)
     - Account Status: Active/Inactive
-    - Currency: Currency code (e.g., NGN)
+    - Currency: ISO 4217 currency code
     - Parent Account: Parent account name (for hierarchy)
     """
 

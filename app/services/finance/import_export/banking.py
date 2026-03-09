@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.banking.bank_account import (
     BankAccount,
     BankAccountStatus,
@@ -36,7 +37,7 @@ class BankAccountImporter(BaseImporter[BankAccount]):
     - Branch Code: Branch identifier
     - Branch Name / Branch: Branch name
     - IBAN: International bank account number
-    - Currency Code / Currency: Currency (default: NGN)
+    - Currency Code / Currency: Currency (defaults to configured organization currency)
     - Opening Balance / Balance: Initial balance
     - Contact Name: Bank contact name
     - Contact Phone: Bank contact phone
@@ -84,7 +85,10 @@ class BankAccountImporter(BaseImporter[BankAccount]):
             FieldMapping("IBAN", "iban", required=False),
             # Currency
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Balance
@@ -223,7 +227,9 @@ class BankAccountImporter(BaseImporter[BankAccount]):
 
         # Get currency
         currency_code = str(
-            row.get("currency_code") or row.get("currency_alt") or "NGN"
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
         )[:3]
 
         # Get or find GL account

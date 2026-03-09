@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.finance.gl.account import Account
@@ -54,7 +55,10 @@ class CustomerImporter(BaseImporter[Customer]):
             FieldMapping("Last Name", "last_name", required=False),
             FieldMapping("Phone", "phone", required=False),
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping(
                 "Status",
@@ -166,7 +170,9 @@ class CustomerImporter(BaseImporter[Customer]):
             trading_name=trading_name[:255] if trading_name else None,
             credit_limit=row.get("credit_limit"),
             credit_terms_days=row.get("payment_terms_days", 30),
-            currency_code=row.get("currency_code", "NGN") or "NGN",
+            currency_code=(
+                row.get("currency_code") or settings.default_functional_currency_code
+            ),
             ar_control_account_id=self.ar_control_account_id,
             risk_category=RiskCategory.MEDIUM,
             is_related_party=False,
@@ -230,7 +236,10 @@ class SupplierImporter(BaseImporter[Supplier]):
             FieldMapping("MobilePhone", "mobile_phone", required=False),
             FieldMapping("EmailID", "email", required=False),
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping(
                 "Status",
@@ -346,7 +355,9 @@ class SupplierImporter(BaseImporter[Supplier]):
             legal_name=legal_name[:255],
             trading_name=trading_name[:255] if trading_name else None,
             payment_terms_days=row.get("payment_terms_days", 30),
-            currency_code=row.get("currency_code", "NGN") or "NGN",
+            currency_code=(
+                row.get("currency_code") or settings.default_functional_currency_code
+            ),
             ap_control_account_id=self.ap_control_account_id,
             is_related_party=False,
             withholding_tax_applicable=withholding_tax_applicable,

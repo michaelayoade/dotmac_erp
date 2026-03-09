@@ -21,6 +21,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 from app.models.procurement.base import ProcurementBaseMixin
 from app.models.procurement.enums import ProcurementMethod, RFQStatus
@@ -105,7 +106,7 @@ class RequestForQuotation(Base, ProcurementBaseMixin):
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="NGN",
+        default=settings.default_functional_currency_code,
     )
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

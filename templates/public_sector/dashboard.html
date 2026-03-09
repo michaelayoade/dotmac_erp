@@ -131,8 +131,8 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                            No virements yet. <a href="/public-sector/virements/new" class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400">Create one</a>.
+                        <td colspan="4" class="p-0">
+                            {{ empty_state("No virements yet", "Create your first virement to transfer between appropriations.", "switch-horizontal", "Create Virement", "/public-sector/virements/new") }}
                         </td>
                     </tr>
                     {% endfor %}

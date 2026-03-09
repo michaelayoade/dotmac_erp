@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_payment import (
     APPaymentMethod,
@@ -38,7 +39,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
     - Payment Date / Date: Date of payment
     - Customer Name / Customer: Customer name
     - Amount / Payment Amount: Payment amount
-    - Currency Code / Currency: Currency (default: NGN)
+    - Currency Code / Currency: Currency (defaults to configured organization currency)
     - Exchange Rate: Exchange rate
     - Payment Method / Method: CASH, CHECK, BANK_TRANSFER, etc.
     - Bank Account / Bank: Bank account used
@@ -93,7 +94,10 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
             ),
             # Currency
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             FieldMapping(
@@ -179,9 +183,11 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
 
         # Get amount and currency
         amount = row.get("amount") or row.get("payment_amount_alt") or Decimal("0")
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
-            :3
-        ]
+        currency_code = (
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
+        )[:3]
         exchange_rate = row.get("exchange_rate") or Decimal("1")
         functional_currency_amount = amount * exchange_rate
 
@@ -316,7 +322,10 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
                 transformer=self.parse_decimal,
             ),
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             FieldMapping(
@@ -414,9 +423,11 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
 
         # Get amount and currency
         amount = row.get("amount") or row.get("payment_amount_alt") or Decimal("0")
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
-            :3
-        ]
+        currency_code = (
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
+        )[:3]
         exchange_rate = row.get("exchange_rate") or Decimal("1")
         functional_currency_amount = amount * exchange_rate
 

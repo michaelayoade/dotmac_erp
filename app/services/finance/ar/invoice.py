@@ -1299,8 +1299,8 @@ class ARInvoiceService(ListResponseMixin):
         # Find posted invoices past due date
         try:
             invoices = (
-                db.query(Invoice)
-                .filter(
+                select(Invoice)
+                .where(
                     and_(
                         Invoice.organization_id == org_id,
                         Invoice.status.in_(
@@ -1399,8 +1399,8 @@ class ARInvoiceService(ListResponseMixin):
             raise NotFoundError("Invoice not found")
 
         return (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == inv_id)
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
             .all()
         )
@@ -1444,32 +1444,32 @@ class ARInvoiceService(ListResponseMixin):
 
         # Build query with eager loading to prevent N+1 queries
         # joinedload for single object (customer), selectinload for collections (lines)
-        query = db.query(Invoice).options(
+        query = select(Invoice).options(
             joinedload(Invoice.customer)
         )  # Eager load customer (1:1)
-        query = query.filter(Invoice.organization_id == org_id)
+        query = query.where(Invoice.organization_id == org_id)
 
         # Optionally eager load lines (heavier, only when needed)
         if include_lines:
             query = query.options(selectinload(Invoice.lines))
 
         if customer_id:
-            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+            query = query.where(Invoice.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.filter(Invoice.status == status)
+            query = query.where(Invoice.status == status)
 
         if invoice_type:
-            query = query.filter(Invoice.invoice_type == invoice_type)
+            query = query.where(Invoice.invoice_type == invoice_type)
 
         if from_date:
-            query = query.filter(Invoice.invoice_date >= from_date)
+            query = query.where(Invoice.invoice_date >= from_date)
 
         if to_date:
-            query = query.filter(Invoice.invoice_date <= to_date)
+            query = query.where(Invoice.invoice_date <= to_date)
 
         if overdue_only:
-            query = query.filter(
+            query = query.where(
                 and_(
                     Invoice.due_date < date.today(),
                     Invoice.status.in_(

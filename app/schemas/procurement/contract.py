@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.procurement.enums import ContractStatus
 
 
@@ -23,7 +24,9 @@ class ContractCreate(BaseModel):
     start_date: date
     end_date: date
     contract_value: Decimal = Field(gt=0)
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     bpp_clearance_number: str | None = None
     bpp_clearance_date: date | None = None
     payment_terms: str | None = None

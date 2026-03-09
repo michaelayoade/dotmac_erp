@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
@@ -108,8 +108,8 @@ class ReportDefinitionService(ListResponseMixin):
 
         # Check for duplicate report code
         existing = (
-            db.query(ReportDefinition)
-            .filter(
+            select(ReportDefinition)
+            .where(
                 and_(
                     ReportDefinition.organization_id == org_id,
                     ReportDefinition.report_code == input.report_code,
@@ -365,8 +365,8 @@ class ReportDefinitionService(ListResponseMixin):
 
         # Check for duplicate
         existing = (
-            db.query(ReportDefinition)
-            .filter(
+            select(ReportDefinition)
+            .where(
                 and_(
                     ReportDefinition.organization_id == org_id,
                     ReportDefinition.report_code == new_report_code,
@@ -416,8 +416,8 @@ class ReportDefinitionService(ListResponseMixin):
     ) -> ReportDefinition | None:
         """Get report definition by code."""
         return (
-            db.query(ReportDefinition)
-            .filter(
+            select(ReportDefinition)
+            .where(
                 and_(
                     ReportDefinition.organization_id == coerce_uuid(organization_id),
                     ReportDefinition.report_code == report_code,
@@ -434,8 +434,8 @@ class ReportDefinitionService(ListResponseMixin):
     ) -> builtins.list[ReportDefinition]:
         """Get report definitions by type."""
         return (
-            db.query(ReportDefinition)
-            .filter(
+            select(ReportDefinition)
+            .where(
                 and_(
                     ReportDefinition.organization_id == coerce_uuid(organization_id),
                     ReportDefinition.report_type == report_type,
@@ -498,24 +498,24 @@ class ReportDefinitionService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ReportDefinition]:
         """List report definitions with optional filters."""
-        stmt = db.query(ReportDefinition)
+        stmt = select(ReportDefinition)
 
         if organization_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ReportDefinition.organization_id == coerce_uuid(organization_id)
             )
 
         if report_type:
-            stmt = stmt.filter(ReportDefinition.report_type == report_type)
+            stmt = stmt.where(ReportDefinition.report_type == report_type)
 
         if category:
-            stmt = stmt.filter(ReportDefinition.category == category)
+            stmt = stmt.where(ReportDefinition.category == category)
 
         if is_active is not None:
-            stmt = stmt.filter(ReportDefinition.is_active == is_active)
+            stmt = stmt.where(ReportDefinition.is_active == is_active)
 
         if is_system_report is not None:
-            stmt = stmt.filter(ReportDefinition.is_system_report == is_system_report)
+            stmt = stmt.where(ReportDefinition.is_system_report == is_system_report)
 
         return (
             stmt.order_by(ReportDefinition.category, ReportDefinition.report_name)

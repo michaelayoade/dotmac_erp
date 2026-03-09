@@ -36,10 +36,10 @@ def _env_int(name: str) -> int | None:
 def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
     try:
         setting = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == domain)
-            .filter(DomainSetting.key == key)
-            .filter(DomainSetting.is_active.is_(True))
+            select(DomainSetting)
+            .where(DomainSetting.domain == domain)
+            .where(DomainSetting.key == key)
+            .where(DomainSetting.is_active.is_(True))
             .first()
         )
     except Exception:
@@ -364,7 +364,7 @@ def build_beat_schedule() -> dict:
     session = SessionLocal()
     try:
         tasks = (
-            session.query(ScheduledTask).filter(ScheduledTask.enabled.is_(True)).all()
+            select(ScheduledTask).where(ScheduledTask.enabled.is_(True)).all()
         )
         for task in tasks:
             task_schedule = None

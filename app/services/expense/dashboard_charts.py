@@ -112,8 +112,13 @@ class ExpenseDashboardChartsMixin:
         return amounts
 
     def _get_recent_claims_detailed(
-        self, db: Session, org_id: UUID, limit: int = 8, currency: str = "NGN"
+        self,
+        db: Session,
+        org_id: UUID,
+        limit: int = 8,
+        currency: str | None = None,
     ) -> list[dict[str, Any]]:
+        currency = currency or self._resolve_currency(db, org_id)
         results = db.execute(
             select(ExpenseClaim, Person)
             .join(Employee, Employee.employee_id == ExpenseClaim.employee_id)
@@ -299,8 +304,13 @@ class ExpenseDashboardChartsMixin:
         ]
 
     def _get_recent_claims(
-        self, db: Session, org_id: UUID, limit: int = 5, currency: str = "NGN"
+        self,
+        db: Session,
+        org_id: UUID,
+        limit: int = 5,
+        currency: str | None = None,
     ) -> list[dict[str, Any]]:
+        currency = currency or self._resolve_currency(db, org_id)
         results = db.execute(
             select(ExpenseClaim, Person)
             .join(Employee, Employee.employee_id == ExpenseClaim.employee_id)

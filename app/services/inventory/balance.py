@@ -304,8 +304,8 @@ class InventoryBalanceService:
 
         # Get all warehouses with inventory for this item
         warehouse_ids = (
-            db.query(InventoryTransaction.warehouse_id)
-            .filter(
+            select(InventoryTransaction.warehouse_id)
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
@@ -408,9 +408,9 @@ class InventoryBalanceService:
 
         # Get items with reorder point or minimum stock (item-level or category fallback)
         items = (
-            db.query(Item, ItemCategory)
+            select(Item, ItemCategory)
             .join(ItemCategory, Item.category_id == ItemCategory.category_id)
-            .filter(
+            .where(
                 and_(
                     Item.organization_id == org_id,
                     Item.is_active == True,
@@ -607,8 +607,8 @@ class InventoryBalanceService:
 
         # Get all items with transactions at this warehouse
         item_ids = (
-            db.query(InventoryTransaction.item_id)
-            .filter(
+            select(InventoryTransaction.item_id)
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.warehouse_id == wh_id,

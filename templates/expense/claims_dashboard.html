@@ -36,9 +36,9 @@
                     {{ icon_svg("document") }}
                 </div>
                 <span class="stat-hero-label">Total Claims</span>
-                <span class="stat-hero-value">{{ stats.total_claims | default(0) }}</span>
+                <span class="stat-hero-value">{{ stats.total_claims if stats.total_claims is not none else 0 }}</span>
                 <span class="stat-hero-trend text-slate-500 dark:text-slate-400">
-                    {{ stats.this_period_claims | default(0) }} this period
+                    {{ stats.this_period_claims if stats.this_period_claims is not none else 0 }} this period
                 </span>
             </a>
 
@@ -48,9 +48,9 @@
                     {{ icon_svg("currency") }}
                 </div>
                 <span class="stat-hero-label">Amount Claimed</span>
-                <span class="stat-hero-value">{{ stats.total_amount | default(currency_zero) }}</span>
+                <span class="stat-hero-value">{{ stats.total_amount if stats.total_amount is not none else currency_zero }}</span>
                 <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
-                    {{ stats.avg_claim | default(currency_zero) }} avg
+                    {{ stats.avg_claim if stats.avg_claim is not none else currency_zero }} avg
                 </span>
             </a>
 
@@ -60,9 +60,9 @@
                     {{ icon_svg("clock") }}
                 </div>
                 <span class="stat-hero-label">Pending Review</span>
-                <span class="stat-hero-value">{{ stats.pending_count | default(0) }}</span>
+                <span class="stat-hero-value">{{ stats.pending_count if stats.pending_count is not none else 0 }}</span>
                 <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
-                    {{ stats.pending_amount | default(currency_zero) }} total
+                    {{ stats.pending_amount if stats.pending_amount is not none else currency_zero }} total
                 </span>
             </a>
 
@@ -72,9 +72,9 @@
                     {{ icon_svg("check-circle") }}
                 </div>
                 <span class="stat-hero-label">Reimbursed</span>
-                <span class="stat-hero-value">{{ stats.paid_amount | default(currency_zero) }}</span>
+                <span class="stat-hero-value">{{ stats.paid_amount if stats.paid_amount is not none else currency_zero }}</span>
                 <span class="stat-hero-trend text-emerald-600 dark:text-emerald-400">
-                    {{ stats.paid_count | default(0) }} claims paid
+                    {{ stats.paid_count if stats.paid_count is not none else 0 }} claims paid
                 </span>
             </a>
         </div>
@@ -222,12 +222,12 @@
                     <a href="/expense/claims/list?status=SUBMITTED" class="cmd-action">
                         <span class="cmd-action-key">R</span>
                         <span class="cmd-action-label">Review Pending Claims</span>
-                        <span class="cmd-action-hint">{{ stats.pending_count | default(0) }}</span>
+                        <span class="cmd-action-hint">{{ stats.pending_count if stats.pending_count is not none else 0 }}</span>
                     </a>
                     <a href="/expense/claims/list?status=APPROVED" class="cmd-action">
                         <span class="cmd-action-key">P</span>
                         <span class="cmd-action-label">Process Payments</span>
-                        <span class="cmd-action-hint">{{ stats.approved_count | default(0) }}</span>
+                        <span class="cmd-action-hint">{{ stats.approved_count if stats.approved_count is not none else 0 }}</span>
                     </a>
                     <a href="/expense/claims/list" class="cmd-action">
                         <span class="cmd-action-key">A</span>
@@ -243,19 +243,19 @@
                 <div class="space-y-3">
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-slate-500 dark:text-slate-400">Avg Processing Time</span>
-                        <span class="font-medium text-slate-900 dark:text-white">{{ stats.avg_processing_days | default(0) }} days</span>
+                        <span class="font-medium text-slate-900 dark:text-white">{{ stats.avg_processing_days if stats.avg_processing_days is not none else 0 }} days</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-slate-500 dark:text-slate-400">Approval Rate</span>
-                        <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ stats.approval_rate | default(0) }}%</span>
+                        <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ stats.approval_rate if stats.approval_rate is not none else 0 }}%</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-slate-500 dark:text-slate-400">Rejection Rate</span>
-                        <span class="font-medium text-rose-600 dark:text-rose-400">{{ stats.rejection_rate | default(0) }}%</span>
+                        <span class="font-medium text-rose-600 dark:text-rose-400">{{ stats.rejection_rate if stats.rejection_rate is not none else 0 }}%</span>
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-slate-500 dark:text-slate-400">Claims This Month</span>
-                        <span class="font-medium text-amber-600 dark:text-amber-400">{{ stats.this_month_count | default(0) }}</span>
+                        <span class="font-medium text-amber-600 dark:text-amber-400">{{ stats.this_month_count if stats.this_month_count is not none else 0 }}</span>
                     </div>
                 </div>
             </div>
@@ -271,7 +271,7 @@
                 <div class="card" data-testid="recent-claims">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700/60">
                         <span class="text-sm font-medium text-slate-500 dark:text-slate-400">
-                            Latest {{ recent_claims | length | default(0) }} claims
+                            Latest {{ (recent_claims | length) if recent_claims else 0 }} claims
                         </span>
                         <a href="/expense/claims/list" class="text-sm font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400 transition-colors">
                             View all &rarr;
@@ -291,7 +291,7 @@
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ claim.employee_name }} &bull; {{ claim.claim_number }}</p>
                             </div>
                             <div class="text-right">
-                                <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ claim.amount }}</p>
+                                <p class="text-sm font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ claim.amount }}</p>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ claim.date }}</p>
                             </div>
                         </a>

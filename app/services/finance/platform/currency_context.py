@@ -15,7 +15,7 @@ from app.services.finance.platform.org_context import org_context_service
 
 
 def _ensure_default_currency(db: Session) -> None:
-    """Ensure the default currency (NGN) exists in the database."""
+    """Ensure the configured default currency exists in the database."""
     default_code = app_settings.default_functional_currency_code
     existing = db.get(Currency, default_code)
     if existing:

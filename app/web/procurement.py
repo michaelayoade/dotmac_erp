@@ -38,6 +38,7 @@ from app.schemas.procurement.requisition import RequisitionCreate, RequisitionLi
 from app.schemas.procurement.rfq import RFQCreate
 from app.schemas.procurement.vendor import PrequalificationCreate
 from app.services.common import NotFoundError, ValidationError
+from app.services.finance.platform.org_context import org_context_service
 from app.services.procurement.contract import ContractService
 from app.services.procurement.procurement_plan import ProcurementPlanService
 from app.services.procurement.requisition import RequisitionService
@@ -73,6 +74,17 @@ IMPORT_OPTIONAL_COLUMNS = [
     "category",
 ]
 IMPORT_ALL_COLUMNS = IMPORT_REQUIRED_COLUMNS + IMPORT_OPTIONAL_COLUMNS
+
+
+def _resolve_currency_code(
+    db: Session,
+    organization_id: UUID,
+    currency_code: object | None,
+) -> str:
+    raw = "" if _is_empty(currency_code) else str(currency_code).strip().upper()
+    if raw:
+        return raw
+    return org_context_service.get_functional_currency(db, organization_id)
 
 
 REQUISITION_REQUIRED_COLUMNS = [
@@ -358,6 +370,7 @@ def plan_new(
 def plan_import_template(
     format: str = Query("csv"),
     auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db),
 ):
     """Download a procurement plan import template."""
     fmt = (format or "csv").lower()
@@ -370,7 +383,7 @@ def plan_import_template(
         "plan_number": ["PLAN-2026-001"],
         "fiscal_year": ["2026/2027"],
         "title": ["Annual Procurement Plan"],
-        "currency_code": ["NGN"],
+        "currency_code": [_resolve_currency_code(db, auth.organization_id, None)],
         "line_number": [1],
         "description": ["Office supplies procurement"],
         "budget_line_code": ["BL-001"],
@@ -585,11 +598,9 @@ async def plan_import(
         if not title:
             errors.append(f"Row {row_num}: title is required")
 
-        currency_code_raw = row.get("currency_code", "")
-        currency_code = (
-            "NGN" if _is_empty(currency_code_raw) else str(currency_code_raw).strip()
+        currency_code = _resolve_currency_code(
+            db, auth.organization_id, row.get("currency_code")
         )
-        currency_code = currency_code.upper() or "NGN"
 
         try:
             line_number = _parse_int(row.get("line_number"))
@@ -773,6 +784,7 @@ def requisition_list(
 def requisition_import_template(
     format: str = Query("csv"),
     auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db),
 ):
     """Download a requisition import template."""
     fmt = (format or "csv").lower()
@@ -788,7 +800,7 @@ def requisition_import_template(
         "department_id": [""],
         "urgency": ["NORMAL"],
         "justification": ["Replace aging laptops"],
-        "currency_code": ["NGN"],
+        "currency_code": [_resolve_currency_code(db, auth.organization_id, None)],
         "material_request_id": [""],
         "plan_item_id": [""],
         "line_number": [1],
@@ -1026,11 +1038,9 @@ async def requisition_import(
             else str(row.get("justification")).strip()
         )
 
-        currency_code_raw = row.get("currency_code", "")
-        currency_code = (
-            "NGN" if _is_empty(currency_code_raw) else str(currency_code_raw).strip()
+        currency_code = _resolve_currency_code(
+            db, auth.organization_id, row.get("currency_code")
         )
-        currency_code = currency_code.upper() or "NGN"
 
         material_request_id = None
         try:
@@ -1313,6 +1323,7 @@ def rfq_list(
 def rfq_import_template(
     format: str = Query("csv"),
     auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db),
 ):
     """Download an RFQ import template."""
     fmt = (format or "csv").lower()
@@ -1334,7 +1345,7 @@ def rfq_import_template(
         ],
         "terms_and_conditions": ["Net 30 payment terms."],
         "estimated_value": [50000],
-        "currency_code": ["NGN"],
+        "currency_code": [_resolve_currency_code(db, auth.organization_id, None)],
     }
 
     if fmt == "csv":
@@ -1614,11 +1625,9 @@ async def rfq_import(
                 errors.append(f"Row {row_num}: estimated_value must be a number >= 0")
                 estimated_value = None
 
-        currency_code_raw = row.get("currency_code", "")
-        currency_code = (
-            "NGN" if _is_empty(currency_code_raw) else str(currency_code_raw).strip()
+        currency_code = _resolve_currency_code(
+            db, auth.organization_id, row.get("currency_code")
         )
-        currency_code = currency_code.upper() or "NGN"
 
         if rfq_number:
             if rfq_number in rfqs:
@@ -1812,6 +1821,7 @@ def contract_list(
 def contract_import_template(
     format: str = Query("csv"),
     auth: WebAuthContext = Depends(require_procurement_access),
+    db: Session = Depends(get_db),
 ):
     """Download a contract import template."""
     fmt = (format or "csv").lower()
@@ -1830,7 +1840,7 @@ def contract_import_template(
         "contract_value": [250000],
         "rfq_id": [""],
         "evaluation_id": [""],
-        "currency_code": ["NGN"],
+        "currency_code": [_resolve_currency_code(db, auth.organization_id, None)],
         "bpp_clearance_number": [""],
         "bpp_clearance_date": [""],
         "payment_terms": ["Milestone-based"],
@@ -2101,11 +2111,9 @@ async def contract_import(
         except InvalidOperation:
             errors.append(f"Row {row_num}: evaluation_id must be a valid UUID")
 
-        currency_code_raw = row.get("currency_code", "")
-        currency_code = (
-            "NGN" if _is_empty(currency_code_raw) else str(currency_code_raw).strip()
+        currency_code = _resolve_currency_code(
+            db, auth.organization_id, row.get("currency_code")
         )
-        currency_code = currency_code.upper() or "NGN"
 
         bpp_clearance_number = (
             None
@@ -2295,7 +2303,9 @@ async def contract_create(
         start_date = _parse_date(form.get("start_date"))
         end_date = _parse_date(form.get("end_date"))
         contract_value = _parse_decimal(form.get("contract_value"))
-        currency_code = str(form.get("currency_code") or "").strip() or "NGN"
+        currency_code = _resolve_currency_code(
+            db, auth.organization_id, form.get("currency_code")
+        )
 
         bpp_clearance_date = (
             _parse_date(form.get("bpp_clearance_date"))

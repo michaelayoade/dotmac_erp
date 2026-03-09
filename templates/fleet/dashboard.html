@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import status_badge, icon_svg %}
+{% from "components/macros.html" import status_badge, icon_svg, stats_card %}
 
 {% block page_title %}Fleet Dashboard{% endblock %}
 
@@ -52,61 +52,11 @@
 
     <!-- Fleet Summary Stats -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                    {{ icon_svg("switch-horizontal") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.total_vehicles }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Vehicles</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    {{ icon_svg("check-circle") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.available_vehicles | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Available</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    {{ icon_svg("cog") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.in_maintenance | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">In Maintenance</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    {{ icon_svg("user") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.assigned_vehicles | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Assigned</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    {{ icon_svg("exclamation-circle") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ summary.out_of_service | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Out of Service</p>
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Total Vehicles", summary.total_vehicles, icon="switch-horizontal", color="teal") }}
+        {{ stats_card("Available", summary.available_vehicles if summary.available_vehicles else 0, icon="check-circle", color="emerald") }}
+        {{ stats_card("In Maintenance", summary.in_maintenance if summary.in_maintenance else 0, icon="cog", color="amber") }}
+        {{ stats_card("Assigned", summary.assigned_vehicles if summary.assigned_vehicles else 0, icon="user", color="violet") }}
+        {{ stats_card("Out of Service", summary.out_of_service if summary.out_of_service else 0, icon="exclamation-circle", color="rose") }}
     </div>
 
     <div class="grid gap-6 lg:grid-cols-2">

@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.common.attachment import Attachment, AttachmentCategory
@@ -165,8 +165,8 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return list(
-            db.query(Attachment)
-            .filter(
+            select(Attachment)
+            .where(
                 Attachment.organization_id == org_id,
                 Attachment.entity_type == entity_type,
                 Attachment.entity_id == ent_id,
@@ -186,8 +186,8 @@ class AttachmentService:
         org_id = coerce_uuid(organization_id)
 
         attachment = (
-            db.query(Attachment)
-            .filter(
+            select(Attachment)
+            .where(
                 Attachment.attachment_id == att_id,
                 Attachment.organization_id == org_id,
             )
@@ -224,8 +224,8 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return (
-            db.query(func.count(Attachment.attachment_id))
-            .filter(
+            select(func.count(Attachment.attachment_id))
+            .where(
                 Attachment.organization_id == org_id,
                 Attachment.entity_type == entity_type,
                 Attachment.entity_id == ent_id,

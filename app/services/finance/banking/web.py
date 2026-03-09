@@ -53,6 +53,7 @@ from app.services.finance.banking.payment_metadata import (
 )
 from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.platform.org_context import org_context_service
 from app.services.formatters import format_currency as _base_format_currency
 from app.services.formatters import format_date as _format_date
 from app.services.formatters import parse_date as _parse_date
@@ -988,8 +989,10 @@ class BankingWebService:
         matched_jl_ids: set[UUID] = set()
         for line, stmt in rows:
             bank_acct = bank_map.get(stmt.bank_account_id)
-            currency = stmt.currency_code or (
-                bank_acct.currency_code if bank_acct else "NGN"
+            currency = (
+                stmt.currency_code
+                or (bank_acct.currency_code if bank_acct else None)
+                or org_context_service.get_functional_currency(db, organization_id)
             )
             txn = _statement_line_view(line, currency)
             txn["statement_id"] = str(stmt.statement_id)
@@ -2742,7 +2745,7 @@ class BankingWebService:
                     BankStatementLine.statement_id,
                     func.count().label("total"),
                     func.count()
-                    .filter(BankStatementLine.is_matched.is_(True))
+                    .where(BankStatementLine.is_matched.is_(True))
                     .label("matched"),
                 )
                 .where(BankStatementLine.statement_id.in_(stmt_ids))
@@ -5111,7 +5114,10 @@ class BankingWebService:
                 account_number=str(form.get("account_number", "")),
                 account_name=str(form.get("account_name", "")),
                 gl_account_id=UUID(str(form["gl_account_id"])),
-                currency_code=str(form.get("currency_code", "NGN")),
+                currency_code=(
+                    str(form.get("currency_code", "")).strip()
+                    or org_context_service.get_functional_currency(db, org_id)
+                ),
                 account_type=BankAccountType(str(form.get("account_type", "checking"))),
                 bank_code=str(form.get("bank_code", "")) or None,
                 branch_code=str(form.get("branch_code", "")) or None,
@@ -5460,7 +5466,9 @@ class BankingWebService:
                 bank_acct = gl_to_bank.get(line.account_id)
                 if not bank_acct:
                     continue
-                currency = bank_acct.currency_code or "NGN"
+                currency = bank_acct.currency_code or org_context_service.get_functional_currency(
+                    db, org_id
+                )
                 doc_id = getattr(entry, "source_document_id", None)
                 meta = metadata_map.get(doc_id) if doc_id else None
                 txn = _gl_line_as_transaction(line, entry, bank_acct, currency, meta)
@@ -5481,7 +5489,11 @@ class BankingWebService:
             for a in accounts
         ]
 
-        org_currency = accounts[0].currency_code if accounts else "NGN"
+        org_currency = (
+            accounts[0].currency_code
+            if accounts
+            else org_context_service.get_functional_currency(db, org_id)
+        )
 
         return {
             "total_balance": _format_currency(total_balance, org_currency),

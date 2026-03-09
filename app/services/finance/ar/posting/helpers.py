@@ -51,8 +51,8 @@ def create_tax_transactions(
     # Get fiscal period from invoice date
     try:
         fiscal_period = (
-            db.query(FiscalPeriod)
-            .filter(
+            select(FiscalPeriod)
+            .where(
                 and_(
                     FiscalPeriod.organization_id == organization_id,
                     FiscalPeriod.start_date <= invoice.invoice_date,

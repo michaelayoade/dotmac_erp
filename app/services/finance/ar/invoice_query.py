@@ -4,8 +4,8 @@ Shared AR invoice query builder for list + export.
 
 from __future__ import annotations
 
-from sqlalchemy import or_
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import Select, or_, select
+from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice
@@ -22,7 +22,7 @@ def build_invoice_query(
     status: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
-) -> Query:
+) -> Select:
     """
     Build the base AR invoice query with filters applied.
 
@@ -33,23 +33,23 @@ def build_invoice_query(
     from_date = parse_date(start_date)
     to_date = parse_date(end_date)
 
-    query: Query[Invoice] = (
-        Query([Invoice], session=db)
+    query = (
+        select(Invoice)
         .join(Customer, Invoice.customer_id == Customer.customer_id)
-        .filter(Invoice.organization_id == org_id)
+        .where(Invoice.organization_id == org_id)
     )
 
     if customer_id:
-        query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+        query = query.where(Invoice.customer_id == coerce_uuid(customer_id))
     if status_value:
-        query = query.filter(Invoice.status == status_value)
+        query = query.where(Invoice.status == status_value)
     if from_date:
-        query = query.filter(Invoice.invoice_date >= from_date)
+        query = query.where(Invoice.invoice_date >= from_date)
     if to_date:
-        query = query.filter(Invoice.invoice_date <= to_date)
+        query = query.where(Invoice.invoice_date <= to_date)
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
+        query = query.where(
             or_(
                 Invoice.invoice_number.ilike(search_pattern),
                 Customer.legal_name.ilike(search_pattern),

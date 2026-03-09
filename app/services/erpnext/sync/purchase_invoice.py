@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -380,7 +381,9 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
             received_date=data["invoice_date"],
             due_date=data.get("due_date") or data["invoice_date"],
             supplier_id=supplier_id,
-            currency_code=data.get("currency_code", "NGN")[:3],
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
             subtotal=data.get("subtotal", Decimal("0")),
             tax_amount=data.get("tax_amount", Decimal("0")),
             total_amount=data.get("total_amount", Decimal("0")),

@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{% from "components/macros.html" import icon_svg, status_badge %}
+{% from "components/macros.html" import stats_card, icon_svg, status_badge, empty_state %}
 
 {% block page_title %}Dashboard{% endblock %}
 {% block page_subtitle %}System overview and quick stats{% endblock %}
@@ -8,74 +8,10 @@
 <div class="space-y-6">
     <!-- Stats Grid -->
     <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <!-- Total Users -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_users | default(0) }}</p>
-                    <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">
-                        <span class="inline-flex items-center gap-1">
-                            {{ icon_svg("arrow-up", "h-3 w-3") }}
-                            +{{ stats.new_users_week | default(0) }} this week
-                        </span>
-                    </p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    {{ icon_svg("users", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Active Sessions -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active Sessions</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ stats.active_sessions | default(0) }}</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        {{ stats.unique_users_today | default(0) }} unique users today
-                    </p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Organizations -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Organizations</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ stats.total_organizations | default(0) }}</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        {{ stats.active_organizations | default(0) }} active
-                    </p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    {{ icon_svg("building", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- System Health -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">System Health</p>
-                    <p class="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400 font-display">{{ stats.system_health | default("Good") }}</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        All services operational
-                    </p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    {{ icon_svg("check-circle", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Total Users", stats.total_users | default(0), icon="users", color="blue", trend="+%s this week" | format(stats.new_users_week | default(0))) }}
+        {{ stats_card("Active Sessions", stats.active_sessions | default(0), icon="chart", color="emerald", subtitle="%s unique users today" | format(stats.unique_users_today | default(0))) }}
+        {{ stats_card("Organizations", stats.total_organizations | default(0), icon="building", color="violet", subtitle="%s active" | format(stats.active_organizations | default(0))) }}
+        {{ stats_card("System Health", stats.system_health | default("Good"), icon="check-circle", color="emerald", subtitle="All services operational") }}
     </div>
 
     <!-- Quick Actions & Recent Activity -->
@@ -146,7 +82,7 @@
                         {% if activity.type == 'user_created' %}
                         {{ icon_svg("user-add", "h-4 w-4") }}
                         {% elif activity.type == 'login' %}
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
                         </svg>
                         {% else %}
@@ -159,14 +95,7 @@
                     </div>
                 </div>
                 {% else %}
-                <!-- Empty state -->
-                <div class="text-center py-12">
-                    <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                        {{ icon_svg("clock", "h-6 w-6 text-slate-400") }}
-                    </div>
-                    <p class="text-sm font-medium text-slate-900 dark:text-white">No recent activity</p>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Activity will appear here as users interact with the system</p>
-                </div>
+                {{ empty_state("No recent activity", "Activity will appear here as users interact with the system.", "clock") }}
                 {% endfor %}
             </div>
         </div>
@@ -195,9 +124,7 @@
                     {{ status_badge(user.status, 'sm') }}
                 </div>
                 {% else %}
-                <div class="text-center py-8">
-                    <p class="text-sm text-slate-500 dark:text-slate-400">No users yet</p>
-                </div>
+                {{ empty_state("No users yet", "Users will appear here once created.", "users") }}
                 {% endfor %}
             </div>
         </div>
@@ -210,7 +137,7 @@
                 <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
                     <div class="flex items-center gap-3">
                         <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
                             </svg>
                         </div>
@@ -219,10 +146,7 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400">PostgreSQL</p>
                         </div>
                     </div>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Healthy
-                    </span>
+                    {{ status_badge('ACTIVE', 'sm') }}
                 </div>
 
                 <!-- Cache -->
@@ -236,10 +160,7 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400">Redis</p>
                         </div>
                     </div>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Connected
-                    </span>
+                    {{ status_badge('ACTIVE', 'sm') }}
                 </div>
 
                 <!-- Task Queue -->
@@ -253,10 +174,7 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400">Celery</p>
                         </div>
                     </div>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Running
-                    </span>
+                    {{ status_badge('ACTIVE', 'sm') }}
                 </div>
 
                 <!-- Email Service -->
@@ -270,10 +188,7 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400">SMTP</p>
                         </div>
                     </div>
-                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Configured
-                    </span>
+                    {{ status_badge('ACTIVE', 'sm') }}
                 </div>
             </div>
         </div>

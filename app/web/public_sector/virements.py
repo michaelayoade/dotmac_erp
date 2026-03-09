@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ipsas.web.ipsas_web import IPSASWebService
+from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -82,7 +83,7 @@ def create_virement(
     from_appropriation_id: str = Form(...),
     to_appropriation_id: str = Form(...),
     amount: str = Form(...),
-    currency_code: str = Form("NGN"),
+    currency_code: str | None = Form(None),
     justification: str = Form(...),
     approval_authority: str | None = Form(None),
     auth: WebAuthContext = Depends(require_public_sector_access),
@@ -106,7 +107,8 @@ def create_virement(
         from_appropriation_id=UUID(from_appropriation_id),
         to_appropriation_id=UUID(to_appropriation_id),
         amount=Decimal(amount),
-        currency_code=currency_code,
+        currency_code=currency_code
+        or org_context_service.get_functional_currency(db, auth.organization_id),
         justification=justification,
         approval_authority=approval_authority or None,
     )

@@ -27,6 +27,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 
 if TYPE_CHECKING:
@@ -105,7 +106,7 @@ class TransferBatch(Base):
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="NGN",
+        default=settings.default_functional_currency_code,
     )
 
     # Batch totals
@@ -287,7 +288,7 @@ class TransferBatchItem(Base):
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="NGN",
+        default=settings.default_functional_currency_code,
     )
 
     # Transfer details (after processing)

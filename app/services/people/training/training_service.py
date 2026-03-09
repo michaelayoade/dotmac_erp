@@ -25,6 +25,7 @@ from app.models.people.training import (
     TrainingProgramStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams
+from app.services.finance.platform.org_context import org_context_service
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,15 @@ class TrainingService:
         self.db = db
         self.ctx = ctx
 
+    def _resolve_currency_code(
+        self,
+        org_id: UUID,
+        currency_code: str | None = None,
+    ) -> str:
+        if currency_code:
+            return currency_code
+        return org_context_service.get_functional_currency(self.db, org_id)
+
     # =========================================================================
     # Training Programs
     # =========================================================================
@@ -219,7 +229,7 @@ class TrainingService:
         duration_days: int | None = None,
         department_id: UUID | None = None,
         cost_per_attendee: Decimal | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         objectives: str | None = None,
         prerequisites: str | None = None,
         syllabus: str | None = None,
@@ -229,6 +239,7 @@ class TrainingService:
         status: TrainingProgramStatus = TrainingProgramStatus.DRAFT,
     ) -> TrainingProgram:
         """Create a new training program."""
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         program = TrainingProgram(
             organization_id=org_id,
             program_code=program_code,
@@ -239,7 +250,7 @@ class TrainingService:
             duration_days=duration_days,
             department_id=department_id,
             cost_per_attendee=cost_per_attendee,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             objectives=objectives,
             prerequisites=prerequisites,
             syllabus=syllabus,
@@ -412,12 +423,13 @@ class TrainingService:
         trainer_employee_id: UUID | None = None,
         max_attendees: int | None = None,
         total_cost: Decimal | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         description: str | None = None,
     ) -> TrainingEvent:
         """Create a new training event."""
         # Verify program exists
         self.get_program(org_id, program_id)
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         event = TrainingEvent(
             organization_id=org_id,
@@ -435,7 +447,7 @@ class TrainingService:
             trainer_employee_id=trainer_employee_id,
             max_attendees=max_attendees,
             total_cost=total_cost,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             description=description,
             status=TrainingEventStatus.DRAFT,
         )

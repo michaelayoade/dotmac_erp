@@ -5,6 +5,8 @@ Item mapping from ERPNext to DotMac ERP.
 import logging
 from typing import Any
 
+from app.config import settings
+
 from .base import (
     DocTypeMapping,
     FieldMapping,
@@ -157,7 +159,7 @@ class ItemMapping(DocTypeMapping):
         result["item_type"] = map_item_type(record)
 
         # Default currency
-        result["currency_code"] = "NGN"
+        result["currency_code"] = settings.default_functional_currency_code
 
         return result
 

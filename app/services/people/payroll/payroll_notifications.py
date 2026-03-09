@@ -153,7 +153,7 @@ class PayrollNotificationService:
         org_id: UUID,
         slip_count: int,
         total_net_pay: float,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         recipient_id: UUID | None = None,
     ) -> None:
         """
@@ -170,6 +170,9 @@ class PayrollNotificationService:
         if not recipient_id:
             logger.debug("No recipient specified for payroll entry notification")
             return
+        amount_label = f"{total_net_pay:,.2f}"
+        if currency_code:
+            amount_label = f"{currency_code} {amount_label}"
 
         self._notification_service.create(
             self.db,
@@ -181,7 +184,7 @@ class PayrollNotificationService:
             title="Payroll batch processed",
             message=(
                 f"{slip_count} payslips processed. "
-                f"Total disbursement: {currency_code} {total_net_pay:,.2f}"
+                f"Total disbursement: {amount_label}"
             ),
             channel=NotificationChannel.IN_APP,
             action_url=f"/people/payroll/runs/{entry_id}",

@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.gl.account import Account
@@ -123,7 +124,9 @@ class CustomerSyncService(BaseSyncService[Customer]):
             legal_name=legal_name,
             trading_name=(data.get("trading_name") or legal_name)[:200],
             customer_type=customer_type,
-            currency_code=(data.get("currency_code") or "NGN")[:3],
+            currency_code=(
+                data.get("currency_code") or settings.default_functional_currency_code
+            )[:3],
             tax_identification_number=str(data.get("tax_id") or "")[:50] or None,
             ar_control_account_id=ar_account_id,
             credit_terms_days=30,  # Default credit terms
@@ -148,7 +151,9 @@ class CustomerSyncService(BaseSyncService[Customer]):
             data.get("customer_type", ""), entity.customer_type.value
         )
         entity.customer_type = CustomerType(customer_type_value)
-        entity.currency_code = (data.get("currency_code") or "NGN")[:3]
+        entity.currency_code = (
+            data.get("currency_code") or settings.default_functional_currency_code
+        )[:3]
         entity.tax_identification_number = str(data.get("tax_id") or "")[:50] or None
         entity.is_active = data.get("is_active", True)
         if data.get("splynx_id") is not None:
@@ -279,7 +284,9 @@ class SupplierSyncService(BaseSyncService[Supplier]):
             legal_name=legal_name,
             trading_name=(data.get("trading_name") or legal_name)[:200],
             supplier_type=supplier_type,
-            currency_code=(data.get("currency_code") or "NGN")[:3],
+            currency_code=(
+                data.get("currency_code") or settings.default_functional_currency_code
+            )[:3],
             tax_identification_number=str(data.get("tax_id") or "")[:50] or None,
             ap_control_account_id=ap_account_id,
             is_active=data.get("is_active", True),
@@ -298,7 +305,9 @@ class SupplierSyncService(BaseSyncService[Supplier]):
             data.get("supplier_type", ""), entity.supplier_type.value
         )
         entity.supplier_type = SupplierType(supplier_type_value)
-        entity.currency_code = (data.get("currency_code") or "NGN")[:3]
+        entity.currency_code = (
+            data.get("currency_code") or settings.default_functional_currency_code
+        )[:3]
         entity.tax_identification_number = str(data.get("tax_id") or "")[:50] or None
         entity.is_active = data.get("is_active", True)
 

@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.core_org.project import (
     Project,
     ProjectStatus,
@@ -150,7 +151,10 @@ class ProjectSyncService(BaseSyncService[Project]):
             start_date=data.get("start_date"),
             end_date=data.get("end_date"),
             budget_amount=data.get("budget_amount"),
-            budget_currency_code=str(data.get("budget_currency_code") or "NGN")[:3],
+            budget_currency_code=str(
+                data.get("budget_currency_code")
+                or settings.default_functional_currency_code
+            )[:3],
             is_capitalizable=data.get("is_capitalizable", False),
             customer_id=customer_id,
             cost_center_id=cost_center_id,
@@ -174,7 +178,9 @@ class ProjectSyncService(BaseSyncService[Project]):
         entity.end_date = data.get("end_date")
         entity.budget_amount = data.get("budget_amount")
         entity.budget_currency_code = str(
-            data.get("budget_currency_code") or entity.budget_currency_code or "NGN"
+            data.get("budget_currency_code")
+            or entity.budget_currency_code
+            or settings.default_functional_currency_code
         )[:3]
 
         # Update progress and cost tracking

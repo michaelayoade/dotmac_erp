@@ -30,6 +30,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from app.config import settings
+
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
 
@@ -109,7 +111,7 @@ class OrgFormattingPrefs:
     thousand_sep: str = ","
     decimal_sep: str = "."
     decimal_places: int = 2
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_presentation_currency_code
     timezone_name: str | None = None
 
 
@@ -165,7 +167,7 @@ def resolve_from_org(org: Organization | None) -> OrgFormattingPrefs:
     currency_code = (
         getattr(org, "presentation_currency_code", None)
         or getattr(org, "functional_currency_code", None)
-        or "NGN"
+        or settings.default_presentation_currency_code
     )
 
     return OrgFormattingPrefs(

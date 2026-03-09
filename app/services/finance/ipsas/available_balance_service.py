@@ -16,6 +16,7 @@ from app.models.finance.ipsas.appropriation import Allotment, Appropriation
 from app.models.finance.ipsas.commitment import Commitment
 from app.models.finance.ipsas.enums import AppropriationStatus, CommitmentStatus
 from app.schemas.finance.ipsas import AvailableBalanceResponse
+from app.services.finance.platform.org_context import org_context_service
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,9 @@ class AvailableBalanceService:
             currency_stmt = currency_stmt.where(Appropriation.fund_id == fund_id)
         if account_id:
             currency_stmt = currency_stmt.where(Appropriation.account_id == account_id)
-        currency_code = self.db.scalar(currency_stmt.limit(1)) or "NGN"
+        currency_code = self.db.scalar(currency_stmt.limit(1)) or (
+            org_context_service.get_functional_currency(self.db, organization_id)
+        )
 
         return AvailableBalanceResponse(
             organization_id=organization_id,

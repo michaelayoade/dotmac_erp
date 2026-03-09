@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.people.exp import (
     CardTransactionStatus,
     CashAdvanceStatus,
@@ -145,7 +146,7 @@ class ExpenseClaimBase(BaseModel):
     project_id: UUID | None = None
     ticket_id: UUID | None = None
     task_id: UUID | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     cost_center_id: UUID | None = None
     recipient_bank_code: str | None = Field(default=None, max_length=20)
     recipient_bank_name: str | None = Field(default=None, max_length=100)
@@ -272,7 +273,7 @@ class CashAdvanceBase(BaseModel):
     request_date: date
     purpose: str = Field(max_length=500)
     requested_amount: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     expected_settlement_date: date | None = None
     cost_center_id: UUID | None = None
     advance_account_id: UUID | None = None
@@ -381,7 +382,7 @@ class CorporateCardBase(BaseModel):
     credit_limit: Decimal | None = None
     single_transaction_limit: Decimal | None = None
     monthly_limit: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     liability_account_id: UUID | None = None
 
 
@@ -447,7 +448,7 @@ class CardTransactionBase(BaseModel):
     merchant_name: str = Field(max_length=200)
     merchant_category: str | None = Field(default=None, max_length=100)
     amount: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     original_currency: str | None = None
     original_amount: Decimal | None = None
     external_reference: str | None = Field(default=None, max_length=100)

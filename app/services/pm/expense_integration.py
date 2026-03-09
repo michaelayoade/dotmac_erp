@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -159,7 +161,7 @@ class ProjectExpenseService:
             "expense_count": total_count,
             "approved_amount": approved_amount,
             "pending_amount": pending_amount,
-            "currency": "NGN",
+            "currency": settings.default_functional_currency_code,
             "expenses_by_category": expenses_by_category,
         }
 

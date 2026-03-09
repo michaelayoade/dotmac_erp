@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.coach.insight import CoachInsight
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
@@ -76,7 +77,11 @@ class AROverdueAnalyzer:
         org = self.db.scalar(
             select(Organization).where(Organization.organization_id == organization_id)
         )
-        currency_code = org.functional_currency_code if org else "NGN"
+        currency_code = (
+            org.functional_currency_code
+            if org
+            else settings.default_functional_currency_code
+        )
 
         today = date.today()
         # PostgreSQL: date - date returns integer days natively

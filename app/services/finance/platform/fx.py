@@ -184,12 +184,11 @@ class FXService(ListResponseMixin):
             return rate
 
         # Get the rate type
-        rate_type = (
-            db.query(ExchangeRateType)
-            .filter(ExchangeRateType.organization_id == org_id)
-            .filter(ExchangeRateType.type_code == rate_type_code)
-            .first()
-        )
+        rate_type = db.scalars(
+            select(ExchangeRateType)
+            .where(ExchangeRateType.organization_id == org_id)
+            .where(ExchangeRateType.type_code == rate_type_code)
+        ).first()
 
         if not rate_type:
             raise HTTPException(
@@ -198,31 +197,31 @@ class FXService(ListResponseMixin):
             )
 
         # Try direct rate first
-        direct_rate = (
-            db.query(ExchangeRate)
-            .filter(ExchangeRate.organization_id == org_id)
-            .filter(ExchangeRate.from_currency_code == from_currency)
-            .filter(ExchangeRate.to_currency_code == to_currency)
-            .filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
-            .filter(ExchangeRate.effective_date <= effective_date)
+        direct_rate = db.scalars(
+            select(ExchangeRate)
+            .where(ExchangeRate.organization_id == org_id)
+            .where(ExchangeRate.from_currency_code == from_currency)
+            .where(ExchangeRate.to_currency_code == to_currency)
+            .where(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+            .where(ExchangeRate.effective_date <= effective_date)
             .order_by(ExchangeRate.effective_date.desc())
-            .first()
-        )
+            .limit(1)
+        ).first()
 
         if direct_rate:
             return direct_rate
 
         # Try inverse rate
-        inverse_rate = (
-            db.query(ExchangeRate)
-            .filter(ExchangeRate.organization_id == org_id)
-            .filter(ExchangeRate.from_currency_code == to_currency)
-            .filter(ExchangeRate.to_currency_code == from_currency)
-            .filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
-            .filter(ExchangeRate.effective_date <= effective_date)
+        inverse_rate = db.scalars(
+            select(ExchangeRate)
+            .where(ExchangeRate.organization_id == org_id)
+            .where(ExchangeRate.from_currency_code == to_currency)
+            .where(ExchangeRate.to_currency_code == from_currency)
+            .where(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+            .where(ExchangeRate.effective_date <= effective_date)
             .order_by(ExchangeRate.effective_date.desc())
-            .first()
-        )
+            .limit(1)
+        ).first()
 
         if inverse_rate:
             # Create synthetic rate from inverse
@@ -412,12 +411,11 @@ class FXService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        rate_type = (
-            db.query(ExchangeRateType)
-            .filter(ExchangeRateType.organization_id == org_id)
-            .filter(ExchangeRateType.is_default == True)  # noqa: E712
-            .first()
-        )
+        rate_type = db.scalars(
+            select(ExchangeRateType)
+            .where(ExchangeRateType.organization_id == org_id)
+            .where(ExchangeRateType.is_default == True)  # noqa: E712
+        ).first()
 
         if not rate_type:
             raise HTTPException(
@@ -495,12 +493,11 @@ class FXService(ListResponseMixin):
             )
 
         # Get the rate type
-        rate_type = (
-            db.query(ExchangeRateType)
-            .filter(ExchangeRateType.organization_id == org_id)
-            .filter(ExchangeRateType.type_code == rate_type_code)
-            .first()
-        )
+        rate_type = db.scalars(
+            select(ExchangeRateType)
+            .where(ExchangeRateType.organization_id == org_id)
+            .where(ExchangeRateType.type_code == rate_type_code)
+        ).first()
 
         if not rate_type:
             raise HTTPException(
@@ -555,42 +552,40 @@ class FXService(ListResponseMixin):
         Returns:
             List of ExchangeRate objects
         """
-        stmt = db.query(ExchangeRate)
+        stmt = select(ExchangeRate)
 
         if organization_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ExchangeRate.organization_id == coerce_uuid(organization_id)
             )
 
         if from_currency:
-            stmt = stmt.filter(ExchangeRate.from_currency_code == from_currency)
+            stmt = stmt.where(ExchangeRate.from_currency_code == from_currency)
 
         if to_currency:
-            stmt = stmt.filter(ExchangeRate.to_currency_code == to_currency)
+            stmt = stmt.where(ExchangeRate.to_currency_code == to_currency)
 
         if from_date:
-            stmt = stmt.filter(ExchangeRate.effective_date >= from_date)
+            stmt = stmt.where(ExchangeRate.effective_date >= from_date)
 
         if to_date:
-            stmt = stmt.filter(ExchangeRate.effective_date <= to_date)
+            stmt = stmt.where(ExchangeRate.effective_date <= to_date)
 
         if rate_type_code and organization_id:
             org_id = coerce_uuid(organization_id)
-            rate_type = (
-                db.query(ExchangeRateType)
-                .filter(ExchangeRateType.organization_id == org_id)
-                .filter(ExchangeRateType.type_code == rate_type_code)
-                .first()
-            )
+            rate_type = db.scalars(
+                select(ExchangeRateType)
+                .where(ExchangeRateType.organization_id == org_id)
+                .where(ExchangeRateType.type_code == rate_type_code)
+            ).first()
             if rate_type:
-                stmt = stmt.filter(ExchangeRate.rate_type_id == rate_type.rate_type_id)
+                stmt = stmt.where(ExchangeRate.rate_type_id == rate_type.rate_type_id)
 
-        return (
+        return list(db.scalars(
             stmt.order_by(ExchangeRate.effective_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all())
 
 
 # Module-level singleton instance

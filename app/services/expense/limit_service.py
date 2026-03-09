@@ -259,7 +259,7 @@ class ExpenseLimitService:
         effective_from: date,
         scope_id: UUID | None = None,
         custom_period_days: int | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         dimension_filters: dict | None = None,
         action_config: dict | None = None,
         priority: int = 100,
@@ -268,6 +268,7 @@ class ExpenseLimitService:
         description: str | None = None,
     ) -> ExpenseLimitRule:
         """Create a new expense limit rule."""
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         rule = ExpenseLimitRule(
             organization_id=org_id,
             rule_code=rule_code,
@@ -278,7 +279,7 @@ class ExpenseLimitService:
             period_type=period_type,
             custom_period_days=custom_period_days,
             limit_amount=limit_amount,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             action_type=action_type,
             dimension_filters=dimension_filters or {},
             action_config=action_config or {},
@@ -379,7 +380,7 @@ class ExpenseLimitService:
         scope_id: UUID | None = None,
         weekly_approval_budget: Decimal | None = None,
         monthly_approval_budget: Decimal | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         dimension_filters: dict | None = None,
         escalate_to_employee_id: UUID | None = None,
         escalate_to_grade_min_rank: int | None = None,
@@ -387,6 +388,7 @@ class ExpenseLimitService:
         is_active: bool = True,
     ) -> ExpenseApproverLimit:
         """Create a new expense approver limit."""
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         limit = ExpenseApproverLimit(
             organization_id=org_id,
             scope_type=scope_type,
@@ -394,7 +396,7 @@ class ExpenseLimitService:
             max_approval_amount=max_approval_amount,
             weekly_approval_budget=weekly_approval_budget,
             monthly_approval_budget=monthly_approval_budget,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             dimension_filters=dimension_filters or {},
             escalate_to_employee_id=escalate_to_employee_id,
             escalate_to_grade_min_rank=escalate_to_grade_min_rank,

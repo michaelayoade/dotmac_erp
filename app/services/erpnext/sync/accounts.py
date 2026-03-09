@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory
 from app.services.erpnext.mappings.accounts import ROOT_TYPE_MAP, AccountMapping
@@ -146,7 +147,9 @@ class AccountSyncService(BaseSyncService[Account]):
             normal_balance=NormalBalance(data.get("normal_balance", "DEBIT")[:6]),
             is_posting_allowed=not is_header,  # Header accounts don't allow posting
             is_active=data.get("is_active", True),
-            default_currency_code=data.get("currency_code", "NGN")[:3],
+            default_currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
             subledger_type=data.get("subledger_type"),
             created_by_user_id=self.user_id,
         )
@@ -175,7 +178,9 @@ class AccountSyncService(BaseSyncService[Account]):
         entity.normal_balance = NormalBalance(data.get("normal_balance", "DEBIT")[:6])
         entity.is_posting_allowed = not is_header
         entity.is_active = data.get("is_active", True)
-        entity.default_currency_code = data.get("currency_code", "NGN")[:3]
+        entity.default_currency_code = data.get(
+            "currency_code", settings.default_functional_currency_code
+        )[:3]
         entity.subledger_type = data.get("subledger_type")
 
         return entity

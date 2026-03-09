@@ -108,8 +108,8 @@ def cleanup_old_hook_executions(
                 return {"deleted": 0, "errors": []}
 
             deleted = (
-                db.query(ServiceHookExecution)
-                .filter(ServiceHookExecution.execution_id.in_(execution_ids))
+                select(ServiceHookExecution)
+                .where(ServiceHookExecution.execution_id.in_(execution_ids))
                 .delete(synchronize_session=False)
             )
             db.commit()

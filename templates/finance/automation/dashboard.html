@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import icon_svg, status_badge %}
+{% from "components/macros.html" import icon_svg, status_badge, stats_card %}
 
 {% block page_title %}Automation{% endblock %}
 
@@ -16,53 +16,10 @@
 <div class="space-y-6">
     <!-- Overview Cards -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <a href="/automation/recurring" class="group rounded-xl border border-slate-200 bg-white p-6 transition-all hover:border-teal-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-teal-700">
-            <div class="flex items-center justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                    {{ icon_svg("refresh", "h-6 w-6") }}
-                </div>
-                {{ icon_svg("chevron-right", "h-5 w-5 text-slate-400 transition-transform group-hover:translate-x-1") }}
-            </div>
-            <h3 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Recurring</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ recurring_count }} templates</p>
-            <p class="text-xs text-teal-600 dark:text-teal-400">{{ active_recurring }} active</p>
-        </a>
-
-        <a href="/automation/workflows" class="group rounded-xl border border-slate-200 bg-white p-6 transition-all hover:border-violet-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-violet-700">
-            <div class="flex items-center justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    {{ icon_svg("lightning-bolt", "h-6 w-6") }}
-                </div>
-                {{ icon_svg("chevron-right", "h-5 w-5 text-slate-400 transition-transform group-hover:translate-x-1") }}
-            </div>
-            <h3 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Workflows</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ workflow_count }} rules</p>
-            <p class="text-xs text-violet-600 dark:text-violet-400">{{ active_workflows }} active</p>
-        </a>
-
-        <a href="/automation/fields" class="group rounded-xl border border-slate-200 bg-white p-6 transition-all hover:border-amber-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-amber-700">
-            <div class="flex items-center justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    {{ icon_svg("view-boards", "h-6 w-6") }}
-                </div>
-                {{ icon_svg("chevron-right", "h-5 w-5 text-slate-400 transition-transform group-hover:translate-x-1") }}
-            </div>
-            <h3 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Custom Fields</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ custom_fields_count }} fields</p>
-            <p class="text-xs text-amber-600 dark:text-amber-400">Extend your entities</p>
-        </a>
-
-        <a href="/automation/templates" class="group rounded-xl border border-slate-200 bg-white p-6 transition-all hover:border-rose-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-rose-700">
-            <div class="flex items-center justify-between">
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    {{ icon_svg("document", "h-6 w-6") }}
-                </div>
-                {{ icon_svg("chevron-right", "h-5 w-5 text-slate-400 transition-transform group-hover:translate-x-1") }}
-            </div>
-            <h3 class="mt-4 text-lg font-semibold text-slate-900 dark:text-white">Templates</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ templates_count }} templates</p>
-            <p class="text-xs text-rose-600 dark:text-rose-400">Documents & emails</p>
-        </a>
+        {{ stats_card("Recurring", recurring_count ~ " templates", icon="refresh", color="teal", href="/automation/recurring", subtitle=active_recurring ~ " active") }}
+        {{ stats_card("Workflows", workflow_count ~ " rules", icon="lightning-bolt", color="violet", href="/automation/workflows", subtitle=active_workflows ~ " active") }}
+        {{ stats_card("Custom Fields", custom_fields_count ~ " fields", icon="view-boards", color="amber", href="/automation/fields", subtitle="Extend your entities") }}
+        {{ stats_card("Templates", templates_count ~ " templates", icon="document", color="rose", href="/automation/templates", subtitle="Documents & emails") }}
     </div>
 
     <!-- Recent Activity -->
@@ -110,11 +67,7 @@
                         <p class="text-xs text-slate-500 dark:text-slate-400">{{ rule.entity_type | replace('_', ' ') | title }} - {{ rule.trigger_event }}</p>
                     </div>
                     <div class="text-right">
-                        <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
-                            {% if rule.is_active %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                            {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                            {% if rule.is_active %}Active{% else %}Inactive{% endif %}
-                        </span>
+                        {{ status_badge('ACTIVE' if rule.is_active else 'INACTIVE', 'sm') }}
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ rule.execution_count }} executions</p>
                     </div>
                 </a>

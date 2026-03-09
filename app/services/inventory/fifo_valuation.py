@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -115,8 +115,8 @@ class FIFOValuationService(ListResponseMixin):
 
         # Validate item
         item = (
-            db.query(Item)
-            .filter(
+            select(Item)
+            .where(
                 Item.item_id == item_id,
                 Item.organization_id == org_id,
             )
@@ -145,15 +145,15 @@ class FIFOValuationService(ListResponseMixin):
         db.add(lot)
 
         # Update item average cost
-        total_on_hand = db.query(func.sum(InventoryLot.quantity_on_hand)).filter(
+        total_on_hand = select(func.sum(InventoryLot.quantity_on_hand)).where(
             InventoryLot.organization_id == org_id,
             InventoryLot.item_id == item_id,
             InventoryLot.quantity_on_hand > 0,
         ).scalar() or Decimal("0")
 
-        total_value = db.query(
+        total_value = select(
             func.sum(InventoryLot.quantity_on_hand * InventoryLot.unit_cost)
-        ).filter(
+        ).where(
             InventoryLot.organization_id == org_id,
             InventoryLot.item_id == item_id,
             InventoryLot.quantity_on_hand > 0,
@@ -200,8 +200,8 @@ class FIFOValuationService(ListResponseMixin):
 
         # Get layers ordered by received date (oldest first)
         layers = (
-            db.query(InventoryLot)
-            .filter(
+            select(InventoryLot)
+            .where(
                 InventoryLot.organization_id == org_id,
                 InventoryLot.item_id == item_id,
                 InventoryLot.quantity_on_hand > 0,
@@ -276,8 +276,8 @@ class FIFOValuationService(ListResponseMixin):
 
         org_id = coerce_uuid(organization_id)
         layers_data = (
-            db.query(InventoryLot)
-            .filter(
+            select(InventoryLot)
+            .where(
                 InventoryLot.organization_id == org_id,
                 InventoryLot.item_id == item_id,
                 InventoryLot.quantity_on_hand > 0,
@@ -452,8 +452,8 @@ class FIFOValuationService(ListResponseMixin):
 
         # Get item details - verify belongs to organization
         item = (
-            db.query(Item)
-            .filter(
+            select(Item)
+            .where(
                 Item.item_id == item_id,
                 Item.organization_id == org_id,
             )
@@ -467,8 +467,8 @@ class FIFOValuationService(ListResponseMixin):
 
         # Check for existing valuation
         existing = (
-            db.query(InventoryValuation)
-            .filter(
+            select(InventoryValuation)
+            .where(
                 InventoryValuation.fiscal_period_id == period_id,
                 InventoryValuation.item_id == item_id,
                 InventoryValuation.warehouse_id == warehouse_id,
@@ -541,8 +541,8 @@ class FIFOValuationService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         valuations = (
-            db.query(InventoryValuation)
-            .filter(
+            select(InventoryValuation)
+            .where(
                 InventoryValuation.organization_id == org_id,
                 InventoryValuation.fiscal_period_id == period_id,
             )

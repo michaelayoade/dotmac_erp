@@ -8,6 +8,8 @@ Each SLE represents a single stock movement (receipt, issue, transfer leg, etc.)
 import logging
 from typing import Any
 
+from app.config import settings
+
 from .base import (
     DocTypeMapping,
     FieldMapping,
@@ -157,6 +159,6 @@ class StockLedgerMapping(DocTypeMapping):
         result["transaction_type"] = map_transaction_type(record)
 
         # Currency default
-        result["currency_code"] = "NGN"
+        result["currency_code"] = settings.default_functional_currency_code
 
         return result

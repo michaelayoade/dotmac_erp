@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import text
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.finance.gl.journal import JournalInput, JournalLineInput
@@ -161,7 +162,7 @@ def main() -> None:
                 f"Reclass EXPENSE net from {source.account_code} to {target.account_code}"
             ),
             reference=f"RECLASS-EXP-{source.account_code}-{target.account_code}-{posting_date.isoformat()}",
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             exchange_rate=Decimal("1.0"),
             lines=lines,
             source_module="GL",

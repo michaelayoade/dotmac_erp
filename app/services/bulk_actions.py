@@ -75,9 +75,9 @@ class BulkActionService(ABC, Generic[T]):
 
         try:
             return (
-                self.db.query(self.model)
-                .filter(org_col == self.organization_id)
-                .filter(id_col.in_(coerced_ids))
+                self.select(self.model)
+                .where(org_col == self.organization_id)
+                .where(id_col.in_(coerced_ids))
             )
         except Exception:
             return select(self.model).where(

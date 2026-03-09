@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.procurement.enums import (
     PlanItemStatus,
     ProcurementMethod,
@@ -54,7 +55,9 @@ class ProcurementPlanCreate(BaseModel):
     plan_number: str = Field(max_length=30)
     fiscal_year: str = Field(max_length=10)
     title: str = Field(max_length=200)
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     items: list[PlanItemCreate] = Field(default_factory=list)
 
 

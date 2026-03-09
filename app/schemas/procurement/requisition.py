@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.procurement.enums import RequisitionStatus, UrgencyLevel
 
 
@@ -56,7 +57,9 @@ class RequisitionCreate(BaseModel):
     department_id: UUID | None = None
     urgency: UrgencyLevel = UrgencyLevel.NORMAL
     justification: str | None = None
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     material_request_id: UUID | None = None
     plan_item_id: UUID | None = None
     lines: list[RequisitionLineCreate] = Field(default_factory=list)

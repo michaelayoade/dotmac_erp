@@ -14,7 +14,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.consolidated_balance import ConsolidatedBalance
@@ -118,8 +118,8 @@ class ConsolidationService(ListResponseMixin):
 
         # Get next run number for this period
         max_run = (
-            db.query(func.max(ConsolidationRun.run_number))
-            .filter(
+            select(func.max(ConsolidationRun.run_number))
+            .where(
                 ConsolidationRun.group_id == grp_id,
                 ConsolidationRun.fiscal_period_id == input.fiscal_period_id,
             )
@@ -129,8 +129,8 @@ class ConsolidationService(ListResponseMixin):
 
         # Count entities
         entities = (
-            db.query(LegalEntity)
-            .filter(
+            select(LegalEntity)
+            .where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
                 LegalEntity.consolidation_method
@@ -307,8 +307,8 @@ class ConsolidationService(ListResponseMixin):
 
         # Get entities in group
         entities = (
-            db.query(LegalEntity)
-            .filter(
+            select(LegalEntity)
+            .where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
@@ -319,8 +319,8 @@ class ConsolidationService(ListResponseMixin):
 
         # Get matched intercompany balances
         balances = (
-            db.query(IntercompanyBalance)
-            .filter(
+            select(IntercompanyBalance)
+            .where(
                 IntercompanyBalance.fiscal_period_id == run.fiscal_period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
                 IntercompanyBalance.is_matched == True,
@@ -372,8 +372,8 @@ class ConsolidationService(ListResponseMixin):
 
         # Update intercompany differences on run
         unmatched = (
-            db.query(func.sum(IntercompanyBalance.difference_amount))
-            .filter(
+            select(func.sum(IntercompanyBalance.difference_amount))
+            .where(
                 IntercompanyBalance.fiscal_period_id == run.fiscal_period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
                 IntercompanyBalance.is_matched == False,
@@ -419,8 +419,8 @@ class ConsolidationService(ListResponseMixin):
 
         # Get subsidiaries with ownership
         subsidiaries = (
-            db.query(LegalEntity)
-            .filter(
+            select(LegalEntity)
+            .where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
                 LegalEntity.consolidation_method == ConsolidationMethod.FULL,
@@ -432,8 +432,8 @@ class ConsolidationService(ListResponseMixin):
 
         for subsidiary in subsidiaries:
             ownership = (
-                db.query(OwnershipInterest)
-                .filter(
+                select(OwnershipInterest)
+                .where(
                     OwnershipInterest.investee_entity_id == subsidiary.entity_id,
                     OwnershipInterest.is_current == True,
                 )
@@ -689,12 +689,12 @@ class ConsolidationService(ListResponseMixin):
         """Get elimination entries for a run."""
         r_id = coerce_uuid(run_id)
 
-        query = db.query(EliminationEntry).filter(
+        query = select(EliminationEntry).where(
             EliminationEntry.consolidation_run_id == r_id
         )
 
         if elimination_type:
-            query = query.filter(EliminationEntry.elimination_type == elimination_type)
+            query = query.where(EliminationEntry.elimination_type == elimination_type)
 
         return query.order_by(EliminationEntry.created_at).all()
 
@@ -707,12 +707,12 @@ class ConsolidationService(ListResponseMixin):
         """Get consolidated balances for a run."""
         r_id = coerce_uuid(run_id)
 
-        query = db.query(ConsolidatedBalance).filter(
+        query = select(ConsolidatedBalance).where(
             ConsolidatedBalance.consolidation_run_id == r_id
         )
 
         if segment_id:
-            query = query.filter(
+            query = query.where(
                 ConsolidatedBalance.segment_id == coerce_uuid(segment_id)
             )
 
@@ -742,18 +742,18 @@ class ConsolidationService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ConsolidationRun]:
         """List consolidation runs with optional filters."""
-        query = db.query(ConsolidationRun)
+        query = select(ConsolidationRun)
 
         if group_id:
-            query = query.filter(ConsolidationRun.group_id == coerce_uuid(group_id))
+            query = query.where(ConsolidationRun.group_id == coerce_uuid(group_id))
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 ConsolidationRun.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if status:
-            query = query.filter(ConsolidationRun.status == status)
+            query = query.where(ConsolidationRun.status == status)
 
         query = query.order_by(ConsolidationRun.created_at.desc())
         return query.limit(limit).offset(offset).all()

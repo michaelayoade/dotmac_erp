@@ -14,6 +14,7 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.inventory.inventory_lot import InventoryLot
@@ -106,9 +107,9 @@ class LotSerialService(ListResponseMixin):
 
         # Validate item
         item = (
-            db.query(Item)
-            .filter(Item.item_id == item_id)
-            .filter(Item.organization_id == org_id)
+            select(Item)
+            .where(Item.item_id == item_id)
+            .where(Item.organization_id == org_id)
             .first()
         )
 
@@ -122,9 +123,9 @@ class LotSerialService(ListResponseMixin):
 
         # Check for duplicate lot number
         existing = (
-            db.query(InventoryLot)
-            .filter(InventoryLot.item_id == item_id)
-            .filter(InventoryLot.lot_number == input.lot_number)
+            select(InventoryLot)
+            .where(InventoryLot.item_id == item_id)
+            .where(InventoryLot.lot_number == input.lot_number)
             .first()
         )
 
@@ -195,7 +196,7 @@ class LotSerialService(ListResponseMixin):
             lot_id_value = coerce_uuid(cast(UUID, lot_id))
             quantity_value = quantity
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id_value).first()
+        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -261,7 +262,7 @@ class LotSerialService(ListResponseMixin):
             lot_id_value = coerce_uuid(cast(UUID, lot_id))
             quantity_value = quantity
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id_value).first()
+        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -314,7 +315,7 @@ class LotSerialService(ListResponseMixin):
             lot_id_value = coerce_uuid(cast(UUID, lot_id))
             quantity_value = quantity
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id_value).first()
+        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id_value)).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -376,7 +377,7 @@ class LotSerialService(ListResponseMixin):
 
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
+        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id)).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -431,7 +432,7 @@ class LotSerialService(ListResponseMixin):
 
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
+        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id)).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -473,13 +474,13 @@ class LotSerialService(ListResponseMixin):
         cutoff_date = date.today() + timedelta(days=days_ahead)
 
         return (
-            db.query(InventoryLot)
+            select(InventoryLot)
             .join(Item, InventoryLot.item_id == Item.item_id)
-            .filter(Item.organization_id == org_id)
-            .filter(InventoryLot.expiry_date <= cutoff_date)
-            .filter(InventoryLot.expiry_date >= date.today())
-            .filter(InventoryLot.quantity_on_hand > 0)
-            .filter(InventoryLot.is_active.is_(True))
+            .where(Item.organization_id == org_id)
+            .where(InventoryLot.expiry_date <= cutoff_date)
+            .where(InventoryLot.expiry_date >= date.today())
+            .where(InventoryLot.quantity_on_hand > 0)
+            .where(InventoryLot.is_active.is_(True))
             .order_by(InventoryLot.expiry_date.asc())
             .all()
         )
@@ -502,12 +503,12 @@ class LotSerialService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         return (
-            db.query(InventoryLot)
+            select(InventoryLot)
             .join(Item, InventoryLot.item_id == Item.item_id)
-            .filter(Item.organization_id == org_id)
-            .filter(InventoryLot.expiry_date < date.today())
-            .filter(InventoryLot.quantity_on_hand > 0)
-            .filter(InventoryLot.is_active.is_(True))
+            .where(Item.organization_id == org_id)
+            .where(InventoryLot.expiry_date < date.today())
+            .where(InventoryLot.quantity_on_hand > 0)
+            .where(InventoryLot.is_active.is_(True))
             .order_by(InventoryLot.expiry_date.asc())
             .all()
         )
@@ -539,7 +540,7 @@ class LotSerialService(ListResponseMixin):
 
         lot_id = coerce_uuid(lot_id)
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
+        lot = db.scalars(select(InventoryLot).where(InventoryLot.lot_id == lot_id)).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
@@ -548,7 +549,7 @@ class LotSerialService(ListResponseMixin):
             if lot.organization_id != org_id_value:
                 raise HTTPException(status_code=404, detail="Lot not found")
 
-        item = db.query(Item).filter(Item.item_id == lot.item_id).first()
+        item = db.scalars(select(Item).where(Item.item_id == lot.item_id)).first()
 
         return LotTraceability(
             lot_id=lot.lot_id,
@@ -571,8 +572,8 @@ class LotSerialService(ListResponseMixin):
     ) -> InventoryLot | None:
         """Get a lot by ID."""
         lot = (
-            db.query(InventoryLot)
-            .filter(InventoryLot.lot_id == coerce_uuid(lot_id))
+            select(InventoryLot)
+            .where(InventoryLot.lot_id == coerce_uuid(lot_id))
             .first()
         )
         if not lot:
@@ -591,9 +592,9 @@ class LotSerialService(ListResponseMixin):
     ) -> InventoryLot | None:
         """Get a lot by number."""
         return (
-            db.query(InventoryLot)
-            .filter(InventoryLot.item_id == coerce_uuid(item_id))
-            .filter(InventoryLot.lot_number == lot_number)
+            select(InventoryLot)
+            .where(InventoryLot.item_id == coerce_uuid(item_id))
+            .where(InventoryLot.lot_number == lot_number)
             .first()
         )
 
@@ -604,12 +605,12 @@ class LotSerialService(ListResponseMixin):
         include_inactive: bool = False,
     ) -> list[InventoryLot]:
         """List all lots for an item."""
-        query = db.query(InventoryLot).filter(
+        query = select(InventoryLot).where(
             InventoryLot.item_id == coerce_uuid(item_id)
         )
 
         if not include_inactive:
-            query = query.filter(InventoryLot.is_active.is_(True))
+            query = query.where(InventoryLot.is_active.is_(True))
 
         return query.order_by(InventoryLot.received_date.desc()).all()
 
@@ -640,27 +641,27 @@ class LotSerialService(ListResponseMixin):
         Returns:
             List of InventoryLot objects
         """
-        query = db.query(InventoryLot)
+        query = select(InventoryLot)
 
         if item_id:
-            query = query.filter(InventoryLot.item_id == coerce_uuid(item_id))
+            query = query.where(InventoryLot.item_id == coerce_uuid(item_id))
 
         if organization_id:
-            query = query.join(Item, InventoryLot.item_id == Item.item_id).filter(
+            query = query.join(Item, InventoryLot.item_id == Item.item_id).where(
                 Item.organization_id == coerce_uuid(organization_id)
             )
 
         if is_quarantined is not None:
-            query = query.filter(InventoryLot.is_quarantined == is_quarantined)
+            query = query.where(InventoryLot.is_quarantined == is_quarantined)
 
         if has_expiry is not None:
             if has_expiry:
-                query = query.filter(InventoryLot.expiry_date.isnot(None))
+                query = query.where(InventoryLot.expiry_date.isnot(None))
             else:
-                query = query.filter(InventoryLot.expiry_date.is_(None))
+                query = query.where(InventoryLot.expiry_date.is_(None))
 
         if not include_zero_quantity:
-            query = query.filter(InventoryLot.quantity_on_hand > 0)
+            query = query.where(InventoryLot.quantity_on_hand > 0)
 
         return (
             query.order_by(InventoryLot.received_date.desc())

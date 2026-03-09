@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.gl.journal_entry import (
     JournalEntry,
     JournalEntryLine,
@@ -184,7 +185,9 @@ class JournalEntrySyncService(BaseSyncService[JournalEntry]):
                 credit_amount_functional=acct_data.get(
                     "credit_amount_functional", Decimal("0")
                 ),
-                currency_code=acct_data.get("currency_code", "NGN"),
+                currency_code=acct_data.get(
+                    "currency_code", settings.default_functional_currency_code
+                ),
                 exchange_rate=acct_data.get("exchange_rate", Decimal("1")),
             )
             self.db.add(line)
@@ -235,7 +238,7 @@ class JournalEntrySyncService(BaseSyncService[JournalEntry]):
             fiscal_period_id=fiscal_period_id,
             description=str(description)[:1000],
             reference=data.get("reference"),
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             total_debit=data.get("total_debit", Decimal("0")),
             total_credit=data.get("total_credit", Decimal("0")),
             total_debit_functional=data.get("total_debit", Decimal("0")),

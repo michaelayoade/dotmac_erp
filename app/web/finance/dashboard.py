@@ -2,6 +2,8 @@
 Finance Dashboard Web Routes.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -9,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.services.finance.dashboard_web import dashboard_web_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -64,6 +68,7 @@ def ifrs_dashboard(
         else:
             context["coach_insights"] = []
     except Exception:
+        logger.exception("Failed to load coach insights for finance dashboard")
         context["coach_insights"] = []
 
     return templates.TemplateResponse(request, "finance/dashboard.html", context)

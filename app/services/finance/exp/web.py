@@ -50,6 +50,7 @@ class ExpenseWebService:
         search: str | None = None,
         offset: int = 0,
         limit: int = 25,
+        page: int = 1,
     ) -> dict:
         """Get context for expense list page."""
         from sqlalchemy import or_
@@ -137,6 +138,9 @@ class ExpenseWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "page": page,
+            "total_count": total,
+            "total_pages": max(1, (total + limit - 1) // limit),
             "active_filters": active_filters,
         }
 

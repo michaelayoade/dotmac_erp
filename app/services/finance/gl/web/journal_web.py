@@ -78,7 +78,7 @@ class JournalWebService:
         )
 
         total_count = (
-            query.with_entities(func.count(JournalEntry.journal_entry_id)).scalar() or 0
+            db.scalar(select(func.count()).select_from(query.subquery())) or 0
         )
         column_map = {
             "entry_date": JournalEntry.entry_date,
@@ -89,7 +89,7 @@ class JournalWebService:
         query = apply_sort(
             query, sort, sort_dir, column_map, default=JournalEntry.created_at.desc()
         )
-        entries = query.limit(limit).offset(offset).all()
+        entries = list(db.scalars(query.limit(limit).offset(offset)).all())
         stats_query = build_journal_query(
             db=db,
             organization_id=organization_id,
@@ -99,27 +99,37 @@ class JournalWebService:
             end_date=end_date,
         )
         stats_total = (
-            stats_query.with_entities(
-                func.count(JournalEntry.journal_entry_id)
-            ).scalar()
+            db.scalar(select(func.count()).select_from(stats_query.subquery()))
             or 0
         )
         draft_count = (
-            stats_query.filter(JournalEntry.status == JournalStatus.DRAFT)
-            .with_entities(func.count(JournalEntry.journal_entry_id))
-            .scalar()
+            db.scalar(
+                select(func.count()).select_from(
+                    stats_query.where(
+                        JournalEntry.status == JournalStatus.DRAFT
+                    ).subquery()
+                )
+            )
             or 0
         )
         posted_count = (
-            stats_query.filter(JournalEntry.status == JournalStatus.POSTED)
-            .with_entities(func.count(JournalEntry.journal_entry_id))
-            .scalar()
+            db.scalar(
+                select(func.count()).select_from(
+                    stats_query.where(
+                        JournalEntry.status == JournalStatus.POSTED
+                    ).subquery()
+                )
+            )
             or 0
         )
         reversed_count = (
-            stats_query.filter(JournalEntry.status == JournalStatus.REVERSED)
-            .with_entities(func.count(JournalEntry.journal_entry_id))
-            .scalar()
+            db.scalar(
+                select(func.count()).select_from(
+                    stats_query.where(
+                        JournalEntry.status == JournalStatus.REVERSED
+                    ).subquery()
+                )
+            )
             or 0
         )
 

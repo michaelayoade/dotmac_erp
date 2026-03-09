@@ -133,7 +133,7 @@ class ProgramWebService:
             "duration_hours": parse_int(form_data.get("duration_hours")),
             "duration_days": parse_int(form_data.get("duration_days")),
             "cost_per_attendee": parse_decimal(form_data.get("cost_per_attendee")),
-            "currency_code": form_data.get("currency_code", "NGN"),
+            "currency_code": form_data.get("currency_code") or None,
             "provider_name": form_data.get("provider_name") or None,
             "provider_contact": form_data.get("provider_contact") or None,
             "objectives": form_data.get("objectives") or None,

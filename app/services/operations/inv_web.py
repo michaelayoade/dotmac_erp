@@ -14,6 +14,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.datastructures import UploadFile
 
+from app.services.finance.platform.currency_context import get_currency_context
+from app.services.finance.platform.org_context import org_context_service
 from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -1710,13 +1712,7 @@ class OperationsInventoryWebService:
         context = base_context(request, auth, "New Price List", "price_lists")
         org_id = auth.organization_id
 
-        # Common currencies
-        currencies = [
-            {"currency_code": "NGN", "currency_name": "Nigerian Naira"},
-            {"currency_code": "USD", "currency_name": "US Dollar"},
-            {"currency_code": "EUR", "currency_name": "Euro"},
-            {"currency_code": "GBP", "currency_name": "British Pound"},
-        ]
+        currencies = get_currency_context(db, str(org_id)).get("currencies", [])
 
         items = list(
             db.scalars(
@@ -1761,7 +1757,9 @@ class OperationsInventoryWebService:
 
         pl_name = _safe_form_text(form.get("price_list_name"))
         pl_type_str = _safe_form_text(form.get("price_list_type") or "SALES")
-        currency_code = _safe_form_text(form.get("currency_code") or "NGN")
+        currency_code = _safe_form_text(form.get("currency_code")) or (
+            org_context_service.get_functional_currency(db, org_id)
+        )
         effective_from = _safe_form_text(form.get("effective_from")) or None
         effective_to = _safe_form_text(form.get("effective_to")) or None
         markup_str = _safe_form_text(form.get("markup_percent")) or None

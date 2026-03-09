@@ -13,7 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, case, func
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
@@ -128,7 +128,7 @@ class InventoryTransactionService(ListResponseMixin):
             ),
             else_=InventoryTransaction.quantity,
         )
-        current_qty = db.query(func.sum(net_qty_expr)).filter(
+        current_qty = select(func.sum(net_qty_expr)).where(
             and_(
                 InventoryTransaction.organization_id == org_id,
                 InventoryTransaction.item_id == itm_id,
@@ -190,8 +190,8 @@ class InventoryTransactionService(ListResponseMixin):
             else_=InventoryTransaction.quantity,
         )
         balance = (
-            db.query(func.sum(net_qty_expr))
-            .filter(
+            select(func.sum(net_qty_expr))
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
@@ -616,8 +616,8 @@ class InventoryTransactionService(ListResponseMixin):
 
         # Get lots ordered by received date (oldest first)
         lots = list(
-            db.query(InventoryLot)
-            .filter(
+            select(InventoryLot)
+            .where(
                 InventoryLot.item_id == itm_id,
                 InventoryLot.quantity_on_hand > 0,
                 InventoryLot.is_active == True,
@@ -1102,18 +1102,18 @@ class InventoryTransactionService(ListResponseMixin):
         """List inventory transactions with optional filters."""
         from datetime import datetime
 
-        query = db.query(InventoryTransaction)
+        query = select(InventoryTransaction)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 InventoryTransaction.organization_id == coerce_uuid(organization_id)
             )
 
         if item_id:
-            query = query.filter(InventoryTransaction.item_id == coerce_uuid(item_id))
+            query = query.where(InventoryTransaction.item_id == coerce_uuid(item_id))
 
         if warehouse_id:
-            query = query.filter(
+            query = query.where(
                 InventoryTransaction.warehouse_id == coerce_uuid(warehouse_id)
             )
 
@@ -1125,24 +1125,24 @@ class InventoryTransactionService(ListResponseMixin):
                 except ValueError:
                     pass  # Invalid type, skip filter
             if isinstance(transaction_type, TransactionType):
-                query = query.filter(
+                query = query.where(
                     InventoryTransaction.transaction_type == transaction_type
                 )
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 InventoryTransaction.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if start_date:
             # Convert date to datetime for comparison
             start_dt = datetime.combine(start_date, datetime.min.time())
-            query = query.filter(InventoryTransaction.transaction_date >= start_dt)
+            query = query.where(InventoryTransaction.transaction_date >= start_dt)
 
         if end_date:
             # End date is inclusive, so use end of day
             end_dt = datetime.combine(end_date, datetime.max.time())
-            query = query.filter(InventoryTransaction.transaction_date <= end_dt)
+            query = query.where(InventoryTransaction.transaction_date <= end_dt)
 
         return list(
             query.order_by(InventoryTransaction.transaction_date.desc())

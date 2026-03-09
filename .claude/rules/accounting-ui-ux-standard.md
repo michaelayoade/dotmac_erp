@@ -149,7 +149,7 @@ Shows a single entity with full context and available actions.
 │ ┌─ Document Card ────────────────────────────┐  │
 │ │ Invoice Date: 07 Feb 2026    Due: 07 Mar   │  │
 │ │ Customer: Acme Corp          Terms: Net 30  │  │
-│ │ Currency: NGN                PO#: PO-1234   │  │
+│ │ Currency: <ORG_CCY>          PO#: PO-1234   │  │
 │ ├────────────────────────────────────────────┤  │
 │ │ # │ Description     │ Qty │ Rate  │ Amount │  │
 │ │ 1 │ Consulting      │  10 │ 4,500 │ 45,000 │  │
@@ -201,7 +201,7 @@ Creates or edits an entity.
 │ └─────────────────────────────────────────────┘ │
 │                                                  │
 │ Customer*    [▾ Select customer          ]       │
-│ Currency*    [▾ NGN - Nigerian Naira     ]       │
+│ Currency*    [▾ <Org currency>           ]       │
 │ Invoice Date [2026-02-07]  Due Date [2026-03-09] │
 │ PO Reference [___________]                       │
 │                                                  │

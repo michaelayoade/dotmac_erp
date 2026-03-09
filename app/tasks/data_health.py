@@ -22,6 +22,7 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
+from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.services.common import coerce_uuid
@@ -70,17 +71,17 @@ def cleanup_old_notifications(
         unread_cutoff = now - timedelta(days=unread_days)
 
         try:
-            read_query = db.query(Notification).filter(
+            read_query = select(Notification).where(
                 Notification.is_read.is_(True),
                 Notification.created_at < read_cutoff,
             )
-            unread_query = db.query(Notification).filter(
+            unread_query = select(Notification).where(
                 Notification.is_read.is_(False),
                 Notification.created_at < unread_cutoff,
             )
             if org_id is not None:
-                read_query = read_query.filter(Notification.organization_id == org_id)
-                unread_query = unread_query.filter(
+                read_query = read_query.where(Notification.organization_id == org_id)
+                unread_query = unread_query.where(
                     Notification.organization_id == org_id
                 )
 

@@ -227,8 +227,8 @@ class InventoryWebService:
 
         # Get categories for dropdown
         categories = (
-            db.query(ItemCategory)
-            .filter(
+            select(ItemCategory)
+            .where(
                 ItemCategory.organization_id == org_id,
                 ItemCategory.is_active.is_(True),
             )
@@ -407,14 +407,13 @@ class InventoryWebService:
             status=status,
         )
 
-        total_count = query.with_entities(func.count(Item.item_id)).scalar() or 0
-        rows = (
-            query.with_entities(Item, ItemCategory)
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.execute(
+            query.add_columns(ItemCategory)
             .order_by(Item.item_code)
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         # Batch load inventory quantities for all items on this page
         item_ids = [item.item_id for item, _ in rows]
@@ -467,18 +466,20 @@ class InventoryWebService:
 
         # Pre-computed stat-card counts (across ALL items, not just the page)
         active_count = (
-            db.query(func.count(Item.item_id))
-            .filter(Item.organization_id == org_id, Item.is_active.is_(True))
-            .scalar()
+            db.scalar(
+                select(func.count(Item.item_id))
+                .where(Item.organization_id == org_id, Item.is_active.is_(True))
+            )
             or 0
         )
         stock_count = (
-            db.query(func.count(Item.item_id))
-            .filter(
-                Item.organization_id == org_id,
-                Item.item_type == ItemType.INVENTORY,
+            db.scalar(
+                select(func.count(Item.item_id))
+                .where(
+                    Item.organization_id == org_id,
+                    Item.item_type == ItemType.INVENTORY,
+                )
             )
-            .scalar()
             or 0
         )
 
@@ -512,16 +513,16 @@ class InventoryWebService:
         type_value = _parse_transaction_type(transaction_type)
 
         query = (
-            db.query(InventoryTransaction, Item, Warehouse)
+            select(InventoryTransaction, Item, Warehouse)
             .join(Item, InventoryTransaction.item_id == Item.item_id)
             .join(
                 Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id
             )
-            .filter(InventoryTransaction.organization_id == org_id)
+            .where(InventoryTransaction.organization_id == org_id)
         )
 
         if type_value:
-            query = query.filter(InventoryTransaction.transaction_type == type_value)
+            query = query.where(InventoryTransaction.transaction_type == type_value)
 
         if search:
             search_pattern = f"%{search}%"
@@ -530,20 +531,17 @@ class InventoryWebService:
                 Item.item_code.ilike(search_pattern),
                 Item.item_name.ilike(search_pattern),
             )
-            query = query.filter(search_filter)
+            query = query.where(search_filter)
 
         total_count = (
-            query.with_entities(
-                func.count(InventoryTransaction.transaction_id)
-            ).scalar()
+            db.scalar(select(func.count()).select_from(query.subquery()))
             or 0
         )
-        rows = (
+        rows = db.execute(
             query.order_by(InventoryTransaction.transaction_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         transactions_view = []
         for txn, item, warehouse in rows:

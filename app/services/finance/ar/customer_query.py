@@ -4,7 +4,8 @@ Shared AR customer query builder for list + export.
 
 from __future__ import annotations
 
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import Select, select
+from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
 from app.services.common import coerce_uuid
@@ -17,7 +18,7 @@ def build_customer_query(
     status: str | None = None,
     parent_customer_id: str | None = None,
     top_level_only: bool = False,
-) -> Query:
+) -> Select:
     """
     Build the base AR customer query with filters applied.
 
@@ -33,15 +34,15 @@ def build_customer_query(
     elif status == "inactive":
         is_active = False
 
-    query: Query[Customer] = Query([Customer], session=db).filter(
+    query = select(Customer).where(
         Customer.organization_id == org_id
     )
 
     if is_active is not None:
-        query = query.filter(Customer.is_active == is_active)
+        query = query.where(Customer.is_active == is_active)
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
+        query = query.where(
             (Customer.customer_code.ilike(search_pattern))
             | (Customer.legal_name.ilike(search_pattern))
             | (Customer.trading_name.ilike(search_pattern))
@@ -49,8 +50,8 @@ def build_customer_query(
         )
     if parent_customer_id:
         parent_id = coerce_uuid(parent_customer_id)
-        query = query.filter(Customer.parent_customer_id == parent_id)
+        query = query.where(Customer.parent_customer_id == parent_id)
     elif top_level_only:
-        query = query.filter(Customer.parent_customer_id.is_(None))
+        query = query.where(Customer.parent_customer_id.is_(None))
 
     return query

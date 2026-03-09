@@ -118,7 +118,7 @@ class SplynxInvoice:
     status: str  # paid, unpaid, partially_paid
     total: Decimal
     total_due: Decimal  # 'due' in API
-    currency: str = "NGN"
+    currency: str = settings.default_functional_currency_code
     items: list[dict[str, Any]] = field(default_factory=list)
     note: str | None = None
     memo: str | None = None
@@ -458,7 +458,7 @@ class SplynxClient:
                 status=item.get("status", ""),
                 total=Decimal(str(item.get("total", 0))),
                 total_due=Decimal(str(item.get("due", 0))),
-                currency="NGN",  # Splynx doesn't return currency, default to NGN
+                currency=settings.default_functional_currency_code,
                 items=item.get("items", []),
                 note=item.get("note"),
                 memo=item.get("memo"),
@@ -477,7 +477,7 @@ class SplynxClient:
             status=data.get("status", ""),
             total=Decimal(str(data.get("total", 0))),
             total_due=Decimal(str(data.get("due", 0))),
-            currency="NGN",
+            currency=settings.default_functional_currency_code,
             items=data.get("items", []),
             note=data.get("note"),
             memo=data.get("memo"),

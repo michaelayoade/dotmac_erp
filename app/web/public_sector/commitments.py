@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ipsas.web.ipsas_web import IPSASWebService
+from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -125,7 +126,7 @@ def create_commitment(
     fiscal_year_id: str = Form(...),
     fiscal_period_id: str = Form(...),
     committed_amount: str = Form(...),
-    currency_code: str = Form("NGN"),
+    currency_code: str | None = Form(None),
     appropriation_id: str | None = Form(None),
     auth: WebAuthContext = Depends(require_public_sector_access),
     db: Session = Depends(get_db),
@@ -143,7 +144,8 @@ def create_commitment(
         fiscal_year_id=UUID(fiscal_year_id),
         fiscal_period_id=UUID(fiscal_period_id),
         committed_amount=Decimal(committed_amount),
-        currency_code=currency_code,
+        currency_code=currency_code
+        or org_context_service.get_functional_currency(db, auth.organization_id),
         created_by_user_id=auth.user_id,
         appropriation_id=UUID(appropriation_id) if appropriation_id else None,
     )

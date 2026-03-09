@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete
+from sqlalchemy import and_, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -59,17 +59,16 @@ class IdempotencyService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         now = datetime.now(UTC)
 
-        record = (
-            db.query(IdempotencyRecord)
-            .filter(
+        record = db.scalars(
+            select(IdempotencyRecord)
+            .where(
                 and_(
                     IdempotencyRecord.organization_id == org_id,
                     IdempotencyRecord.idempotency_key == idempotency_key,
                     IdempotencyRecord.endpoint == endpoint,
                 )
             )
-            .first()
-        )
+        ).first()
 
         if record is None:
             return None
@@ -192,13 +191,12 @@ class IdempotencyService(ListResponseMixin):
         Update the cached response for an existing idempotency key.
         """
         org_id = coerce_uuid(organization_id)
-        record = (
-            db.query(IdempotencyRecord)
-            .filter(IdempotencyRecord.organization_id == org_id)
-            .filter(IdempotencyRecord.idempotency_key == idempotency_key)
-            .filter(IdempotencyRecord.endpoint == endpoint)
-            .first()
-        )
+        record = db.scalars(
+            select(IdempotencyRecord)
+            .where(IdempotencyRecord.organization_id == org_id)
+            .where(IdempotencyRecord.idempotency_key == idempotency_key)
+            .where(IdempotencyRecord.endpoint == endpoint)
+        ).first()
 
         if record is None:
             # Fallback: create a record if it doesn't exist
@@ -242,14 +240,13 @@ class IdempotencyService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         now = datetime.now(UTC)
 
-        record = (
-            db.query(IdempotencyRecord)
-            .filter(IdempotencyRecord.organization_id == org_id)
-            .filter(IdempotencyRecord.idempotency_key == idempotency_key)
-            .filter(IdempotencyRecord.endpoint == endpoint)
-            .filter(IdempotencyRecord.expires_at > now)
-            .first()
-        )
+        record = db.scalars(
+            select(IdempotencyRecord)
+            .where(IdempotencyRecord.organization_id == org_id)
+            .where(IdempotencyRecord.idempotency_key == idempotency_key)
+            .where(IdempotencyRecord.endpoint == endpoint)
+            .where(IdempotencyRecord.expires_at > now)
+        ).first()
 
         if record is None:
             return None
@@ -274,12 +271,11 @@ class IdempotencyService(ListResponseMixin):
         now = datetime.now(UTC)
 
         # Get IDs of expired records (limited by batch_size)
-        expired_ids = (
-            db.query(IdempotencyRecord.record_id)
-            .filter(IdempotencyRecord.expires_at < now)
+        expired_ids = db.execute(
+            select(IdempotencyRecord.record_id)
+            .where(IdempotencyRecord.expires_at < now)
             .limit(batch_size)
-            .all()
-        )
+        ).all()
 
         if not expired_ids:
             return 0
@@ -347,26 +343,25 @@ class IdempotencyService(ListResponseMixin):
         Returns:
             List of IdempotencyRecord objects
         """
-        stmt = db.query(IdempotencyRecord)
+        stmt = select(IdempotencyRecord)
 
         if organization_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 IdempotencyRecord.organization_id == coerce_uuid(organization_id)
             )
 
         if endpoint:
-            stmt = stmt.filter(IdempotencyRecord.endpoint == endpoint)
+            stmt = stmt.where(IdempotencyRecord.endpoint == endpoint)
 
         if not include_expired:
             now = datetime.now(UTC)
-            stmt = stmt.filter(IdempotencyRecord.expires_at > now)
+            stmt = stmt.where(IdempotencyRecord.expires_at > now)
 
-        return (
+        return list(db.scalars(
             stmt.order_by(IdempotencyRecord.created_at.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all())
 
 
 # Module-level singleton instance

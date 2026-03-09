@@ -68,9 +68,10 @@ class ExpenseCardMixin(ExpenseServiceBase):
         credit_limit: Decimal | None = None,
         single_transaction_limit: Decimal | None = None,
         monthly_limit: Decimal | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         liability_account_id: UUID | None = None,
     ) -> CorporateCard:
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         card = CorporateCard(
             organization_id=org_id,
             card_number_last4=card_number_last4,
@@ -83,7 +84,7 @@ class ExpenseCardMixin(ExpenseServiceBase):
             credit_limit=credit_limit,
             single_transaction_limit=single_transaction_limit,
             monthly_limit=monthly_limit,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             liability_account_id=liability_account_id,
             is_active=True,
         )
@@ -178,7 +179,7 @@ class ExpenseCardMixin(ExpenseServiceBase):
         amount: Decimal,
         posting_date: date | None = None,
         merchant_category: str | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         original_currency: str | None = None,
         original_amount: Decimal | None = None,
         external_reference: str | None = None,
@@ -186,6 +187,7 @@ class ExpenseCardMixin(ExpenseServiceBase):
         notes: str | None = None,
     ) -> CardTransaction:
         self.get_card(org_id, card_id)
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         transaction = CardTransaction(
             organization_id=org_id,
             card_id=card_id,
@@ -194,7 +196,7 @@ class ExpenseCardMixin(ExpenseServiceBase):
             merchant_name=merchant_name,
             merchant_category=merchant_category,
             amount=amount,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             original_currency=original_currency,
             original_amount=original_amount,
             external_reference=external_reference,

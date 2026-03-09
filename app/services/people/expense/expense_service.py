@@ -37,6 +37,7 @@ from app.models.people.exp import (
     ExpenseClaimStatus,
 )
 from app.services.common import PaginatedResult, PaginationParams
+from app.services.finance.platform.org_context import org_context_service
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,15 @@ class ExpenseService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _resolve_currency_code(
+        self,
+        org_id: UUID,
+        currency_code: str | None = None,
+    ) -> str:
+        if currency_code:
+            return currency_code
+        return org_context_service.get_functional_currency(self.db, org_id)
 
     @staticmethod
     def _action_key(claim_id: UUID, action: ExpenseClaimActionType) -> str:
@@ -425,7 +435,7 @@ class ExpenseService:
         project_id: UUID | None = None,
         ticket_id: UUID | None = None,
         task_id: UUID | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         cost_center_id: UUID | None = None,
         recipient_bank_code: str | None = None,
         recipient_bank_name: str | None = None,
@@ -443,6 +453,7 @@ class ExpenseService:
 
         # Generate claim number via DB sequence (concurrency-safe)
         claim_number = self._next_claim_number(org_id)
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         claim = ExpenseClaim(
             organization_id=org_id,
@@ -455,7 +466,7 @@ class ExpenseService:
             project_id=project_id,
             ticket_id=ticket_id,
             task_id=task_id,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             cost_center_id=cost_center_id,
             recipient_bank_code=recipient_bank_code,
             recipient_bank_name=recipient_bank_name,
@@ -1101,7 +1112,7 @@ class ExpenseService:
         request_date: date,
         purpose: str,
         requested_amount: Decimal,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         expected_settlement_date: date | None = None,
         cost_center_id: UUID | None = None,
         advance_account_id: UUID | None = None,
@@ -1118,6 +1129,7 @@ class ExpenseService:
             or 0
         )
         advance_number = f"ADV-{date.today().year}-{count + 1:05d}"
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         advance = CashAdvance(
             organization_id=org_id,
@@ -1126,7 +1138,7 @@ class ExpenseService:
             request_date=request_date,
             purpose=purpose,
             requested_amount=requested_amount,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             expected_settlement_date=expected_settlement_date,
             cost_center_id=cost_center_id,
             advance_account_id=advance_account_id,
@@ -1381,10 +1393,11 @@ class ExpenseService:
         credit_limit: Decimal | None = None,
         single_transaction_limit: Decimal | None = None,
         monthly_limit: Decimal | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         liability_account_id: UUID | None = None,
     ) -> CorporateCard:
         """Create a new corporate card."""
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         card = CorporateCard(
             organization_id=org_id,
             card_number_last4=card_number_last4,
@@ -1397,7 +1410,7 @@ class ExpenseService:
             credit_limit=credit_limit,
             single_transaction_limit=single_transaction_limit,
             monthly_limit=monthly_limit,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             liability_account_id=liability_account_id,
             is_active=True,
         )
@@ -1527,7 +1540,7 @@ class ExpenseService:
         amount: Decimal,
         posting_date: date | None = None,
         merchant_category: str | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         original_currency: str | None = None,
         original_amount: Decimal | None = None,
         external_reference: str | None = None,
@@ -1537,6 +1550,7 @@ class ExpenseService:
         """Create a new card transaction."""
         # Verify card exists
         self.get_card(org_id, card_id)
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         transaction = CardTransaction(
             organization_id=org_id,
@@ -1546,7 +1560,7 @@ class ExpenseService:
             merchant_name=merchant_name,
             merchant_category=merchant_category,
             amount=amount,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             original_currency=original_currency,
             original_amount=original_amount,
             external_reference=external_reference,

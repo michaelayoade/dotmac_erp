@@ -12,7 +12,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -149,7 +149,7 @@ class SoftDeleteMixin:
         # In service layer:
         query = MyModel.query_active(db)  # Excludes deleted records
         # Or with existing query:
-        query = query.filter(MyModel.filter_active())
+        query = query.where(MyModel.filter_active())
     """
 
     is_deleted: Mapped[bool] = mapped_column(
@@ -173,16 +173,16 @@ class SoftDeleteMixin:
         """Return a query that excludes soft-deleted records.
 
         Usage:
-            items = MyModel.query_active(db).filter(...).all()
+            items = MyModel.query_active(db).where(...).all()
         """
-        return db.query(cls).filter(cls.is_deleted.is_(False))
+        return select(cls).where(cls.is_deleted.is_(False))
 
     @classmethod
     def filter_active(cls):
         """Return a filter expression for active (non-deleted) records.
 
         Usage:
-            query = db.query(MyModel).filter(MyModel.filter_active())
+            query = select(MyModel).where(MyModel.filter_active())
         """
         return cls.is_deleted.is_(False)
 

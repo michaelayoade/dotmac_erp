@@ -9,6 +9,8 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -145,4 +147,4 @@ def default_currency(value: Any) -> str:
     """Return default currency if value is empty."""
     if value and str(value).strip():
         return str(value).strip().upper()[:3]
-    return "NGN"
+    return settings.default_functional_currency_code

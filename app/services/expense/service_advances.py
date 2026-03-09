@@ -68,12 +68,13 @@ class ExpenseAdvanceMixin(ExpenseServiceBase):
         request_date: date,
         purpose: str,
         requested_amount: Decimal,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         expected_settlement_date: date | None = None,
         cost_center_id: UUID | None = None,
         advance_account_id: UUID | None = None,
         notes: str | None = None,
     ) -> CashAdvance:
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         count = (
             self.db.scalar(
                 select(func.count(CashAdvance.advance_id)).where(
@@ -89,7 +90,7 @@ class ExpenseAdvanceMixin(ExpenseServiceBase):
             request_date=request_date,
             purpose=purpose,
             requested_amount=requested_amount,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             expected_settlement_date=expected_settlement_date,
             cost_center_id=cost_center_id,
             advance_account_id=advance_account_id,

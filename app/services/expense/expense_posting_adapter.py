@@ -42,6 +42,7 @@ from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
 )
+from app.services.finance.platform.org_context import org_context_service
 from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
@@ -1095,6 +1096,9 @@ class ExpensePostingAdapter:
         )
         if not payable_account_id:
             return None
+        resolved_currency_code = org_context_service.get_functional_currency(
+            db, organization_id
+        )
 
         # Create new supplier for employee
         supplier = Supplier(
@@ -1107,7 +1111,7 @@ class ExpensePostingAdapter:
             primary_contact={"email": employee.work_email}
             if employee.work_email
             else None,
-            currency_code="NGN",
+            currency_code=resolved_currency_code,
             is_active=True,
             created_by_user_id=user_id,
         )
@@ -1199,6 +1203,9 @@ class ExpensePostingAdapter:
                 success=False,
                 message="Employee payable account not configured",
             )
+        resolved_currency_code = claim.currency_code or bank_account.currency_code or (
+            org_context_service.get_functional_currency(db, org_id)
+        )
 
         # Build journal lines
         reimbursement_amount = claim.net_payable_amount or Decimal("0")
@@ -1237,7 +1244,7 @@ class ExpensePostingAdapter:
             posting_date=posting_date,
             description=f"Expense Reimbursement {claim.claim_number}",
             reference=reference,
-            currency_code="NGN",
+            currency_code=resolved_currency_code,
             exchange_rate=Decimal("1.0"),
             lines=journal_lines,
             source_module="EXPENSE",
@@ -1346,6 +1353,9 @@ class ExpensePostingAdapter:
                 success=False,
                 message="Bank account has no linked GL account",
             )
+        resolved_currency_code = bank_account.currency_code or (
+            org_context_service.get_functional_currency(db, org_id)
+        )
 
         # Build journal lines
         journal_lines = [
@@ -1376,7 +1386,7 @@ class ExpensePostingAdapter:
             posting_date=posting_date,
             description=description,
             reference=f"FEE-{reference}",
-            currency_code="NGN",
+            currency_code=resolved_currency_code,
             exchange_rate=Decimal("1.0"),
             lines=journal_lines,
             source_module="PAYMENTS",
@@ -1501,6 +1511,9 @@ class ExpensePostingAdapter:
             return ExpensePostingResult(
                 success=False, message="Bank account not found or has no GL account"
             )
+        resolved_currency_code = claim.currency_code or bank_account.currency_code or (
+            org_context_service.get_functional_currency(db, org_id)
+        )
 
         # Get employee payable account
         payable_account_id = ExpensePostingAdapter._get_employee_payable_account(
@@ -1541,7 +1554,7 @@ class ExpensePostingAdapter:
             description=f"Reversal: Expense Reimbursement {claim.claim_number}"
             + (f" - {reason}" if reason else ""),
             reference=f"REV-{claim.claim_number}",
-            currency_code="NGN",
+            currency_code=resolved_currency_code,
             exchange_rate=Decimal("1.0"),
             lines=journal_lines,
             source_module="EXPENSE",
@@ -1643,6 +1656,9 @@ class ExpensePostingAdapter:
             return ExpensePostingResult(
                 success=False, message="Bank account not found or has no GL account"
             )
+        resolved_currency_code = bank_account.currency_code or (
+            org_context_service.get_functional_currency(db, org_id)
+        )
 
         # Get fee expense account from settings
         fee_account_id = resolve_value(
@@ -1684,7 +1700,7 @@ class ExpensePostingAdapter:
             posting_date=posting_date,
             description=f"Reversal: Transfer fee {reference}",
             reference=f"REV-FEE-{reference}",
-            currency_code="NGN",
+            currency_code=resolved_currency_code,
             exchange_rate=Decimal("1.0"),
             lines=journal_lines,
             source_module="PAYMENTS",

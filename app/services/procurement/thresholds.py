@@ -86,7 +86,7 @@ def determine_procurement_method(
     otherwise falls back to PPA 2007 statutory defaults.
 
     Args:
-        estimated_value: Estimated contract value in NGN.
+        estimated_value: Estimated contract value in the functional currency.
         db: Database session (optional).
         organization_id: Organization UUID (optional).
 
@@ -127,7 +127,7 @@ def validate_procurement_method(
     if method == "DIRECT" and value > direct_max:
         raise ValueError(
             f"Direct procurement not allowed for values exceeding "
-            f"NGN {direct_max:,.0f}. Value: NGN {value:,.2f}. "
+            f"{direct_max:,.0f}. Value: {value:,.2f}. "
             f"Required method: {required_method} "
             f"(approving authority: {authority})."
         )
@@ -137,13 +137,13 @@ def validate_procurement_method(
     if method == "SELECTIVE" and value > selective_max:
         raise ValueError(
             f"Selective procurement not allowed for values exceeding "
-            f"NGN {selective_max:,.0f}. Value: NGN {value:,.2f}. "
+            f"{selective_max:,.0f}. Value: {value:,.2f}. "
             f"Required method: {required_method} "
             f"(approving authority: {authority})."
         )
 
     logger.debug(
-        "Procurement method %s validated for value NGN %s (approving authority: %s)",
+        "Procurement method %s validated for value %s (approving authority: %s)",
         method,
         f"{value:,.2f}",
         authority,

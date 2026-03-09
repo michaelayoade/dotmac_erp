@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
@@ -32,7 +33,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
     - Due Date: Payment due date
     - Customer Name / Customer / Client: Customer name (required)
     - Invoice Type / Type: STANDARD, CREDIT_NOTE, DEBIT_NOTE, PROFORMA
-    - Currency Code / Currency: Currency (default: NGN)
+    - Currency Code / Currency: Currency (defaults to configured organization currency)
     - Exchange Rate: Exchange rate to functional currency
     - Subtotal / Net Amount: Subtotal before tax
     - Tax Amount / VAT / Tax: Tax amount
@@ -93,7 +94,10 @@ class InvoiceImporter(BaseImporter[Invoice]):
             FieldMapping("Type", "type_alt", required=False),
             # Currency
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             FieldMapping(
@@ -336,7 +340,9 @@ class InvoiceImporter(BaseImporter[Invoice]):
         invoice_type = self._parse_invoice_type(type_str)
 
         currency_code = (
-            header.get("currency_code") or header.get("currency_alt") or "NGN"
+            header.get("currency_code")
+            or header.get("currency_alt")
+            or settings.default_functional_currency_code
         )[:3]
         exchange_rate = header.get("exchange_rate") or Decimal("1")
 
@@ -500,9 +506,11 @@ class InvoiceImporter(BaseImporter[Invoice]):
         invoice_type = self._parse_invoice_type(type_str)
 
         # Get currency
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
-            :3
-        ]
+        currency_code = (
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
+        )[:3]
         exchange_rate = row.get("exchange_rate") or Decimal("1")
 
         # Get amounts

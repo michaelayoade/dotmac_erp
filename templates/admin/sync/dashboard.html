@@ -1,6 +1,6 @@
 {% extends "admin/base_admin.html" %}
 
-{% from "components/macros.html" import status_badge, icon_svg %}
+{% from "components/macros.html" import status_badge, icon_svg, stats_card %}
 {% block page_title %}Sync Management{% endblock %}
 {% block page_subtitle %}ERPNext integration and data synchronization{% endblock %}
 
@@ -27,70 +27,14 @@
 
     <!-- Stats Grid -->
     <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <!-- Integration Status -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Integration</p>
-                    <p class="mt-2 text-xl font-bold {% if integration_configured %}text-emerald-600 dark:text-emerald-400{% else %}text-amber-600 dark:text-amber-400{% endif %} font-display">
-                        {% if integration_configured %}Connected{% else %}Not Configured{% endif %}
-                    </p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">ERPNext</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl {% if integration_configured %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% endif %}">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Synced -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Synced</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ total_synced | default(0) }}</p>
-                    <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">Records synchronized</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    {{ icon_svg("refresh", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Failed Records -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Failed</p>
-                    <p class="mt-2 text-3xl font-bold {% if total_failed > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-900 dark:text-white{% endif %} font-display">{{ total_failed | default(0) }}</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Records with errors</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl {% if total_failed > 0 %}bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400{% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                    {{ icon_svg("exclamation-circle", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Last Sync -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Last Sync</p>
-                    {% if last_sync and last_sync.completed_at %}
-                    <p class="mt-2 text-lg font-bold text-slate-900 dark:text-white font-display">{{ last_sync.completed_at.strftime('%b %d, %H:%M') }}</p>
-                    <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">{{ last_sync.status | replace('_', ' ') | title }}</p>
-                    {% else %}
-                    <p class="mt-2 text-lg font-bold text-slate-500 dark:text-slate-400 font-display">Never</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">No syncs yet</p>
-                    {% endif %}
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    {{ icon_svg("clock", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Integration", "Connected" if integration_configured else "Not Configured", icon="chart", color="emerald" if integration_configured else "amber", subtitle="ERPNext") }}
+        {{ stats_card("Total Synced", total_synced if total_synced else 0, icon="refresh", color="blue", subtitle="Records synchronized") }}
+        {{ stats_card("Failed", total_failed if total_failed else 0, icon="exclamation-circle", color="rose" if total_failed else "slate", subtitle="Records with errors") }}
+        {% if last_sync and last_sync.completed_at %}
+        {{ stats_card("Last Sync", last_sync.completed_at.strftime('%b %d, %H:%M'), icon="clock", color="violet", subtitle=last_sync.status | replace('_', ' ') | title) }}
+        {% else %}
+        {{ stats_card("Last Sync", "Never", icon="clock", color="violet", subtitle="No syncs yet") }}
+        {% endif %}
     </div>
 
     <!-- Sync Actions & Entity Stats -->
@@ -113,7 +57,7 @@
             </div>
             {% else %}
             <form action="/admin/sync/trigger" method="post" class="space-y-4">
-                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                {{ request.state.csrf_form | safe }}
 
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Sync Type</label>
@@ -222,15 +166,7 @@
                             {{ status_badge(h.sync_type.value if h.sync_type else 'Unknown', size="sm") }}
                         </td>
                         <td class="py-3">
-                            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold
-                                {% if h.status == 'COMPLETED' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
-                                {% elif h.status == 'COMPLETED_WITH_ERRORS' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
-                                {% elif h.status == 'IN_PROGRESS' %}bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400
-                                {% elif h.status == 'FAILED' %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400
-                                {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                {{ status_badge(h.status, 'sm') }}
-                                {{ h.status | replace('_', ' ') | title }}
-                            </span>
+                            {{ status_badge(h.status, 'sm') }}
                         </td>
                         <td class="py-3 text-sm text-right text-slate-600 dark:text-slate-300">{{ h.total_records | default(0) }}</td>
                         <td class="py-3 text-sm text-right text-slate-500 dark:text-slate-400">

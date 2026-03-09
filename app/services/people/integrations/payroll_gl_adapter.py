@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.domain_settings import SettingDomain
 from app.models.people.payroll import (
     PayrollEntry,
@@ -494,7 +495,11 @@ class PayrollGLAdapter:
 
             # Build journal lines
             lines: list[JournalLineInput] = []
-            currency_code = slips[0].currency_code if slips else "NGN"
+            currency_code = (
+                slips[0].currency_code
+                if slips
+                else settings.default_functional_currency_code
+            )
             exchange_rate = slips[0].exchange_rate if slips else Decimal("1.0")
 
             # Period reference for descriptions

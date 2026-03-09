@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.gl.account import Account
 from app.models.inventory.item import Item
 from app.models.inventory.item_category import ItemCategory
@@ -282,7 +283,9 @@ class ItemSyncService(BaseSyncService[Item]):
             track_serial_numbers=bool(data.get("track_serial_numbers", False)),
             standard_cost=standard_cost,
             last_purchase_cost=last_purchase_cost,
-            currency_code=(data.get("currency_code") or "NGN")[:3],
+            currency_code=(
+                data.get("currency_code") or settings.default_functional_currency_code
+            )[:3],
             is_active=data.get("is_active", True),
             is_purchaseable=data.get("is_purchaseable", True),
             is_saleable=data.get("is_saleable", True),

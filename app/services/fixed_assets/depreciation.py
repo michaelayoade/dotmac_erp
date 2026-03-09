@@ -529,8 +529,8 @@ class DepreciationService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Depreciation run not found")
 
         return (
-            db.query(DepreciationSchedule)
-            .filter(DepreciationSchedule.run_id == r_id)
+            select(DepreciationSchedule)
+            .where(DepreciationSchedule.run_id == r_id)
             .all()
         )
 
@@ -560,20 +560,20 @@ class DepreciationService(ListResponseMixin):
         offset: int = 0,
     ) -> list[DepreciationRun]:
         """List depreciation runs with optional filters."""
-        query = db.query(DepreciationRun)
+        query = select(DepreciationRun)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 DepreciationRun.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 DepreciationRun.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if status:
-            query = query.filter(DepreciationRun.status == status)
+            query = query.where(DepreciationRun.status == status)
 
         return (
             query.order_by(DepreciationRun.created_at.desc())

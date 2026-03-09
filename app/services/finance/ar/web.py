@@ -1585,7 +1585,11 @@ class ARWebService:
         ]
 
         # Build template-ready context from raw aging data
-        currency = aging_data[0].currency_code if aging_data else "NGN"
+        currency = (
+            aging_data[0].currency_code
+            if aging_data
+            else settings.default_functional_currency_code
+        )
 
         def fmt(v):
             return _format_currency(v, currency)

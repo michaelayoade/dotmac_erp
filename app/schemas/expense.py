@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.expense import (
     CardTransactionStatus,
     CashAdvanceStatus,
@@ -145,7 +146,7 @@ class ExpenseClaimBase(BaseModel):
     project_id: UUID | None = None
     ticket_id: UUID | None = None
     task_id: UUID | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     cost_center_id: UUID | None = None
     recipient_bank_code: str | None = None
     recipient_bank_name: str | None = None
@@ -288,7 +289,7 @@ class CashAdvanceBase(BaseModel):
     request_date: date
     purpose: str = Field(max_length=500)
     requested_amount: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     expected_settlement_date: date | None = None
     cost_center_id: UUID | None = None
     advance_account_id: UUID | None = None
@@ -397,7 +398,7 @@ class CorporateCardBase(BaseModel):
     credit_limit: Decimal | None = None
     single_transaction_limit: Decimal | None = None
     monthly_limit: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     liability_account_id: UUID | None = None
 
 
@@ -463,7 +464,7 @@ class CardTransactionBase(BaseModel):
     merchant_name: str = Field(max_length=200)
     merchant_category: str | None = Field(default=None, max_length=100)
     amount: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     original_currency: str | None = None
     original_amount: Decimal | None = None
     external_reference: str | None = Field(default=None, max_length=100)
@@ -602,7 +603,7 @@ class ExpenseLimitRuleBase(BaseModel):
     )
     custom_period_days: int | None = None
     limit_amount: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     action_type: str = Field(
         description="BLOCK, WARN, REQUIRE_APPROVAL, REQUIRE_MULTI_APPROVAL, AUTO_ESCALATE"
     )
@@ -681,7 +682,7 @@ class ExpenseApproverLimitBase(BaseModel):
     scope_id: UUID | None = None
     max_approval_amount: Decimal
     weekly_approval_budget: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     dimension_filters: DimensionFilters | None = None
     escalate_to_employee_id: UUID | None = None
     escalate_to_grade_min_rank: int | None = None
@@ -788,7 +789,7 @@ class ExpensePeriodUsageBase(BaseModel):
     total_claimed: Decimal = Decimal("0")
     total_approved: Decimal = Decimal("0")
     claim_count: int = 0
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
 
 
 class ExpensePeriodUsageRead(ExpensePeriodUsageBase):

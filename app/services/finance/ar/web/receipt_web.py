@@ -105,7 +105,12 @@ class ReceiptWebService:
         )
 
         total_count = (
-            query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
+            db.scalar(
+                select(func.count()).select_from(
+                    query.with_only_columns(CustomerPayment.payment_id).subquery()
+                )
+            )
+            or 0
         )
 
         sort_dir_norm = (sort_dir or "desc").lower()
@@ -122,13 +127,12 @@ class ReceiptWebService:
         order_col = order_map.get(sort or "", CustomerPayment.payment_date)
         order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
 
-        receipts = (
-            query.with_entities(CustomerPayment, Customer)
+        receipts = db.execute(
+            query.add_columns(Customer)
             .order_by(order_expr, CustomerPayment.payment_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         receipts_view = []
         for payment, customer in receipts:

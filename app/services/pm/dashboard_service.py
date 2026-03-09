@@ -348,27 +348,28 @@ class DashboardService:
         ).all()
         by_status = {s.value: c for s, c in status_counts}
 
-        # Active projects with overdue tasks
-        # This is a simplified version - would need a subquery for accurate count
-        active_project_ids = self.db.scalars(
-            select(Project.project_id).where(
-                base_where,
-                Project.status == ProjectStatus.ACTIVE,
+        # Active projects with overdue tasks (single query instead of N+1)
+        overdue_subq = (
+            select(Task.project_id)
+            .where(
+                Task.organization_id == self.organization_id,
+                Task.is_deleted == False,  # noqa: E712
+                Task.due_date < date.today(),
+                Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
             )
-        ).all()
-
-        projects_with_overdue = 0
-        for pid in active_project_ids:
-            has_overdue = self.db.scalar(
-                select(func.count(Task.task_id)).where(
-                    Task.project_id == pid,
-                    Task.is_deleted == False,  # noqa: E712
-                    Task.due_date < date.today(),
-                    Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
+            .group_by(Task.project_id)
+            .subquery()
+        )
+        projects_with_overdue = (
+            self.db.scalar(
+                select(func.count(Project.project_id)).where(
+                    base_where,
+                    Project.status == ProjectStatus.ACTIVE,
+                    Project.project_id.in_(select(overdue_subq.c.project_id)),
                 )
             )
-            if has_overdue and has_overdue > 0:
-                projects_with_overdue += 1
+            or 0
+        )
 
         return {
             "total_projects": total,

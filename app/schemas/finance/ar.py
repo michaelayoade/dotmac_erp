@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
+
 # =============================================================================
 # Customer
 # =============================================================================
@@ -38,7 +40,9 @@ class CustomerBase(BaseModel):
         default=30
     )  # Template name (service maps to credit_terms_days)
     credit_limit: Decimal | None = None
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     default_revenue_account_id: UUID | None = None
     default_tax_code_id: UUID | None = None
     default_receivable_account_id: UUID | None = (

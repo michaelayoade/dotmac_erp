@@ -32,6 +32,7 @@ from app.models.people.payroll.salary_structure import (
     SalaryStructureEarning,
 )
 from app.services.common import PaginatedResult, PaginationParams, coerce_uuid
+from app.services.finance.platform.org_context import org_context_service
 from app.services.people.integrations.payroll_gl_adapter import PayrollGLAdapter
 from app.services.people.payroll.salary_slip_service import (
     SalarySlipInput,
@@ -117,6 +118,15 @@ class PayrollService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _resolve_currency_code(
+        self,
+        org_id: UUID,
+        currency_code: str | None = None,
+    ) -> str:
+        if currency_code:
+            return currency_code
+        return org_context_service.get_functional_currency(self.db, org_id)
 
     # =========================================================================
     # Salary Components
@@ -324,17 +334,18 @@ class PayrollService:
         structure_name: str,
         description: str | None = None,
         payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         earnings: list[dict] | None = None,
         deductions: list[dict] | None = None,
     ) -> SalaryStructure:
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         structure = SalaryStructure(
             organization_id=org_id,
             structure_code=structure_code,
             structure_name=structure_name,
             description=description,
             payroll_frequency=payroll_frequency,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
         )
         self.db.add(structure)
         self.db.flush()
@@ -583,7 +594,7 @@ class PayrollService:
         start_date: date,
         end_date: date,
         payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         department_id: UUID | None = None,
         designation_id: UUID | None = None,
         employment_type_id: UUID | None = None,
@@ -597,6 +608,7 @@ class PayrollService:
         entry_number = SyncNumberingService(self.db).generate_next_number(
             org_id, SequenceType.PAYROLL_ENTRY, reference_date=posting_date
         )
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         entry = PayrollEntry(
             organization_id=org_id,
@@ -605,7 +617,7 @@ class PayrollService:
             start_date=start_date,
             end_date=end_date,
             payroll_frequency=payroll_frequency,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             department_id=department_id,
             designation_id=designation_id,
             employment_type_id=employment_type_id,

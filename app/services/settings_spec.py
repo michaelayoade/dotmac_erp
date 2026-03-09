@@ -704,7 +704,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.integer,
         default=2500000,
         min_value=0,
-        label="Direct Procurement Threshold (NGN)",
+        label="Direct Procurement Threshold",
         description="Maximum value for direct procurement method (PPA 2007 default: 2,500,000)",
     ),
     SettingSpec(
@@ -714,7 +714,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.integer,
         default=50000000,
         min_value=0,
-        label="Selective Procurement Threshold (NGN)",
+        label="Selective Procurement Threshold",
         description="Maximum value for selective procurement method (PPA 2007 default: 50,000,000)",
     ),
     SettingSpec(
@@ -724,7 +724,7 @@ SETTINGS_SPECS: list[SettingSpec] = [
         value_type=SettingValueType.integer,
         default=1000000000,
         min_value=0,
-        label="Ministerial Threshold (NGN)",
+        label="Ministerial Threshold",
         description="Maximum value for Ministerial Tenders Board (PPA 2007 default: 1,000,000,000)",
     ),
     # Module Settings: Expense

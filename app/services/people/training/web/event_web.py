@@ -207,7 +207,7 @@ class EventWebService:
             "trainer_email": form_data.get("trainer_email") or None,
             "max_attendees": parse_int(form_data.get("max_attendees")),
             "total_cost": parse_decimal(form_data.get("total_cost")),
-            "currency_code": form_data.get("currency_code", "NGN"),
+            "currency_code": form_data.get("currency_code") or None,
             "description": form_data.get("description") or None,
         }
 

@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.coach.insight import CoachInsight
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
@@ -58,7 +59,11 @@ class APDueAnalyzer:
         org = self.db.scalar(
             select(Organization).where(Organization.organization_id == organization_id)
         )
-        return org.functional_currency_code if org else "NGN"
+        return (
+            org.functional_currency_code
+            if org
+            else settings.default_functional_currency_code
+        )
 
     def _quick_check_from_store(self, organization_id: UUID) -> bool:
         """Return True if MetricStore says AP due 7d total is zero (nothing to report)."""

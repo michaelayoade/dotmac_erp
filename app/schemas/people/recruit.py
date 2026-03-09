@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.people.recruit import (
     ApplicantStatus,
     InterviewRound,
@@ -44,7 +45,7 @@ class JobOpeningBase(BaseModel):
     is_remote: bool = False
     min_salary: Decimal | None = None
     max_salary: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     min_experience_years: int | None = None
     required_skills: str | None = None
     preferred_skills: str | None = None
@@ -382,7 +383,7 @@ class JobOfferBase(BaseModel):
     valid_until: date
     expected_joining_date: date
     base_salary: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     pay_frequency: str = "MONTHLY"
     signing_bonus: Decimal | None = None
     relocation_allowance: Decimal | None = None

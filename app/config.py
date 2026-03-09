@@ -1,9 +1,37 @@
 import os
 from dataclasses import dataclass
 
+from babel import Locale
+from babel.core import default_locale, get_global
+from babel.numbers import get_territory_currencies
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _derive_default_currency_code() -> str:
+    """Infer a default currency from the host monetary locale."""
+    locale_code = default_locale("LC_MONETARY") or default_locale()
+    if locale_code:
+        try:
+            locale = Locale.parse(locale_code)
+        except Exception:
+            locale = None
+        if locale and locale.territory:
+            currencies = get_territory_currencies(locale.territory, tender=True)
+            if currencies:
+                return currencies[0]
+
+    territory_currencies = get_global("territory_currencies")
+    for territory in sorted(territory_currencies):
+        for currency_code, _from, to, tender in territory_currencies[territory]:
+            if tender and to is None:
+                return currency_code
+
+    raise RuntimeError("Unable to derive a default currency code")
+
+
+DEFAULT_CURRENCY_CODE = _derive_default_currency_code()
 
 
 @dataclass(frozen=True)
@@ -56,11 +84,11 @@ class Settings:
     # Default currency (used for admin org creation when no org context)
     default_functional_currency_code: str = os.getenv(
         "DEFAULT_FUNCTIONAL_CURRENCY_CODE",
-        "NGN",
+        DEFAULT_CURRENCY_CODE,
     )
     default_presentation_currency_code: str = os.getenv(
         "DEFAULT_PRESENTATION_CURRENCY_CODE",
-        "NGN",
+        DEFAULT_CURRENCY_CODE,
     )
 
     # Landing page content (configurable without code changes)

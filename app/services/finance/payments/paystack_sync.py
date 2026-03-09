@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.domain_settings import SettingDomain
 from app.models.finance.banking import (
     BankAccount,
@@ -597,7 +598,7 @@ class PaystackSyncService:
             closing_balance=opening_balance,  # Will be updated as lines added
             total_credits=Decimal("0"),
             total_debits=Decimal("0"),
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             status=BankStatementStatus.imported,
             import_source=source,
             imported_at=datetime.now(UTC),
@@ -686,7 +687,9 @@ class PaystackSyncService:
         try:
             balance_data = client.get_balance()
             for b in balance_data:
-                if b.get("currency", "NGN") == "NGN":
+                if b.get(
+                    "currency", settings.default_functional_currency_code
+                ) == settings.default_functional_currency_code:
                     balance_kobo = b.get("balance", 0)
                     balance_naira = Decimal(balance_kobo) / Decimal("100")
                     account.last_statement_balance = balance_naira

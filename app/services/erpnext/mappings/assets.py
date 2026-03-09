@@ -5,6 +5,8 @@ Asset mapping from ERPNext to DotMac ERP.
 import logging
 from typing import Any
 
+from app.config import settings
+
 from .base import (
     DocTypeMapping,
     FieldMapping,
@@ -184,7 +186,7 @@ class AssetMapping(DocTypeMapping):
         result["remaining_life_months"] = result["useful_life_months"]
 
         # Default currency
-        result["currency_code"] = "NGN"
+        result["currency_code"] = settings.default_functional_currency_code
 
         # Calculate NBV if not provided
         if result.get("net_book_value") is None:

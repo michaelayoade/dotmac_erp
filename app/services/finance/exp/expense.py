@@ -9,6 +9,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -32,8 +33,8 @@ class ExpenseService:
         prefix = f"EXP-{today.strftime('%Y%m')}-"
 
         last = (
-            db.query(ExpenseEntry)
-            .filter(
+            select(ExpenseEntry)
+            .where(
                 ExpenseEntry.organization_id == organization_id,
                 ExpenseEntry.expense_number.like(f"{prefix}%"),
             )
@@ -116,8 +117,8 @@ class ExpenseService:
         """Submit expense for approval."""
         org_id = coerce_uuid(organization_id)
         expense = (
-            db.query(ExpenseEntry)
-            .filter(
+            select(ExpenseEntry)
+            .where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
             )
@@ -146,8 +147,8 @@ class ExpenseService:
         """Approve expense."""
         org_id = coerce_uuid(organization_id)
         expense = (
-            db.query(ExpenseEntry)
-            .filter(
+            select(ExpenseEntry)
+            .where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
             )
@@ -176,8 +177,8 @@ class ExpenseService:
         """Reject expense."""
         org_id = coerce_uuid(organization_id)
         expense = (
-            db.query(ExpenseEntry)
-            .filter(
+            select(ExpenseEntry)
+            .where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
             )
@@ -218,8 +219,8 @@ class ExpenseService:
 
         org_id = coerce_uuid(organization_id)
         expense = (
-            db.query(ExpenseEntry)
-            .filter(
+            select(ExpenseEntry)
+            .where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
             )

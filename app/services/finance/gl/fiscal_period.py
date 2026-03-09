@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -74,8 +74,8 @@ class FiscalPeriodService(ListResponseMixin):
 
         # Check for duplicate period number
         existing = (
-            db.query(FiscalPeriod)
-            .filter(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.fiscal_year_id == year_id,
                 FiscalPeriod.period_number == input.period_number,
             )
@@ -91,8 +91,8 @@ class FiscalPeriodService(ListResponseMixin):
         # Adjustment/closing periods are excluded from this guard.
         if not input.is_adjustment_period and not input.is_closing_period:
             overlap = (
-                db.query(FiscalPeriod)
-                .filter(
+                select(FiscalPeriod)
+                .where(
                     and_(
                         FiscalPeriod.organization_id == org_id,
                         FiscalPeriod.is_adjustment_period.is_(False),
@@ -404,20 +404,20 @@ class FiscalPeriodService(ListResponseMixin):
         Returns:
             List of FiscalPeriod objects
         """
-        query = db.query(FiscalPeriod)
+        query = select(FiscalPeriod)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 FiscalPeriod.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_year_id:
-            query = query.filter(
+            query = query.where(
                 FiscalPeriod.fiscal_year_id == coerce_uuid(fiscal_year_id)
             )
 
         if status:
-            query = query.filter(FiscalPeriod.status == status)
+            query = query.where(FiscalPeriod.status == status)
 
         query = query.order_by(FiscalPeriod.period_number)
         return list(query.limit(limit).offset(offset).all())

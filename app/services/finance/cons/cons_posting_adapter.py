@@ -13,6 +13,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.consolidation_run import (
@@ -110,8 +111,8 @@ class CONSPostingAdapter:
 
         # Get parent entity for organization_id
         parent = (
-            db.query(LegalEntity)
-            .filter(
+            select(LegalEntity)
+            .where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
             )
@@ -235,8 +236,8 @@ class CONSPostingAdapter:
             return [CONSPostingResult(success=False, message="Run not found")]
 
         entries = (
-            db.query(EliminationEntry)
-            .filter(EliminationEntry.consolidation_run_id == r_id)
+            select(EliminationEntry)
+            .where(EliminationEntry.consolidation_run_id == r_id)
             .all()
         )
 
@@ -309,8 +310,8 @@ class CONSPostingAdapter:
 
         # Get parent for organization_id
         parent = (
-            db.query(LegalEntity)
-            .filter(
+            select(LegalEntity)
+            .where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
             )
@@ -439,8 +440,8 @@ class CONSPostingAdapter:
 
         # Get parent for organization_id
         parent = (
-            db.query(LegalEntity)
-            .filter(
+            select(LegalEntity)
+            .where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
             )

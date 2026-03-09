@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from app.models.scheduler import ScheduledTask, ScheduleType
@@ -79,9 +79,9 @@ class ScheduledTasks(ListResponseMixin):
                 detail=f"Invalid order_by. Allowed: {', '.join(sorted(allowed_columns))}",
             )
 
-        query = db.query(ScheduledTask)
+        query = select(ScheduledTask)
         if enabled is not None:
-            query = query.filter(ScheduledTask.enabled == enabled)
+            query = query.where(ScheduledTask.enabled == enabled)
 
         sort_column = (
             ScheduledTask.created_at if order_by == "created_at" else ScheduledTask.name

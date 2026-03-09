@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.inventory.inventory_transaction import (
     InventoryTransaction,
     TransactionType,
@@ -239,7 +240,9 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
             uom=data.get("uom", "Nos"),
             unit_cost=abs(unit_cost),
             total_cost=total_cost,
-            currency_code=data.get("currency_code", "NGN"),
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            ),
             cost_variance=Decimal("0"),
             quantity_before=quantity_before,
             quantity_after=quantity_after,

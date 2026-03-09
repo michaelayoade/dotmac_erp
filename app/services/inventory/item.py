@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.inventory.item import CostingMethod, Item, ItemType
@@ -110,8 +110,8 @@ class ItemCategoryService(ListResponseMixin):
 
         # Check for duplicate
         existing = (
-            db.query(ItemCategory)
-            .filter(
+            select(ItemCategory)
+            .where(
                 and_(
                     ItemCategory.organization_id == org_id,
                     ItemCategory.category_code == input.category_code,
@@ -227,9 +227,9 @@ class ItemCategoryService(ListResponseMixin):
         from app.models.inventory.item import Item
 
         active_items_count = (
-            db.query(func.count())
+            select(func.count())
             .select_from(Item)
-            .filter(
+            .where(
                 and_(
                     Item.category_id == cat_id,
                     Item.is_active.is_(True),
@@ -277,19 +277,19 @@ class ItemCategoryService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ItemCategory]:
         """List item categories."""
-        query = db.query(ItemCategory)
+        query = select(ItemCategory)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 ItemCategory.organization_id == coerce_uuid(organization_id)
             )
 
         if is_active is not None:
-            query = query.filter(ItemCategory.is_active == is_active)
+            query = query.where(ItemCategory.is_active == is_active)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     ItemCategory.category_code.ilike(search_pattern),
                     ItemCategory.category_name.ilike(search_pattern),
@@ -307,19 +307,19 @@ class ItemCategoryService(ListResponseMixin):
         search: str | None = None,
     ) -> int:
         """Count item categories with filters."""
-        query = db.query(ItemCategory)
+        query = select(ItemCategory)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 ItemCategory.organization_id == coerce_uuid(organization_id)
             )
 
         if is_active is not None:
-            query = query.filter(ItemCategory.is_active == is_active)
+            query = query.where(ItemCategory.is_active == is_active)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     ItemCategory.category_code.ilike(search_pattern),
                     ItemCategory.category_name.ilike(search_pattern),
@@ -358,8 +358,8 @@ class ItemService(ListResponseMixin):
 
         # Check for duplicate
         existing = (
-            db.query(Item)
-            .filter(
+            select(Item)
+            .where(
                 and_(
                     Item.organization_id == org_id,
                     Item.item_code == input.item_code,
@@ -560,8 +560,8 @@ class ItemService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         return (
-            db.query(Item)
-            .filter(
+            select(Item)
+            .where(
                 and_(
                     Item.organization_id == org_id,
                     Item.item_code == item_code,
@@ -584,19 +584,19 @@ class ItemService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[Item]:
         """List items with optional filters."""
-        query = db.query(Item)
+        query = select(Item)
 
         if organization_id:
-            query = query.filter(Item.organization_id == coerce_uuid(organization_id))
+            query = query.where(Item.organization_id == coerce_uuid(organization_id))
 
         if category_id:
-            query = query.filter(Item.category_id == coerce_uuid(category_id))
+            query = query.where(Item.category_id == coerce_uuid(category_id))
 
         if item_type:
-            query = query.filter(Item.item_type == item_type)
+            query = query.where(Item.item_type == item_type)
 
         if is_active is not None:
-            query = query.filter(Item.is_active == is_active)
+            query = query.where(Item.is_active == is_active)
 
         if is_purchaseable is not None:
             query = query.where(Item.is_purchaseable == is_purchaseable)
@@ -606,7 +606,7 @@ class ItemService(ListResponseMixin):
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     Item.item_code.ilike(search_pattern),
                     Item.item_name.ilike(search_pattern),

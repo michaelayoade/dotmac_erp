@@ -24,6 +24,7 @@ from uuid import UUID
 
 from sqlalchemy import select, text
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models.expense.expense_claim import ExpenseClaim
 from app.models.finance.banking.bank_account import BankAccount
@@ -113,7 +114,7 @@ def _ensure_extra_reimbursement_journal(
         posting_date=paid_on,
         description=f"Expense Reimbursement (extra) {claim.claim_number} {token}",
         reference=token[:100],
-        currency_code="NGN",
+        currency_code=settings.default_functional_currency_code,
         exchange_rate=Decimal("1.0"),
         lines=[
             JournalLineInput(

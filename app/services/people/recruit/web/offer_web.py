@@ -197,7 +197,7 @@ class OfferWebService:
                 form_data.get("expected_joining_date")
             ),
             "base_salary": parse_decimal(form_data.get("base_salary")),
-            "currency_code": form_data.get("currency_code", "NGN"),
+            "currency_code": form_data.get("currency_code") or None,
             "pay_frequency": form_data.get("pay_frequency", "MONTHLY"),
             "signing_bonus": parse_decimal(form_data.get("signing_bonus")),
             "relocation_allowance": parse_decimal(

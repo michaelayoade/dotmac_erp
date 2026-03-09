@@ -9,6 +9,8 @@ Maps ERPNext Expense DocTypes to DotMac expense schema:
 import logging
 from typing import Any
 
+from app.config import settings
+
 from .base import (
     DocTypeMapping,
     FieldMapping,
@@ -212,7 +214,7 @@ class ExpenseClaimMapping(DocTypeMapping):
         result["status"] = map_approval_status(record)
 
         # Set currency default
-        result["currency_code"] = "NGN"
+        result["currency_code"] = settings.default_functional_currency_code
 
         # Set net payable
         approved = result.get("total_approved_amount")

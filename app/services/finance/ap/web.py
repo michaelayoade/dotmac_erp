@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, load_only
 
+from app.config import settings
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
@@ -1628,7 +1629,11 @@ class APWebService:
         ]
 
         # Build template-ready context from raw aging data
-        currency = aging_data[0].currency_code if aging_data else "NGN"
+        currency = (
+            aging_data[0].currency_code
+            if aging_data
+            else settings.default_functional_currency_code
+        )
 
         def fmt(v):
             return _format_currency(v, currency)

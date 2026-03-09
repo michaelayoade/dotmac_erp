@@ -110,9 +110,9 @@ class WarehouseService(ListResponseMixin):
 
         # Check for duplicate
         existing = (
-            db.query(Warehouse)
-            .filter(Warehouse.organization_id == org_id)
-            .filter(Warehouse.warehouse_code == input.warehouse_code)
+            select(Warehouse)
+            .where(Warehouse.organization_id == org_id)
+            .where(Warehouse.warehouse_code == input.warehouse_code)
             .first()
         )
 
@@ -173,9 +173,9 @@ class WarehouseService(ListResponseMixin):
 
         # Check for duplicate
         existing = (
-            db.query(WarehouseLocation)
-            .filter(WarehouseLocation.warehouse_id == wh_id)
-            .filter(WarehouseLocation.location_code == input.location_code)
+            select(WarehouseLocation)
+            .where(WarehouseLocation.warehouse_id == wh_id)
+            .where(WarehouseLocation.location_code == input.location_code)
             .first()
         )
 
@@ -386,25 +386,25 @@ class WarehouseService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[Warehouse]:
         """List warehouses with optional filters."""
-        query = db.query(Warehouse)
+        query = select(Warehouse)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 Warehouse.organization_id == coerce_uuid(organization_id)
             )
 
         if is_active is not None:
-            query = query.filter(Warehouse.is_active == is_active)
+            query = query.where(Warehouse.is_active == is_active)
 
         if is_receiving is not None:
-            query = query.filter(Warehouse.is_receiving == is_receiving)
+            query = query.where(Warehouse.is_receiving == is_receiving)
 
         if is_shipping is not None:
-            query = query.filter(Warehouse.is_shipping == is_shipping)
+            query = query.where(Warehouse.is_shipping == is_shipping)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     Warehouse.warehouse_code.ilike(search_pattern),
                     Warehouse.warehouse_name.ilike(search_pattern),
@@ -426,12 +426,12 @@ class WarehouseService(ListResponseMixin):
         """List locations in a warehouse."""
         wh_id = coerce_uuid(warehouse_id)
 
-        query = db.query(WarehouseLocation).filter(
+        query = select(WarehouseLocation).where(
             WarehouseLocation.warehouse_id == wh_id
         )
 
         if is_active is not None:
-            query = query.filter(WarehouseLocation.is_active == is_active)
+            query = query.where(WarehouseLocation.is_active == is_active)
 
         return (
             query.order_by(WarehouseLocation.location_code)

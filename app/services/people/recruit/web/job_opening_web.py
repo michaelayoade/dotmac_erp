@@ -172,7 +172,7 @@ class JobOpeningWebService:
             "number_of_positions": int(form_data.get("number_of_positions", 1)),
             "location": form_data.get("location") or None,
             "is_remote": form_data.get("is_remote") == "true",
-            "currency_code": form_data.get("currency_code", "NGN"),
+            "currency_code": form_data.get("currency_code") or None,
             "min_salary": parse_decimal(form_data.get("min_salary")),
             "max_salary": parse_decimal(form_data.get("max_salary")),
             "posted_on": parse_date_only(form_data.get("posted_on")),

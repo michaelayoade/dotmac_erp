@@ -99,7 +99,7 @@ def expense_list(
 ):
     """Expense list page."""
     offset = (page - 1) * limit
-    context = base_context(request, auth, "Expenses", "expense")
+    context = base_context(request, auth, "Expenses", "expense", db=db)
     context.update(
         expense_web_service.list_context(
             db,
@@ -110,13 +110,9 @@ def expense_list(
             search=search,
             offset=offset,
             limit=limit,
+            page=page,
         )
     )
-    # Add page-based pagination vars
-    total = context.get("total", 0)
-    context["page"] = page
-    context["total_count"] = total
-    context["total_pages"] = max(1, (total + limit - 1) // limit)
     return templates.TemplateResponse(request, "expense/list.html", context)
 
 
@@ -382,7 +378,7 @@ def expense_advances(
     db: Session = Depends(get_db),
 ):
     """Cash advances list page."""
-    context = base_context(request, auth, "Cash Advances", "advances")
+    context = base_context(request, auth, "Cash Advances", "advances", db=db)
     context.update(
         expense_web_service.list_context(
             db,
@@ -405,7 +401,7 @@ def expense_cards(
     db: Session = Depends(get_db),
 ):
     """Corporate cards list page."""
-    context = base_context(request, auth, "Corporate Cards", "cards")
+    context = base_context(request, auth, "Corporate Cards", "cards", db=db)
     context.update(
         expense_web_service.list_context(
             db,
@@ -531,7 +527,7 @@ def new_expense_form(
     db: Session = Depends(get_db),
 ):
     """New expense form."""
-    context = base_context(request, auth, "New Expense", "expenses")
+    context = base_context(request, auth, "New Expense", "expenses", db=db)
     context.update(
         expense_web_service.form_context(
             db,
@@ -588,7 +584,7 @@ def create_expense(
         )
         return RedirectResponse(f"/expense/{expense.expense_id}", status_code=303)
     except Exception as e:
-        context = base_context(request, auth, "New Expense", "expenses")
+        context = base_context(request, auth, "New Expense", "expenses", db=db)
         context.update(expense_web_service.form_context(db, str(auth.organization_id)))
         context["return_to"] = return_to or _safe_return_to(request)
         context["error"] = str(e)

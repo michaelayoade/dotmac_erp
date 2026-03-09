@@ -108,7 +108,7 @@ class SupplierWebService:
     ) -> dict:
         """Search people by name/email for comment @mentions.
 
-        Uses SQLAlchemy 2.0 ``select()`` syntax instead of ``db.query()``.
+        Uses SQLAlchemy 2.0 ``select()`` syntax instead of ``select()``.
 
         Args:
             db: Database session

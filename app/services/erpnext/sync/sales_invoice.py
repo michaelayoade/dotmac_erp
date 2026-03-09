@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
@@ -405,7 +406,9 @@ class SalesInvoiceSyncService(BaseSyncService[Invoice]):
             invoice_date=data["invoice_date"],
             due_date=data.get("due_date") or data["invoice_date"],
             customer_id=customer_id,
-            currency_code=data.get("currency_code", "NGN")[:3],
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
             subtotal=data.get("subtotal", Decimal("0")),
             tax_amount=data.get("tax_amount", Decimal("0")),
             total_amount=data.get("total_amount", Decimal("0")),

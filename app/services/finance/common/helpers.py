@@ -151,7 +151,7 @@ def validate_unique_code(
             filters.append(pk_column != coerce_uuid(exclude_id))
 
     try:
-        existing = db.query(model_class).filter(and_(*filters)).first()
+        existing = db.scalars(select(model_class).where(and_(*filters))).first()
     except Exception:
         existing = db.scalar(select(model_class).where(and_(*filters)))
 
@@ -242,8 +242,8 @@ def get_org_scoped_entity_by_field(
 
     try:
         entity = (
-            db.query(model_class)
-            .filter(and_(org_column == org_id, field_column == field_value))
+            select(model_class)
+            .where(and_(org_column == org_id, field_column == field_value))
             .first()
         )
     except Exception:

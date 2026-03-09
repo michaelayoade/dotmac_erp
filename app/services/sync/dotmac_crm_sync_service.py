@@ -23,6 +23,8 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.config import settings
+
 if TYPE_CHECKING:
     from app.models.finance.ap.supplier import Supplier  # noqa: F401
 
@@ -509,7 +511,9 @@ class DotMacCRMSyncService:
             item.base_uom = (data.base_uom or "EA").strip().upper()
             item.purchase_uom = item.base_uom
             item.sales_uom = item.base_uom
-            item.currency_code = (data.currency_code or "NGN").strip().upper()
+            item.currency_code = (
+                data.currency_code or settings.default_functional_currency_code
+            ).strip().upper()
             item.list_price = data.list_price
             item.reorder_point = data.reorder_point
             item.barcode = data.barcode
@@ -530,7 +534,9 @@ class DotMacCRMSyncService:
                 purchase_uom=(data.base_uom or "EA").strip().upper(),
                 sales_uom=(data.base_uom or "EA").strip().upper(),
                 costing_method=CostingMethod.WEIGHTED_AVERAGE,
-                currency_code=(data.currency_code or "NGN").strip().upper(),
+                currency_code=(
+                    data.currency_code or settings.default_functional_currency_code
+                ).strip().upper(),
                 list_price=data.list_price,
                 reorder_point=data.reorder_point,
                 barcode=data.barcode,

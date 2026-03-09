@@ -107,7 +107,7 @@ class InvoiceWebService:
             end_date=end_date,
         )
 
-        count_subq = query.with_entities(Invoice.invoice_id).subquery()
+        count_subq = query.with_only_columns(Invoice.invoice_id).subquery()
         total_count = db.scalar(select(func.count()).select_from(count_subq)) or 0
 
         sort_dir_norm = (sort_dir or "desc").lower()
@@ -125,37 +125,41 @@ class InvoiceWebService:
         order_col = order_map.get(sort or "", Invoice.invoice_date)
         order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
 
-        invoices = (
-            query.with_entities(Invoice, Customer)
+        invoices = db.execute(
+            query.add_columns(Customer)
             .order_by(order_expr, Invoice.invoice_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         open_statuses = [
             InvoiceStatus.POSTED,
             InvoiceStatus.PARTIALLY_PAID,
             InvoiceStatus.OVERDUE,
         ]
-        stats_base = query.with_entities(Invoice)
-        outstanding_filter = stats_base.filter(Invoice.status.in_(open_statuses))
+        outstanding_filter = query.where(Invoice.status.in_(open_statuses))
 
-        total_outstanding = outstanding_filter.with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        total_outstanding = db.scalar(
+            outstanding_filter.with_only_columns(
+                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+            )
+        ) or Decimal("0")
 
-        past_due = outstanding_filter.filter(Invoice.due_date < today).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        past_due = db.scalar(
+            outstanding_filter.where(Invoice.due_date < today).with_only_columns(
+                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+            )
+        ) or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = outstanding_filter.filter(
-            Invoice.due_date >= today,
-            Invoice.due_date <= due_this_week_end,
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        due_this_week = db.scalar(
+            outstanding_filter.where(
+                Invoice.due_date >= today,
+                Invoice.due_date <= due_this_week_end,
+            ).with_only_columns(
+                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+            )
+        ) or Decimal("0")
 
         month_start = date(today.year, today.month, 1)
         if today.month == 12:
@@ -163,12 +167,14 @@ class InvoiceWebService:
         else:
             month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
 
-        this_month = outstanding_filter.filter(
-            Invoice.due_date >= month_start,
-            Invoice.due_date <= month_end,
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        this_month = db.scalar(
+            outstanding_filter.where(
+                Invoice.due_date >= month_start,
+                Invoice.due_date <= month_end,
+            ).with_only_columns(
+                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+            )
+        ) or Decimal("0")
 
         invoices_view = []
         for invoice, customer in invoices:

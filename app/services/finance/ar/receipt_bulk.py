@@ -112,7 +112,7 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
                     ],
                     session=self.db,
                 )
-                .filter(Customer.organization_id == self.organization_id)
+                .where(Customer.organization_id == self.organization_id)
                 .all()
             )
             self._customer_names = {str(r[0]): r[1] or r[2] or "" for r in rows}

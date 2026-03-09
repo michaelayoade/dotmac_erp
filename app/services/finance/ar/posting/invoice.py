@@ -78,8 +78,8 @@ def _resolve_tax_accounts(
 
     try:
         tax_codes = (
-            db.query(TaxCode)
-            .filter(
+            select(TaxCode)
+            .where(
                 and_(
                     TaxCode.organization_id == organization_id,
                     TaxCode.tax_code_id.in_(tax_code_ids),
@@ -171,8 +171,8 @@ def post_invoice(
     # Load invoice lines
     try:
         lines = (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == inv_id)
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
             .all()
         )
@@ -191,8 +191,8 @@ def post_invoice(
     # Get fiscal period for inventory transactions
     try:
         fiscal_period = (
-            db.query(FiscalPeriod)
-            .filter(
+            select(FiscalPeriod)
+            .where(
                 and_(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= invoice.invoice_date,

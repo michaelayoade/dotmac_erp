@@ -3,7 +3,7 @@ Exchange Rate Fetcher — pulls daily rates from the free Currency API.
 
 API: https://github.com/fawazahmed0/exchange-api
 - No auth required, no rate limits, updated daily
-- Supports 300+ currencies including NGN
+- Supports 300+ currencies
 - Primary endpoint on Cloudflare Pages, fallback on jsDelivr CDN
 """
 

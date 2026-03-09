@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 def apply_search_filter(query, model, search: str):
     """Apply text search filter; kept as a module helper for test compatibility."""
     pattern = f"%{search}%"
-    return query.filter(
+    return query.where(
         model.supplier_code.ilike(pattern)
         | model.legal_name.ilike(pattern)
         | model.trading_name.ilike(pattern)
@@ -625,13 +625,13 @@ class SupplierService(ListResponseMixin):
 
         org_id = coerce_uuid(organization_id)
         if isinstance(Supplier, Mock):
-            query: Any = db.query(Supplier).filter(Supplier.organization_id == org_id)
+            query: Any = select(Supplier).where(Supplier.organization_id == org_id)
             if supplier_type:
-                query = query.filter(Supplier.supplier_type == supplier_type)
+                query = query.where(Supplier.supplier_type == supplier_type)
             if is_active is not None:
-                query = query.filter(Supplier.is_active == is_active)
+                query = query.where(Supplier.is_active == is_active)
             if is_related_party is not None:
-                query = query.filter(Supplier.is_related_party == is_related_party)
+                query = query.where(Supplier.is_related_party == is_related_party)
             if search:
                 query = apply_search_filter(query, Supplier, search)
             return list(

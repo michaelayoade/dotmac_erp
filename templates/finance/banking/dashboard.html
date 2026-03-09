@@ -33,10 +33,10 @@
 <div class="space-y-6 page-enter">
     <!-- Stat Cards -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {{ stats_card("Total Balance", total_balance | default("₦0.00"), icon="currency", color="teal", href="/finance/banking/accounts") }}
-        {{ stats_card("Unreconciled", unreconciled_count | default(0), icon="clock", color="amber", href="/finance/banking/statements") }}
-        {{ stats_card("Inflows MTD", inflows_mtd | default("₦0.00"), icon="trending-up", color="emerald") }}
-        {{ stats_card("Outflows MTD", outflows_mtd | default("₦0.00"), icon="trending-down", color="rose") }}
+        {{ stats_card("Total Balance", total_balance if total_balance is not none else "₦0.00", icon="currency", color="teal", href="/finance/banking/accounts") }}
+        {{ stats_card("Unreconciled", unreconciled_count if unreconciled_count is not none else 0, icon="clock", color="amber", href="/finance/banking/statements") }}
+        {{ stats_card("Inflows MTD", inflows_mtd if inflows_mtd is not none else "₦0.00", icon="trending-up", color="emerald") }}
+        {{ stats_card("Outflows MTD", outflows_mtd if outflows_mtd is not none else "₦0.00", icon="trending-down", color="rose") }}
     </div>
 
     <!-- Account Balances + Reconciliation Status -->

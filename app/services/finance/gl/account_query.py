@@ -4,7 +4,8 @@ Shared GL account query builder for list + export.
 
 from __future__ import annotations
 
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import Select, select
+from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory
@@ -18,7 +19,7 @@ def build_account_query(
     search: str | None = None,
     category: str | None = None,
     status: str | None = None,
-) -> Query:
+) -> Select:
     """
     Build the base GL account query with filters applied.
     """
@@ -32,19 +33,19 @@ def build_account_query(
 
     category_value = parse_category(category)
 
-    query: Query[Account] = (
-        Query([Account], session=db)
+    query = (
+        select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .filter(Account.organization_id == org_id)
+        .where(Account.organization_id == org_id)
     )
 
     if is_active is not None:
-        query = query.filter(Account.is_active == is_active)
+        query = query.where(Account.is_active == is_active)
     if category_value:
-        query = query.filter(AccountCategory.ifrs_category == category_value)
+        query = query.where(AccountCategory.ifrs_category == category_value)
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
+        query = query.where(
             (Account.account_code.ilike(search_pattern))
             | (Account.account_name.ilike(search_pattern))
             | (Account.search_terms.ilike(search_pattern))

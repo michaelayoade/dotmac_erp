@@ -18,6 +18,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType
 from app.models.finance.ar.customer_payment import (
     CustomerPayment,
@@ -424,7 +425,7 @@ class SplynxSyncService:
         """Get the organization's default active bank account for a currency."""
         from app.models.finance.banking.bank_account import BankAccount
 
-        code = (currency_code or "NGN").upper()
+        code = (currency_code or settings.default_functional_currency_code).upper()
         cached = self._default_bank_account_cache.get(code)
         if cached:
             return cached
@@ -1162,7 +1163,9 @@ class SplynxSyncService:
             splynx_invoice.status, splynx_invoice.total_due
         )
 
-        currency_code = splynx_invoice.currency or "NGN"
+        currency_code = (
+            splynx_invoice.currency or settings.default_functional_currency_code
+        )
 
         # Extract tax from total (inclusive VAT) or compute additive tax
         subtotal, tax_amount = self._extract_tax(splynx_invoice.total)
@@ -1502,7 +1505,9 @@ class SplynxSyncService:
         customer_id: UUID
         if invoice:
             customer_id = invoice.customer_id
-            currency_code = invoice.currency_code or "NGN"
+            currency_code = (
+                invoice.currency_code or settings.default_functional_currency_code
+            )
         else:
             resolved_cust = self._get_or_create_customer_id(splynx_payment.customer_id)
             if not resolved_cust:
@@ -1514,7 +1519,9 @@ class SplynxSyncService:
             customer_id = resolved_cust
             # Use customer's currency or org default
             customer = self.db.get(Customer, customer_id)
-            currency_code = (customer.currency_code if customer else None) or "NGN"
+            currency_code = (
+                customer.currency_code if customer else None
+            ) or settings.default_functional_currency_code
 
         # Get bank account for this payment method, with fallback by currency
         bank_account_id = self._get_bank_account_for_payment(
@@ -2166,7 +2173,7 @@ class SplynxSyncService:
                 invoice_type=InvoiceType.CREDIT_NOTE,
                 invoice_date=cn_date,
                 due_date=cn_date,
-                currency_code="NGN",
+                currency_code=settings.default_functional_currency_code,
                 subtotal=cn_subtotal,
                 tax_amount=cn_tax,
                 total_amount=splynx_cn.total,
@@ -3327,7 +3334,7 @@ class SplynxSyncService:
             self.db.flush()
 
         logger.info(
-            "%s bulk reconciliation: %d bank lines matched to %d payments (NGN %s)",
+            "%s bulk reconciliation: %d bank lines matched to %d payments (%s)",
             bank_name,
             result["bulk_matches"],
             result["payments_matched"],

@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -65,8 +66,8 @@ class FiscalYearService(ListResponseMixin):
 
         # Check for duplicate year code
         existing = (
-            db.query(FiscalYear)
-            .filter(
+            select(FiscalYear)
+            .where(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == input.year_code,
             )
@@ -190,8 +191,8 @@ class FiscalYearService(ListResponseMixin):
 
         # Check all periods are hard closed
         open_periods = (
-            db.query(FiscalPeriod)
-            .filter(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.fiscal_year_id == year_id,
                 FiscalPeriod.status != PeriodStatus.HARD_CLOSED,
             )
@@ -265,8 +266,8 @@ class FiscalYearService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         year = (
-            db.query(FiscalYear)
-            .filter(
+            select(FiscalYear)
+            .where(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == year_code,
             )
@@ -297,15 +298,15 @@ class FiscalYearService(ListResponseMixin):
         Returns:
             List of FiscalYear objects
         """
-        stmt = db.query(FiscalYear)
+        stmt = select(FiscalYear)
 
         if organization_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 FiscalYear.organization_id == coerce_uuid(organization_id)
             )
 
         if is_closed is not None:
-            stmt = stmt.filter(FiscalYear.is_closed == is_closed)
+            stmt = stmt.where(FiscalYear.is_closed == is_closed)
 
         stmt = stmt.order_by(FiscalYear.start_date.desc()).limit(limit).offset(offset)
         return stmt.all()

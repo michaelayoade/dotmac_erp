@@ -19,60 +19,11 @@
     </div>
 
     <!-- Stat Cards -->
-    <div class="card overflow-hidden">
-        <div class="people-stat-grid">
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-                <!-- Total Gross Pay -->
-                <div class="stat-hero">
-                    <div class="stat-hero-icon" style="background: linear-gradient(135deg, #dcfce7 0%, rgba(16, 185, 129, 0.2) 100%); color: #059669;">
-                        {{ icon_svg("currency") }}
-                    </div>
-                    <span class="stat-hero-label">Total Gross Pay</span>
-                    <span class="stat-hero-value font-mono tabular-nums">{{ "{:,.0f}".format(stats.total_gross) }}</span>
-                    {% if stats.latest_run %}
-                    <span class="stat-hero-trend text-emerald-600 dark:text-emerald-400">
-                        Latest run: {{ stats.latest_run.entry_number }}
-                    </span>
-                    {% endif %}
-                </div>
-
-                <!-- Net Payroll -->
-                <div class="stat-hero">
-                    <div class="stat-hero-icon stat-hero-icon-people">
-                        {{ icon_svg("receipt") }}
-                    </div>
-                    <span class="stat-hero-label">Net Payroll</span>
-                    <span class="stat-hero-value font-mono tabular-nums">{{ "{:,.0f}".format(stats.total_net) }}</span>
-                    <span class="stat-hero-trend text-violet-600 dark:text-violet-400">
-                        {{ stats.runs_this_year }} runs this year
-                    </span>
-                </div>
-
-                <!-- Pending Runs -->
-                <div class="stat-hero">
-                    <div class="stat-hero-icon" style="background: linear-gradient(135deg, #fef3c7 0%, rgba(251, 191, 36, 0.2) 100%); color: #d97706;">
-                        {{ icon_svg("clock") }}
-                    </div>
-                    <span class="stat-hero-label">Pending Runs</span>
-                    <span class="stat-hero-value">{{ stats.pending_runs }}</span>
-                    <span class="stat-hero-trend text-amber-600 dark:text-amber-400">
-                        Draft or awaiting slips
-                    </span>
-                </div>
-
-                <!-- Employees Paid -->
-                <div class="stat-hero">
-                    <div class="stat-hero-icon" style="background: linear-gradient(135deg, #ede9fe 0%, rgba(139, 92, 246, 0.2) 100%); color: #7c3aed;">
-                        {{ icon_svg("users") }}
-                    </div>
-                    <span class="stat-hero-label">Employees Paid</span>
-                    <span class="stat-hero-value">{{ stats.employees_paid }}</span>
-                    <span class="stat-hero-trend text-violet-600 dark:text-violet-400">
-                        This month
-                    </span>
-                </div>
-            </div>
-        </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Total Gross Pay", "{:,.0f}".format(stats.total_gross), icon="currency", color="emerald", subtitle="Latest run: %s" | format(stats.latest_run.entry_number) if stats.latest_run else none) }}
+        {{ stats_card("Net Payroll", "{:,.0f}".format(stats.total_net), icon="receipt", color="violet", subtitle="%s runs this year" | format(stats.runs_this_year)) }}
+        {{ stats_card("Pending Runs", stats.pending_runs, icon="clock", color="amber", subtitle="Draft or awaiting slips") }}
+        {{ stats_card("Employees Paid", stats.employees_paid, icon="users", color="violet", subtitle="This month") }}
     </div>
 
     <!-- Alerts Banner -->

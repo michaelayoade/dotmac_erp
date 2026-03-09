@@ -33,6 +33,7 @@ from typing import (
 )
 from uuid import UUID
 
+from babel.numbers import list_currencies
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -779,45 +780,8 @@ PHONE_PATTERN = re.compile(
 # Currency code pattern (ISO 4217)
 CURRENCY_PATTERN = re.compile(r"^[A-Z]{3}$")
 
-# Valid ISO currency codes (subset of common ones)
-VALID_CURRENCY_CODES = {
-    "NGN",
-    "USD",
-    "EUR",
-    "GBP",
-    "CAD",
-    "AUD",
-    "JPY",
-    "CNY",
-    "INR",
-    "ZAR",
-    "AED",
-    "CHF",
-    "SEK",
-    "NOK",
-    "DKK",
-    "NZD",
-    "SGD",
-    "HKD",
-    "KRW",
-    "MXN",
-    "BRL",
-    "RUB",
-    "TRY",
-    "PLN",
-    "THB",
-    "MYR",
-    "IDR",
-    "PHP",
-    "VND",
-    "EGP",
-    "KES",
-    "GHS",
-    "TZS",
-    "UGX",
-    "XOF",
-    "XAF",
-}
+# Valid ISO currency codes from Babel's ISO 4217 registry
+VALID_CURRENCY_CODES = frozenset(list_currencies())
 
 # Account type mappings for validation
 VALID_ACCOUNT_TYPES = {
@@ -986,7 +950,7 @@ class ValidationRule:
                 return (
                     False,
                     self.message
-                    or f"'{self.field_name}' must be a valid ISO currency code (e.g., USD, NGN)",
+                    or f"'{self.field_name}' must be a valid ISO currency code",
                 )
 
         elif self.rule_type == "positive":

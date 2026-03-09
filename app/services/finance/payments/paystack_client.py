@@ -12,6 +12,8 @@ from typing import Any, cast
 
 import httpx
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 PAYSTACK_BASE_URL = "https://api.paystack.co"
@@ -226,11 +228,11 @@ class PaystackClient:
     def initialize_transaction(
         self,
         email: str,
-        amount: int,  # Amount in kobo (NGN * 100)
+        amount: int,  # Amount in the smallest currency unit
         reference: str,
         callback_url: str,
         metadata: dict | None = None,
-        currency: str = "NGN",
+        currency: str = settings.default_functional_currency_code,
     ) -> InitializeResponse:
         """
         Initialize a payment transaction.
@@ -241,7 +243,7 @@ class PaystackClient:
             reference: Unique transaction reference
             callback_url: URL to redirect after payment
             metadata: Optional custom metadata
-            currency: Currency code (default: NGN)
+            currency: Currency code (defaults to configured application currency)
 
         Returns:
             InitializeResponse with authorization URL for customer redirect
@@ -376,13 +378,17 @@ class PaystackClient:
     # Transfer API (for expense reimbursements / payouts)
     # =========================================================================
 
-    def list_banks(self, country: str = "nigeria", currency: str = "NGN") -> list[Bank]:
+    def list_banks(
+        self,
+        country: str = "nigeria",
+        currency: str = settings.default_functional_currency_code,
+    ) -> list[Bank]:
         """
         Get list of banks supported by Paystack.
 
         Args:
             country: Country to get banks for (default: nigeria)
-            currency: Currency code (default: NGN)
+            currency: Currency code (defaults to configured application currency)
 
         Returns:
             List of Bank objects
@@ -470,7 +476,7 @@ class PaystackClient:
         name: str,
         account_number: str,
         bank_code: str,
-        currency: str = "NGN",
+        currency: str = settings.default_functional_currency_code,
         recipient_type: str = "nuban",
         description: str | None = None,
         metadata: dict | None = None,
@@ -482,7 +488,7 @@ class PaystackClient:
             name: Recipient name (should match bank account name)
             account_number: Recipient bank account number
             bank_code: Bank code (from list_banks)
-            currency: Currency code (default: NGN)
+            currency: Currency code (defaults to configured application currency)
             recipient_type: Type of recipient (nuban, mobile_money, basa)
             description: Optional description
             metadata: Optional metadata
@@ -535,7 +541,7 @@ class PaystackClient:
         recipient_code: str,
         reference: str,
         reason: str | None = None,
-        currency: str = "NGN",
+        currency: str = settings.default_functional_currency_code,
     ) -> InitiateTransferResponse:
         """
         Initiate a transfer to a recipient.
@@ -545,7 +551,7 @@ class PaystackClient:
             recipient_code: Recipient code from create_transfer_recipient
             reference: Unique transfer reference
             reason: Optional reason for transfer
-            currency: Currency code (default: NGN)
+            currency: Currency code (defaults to configured application currency)
 
         Returns:
             InitiateTransferResponse with transfer_code
@@ -851,7 +857,9 @@ class PaystackClient:
                     total_amount=s.get("total_amount", 0),
                     total_fees=s.get("total_fees", 0),
                     net_amount=s.get("total_amount", 0) - s.get("total_fees", 0),
-                    currency=s.get("currency", "NGN"),
+                    currency=s.get(
+                        "currency", settings.default_functional_currency_code
+                    ),
                     created_at=s.get("createdAt", ""),
                 )
             )
@@ -911,7 +919,9 @@ class PaystackClient:
                     amount=amount,
                     fees=fees,
                     net_amount=amount - fees,
-                    currency=t.get("currency", "NGN"),
+                    currency=t.get(
+                        "currency", settings.default_functional_currency_code
+                    ),
                     status=t.get("status", ""),
                     paid_at=t.get("paid_at"),
                     created_at=t.get("createdAt", ""),

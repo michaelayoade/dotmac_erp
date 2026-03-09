@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import or_
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import Select, or_, select
+from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory
@@ -43,7 +43,7 @@ def build_asset_query(
     search: str | None = None,
     category: str | None = None,
     status: str | None = None,
-) -> Query:
+) -> Select:
     """
     Build the base asset query with filters applied.
     """
@@ -51,20 +51,20 @@ def build_asset_query(
     status_value = _parse_status(status)
     category_id = _try_uuid(category)
 
-    query = db.query(Asset).join(
+    query = select(Asset).join(
         AssetCategory, Asset.category_id == AssetCategory.category_id
     )
-    query = query.filter(Asset.organization_id == org_id)
+    query = query.where(Asset.organization_id == org_id)
 
     if status_value:
-        query = query.filter(Asset.status == status_value)
+        query = query.where(Asset.status == status_value)
     if category_id:
-        query = query.filter(Asset.category_id == category_id)
+        query = query.where(Asset.category_id == category_id)
     elif category:
-        query = query.filter(AssetCategory.category_code == category)
+        query = query.where(AssetCategory.category_code == category)
     if search:
         search_pattern = f"%{search}%"
-        query = query.filter(
+        query = query.where(
             or_(
                 Asset.asset_number.ilike(search_pattern),
                 Asset.asset_name.ilike(search_pattern),

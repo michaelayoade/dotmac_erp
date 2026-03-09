@@ -1,10 +1,10 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import icon_svg, status_badge %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
 
 {% block page_title %}Reports{% endblock %}
 
 {% block breadcrumbs %}
-<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+<nav class="text-sm text-slate-500 dark:text-slate-400 mt-1" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Reports</span></li>
@@ -45,7 +45,7 @@
                     {{ icon_svg("collection") }}
                 </div>
             </div>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.total_assets }}</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{{ key_metrics.total_assets }}</p>
             <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Financial Position</p>
         </a>
 
@@ -57,7 +57,7 @@
                     {{ icon_svg("receipt") }}
                 </div>
             </div>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.total_liabilities }}</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{{ key_metrics.total_liabilities }}</p>
             <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Financial Position</p>
         </a>
 
@@ -69,7 +69,7 @@
                     {{ icon_svg("trending-up") }}
                 </div>
             </div>
-            <p class="text-2xl font-bold {% if key_metrics.is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} font-mono">{{ key_metrics.net_income }}</p>
+            <p class="text-2xl font-bold {% if key_metrics.is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} font-mono tabular-nums">{{ key_metrics.net_income }}</p>
             <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Profit or Loss</p>
         </a>
 
@@ -81,7 +81,7 @@
                     {{ icon_svg("scale") }}
                 </div>
             </div>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ key_metrics.total_equity }}</p>
+            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{{ key_metrics.total_equity }}</p>
             <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 group-hover:text-teal-500 transition-colors">View Statement of Financial Position</p>
         </a>
     </section>
@@ -354,6 +354,8 @@
                     {{ icon_svg("chevron-right", "h-5 w-5 text-slate-300 dark:text-slate-600 group-hover:text-teal-500 dark:group-hover:text-teal-400 transition-colors") }}
                 </div>
             </a>
+            {% else %}
+            {{ empty_state("No standard reports", "Standard reports will be available once configured.", "document") }}
             {% endfor %}
         </div>
     </section>

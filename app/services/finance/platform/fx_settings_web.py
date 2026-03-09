@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.core_fx.currency import Currency
 from app.models.finance.core_fx.exchange_rate import ExchangeRate, ExchangeRateSource
 from app.models.finance.core_fx.exchange_rate_type import ExchangeRateType
@@ -82,7 +83,11 @@ class FXSettingsWebService:
         )
 
         org = self.db.get(Organization, organization_id)
-        functional_currency = org.functional_currency_code if org else "NGN"
+        functional_currency = (
+            org.functional_currency_code
+            if org
+            else settings.default_functional_currency_code
+        )
 
         return {
             "rates": rates,

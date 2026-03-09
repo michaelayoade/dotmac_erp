@@ -14,6 +14,7 @@ from sqlalchemy import DateTime, Enum, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.db import Base
 
 
@@ -85,7 +86,7 @@ class PaymentIntent(Base):
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="NGN",
+        default=settings.default_functional_currency_code,
     )
     email: Mapped[str] = mapped_column(
         String(255),

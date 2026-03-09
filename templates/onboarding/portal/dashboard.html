@@ -1,5 +1,5 @@
 {% extends "onboarding/portal/base_onboarding.html" %}
-{% from "components/macros.html" import icon_svg, status_badge %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
 
 {% block title %}Welcome {{ employee_name }} - Onboarding{% endblock %}
 
@@ -163,6 +163,8 @@
                         </div>
                     </div>
                 </a>
+                {% else %}
+                {{ empty_state("No tasks in this category", "Tasks will be assigned by HR.", "clipboard") }}
                 {% endfor %}
             </div>
         </div>
@@ -202,6 +204,8 @@
                 {% endif %}
                 {{ status_badge(activity.activity_status, 'sm') }}
             </div>
+            {% else %}
+            {{ empty_state("No HR tasks", "HR tasks will appear here when assigned.", "clipboard") }}
             {% endfor %}
         </div>
     </div>

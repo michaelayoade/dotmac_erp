@@ -86,8 +86,8 @@ class AccountBulkService(BulkActionService[Account]):
         journal_count = coerce_scalar_count(self.db.scalar(count_stmt))
         if journal_count is None and is_mock_session(self.db):
             journal_count = (
-                self.db.query(JournalEntryLine)
-                .filter(JournalEntryLine.account_id == entity.account_id)
+                self.select(JournalEntryLine)
+                .where(JournalEntryLine.account_id == entity.account_id)
                 .count()
             )
         journal_count = journal_count or 0

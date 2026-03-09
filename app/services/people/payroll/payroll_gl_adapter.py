@@ -17,6 +17,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.gl.journal_entry import JournalType
 from app.models.people.hr.employee import Employee
 from app.models.people.payroll.salary_slip import (
@@ -536,7 +537,11 @@ class PayrollGLAdapter:
             posting_date=posting_date,
             description=f"Salary Slip {slip.slip_number} - {slip.employee_name}",
             reference=slip.slip_number,
-            currency_code=getattr(slip, "currency_code", "NGN"),
+            currency_code=getattr(
+                slip,
+                "currency_code",
+                settings.default_functional_currency_code,
+            ),
             exchange_rate=exchange_rate,
             lines=journal_lines,
             source_module="PAYROLL",
@@ -670,7 +675,15 @@ class PayrollGLAdapter:
 
         # Build journal lines
         journal_lines: list[JournalLineInput] = []
-        currency_code = getattr(slips[0], "currency_code", "NGN") if slips else "NGN"
+        currency_code = (
+            getattr(
+                slips[0],
+                "currency_code",
+                settings.default_functional_currency_code,
+            )
+            if slips
+            else settings.default_functional_currency_code
+        )
         exchange_rate = (
             getattr(slips[0], "exchange_rate", None) or Decimal("1.0")
             if slips

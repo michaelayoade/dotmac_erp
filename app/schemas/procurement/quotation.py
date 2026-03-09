@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.procurement.enums import QuotationResponseStatus
 
 
@@ -47,7 +48,9 @@ class QuotationResponseCreate(BaseModel):
     response_number: str = Field(max_length=30)
     response_date: date
     total_amount: Decimal = Field(ge=0)
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     delivery_period_days: int | None = None
     validity_days: int | None = None
     technical_proposal: str | None = None

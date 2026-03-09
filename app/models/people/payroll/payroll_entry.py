@@ -25,6 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingMixin
 from app.models.people.payroll.salary_structure import PayrollFrequency
@@ -131,7 +132,7 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     # Currency
     currency_code: Mapped[str] = mapped_column(
         String(3),
-        default="NGN",
+        default=settings.default_functional_currency_code,
     )
     exchange_rate: Mapped[Decimal] = mapped_column(
         Numeric(18, 6),

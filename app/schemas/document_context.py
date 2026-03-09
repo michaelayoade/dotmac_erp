@@ -11,6 +11,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from app.config import settings
+
 
 class OfferLetterContext(BaseModel):
     """
@@ -39,7 +41,7 @@ class OfferLetterContext(BaseModel):
 
     # Compensation
     base_salary: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     pay_frequency: str = "MONTHLY"  # MONTHLY, BI_WEEKLY, WEEKLY, ANNUAL
     annual_salary: Decimal | None = None  # Calculated from base_salary if monthly
 
@@ -121,7 +123,7 @@ class EmploymentContractContext(BaseModel):
 
     # Compensation
     base_salary: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     payment_frequency: str = "MONTHLY"
     payment_method: str = "BANK_TRANSFER"  # BANK_TRANSFER, CHEQUE, CASH
 
@@ -188,7 +190,7 @@ class ConfirmationLetterContext(BaseModel):
     # Salary (may be revised post-probation)
     current_salary: Decimal
     new_salary: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     salary_effective_date: date | None = None
 
     # Organization
@@ -230,7 +232,7 @@ class TerminationLetterContext(BaseModel):
     accrued_leave_days: int
     leave_encashment_amount: Decimal | None = None
     total_settlement: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
 
     # Exit checklist
     company_property_returned: bool = False
@@ -261,7 +263,7 @@ class SalaryRevisionLetterContext(BaseModel):
     # Salary change
     current_salary: Decimal
     new_salary: Decimal
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     increment_amount: Decimal
     increment_percentage: Decimal
     effective_date: date
@@ -471,7 +473,7 @@ class DisciplineTerminationLetterContext(BaseModel):
     # Final settlement
     final_settlement_items: list[dict[str, Any]] | None = None  # [{item, amount}]
     total_settlement: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
 
     # Appeal rights
     appeal_period_days: int = 14

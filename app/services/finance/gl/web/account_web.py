@@ -106,7 +106,7 @@ class AccountWebService:
             status=status,
         )
 
-        total_count = query.with_entities(func.count(Account.account_id)).scalar() or 0
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         column_map = {
             "account_code": Account.account_code,
             "account_name": Account.account_name,
@@ -115,7 +115,7 @@ class AccountWebService:
         query = apply_sort(
             query, sort, sort_dir, column_map, default=Account.account_code.asc()
         )
-        accounts = query.limit(limit).offset(offset).all()
+        accounts = list(db.scalars(query.limit(limit).offset(offset)).all())
 
         audit_service = get_audit_service(db)
         creator_ids = [
@@ -161,27 +161,31 @@ class AccountWebService:
             )
 
         active_count = (
-            build_account_query(
-                db=db,
-                organization_id=organization_id,
-                search=search,
-                category=category,
-                status="active",
+            db.scalar(
+                select(func.count()).select_from(
+                    build_account_query(
+                        db=db,
+                        organization_id=organization_id,
+                        search=search,
+                        category=category,
+                        status="active",
+                    ).subquery()
+                )
             )
-            .with_entities(func.count(Account.account_id))
-            .scalar()
             or 0
         )
         inactive_count = (
-            build_account_query(
-                db=db,
-                organization_id=organization_id,
-                search=search,
-                category=category,
-                status="inactive",
+            db.scalar(
+                select(func.count()).select_from(
+                    build_account_query(
+                        db=db,
+                        organization_id=organization_id,
+                        search=search,
+                        category=category,
+                        status="inactive",
+                    ).subquery()
+                )
             )
-            .with_entities(func.count(Account.account_id))
-            .scalar()
             or 0
         )
         total_pages = max(1, (total_count + limit - 1) // limit)

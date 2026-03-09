@@ -82,6 +82,7 @@ class PeopleDashboardService:
             else:
                 context["coach_insights"] = []
         except Exception:
+            logger.exception("Failed to load coach insights for people dashboard")
             context["coach_insights"] = []
 
         return templates.TemplateResponse(request, "people/dashboard.html", context)

@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, unquote_plus, urlparse
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
@@ -418,9 +418,9 @@ def _load_audit_settings(db: Session):
         "read_trigger_query": "audit",
     }
     rows = (
-        db.query(DomainSetting)
-        .filter(DomainSetting.domain == SettingDomain.audit)
-        .filter(DomainSetting.is_active.is_(True))
+        select(DomainSetting)
+        .where(DomainSetting.domain == SettingDomain.audit)
+        .where(DomainSetting.is_active.is_(True))
         .all()
     )
     if isinstance(rows, Mock):

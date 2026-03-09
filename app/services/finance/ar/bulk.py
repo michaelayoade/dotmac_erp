@@ -64,8 +64,8 @@ class CustomerBulkService(BulkActionService[Customer]):
         """
         # Check for associated invoices
         invoice_count = (
-            self.db.query(Invoice)
-            .filter(Invoice.customer_id == entity.customer_id)
+            self.select(Invoice)
+            .where(Invoice.customer_id == entity.customer_id)
             .count()
         )
 

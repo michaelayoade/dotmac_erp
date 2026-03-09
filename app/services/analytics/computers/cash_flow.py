@@ -20,6 +20,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
+from app.config import settings
 from app.services.analytics.base_computer import BaseComputer
 
 logger = logging.getLogger(__name__)
@@ -254,4 +255,4 @@ class CashFlowComputer(BaseComputer):
         org = self.db.get(Organization, organization_id)
         if org and hasattr(org, "default_currency"):
             return str(org.default_currency)
-        return "NGN"
+        return settings.default_functional_currency_code

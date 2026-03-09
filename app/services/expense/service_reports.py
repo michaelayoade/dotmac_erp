@@ -551,7 +551,9 @@ class ExpenseReportingMixin(ExpenseServiceBase):
                     "status": row.status.value if row.status else None,
                     "purpose": row.purpose,
                     "claimant_name": row.claimant_name or "Unknown",
-                    "currency_code": row.currency_code or "NGN",
+                    "currency_code": self._resolve_currency_code(
+                        org_id, row.currency_code
+                    ),
                     "claimed_amount": claimed_amount,
                     "approved_amount": approved_amount,
                 }

@@ -126,7 +126,7 @@ class OperationsDashboardWebService:
                     select(InventoryLot)
                     .where(
                         InventoryLot.organization_id == organization_id,
-                        InventoryLot.expiry_date != None,
+                        InventoryLot.expiry_date.isnot(None),
                         InventoryLot.expiry_date > now,
                         InventoryLot.expiry_date <= expiring_soon,
                         InventoryLot.quantity_available > 0,

@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.exp.expense_entry import (
     ExpenseEntry,
     ExpenseStatus,
@@ -37,7 +38,7 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
     - Payment Account / Paid Through / Bank: Payment account
     - Amount: Expense amount
     - Tax Amount / VAT / Tax: Tax amount
-    - Currency Code / Currency: Currency (default: NGN)
+    - Currency Code / Currency: Currency (defaults to configured organization currency)
     - Payment Method / Method: CASH, BANK_TRANSFER, etc.
     - Payee / Vendor / Supplier: Who was paid
     - Receipt Reference / Receipt / Reference #: Receipt reference
@@ -123,7 +124,10 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
             ),
             # Currency
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Payment
@@ -251,9 +255,11 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
         )
 
         # Get currency
-        currency_code = (row.get("currency_code") or row.get("currency_alt") or "NGN")[
-            :3
-        ]
+        currency_code = (
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
+        )[:3]
 
         # Get payment method
         method_str = row.get("payment_method_str") or row.get("method_alt") or "CASH"

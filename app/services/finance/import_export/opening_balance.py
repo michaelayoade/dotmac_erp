@@ -18,6 +18,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
@@ -518,7 +519,7 @@ class OpeningBalanceImporter:
             fiscal_period_id=period.fiscal_period_id,
             description=description,
             reference=f"Opening Balances as at {entry_date}",
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             exchange_rate=Decimal("1.0"),
             total_debit=preview.total_debit,
             total_credit=preview.total_credit,
@@ -560,7 +561,7 @@ class OpeningBalanceImporter:
                 credit_amount=line.credit,
                 debit_amount_functional=line.debit,
                 credit_amount_functional=line.credit,
-                currency_code="NGN",
+                currency_code=settings.default_functional_currency_code,
                 exchange_rate=Decimal("1.0"),
             )
             self.db.add(journal_line)

@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field
 
+from app.config import settings
+
 # ============ Inbound Sync Payloads (CRM → ERP) ============
 
 
@@ -149,7 +151,9 @@ class CRMInventoryItemPayload(BaseModel):
         None, max_length=30, description="ERP item category code"
     )
     base_uom: str = Field("EA", max_length=20)
-    currency_code: str = Field("NGN", min_length=3, max_length=3)
+    currency_code: str = Field(
+        settings.default_functional_currency_code, min_length=3, max_length=3
+    )
     list_price: Decimal | None = None
     reorder_point: Decimal | None = None
     barcode: str | None = Field(None, max_length=100)
@@ -263,7 +267,7 @@ class ExpenseTotals(BaseModel):
     submitted: Decimal = Decimal("0.00")
     approved: Decimal = Decimal("0.00")
     paid: Decimal = Decimal("0.00")
-    currency: str = "NGN"
+    currency: str = settings.default_functional_currency_code
 
 
 class ExpenseTotalsRequest(BaseModel):
@@ -298,7 +302,7 @@ class InventoryItemStock(BaseModel):
     quantity_available: Decimal
     reorder_point: Decimal | None = None
     list_price: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     barcode: str | None = None
     is_below_reorder: bool = False
 
@@ -345,7 +349,7 @@ class InventoryItemDetail(BaseModel):
     total_available: Decimal
     reorder_point: Decimal | None = None
     list_price: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     barcode: str | None = None
     warehouses: list[WarehouseStock] = Field(default_factory=list)
 
@@ -548,7 +552,9 @@ class CRMPurchaseOrderPayload(BaseModel):
     vendor_name: str | None = Field(None, max_length=255)
     vendor_code: str | None = Field(None, max_length=30)
     title: str = Field(..., max_length=500)
-    currency: str = Field("NGN", max_length=3)
+    currency: str = Field(
+        settings.default_functional_currency_code, max_length=3
+    )
     subtotal: Decimal
     tax_total: Decimal = Decimal("0")
     total: Decimal

@@ -34,6 +34,7 @@ from app.services.finance.payments.paystack_client import (
     PaystackConfig,
     PaystackError,
 )
+from app.services.finance.platform.org_context import org_context_service
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
@@ -122,10 +123,10 @@ class PaymentService:
         active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
         try:
             existing_intent = (
-                self.db.query(PaymentIntent)
-                .filter(PaymentIntent.source_type == "INVOICE")
-                .filter(PaymentIntent.source_id == inv_id)
-                .filter(PaymentIntent.status.in_(active_statuses))
+                self.select(PaymentIntent)
+                .where(PaymentIntent.source_type == "INVOICE")
+                .where(PaymentIntent.source_id == inv_id)
+                .where(PaymentIntent.status.in_(active_statuses))
                 .first()
             )
         except Exception:
@@ -212,7 +213,10 @@ class PaymentService:
             organization_id=self.organization_id,
             paystack_reference=reference,
             amount=invoice.balance_due,
-            currency_code=invoice.currency_code or "NGN",
+            currency_code=invoice.currency_code
+            or org_context_service.get_functional_currency(
+                self.db, self.organization_id
+            ),
             email=email,
             direction=PaymentDirection.INBOUND,
             bank_account_id=bank_account_uuid,
@@ -345,7 +349,7 @@ class PaymentService:
             )
         )
         expected_currency = intent.currency_code.upper()
-        paystack_currency = (currency or "NGN").upper()
+        paystack_currency = (currency or intent.currency_code).upper()
 
         amount_diff = abs(int(amount_kobo) - expected_amount_kobo)
         if amount_diff > 1:
@@ -801,6 +805,11 @@ class PaymentService:
         }
         if metadata:
             intent_metadata.update(metadata)
+        resolved_currency_code = claim.currency_code or (
+            org_context_service.get_functional_currency(
+                self.db, self.organization_id
+            )
+        )
 
         # Verify account and create transfer recipient with Paystack
         with PaystackClient(paystack_config) as client:
@@ -815,7 +824,7 @@ class PaymentService:
                 name=account_info.account_name,
                 account_number=recipient_account_number,
                 bank_code=recipient_bank_code,
-                currency="NGN",
+                currency=resolved_currency_code,
                 description=f"Expense reimbursement for {employee.full_name}",
                 metadata=intent_metadata,
             )
@@ -831,7 +840,7 @@ class PaymentService:
             organization_id=self.organization_id,
             paystack_reference=reference,
             amount=claim.net_payable_amount,
-            currency_code="NGN",
+            currency_code=resolved_currency_code,
             email=email,
             direction=PaymentDirection.OUTBOUND,
             bank_account_id=bank_account_uuid,
@@ -1324,8 +1333,8 @@ class PaymentService:
         # Find batch item by payment intent
         try:
             batch_item = (
-                self.db.query(TransferBatchItem)
-                .filter(TransferBatchItem.payment_intent_id == intent.intent_id)
+                self.select(TransferBatchItem)
+                .where(TransferBatchItem.payment_intent_id == intent.intent_id)
                 .first()
             )
         except Exception:

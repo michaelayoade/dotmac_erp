@@ -74,7 +74,7 @@ def apply_search_filter(
     # Build OR conditions for all fields
     conditions = [field.ilike(pattern) for field in fields]
 
-    return query.filter(or_(*conditions))
+    return query.where(or_(*conditions))
 
 
 def apply_code_name_search(
@@ -137,7 +137,7 @@ def apply_multi_field_filter(
     """
     for field, value in filters.items():
         if value is not None:
-            query = query.filter(field == value)
+            query = query.where(field == value)
 
     return query
 
@@ -161,9 +161,9 @@ def apply_date_range_filter(
         Filtered query
     """
     if start_date is not None:
-        query = query.filter(date_field >= start_date)
+        query = query.where(date_field >= start_date)
     if end_date is not None:
-        query = query.filter(date_field <= end_date)
+        query = query.where(date_field <= end_date)
 
     return query
 
@@ -187,9 +187,9 @@ def apply_amount_range_filter(
         Filtered query
     """
     if min_amount is not None:
-        query = query.filter(amount_field >= min_amount)
+        query = query.where(amount_field >= min_amount)
     if max_amount is not None:
-        query = query.filter(amount_field <= max_amount)
+        query = query.where(amount_field <= max_amount)
 
     return query
 
@@ -211,6 +211,6 @@ def apply_status_filter(
         Filtered query
     """
     if statuses:
-        query = query.filter(status_field.in_(statuses))
+        query = query.where(status_field.in_(statuses))
 
     return query

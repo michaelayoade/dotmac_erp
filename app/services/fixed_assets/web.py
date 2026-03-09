@@ -174,14 +174,13 @@ class FixedAssetWebService:
             status=status,
         )
 
-        total_count = query.with_entities(func.count(Asset.asset_id)).scalar() or 0
-        rows = (
-            query.with_entities(Asset, AssetCategory)
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.execute(
+            query.add_columns(AssetCategory)
             .order_by(Asset.asset_number)
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         assets_view = []
         for asset, category_row in rows:
@@ -605,24 +604,23 @@ class FixedAssetWebService:
 
         period_id = _try_uuid(period)
 
-        query = db.query(DepreciationRun, FiscalPeriod).join(
+        query = select(DepreciationRun, FiscalPeriod).join(
             FiscalPeriod,
             DepreciationRun.fiscal_period_id == FiscalPeriod.fiscal_period_id,
         )
-        query = query.filter(DepreciationRun.organization_id == org_id)
+        query = query.where(DepreciationRun.organization_id == org_id)
 
         if period_id:
-            query = query.filter(DepreciationRun.fiscal_period_id == period_id)
+            query = query.where(DepreciationRun.fiscal_period_id == period_id)
 
         total_count = (
-            query.with_entities(func.count(DepreciationRun.run_id)).scalar() or 0
+            db.scalar(select(func.count()).select_from(query.subquery())) or 0
         )
-        rows = (
+        rows = db.execute(
             query.order_by(DepreciationRun.created_at.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         runs_view = []
         for run, fiscal_period in rows:

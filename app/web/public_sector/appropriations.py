@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ipsas.web.ipsas_web import IPSASWebService
+from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -95,7 +96,7 @@ def create_appropriation(
     appropriation_name: str = Form(...),
     appropriation_type: str = Form(...),
     approved_amount: str = Form(...),
-    currency_code: str = Form("NGN"),
+    currency_code: str | None = Form(None),
     effective_from: str = Form(...),
     budget_id: str | None = Form(None),
     account_id: str | None = Form(None),
@@ -118,7 +119,8 @@ def create_appropriation(
         appropriation_name=appropriation_name,
         appropriation_type=appropriation_type,
         approved_amount=Decimal(approved_amount),
-        currency_code=currency_code,
+        currency_code=currency_code
+        or org_context_service.get_functional_currency(db, auth.organization_id),
         effective_from=date_type.fromisoformat(effective_from),
         budget_id=UUID(budget_id) if budget_id else None,
         account_id=UUID(account_id) if account_id else None,

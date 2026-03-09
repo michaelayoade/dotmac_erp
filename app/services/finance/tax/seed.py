@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.core_fx.currency import Currency
 from app.models.finance.core_org.organization import Organization
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
@@ -53,7 +54,7 @@ class CountryTaxConfig:
     country_name: str
     jurisdiction_code: str  # e.g., "NG-FED"
     jurisdiction_name: str
-    currency_code: str  # ISO 4217, e.g., "NGN"
+    currency_code: str  # ISO 4217 currency code
     currency_name: str
     currency_symbol: str
     corporate_tax_rate: Decimal
@@ -73,7 +74,7 @@ COUNTRY_CONFIGS: dict[str, CountryTaxConfig] = {
         country_name="Nigeria",
         jurisdiction_code="NG-FED",
         jurisdiction_name="Nigeria Federal",
-        currency_code="NGN",
+        currency_code=settings.default_functional_currency_code,
         currency_name="Nigerian Naira",
         currency_symbol="₦",
         corporate_tax_rate=Decimal("0.30"),
@@ -90,7 +91,7 @@ COUNTRY_CONFIGS: dict[str, CountryTaxConfig] = {
         country_name="Nigeria",
         jurisdiction_code="NG-FED",
         jurisdiction_name="Nigeria Federal",
-        currency_code="NGN",
+        currency_code=settings.default_functional_currency_code,
         currency_name="Nigerian Naira",
         currency_symbol="₦",
         corporate_tax_rate=Decimal("0.30"),

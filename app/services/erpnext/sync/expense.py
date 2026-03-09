@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.expense.expense_claim import (
     ExpenseCategory,
     ExpenseClaim,
@@ -254,7 +255,9 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
             total_claimed_amount=data.get("total_claimed_amount", Decimal("0")),
             total_approved_amount=data.get("total_approved_amount"),
             net_payable_amount=data.get("net_payable_amount"),
-            currency_code=data.get("currency_code", "NGN")[:3],
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
             status=status,
             payment_reference=data.get("payment_reference"),
             paid_on=data.get("paid_on"),

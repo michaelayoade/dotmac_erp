@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, empty_state %}
 
 {% block page_title %}People Import{% endblock %}
 
@@ -67,6 +67,8 @@
             </div>
             {% endif %}
         </a>
+        {% else %}
+        {{ empty_state("No import types available", "Import entity types will be configured by the system.", "document") }}
         {% endfor %}
     </div>
 </div>

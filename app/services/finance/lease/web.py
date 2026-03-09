@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app.models.finance.lease.lease_asset import LeaseAsset
 from app.models.finance.lease.lease_contract import (
@@ -245,17 +245,17 @@ class LeaseWebService:
         status_value = _parse_status(status)
         classification = _parse_classification(lease_type)
 
-        query: Query[LeaseContract] = Query([LeaseContract], session=db).filter(
+        query = select(LeaseContract).where(
             LeaseContract.organization_id == org_id
         )
 
         if status_value:
-            query = query.filter(LeaseContract.status == status_value)
+            query = query.where(LeaseContract.status == status_value)
         if classification:
-            query = query.filter(LeaseContract.classification == classification)
+            query = query.where(LeaseContract.classification == classification)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     LeaseContract.lease_number.ilike(search_pattern),
                     LeaseContract.lease_name.ilike(search_pattern),
@@ -264,13 +264,14 @@ class LeaseWebService:
             )
 
         total_count = (
-            query.with_entities(func.count(LeaseContract.lease_id)).scalar() or 0
+            db.scalar(select(func.count()).select_from(query.subquery())) or 0
         )
-        contracts = (
-            query.order_by(LeaseContract.commencement_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        contracts = list(
+            db.scalars(
+                query.order_by(LeaseContract.commencement_date.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
         total_pages = max(1, (total_count + limit - 1) // limit)

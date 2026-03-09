@@ -15,7 +15,7 @@ from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
@@ -416,8 +416,8 @@ class ReportInstanceService(ListResponseMixin):
 
         if request.report_code:
             definition = (
-                db.query(ReportDefinition)
-                .filter(
+                select(ReportDefinition)
+                .where(
                     and_(
                         ReportDefinition.organization_id == organization_id,
                         ReportDefinition.report_code == request.report_code,
@@ -636,12 +636,12 @@ class ReportInstanceService(ListResponseMixin):
         Returns:
             List of queued report instances
         """
-        stmt = db.query(ReportInstance).filter(
+        stmt = select(ReportInstance).where(
             ReportInstance.status == ReportStatus.QUEUED
         )
 
         if organization_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
@@ -666,10 +666,10 @@ class ReportInstanceService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        stmt = db.query(ReportInstance).filter(ReportInstance.organization_id == org_id)
+        stmt = select(ReportInstance).where(ReportInstance.organization_id == org_id)
 
         if report_def_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ReportInstance.report_def_id == coerce_uuid(report_def_id)
             )
 
@@ -721,8 +721,8 @@ class ReportInstanceService(ListResponseMixin):
         cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
 
         instances = (
-            db.query(ReportInstance)
-            .filter(
+            select(ReportInstance)
+            .where(
                 and_(
                     ReportInstance.organization_id == org_id,
                     ReportInstance.generated_at < cutoff_date,
@@ -814,23 +814,23 @@ class ReportInstanceService(ListResponseMixin):
         offset: int = 0,
     ) -> list[ReportInstance]:
         """List report instances with optional filters."""
-        stmt = db.query(ReportInstance)
+        stmt = select(ReportInstance)
 
         if organization_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
         if report_def_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ReportInstance.report_def_id == coerce_uuid(report_def_id)
             )
 
         if status:
-            stmt = stmt.filter(ReportInstance.status == status)
+            stmt = stmt.where(ReportInstance.status == status)
 
         if fiscal_period_id:
-            stmt = stmt.filter(
+            stmt = stmt.where(
                 ReportInstance.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 

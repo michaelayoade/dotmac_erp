@@ -1,6 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
+{% from "components/macros.html" import stats_card, status_badge, empty_state, icon_svg %}
 {% block page_title %}Operations Dashboard{% endblock %}
 
 {% block breadcrumbs %}
@@ -15,56 +15,10 @@
 <div class="space-y-6 stagger-in">
     <!-- Summary Stats -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    {{ icon_svg("box") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ total_items | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Inventory Items</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.834-1.964-.834-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                    </svg>
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ critical_count | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Critical Stock</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    {{ icon_svg("clock") }}
-                </div>
-                <div>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ expiring_lots_count | default(0) }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Lots Expiring Soon</p>
-                </div>
-            </div>
-        </div>
-        <div class="card p-4">
-            <div class="flex items-center gap-3">
-                <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    {{ icon_svg("clipboard-check") }}
-                </div>
-                <div>
-                    {% if count_stats %}
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">{{ count_stats.in_progress | default(0) }}</p>
-                    {% else %}
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-display">0</p>
-                    {% endif %}
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Counts In Progress</p>
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Inventory Items", total_items | default(0), icon="box", color="blue") }}
+        {{ stats_card("Critical Stock", critical_count | default(0), icon="warning", color="rose") }}
+        {{ stats_card("Lots Expiring Soon", expiring_lots_count | default(0), icon="clock", color="amber") }}
+        {{ stats_card("Counts In Progress", count_stats.in_progress | default(0) if count_stats else 0, icon="check-circle", color="emerald") }}
     </div>
 
     <!-- Quick Links -->
@@ -117,11 +71,11 @@
                             <td class="px-4 py-2 text-right font-mono">{{ item.reorder_point | default(0) }}</td>
                             <td class="px-4 py-2">
                                 {% if item.stock_level | default('', true) == 'critical' %}
-                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">Critical</span>
+                                {{ status_badge('CRITICAL', 'sm') }}
                                 {% elif item.stock_level | default('', true) == 'low' %}
-                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Low</span>
+                                {{ status_badge('LOW', 'sm') }}
                                 {% else %}
-                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Warning</span>
+                                {{ status_badge('DUE_SOON', 'sm') }}
                                 {% endif %}
                             </td>
                         </tr>
@@ -130,9 +84,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="p-8 text-center text-slate-500 dark:text-slate-400">
-                <p class="text-sm">No low stock items detected.</p>
-            </div>
+            {{ empty_state("No low stock items", "All items are above their reorder points.", "check-circle") }}
             {% endif %}
         </div>
 
@@ -164,7 +116,7 @@
                         {% else %}
                         <tr>
                             <td colspan="99" class="p-0">
-                                {{ empty_state("No expiring_lots found", "There are no expiring_lots to display.") }}
+                                {{ empty_state("No expiring lots", "There are no lots expiring soon.", "clock") }}
                             </td>
                         </tr>
                         {% endfor %}
@@ -218,7 +170,7 @@
                         {% else %}
                         <tr>
                             <td colspan="99" class="p-0">
-                                {{ empty_state("No recent_transactions found", "There are no recent_transactions to display.") }}
+                                {{ empty_state("No recent transactions", "Transactions will appear here as they are recorded.", "document") }}
                             </td>
                         </tr>
                         {% endfor %}
@@ -226,9 +178,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="p-8 text-center text-slate-500 dark:text-slate-400">
-                <p class="text-sm">No recent transactions.</p>
-            </div>
+            {{ empty_state("No recent transactions", "Transactions will appear here as they are recorded.", "document") }}
             {% endif %}
         </div>
 

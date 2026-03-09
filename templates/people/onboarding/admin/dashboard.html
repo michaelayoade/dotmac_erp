@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, stats_card, empty_state %}
 
 {% block page_title %}Onboarding Dashboard{% endblock %}
 
@@ -28,61 +28,10 @@
 
     {# Stats Cards #}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {# Active Onboardings #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
-            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-sky-500/10 to-sky-500/5 dark:from-sky-400/10 dark:to-sky-400/5 group-hover:scale-110 transition-transform"></div>
-            <div class="flex items-start justify-between relative">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active Onboardings</p>
-                    <p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">{{ active_count }}</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                    {{ icon_svg("clock", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        {# Overdue Tasks #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
-            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-rose-500/10 to-rose-500/5 dark:from-rose-400/10 dark:to-rose-400/5 group-hover:scale-110 transition-transform"></div>
-            <div class="flex items-start justify-between relative">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Overdue Tasks</p>
-                    <p class="text-3xl font-bold {% if overdue_count > 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} mt-1">{{ overdue_count }}</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    {{ icon_svg("warning", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        {# Completed This Month #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
-            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 dark:from-emerald-400/10 dark:to-emerald-400/5 group-hover:scale-110 transition-transform"></div>
-            <div class="flex items-start justify-between relative">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Completed This Month</p>
-                    <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ completed_this_month }}</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    {{ icon_svg("check-circle", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        {# Templates #}
-        <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
-            <div class="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-gradient-to-br from-violet-500/10 to-violet-500/5 dark:from-violet-400/10 dark:to-violet-400/5 group-hover:scale-110 transition-transform"></div>
-            <div class="flex items-start justify-between relative">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active Templates</p>
-                    <p class="text-3xl font-bold text-slate-900 dark:text-white mt-1">{{ template_count }}</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    {{ icon_svg("clipboard-check", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Active Onboardings", active_count, icon="clock", color="blue") }}
+        {{ stats_card("Overdue Tasks", overdue_count, icon="warning", color="rose") }}
+        {{ stats_card("Completed This Month", completed_this_month, icon="check-circle", color="emerald") }}
+        {{ stats_card("Active Templates", template_count, icon="clipboard-check", color="violet") }}
     </div>
 
     {# Two Column Layout #}
@@ -123,10 +72,7 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <div class="p-8 text-center">
-                    {{ icon_svg("calendar", "mx-auto h-12 w-12 text-slate-400 dark:text-slate-500") }}
-                    <p class="mt-4 text-slate-500 dark:text-slate-400">No upcoming starts in the next 7 days</p>
-                </div>
+                {{ empty_state("No upcoming starts", "No employees starting in the next 7 days.", "calendar") }}
                 {% endif %}
             </div>
         </div>
@@ -159,10 +105,7 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <div class="p-8 text-center">
-                    {{ icon_svg("check-circle", "mx-auto h-12 w-12 text-slate-400 dark:text-slate-500") }}
-                    <p class="mt-4 text-slate-500 dark:text-slate-400">No completed onboardings yet</p>
-                </div>
+                {{ empty_state("No completed onboardings", "Completed onboardings will appear here.", "check-circle") }}
                 {% endif %}
             </div>
         </div>

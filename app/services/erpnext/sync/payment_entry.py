@@ -22,6 +22,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.customer_payment import (
@@ -409,7 +410,9 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             supplier_id=supplier_id,
             payment_method=ap_method,
             status="CLEARED",
-            currency_code=data.get("currency_code", "NGN")[:3],
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
             amount=data.get("amount", Decimal("0")),
             functional_currency_amount=functional_amount,
             exchange_rate=data.get("exchange_rate", Decimal("1")),
@@ -730,7 +733,9 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             customer_id=customer_id,
             payment_method=payment_method,
             status=PaymentStatus.CLEARED,
-            currency_code=data.get("currency_code", "NGN")[:3],
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
             amount=amount,
             gross_amount=amount,
             functional_currency_amount=functional_amount,

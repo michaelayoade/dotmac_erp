@@ -55,7 +55,7 @@ def format_currency(
         is_negative = False
         abs_value = value
 
-    # When a symbol like "$" or "NGN " is explicitly provided, concatenate it
+    # When a currency symbol/prefix is explicitly provided, concatenate it
     # directly (the core formatter would add an extra space via its own prefix).
     if symbol:
         formatted = f"{symbol}{_fmt.format_currency(abs_value, show_symbol=False, decimal_places=decimals)}"

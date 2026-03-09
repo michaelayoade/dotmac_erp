@@ -7,6 +7,8 @@ Maps ERPNext Project DocType to DotMac core_org.project.
 import logging
 from typing import Any
 
+from app.config import settings
+
 from .base import (
     DocTypeMapping,
     FieldMapping,
@@ -196,7 +198,7 @@ class ProjectMapping(DocTypeMapping):
         result["project_code"] = clean_string(code, 20) or "PROJ"
 
         # Default budget currency
-        result["budget_currency_code"] = "NGN"
+        result["budget_currency_code"] = settings.default_functional_currency_code
 
         # Default capitalizable to False
         result["is_capitalizable"] = False

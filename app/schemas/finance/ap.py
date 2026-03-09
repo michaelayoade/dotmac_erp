@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
+
 # =============================================================================
 # Supplier
 # =============================================================================
@@ -34,7 +36,9 @@ class SupplierBase(BaseModel):
         default=None, max_length=50
     )  # Template name (service maps to tax_identification_number)
     payment_terms_days: int = 30
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     default_expense_account_id: UUID | None = None
     default_payable_account_id: UUID | None = (
         None  # Template name (service maps to ap_control_account_id)

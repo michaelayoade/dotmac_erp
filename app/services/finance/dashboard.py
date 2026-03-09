@@ -58,9 +58,7 @@ def _apply_year_filter(query, column, year: int | None):
     if year is None:
         return query
     start_date, end_date = _year_bounds(year)
-    if hasattr(query, "where"):
-        return query.where(column >= start_date, column <= end_date)
-    return query.filter(column >= start_date, column <= end_date)
+    return query.where(column >= start_date, column <= end_date)
 
 
 def _cogs_match_clause():
@@ -670,7 +668,7 @@ class DashboardService:
                     )
                 )
             except (AttributeError, TypeError) as e:
-                logger.warning(f"Error processing journal entry: {e}")
+                logger.warning("Error processing journal entry: %s", e)
                 continue
 
         return result
@@ -862,7 +860,10 @@ class DashboardService:
             start_date, end_date = _year_bounds(year)
             balances_stmt = balances_stmt.join(
                 FiscalPeriod,
-                FiscalPeriod.fiscal_period_id == AccountBalance.fiscal_period_id,
+                and_(
+                    FiscalPeriod.fiscal_period_id == AccountBalance.fiscal_period_id,
+                    FiscalPeriod.organization_id == org_id,
+                ),
             ).where(
                 FiscalPeriod.start_date >= start_date,
                 FiscalPeriod.start_date <= end_date,

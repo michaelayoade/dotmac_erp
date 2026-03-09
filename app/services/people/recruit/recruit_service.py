@@ -35,6 +35,7 @@ from app.models.person import Gender, Person, PersonStatus
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.careers.candidate_notifications import CandidateNotificationService
 from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.finance.platform.org_context import org_context_service
 from app.services.people.hr import EmployeeCreateData
 from app.services.people.recruit.notifications import send_new_applicant_notification
 from app.services.state_machine import StateMachine
@@ -167,6 +168,15 @@ class RecruitmentService:
         self.db = db
         self.ctx = ctx
 
+    def _resolve_currency_code(
+        self,
+        org_id: UUID,
+        currency_code: str | None = None,
+    ) -> str:
+        if currency_code:
+            return currency_code
+        return org_context_service.get_functional_currency(self.db, org_id)
+
     def _validate_pipeline_transition(
         self,
         current_status: ApplicantStatus,
@@ -268,7 +278,7 @@ class RecruitmentService:
         is_remote: bool = False,
         min_salary: Decimal | None = None,
         max_salary: Decimal | None = None,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         min_experience_years: int | None = None,
         description: str | None = None,
         required_skills: str | None = None,
@@ -277,6 +287,7 @@ class RecruitmentService:
         status: JobOpeningStatus = JobOpeningStatus.DRAFT,
     ) -> JobOpening:
         """Create a new job opening."""
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
         opening = JobOpening(
             organization_id=org_id,
             job_code=job_code,
@@ -292,7 +303,7 @@ class RecruitmentService:
             is_remote=is_remote,
             min_salary=min_salary,
             max_salary=max_salary,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             min_experience_years=min_experience_years,
             description=description,
             required_skills=required_skills,
@@ -1010,7 +1021,7 @@ class RecruitmentService:
         valid_until: date,
         expected_joining_date: date,
         base_salary: Decimal,
-        currency_code: str = "NGN",
+        currency_code: str | None = None,
         pay_frequency: str = "MONTHLY",
         signing_bonus: Decimal | None = None,
         relocation_allowance: Decimal | None = None,
@@ -1036,6 +1047,7 @@ class RecruitmentService:
             or 0
         )
         offer_number = f"OFR-{date.today().year}-{count + 1:05d}"
+        resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         offer = JobOffer(
             organization_id=org_id,
@@ -1048,7 +1060,7 @@ class RecruitmentService:
             valid_until=valid_until,
             expected_joining_date=expected_joining_date,
             base_salary=base_salary,
-            currency_code=currency_code,
+            currency_code=resolved_currency_code,
             pay_frequency=pay_frequency,
             signing_bonus=signing_bonus,
             relocation_allowance=relocation_allowance,

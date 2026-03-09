@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition
@@ -369,7 +369,7 @@ class ReportSchedulerService(ListResponseMixin):
         """
         now = datetime.now(UTC)
 
-        query = db.query(ReportSchedule).filter(
+        query = select(ReportSchedule).where(
             and_(
                 ReportSchedule.is_active == True,
                 ReportSchedule.next_run_at <= now,
@@ -377,7 +377,7 @@ class ReportSchedulerService(ListResponseMixin):
         )
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 ReportSchedule.organization_id == coerce_uuid(organization_id)
             )
 
@@ -405,9 +405,9 @@ class ReportSchedulerService(ListResponseMixin):
         cutoff = now + timedelta(hours=hours_ahead)
 
         schedules = list(
-            db.query(ReportSchedule)
+            select(ReportSchedule)
             .join(ReportDefinition)
-            .filter(
+            .where(
                 and_(
                     ReportSchedule.organization_id == org_id,
                     ReportSchedule.is_active == True,
@@ -590,23 +590,23 @@ class ReportSchedulerService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ReportSchedule]:
         """List schedules with optional filters."""
-        query = db.query(ReportSchedule)
+        query = select(ReportSchedule)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 ReportSchedule.organization_id == coerce_uuid(organization_id)
             )
 
         if report_def_id:
-            query = query.filter(
+            query = query.where(
                 ReportSchedule.report_def_id == coerce_uuid(report_def_id)
             )
 
         if frequency:
-            query = query.filter(ReportSchedule.frequency == frequency)
+            query = query.where(ReportSchedule.frequency == frequency)
 
         if is_active is not None:
-            query = query.filter(ReportSchedule.is_active == is_active)
+            query = query.where(ReportSchedule.is_active == is_active)
 
         query = query.order_by(ReportSchedule.schedule_name)
         return list(query.limit(limit).offset(offset).all())

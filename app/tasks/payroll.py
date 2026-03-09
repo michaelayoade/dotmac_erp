@@ -16,6 +16,7 @@ from typing import Any
 
 from celery import shared_task
 
+from app.config import settings
 from app.db import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -531,7 +532,8 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
                     start_date=period_start,
                     end_date=period_end,
                     payroll_frequency=PayrollFrequency.MONTHLY,
-                    currency_code=org.functional_currency_code or "NGN",
+                    currency_code=org.functional_currency_code
+                    or settings.default_functional_currency_code,
                     notes="Auto-generated draft payroll",
                 )
 

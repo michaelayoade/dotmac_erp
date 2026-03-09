@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.procurement.enums import ProcurementMethod, RFQStatus
 
 
@@ -44,7 +45,9 @@ class RFQCreate(BaseModel):
     evaluation_criteria: list[dict[str, Any]] | None = None
     terms_and_conditions: str | None = None
     estimated_value: Decimal | None = None
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
 
 
 class RFQUpdate(BaseModel):

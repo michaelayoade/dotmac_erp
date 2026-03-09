@@ -13,6 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.people.training import (
     AttendeeStatus,
     TrainingEventStatus,
@@ -36,7 +37,7 @@ class TrainingProgramBase(BaseModel):
     duration_days: int | None = None
     department_id: UUID | None = None
     cost_per_attendee: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
     objectives: str | None = None
     prerequisites: str | None = None
     syllabus: str | None = None
@@ -138,7 +139,7 @@ class TrainingEventBase(BaseModel):
     trainer_employee_id: UUID | None = None
     max_attendees: int | None = None
     total_cost: Decimal | None = None
-    currency_code: str = "NGN"
+    currency_code: str = settings.default_functional_currency_code
 
 
 class TrainingEventCreate(TrainingEventBase):

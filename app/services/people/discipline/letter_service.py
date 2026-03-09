@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import settings
 from app.models.finance.automation.document_template import TemplateType
 from app.models.finance.automation.generated_document import GeneratedDocument
 from app.models.people.discipline import (
@@ -817,7 +818,7 @@ class DisciplineLetterService:
             # Settlement (would need integration with payroll)
             final_settlement_items=None,
             total_settlement=None,
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             # Appeal rights
             appeal_period_days=14,
             appeal_deadline=case.appeal_deadline,

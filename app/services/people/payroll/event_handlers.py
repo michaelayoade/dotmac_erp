@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.people.hr.employee import Employee
 from app.models.people.payroll.payroll_entry import PayrollEntry
 from app.models.people.payroll.salary_slip import SalarySlip
@@ -305,7 +306,9 @@ class PayrollEventHandlers:
                     float(s.net_pay or 0) for s in (run.salary_slips or [])
                 )
                 currency = (
-                    run.salary_slips[0].currency_code if run.salary_slips else "NGN"
+                    run.salary_slips[0].currency_code
+                    if run.salary_slips
+                    else settings.default_functional_currency_code
                 )
 
                 notification_service = PayrollNotificationService(db)

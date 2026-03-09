@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
 from app.models.people.payroll.salary_component import SalaryComponentType
 from app.models.people.payroll.salary_slip import SalarySlipStatus
 from app.models.people.payroll.salary_structure import PayrollFrequency
@@ -93,7 +94,9 @@ class SalaryStructureBase(BaseModel):
     structure_name: str = Field(max_length=100)
     description: str | None = None
     payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
 
 
 class SalaryStructureComponentBase(BaseModel):
@@ -308,7 +311,9 @@ class PayrollEntryBase(BaseModel):
     start_date: date
     end_date: date
     payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY
-    currency_code: str = Field(default="NGN", max_length=3)
+    currency_code: str = Field(
+        default=settings.default_functional_currency_code, max_length=3
+    )
     department_id: UUID | None = None
     designation_id: UUID | None = None
     employment_type_id: UUID | None = None

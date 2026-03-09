@@ -31,6 +31,7 @@ from app.models.people.payroll.salary_assignment import SalaryStructureAssignmen
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.salary_structure import PayrollFrequency, SalaryStructure
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.finance.platform.org_context import org_context_service
 from app.services.people.hr import EmploymentTypeFilters, OrganizationService
 from app.services.people.payroll.payroll_service import (
     PayrollService,
@@ -549,7 +550,8 @@ class RunWebService:
                 if employment_type_id
                 else None,
                 payroll_frequency=parsed_frequency or PayrollFrequency.MONTHLY,
-                currency_code=currency_code or "NGN",
+                currency_code=currency_code
+                or org_context_service.get_functional_currency(db, org_id),
                 notes=notes or entry_name or None,
             )
             db.commit()

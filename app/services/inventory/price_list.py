@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.inventory.item import Item
@@ -101,9 +101,9 @@ class PriceListService(ListResponseMixin):
 
         # Check for duplicate code
         existing = (
-            db.query(PriceList)
-            .filter(PriceList.organization_id == org_id)
-            .filter(PriceList.price_list_code == input.price_list_code)
+            select(PriceList)
+            .where(PriceList.organization_id == org_id)
+            .where(PriceList.price_list_code == input.price_list_code)
             .first()
         )
 
@@ -116,8 +116,8 @@ class PriceListService(ListResponseMixin):
         # If setting as default, clear other defaults
         if input.is_default:
             (
-                db.query(PriceList)
-                .filter(
+                select(PriceList)
+                .where(
                     and_(
                         PriceList.organization_id == org_id,
                         PriceList.price_list_type == input.price_list_type,
@@ -167,8 +167,8 @@ class PriceListService(ListResponseMixin):
         # If setting as default, clear other defaults
         if updates.get("is_default") and not price_list.is_default:
             (
-                db.query(PriceList)
-                .filter(
+                select(PriceList)
+                .where(
                     and_(
                         PriceList.organization_id == org_id,
                         PriceList.price_list_type == price_list.price_list_type,
@@ -225,10 +225,10 @@ class PriceListService(ListResponseMixin):
 
         # Check for existing item with same quantity break
         existing = (
-            db.query(PriceListItem)
-            .filter(PriceListItem.price_list_id == pl_id)
-            .filter(PriceListItem.item_id == itm_id)
-            .filter(PriceListItem.min_quantity == input.min_quantity)
+            select(PriceListItem)
+            .where(PriceListItem.price_list_id == pl_id)
+            .where(PriceListItem.item_id == itm_id)
+            .where(PriceListItem.min_quantity == input.min_quantity)
             .first()
         )
 
@@ -334,17 +334,17 @@ class PriceListService(ListResponseMixin):
 
         # Build price list query
         pl_query = (
-            db.query(PriceList)
-            .filter(PriceList.organization_id == org_id)
-            .filter(PriceList.price_list_type == price_list_type)
-            .filter(PriceList.is_active == True)
-            .filter(
+            select(PriceList)
+            .where(PriceList.organization_id == org_id)
+            .where(PriceList.price_list_type == price_list_type)
+            .where(PriceList.is_active == True)
+            .where(
                 or_(
                     PriceList.effective_from.is_(None),
                     PriceList.effective_from <= check_date,
                 )
             )
-            .filter(
+            .where(
                 or_(
                     PriceList.effective_to.is_(None),
                     PriceList.effective_to >= check_date,
@@ -353,10 +353,10 @@ class PriceListService(ListResponseMixin):
         )
 
         if currency_code:
-            pl_query = pl_query.filter(PriceList.currency_code == currency_code)
+            pl_query = pl_query.where(PriceList.currency_code == currency_code)
 
         if price_list_id:
-            pl_query = pl_query.filter(
+            pl_query = pl_query.where(
                 PriceList.price_list_id == coerce_uuid(price_list_id)
             )
         else:
@@ -370,18 +370,18 @@ class PriceListService(ListResponseMixin):
         for pl in price_lists:
             # Find matching item price with quantity break
             item_prices = (
-                db.query(PriceListItem)
-                .filter(PriceListItem.price_list_id == pl.price_list_id)
-                .filter(PriceListItem.item_id == itm_id)
-                .filter(PriceListItem.is_active == True)
-                .filter(PriceListItem.min_quantity <= quantity)
-                .filter(
+                select(PriceListItem)
+                .where(PriceListItem.price_list_id == pl.price_list_id)
+                .where(PriceListItem.item_id == itm_id)
+                .where(PriceListItem.is_active == True)
+                .where(PriceListItem.min_quantity <= quantity)
+                .where(
                     or_(
                         PriceListItem.effective_from.is_(None),
                         PriceListItem.effective_from <= check_date,
                     )
                 )
-                .filter(
+                .where(
                     or_(
                         PriceListItem.effective_to.is_(None),
                         PriceListItem.effective_to >= check_date,
@@ -477,18 +477,18 @@ class PriceListService(ListResponseMixin):
     ) -> Decimal | None:
         """Get price from base price list."""
         item_price = (
-            db.query(PriceListItem)
-            .filter(PriceListItem.price_list_id == base_price_list_id)
-            .filter(PriceListItem.item_id == item_id)
-            .filter(PriceListItem.is_active == True)
-            .filter(PriceListItem.min_quantity <= quantity)
-            .filter(
+            select(PriceListItem)
+            .where(PriceListItem.price_list_id == base_price_list_id)
+            .where(PriceListItem.item_id == item_id)
+            .where(PriceListItem.is_active == True)
+            .where(PriceListItem.min_quantity <= quantity)
+            .where(
                 or_(
                     PriceListItem.effective_from.is_(None),
                     PriceListItem.effective_from <= check_date,
                 )
             )
-            .filter(
+            .where(
                 or_(
                     PriceListItem.effective_to.is_(None),
                     PriceListItem.effective_to >= check_date,
@@ -522,21 +522,21 @@ class PriceListService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[PriceList]:
         """List price lists with optional filters."""
-        query = db.query(PriceList)
+        query = select(PriceList)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 PriceList.organization_id == coerce_uuid(organization_id)
             )
 
         if price_list_type:
-            query = query.filter(PriceList.price_list_type == price_list_type)
+            query = query.where(PriceList.price_list_type == price_list_type)
 
         if is_active is not None:
-            query = query.filter(PriceList.is_active == is_active)
+            query = query.where(PriceList.is_active == is_active)
 
         if currency_code:
-            query = query.filter(PriceList.currency_code == currency_code)
+            query = query.where(PriceList.currency_code == currency_code)
 
         query = query.order_by(PriceList.is_default.desc(), PriceList.priority.desc())
         return (
@@ -557,10 +557,10 @@ class PriceListService(ListResponseMixin):
         """List items in a price list."""
         pl_id = coerce_uuid(price_list_id)
 
-        query = db.query(PriceListItem).filter(PriceListItem.price_list_id == pl_id)
+        query = select(PriceListItem).where(PriceListItem.price_list_id == pl_id)
 
         if item_id:
-            query = query.filter(PriceListItem.item_id == coerce_uuid(item_id))
+            query = query.where(PriceListItem.item_id == coerce_uuid(item_id))
 
         return (
             query.order_by(PriceListItem.min_quantity.asc())

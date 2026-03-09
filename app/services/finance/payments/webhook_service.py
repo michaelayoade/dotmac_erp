@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.payments.payment_intent import PaymentIntent
 from app.models.finance.payments.payment_webhook import PaymentWebhook, WebhookStatus
 from app.services.finance.payments.payment_service import PaymentService
@@ -203,7 +204,9 @@ class WebhookService:
                 raw_amount,
             )
             raise ValueError("Invalid amount in webhook payload")
-        paystack_currency = data.get("currency", "NGN").upper()
+        paystack_currency = data.get(
+            "currency", settings.default_functional_currency_code
+        ).upper()
 
         # Convert our amount to kobo for comparison
         expected_amount_kobo = int(

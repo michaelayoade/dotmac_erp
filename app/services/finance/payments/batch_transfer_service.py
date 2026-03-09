@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.domain_settings import SettingDomain
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -109,7 +110,7 @@ class BatchTransferService:
             batch_date=batch_date,
             description=description or f"Expense reimbursement batch {batch_number}",
             bank_account_id=bank_account_uuid,
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             status=TransferBatchStatus.DRAFT,
             created_by_user_id=user_id,
         )
@@ -159,7 +160,7 @@ class BatchTransferService:
                 recipient_bank_code=claim.recipient_bank_code,
                 recipient_account_number=claim.recipient_account_number,
                 amount=claim.net_payable_amount,
-                currency_code="NGN",
+                currency_code=settings.default_functional_currency_code,
                 status=TransferBatchItemStatus.PENDING,
             )
             self.db.add(item)
@@ -356,7 +357,7 @@ class BatchTransferService:
             name=account_info.account_name,
             account_number=item.recipient_account_number,
             bank_code=item.recipient_bank_code,
-            currency="NGN",
+            currency=settings.default_functional_currency_code,
             description=f"Batch {batch.batch_number}: {item.recipient_name}",
             metadata=intent_metadata,
         )
@@ -374,7 +375,7 @@ class BatchTransferService:
             organization_id=self.organization_id,
             paystack_reference=reference,
             amount=item.amount,
-            currency_code="NGN",
+            currency_code=settings.default_functional_currency_code,
             email=claim.employee.work_email if claim.employee else "",
             direction=PaymentDirection.OUTBOUND,
             bank_account_id=batch.bank_account_id,
@@ -404,7 +405,7 @@ class BatchTransferService:
             recipient_code=recipient.recipient_code,
             reference=reference,
             reason=f"Expense reimbursement: {claim.claim_number}",
-            currency="NGN",
+            currency=settings.default_functional_currency_code,
         )
 
         # Update item and intent

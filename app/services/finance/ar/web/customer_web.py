@@ -98,7 +98,7 @@ class CustomerWebService:
             parent_customer_id=parent_customer_id,
         )
 
-        count_subq = query.with_entities(Customer.customer_id).subquery()
+        count_subq = query.with_only_columns(Customer.customer_id).subquery()
         total_count = db.scalar(select(func.count()).select_from(count_subq)) or 0
 
         order_map = {
@@ -109,11 +109,12 @@ class CustomerWebService:
         order_col = order_map.get(sort or "", Customer.legal_name)
         order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
 
-        customers = (
-            query.order_by(order_expr, Customer.legal_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+        customers = list(
+            db.scalars(
+                query.order_by(order_expr, Customer.legal_name)
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
         open_statuses = [

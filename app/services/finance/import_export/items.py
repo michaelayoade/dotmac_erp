@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
 
@@ -127,7 +128,7 @@ class ItemImporter(BaseImporter[Item]):
     - Unit / UOM / Base Unit: Base unit of measure
     - Purchase Price / Cost / Unit Cost: Purchase/cost price
     - Selling Price / Sales Price / List Price: Selling price
-    - Currency Code / Currency: Currency code (default: NGN)
+    - Currency Code / Currency: Currency code (defaults to configured organization currency)
     - Reorder Point / Reorder Level: Reorder point
     - Track Inventory: Whether to track inventory (true/false)
     - Is Taxable / Taxable: Whether taxable
@@ -218,7 +219,10 @@ class ItemImporter(BaseImporter[Item]):
             ),
             # Currency
             FieldMapping(
-                "Currency Code", "currency_code", required=False, default="NGN"
+                "Currency Code",
+                "currency_code",
+                required=False,
+                default=settings.default_functional_currency_code,
             ),
             FieldMapping("Currency", "currency_alt", required=False),
             # Stock management
@@ -390,7 +394,9 @@ class ItemImporter(BaseImporter[Item]):
 
         # Get currency
         currency_code = str(
-            row.get("currency_code") or row.get("currency_alt") or "NGN"
+            row.get("currency_code")
+            or row.get("currency_alt")
+            or settings.default_functional_currency_code
         )[:3]
 
         # Get stock management

@@ -9,6 +9,7 @@ from decimal import Decimal
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 
+from app.config import settings
 from app.services.common import coerce_uuid
 from app.services.expense.dashboard_charts import ExpenseDashboardChartsMixin
 from app.services.expense.dashboard_common import _format_currency
@@ -20,6 +21,15 @@ logger = logging.getLogger(__name__)
 
 class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStatsMixin):
     """Service facade for Expense module dashboard pages."""
+
+    def _resolve_currency(self, db, org_id: str) -> str:
+        """Resolve the org's presentation currency instead of hardcoding."""
+        from app.services.finance.platform.org_context import org_context_service
+
+        currency_settings = org_context_service.get_currency_settings(db, org_id)
+        return currency_settings.get(
+            "presentation", settings.default_presentation_currency_code
+        )
 
     def dashboard_response(
         self, request: Request, auth, db, period: str = "month"
@@ -38,7 +48,7 @@ class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStats
         else:
             start_date = None
 
-        currency = "NGN"
+        currency = self._resolve_currency(db, org_id)
         context = {
             **base_context(request, auth, "Expense Dashboard", "dashboard"),
             "stats": self._get_dashboard_stats(db, org_id, start_date, currency),
@@ -88,7 +98,7 @@ class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStats
         else:
             start_date = None
 
-        currency = "NGN"
+        currency = self._resolve_currency(db, org_id)
         context = {
             **base_context(request, auth, "Expense Claims", "claims"),
             "stats": self._get_claims_stats(db, org_id, start_date, currency),

@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.finance.gl.account import Account
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
@@ -241,8 +242,10 @@ class AssetSyncService(BaseSyncService[Asset]):
             acquisition_date=acquisition_date,
             in_service_date=data.get("in_service_date") or acquisition_date,
             acquisition_cost=acquisition_cost,
-            currency_code=data.get("currency_code", "NGN")[:3],
-            functional_currency_cost=acquisition_cost,  # Same as acquisition_cost for NGN
+            currency_code=data.get(
+                "currency_code", settings.default_functional_currency_code
+            )[:3],
+            functional_currency_cost=acquisition_cost,
             depreciation_method=data.get("depreciation_method", "STRAIGHT_LINE"),
             useful_life_months=data.get("useful_life_months", 60),
             remaining_life_months=data.get("remaining_life_months", 60),

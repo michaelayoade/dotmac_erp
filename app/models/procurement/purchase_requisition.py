@@ -23,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import settings
 from app.db import Base
 from app.models.procurement.base import ProcurementBaseMixin
 from app.models.procurement.enums import RequisitionStatus, UrgencyLevel
@@ -93,7 +94,7 @@ class PurchaseRequisition(Base, ProcurementBaseMixin):
     currency_code: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="NGN",
+        default=settings.default_functional_currency_code,
     )
     budget_verified: Mapped[bool] = mapped_column(
         Boolean,

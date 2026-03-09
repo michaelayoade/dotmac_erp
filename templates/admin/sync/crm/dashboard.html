@@ -1,6 +1,6 @@
 {% extends "admin/base_admin.html" %}
 
-{% from "components/macros.html" import status_badge, icon_svg %}
+{% from "components/macros.html" import status_badge, icon_svg, stats_card %}
 {% block page_title %}DotMac CRM Sync{% endblock %}
 {% block page_subtitle %}Sync projects, tickets, and work orders from DotMac CRM{% endblock %}
 
@@ -27,63 +27,10 @@
 
     <!-- Stats Grid -->
     <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <!-- Integration Status -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Integration</p>
-                    <p class="mt-2 text-xl font-bold {% if integration_configured %}text-emerald-600 dark:text-emerald-400{% else %}text-amber-600 dark:text-amber-400{% endif %} font-display">
-                        {% if integration_configured %}Connected{% else %}Not Configured{% endif %}
-                    </p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">DotMac CRM</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl {% if integration_configured %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400{% else %}bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400{% endif %}">
-                    {{ icon_svg("link", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Synced -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Synced</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ total_synced | default(0) }}</p>
-                    <p class="mt-1 text-sm text-emerald-600 dark:text-emerald-400">CRM entities linked</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    {{ icon_svg("refresh", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Projects -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Projects</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ sync_stats.get('PROJECT', {}).get('total', 0) }}</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ sync_stats.get('PROJECT', {}).get('active', 0) }} active</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">
-                    {{ icon_svg("folder", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
-
-        <!-- Work Orders / Tickets -->
-        <div class="admin-card stat-card p-6">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Work Orders</p>
-                    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white font-display">{{ sync_stats.get('WORK_ORDER', {}).get('total', 0) }}</p>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ sync_stats.get('TICKET', {}).get('total', 0) }} tickets</p>
-                </div>
-                <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
-                    {{ icon_svg("clipboard-list", "h-6 w-6") }}
-                </div>
-            </div>
-        </div>
+        {{ stats_card("Integration", "Connected" if integration_configured else "Not Configured", icon="link", color="emerald" if integration_configured else "amber", subtitle="DotMac CRM") }}
+        {{ stats_card("Total Synced", total_synced if total_synced else 0, icon="refresh", color="blue", subtitle="CRM entities linked") }}
+        {{ stats_card("Projects", sync_stats.get('PROJECT', {}).get('total', 0), icon="folder", color="violet", subtitle=sync_stats.get('PROJECT', {}).get('active', 0) ~ " active") }}
+        {{ stats_card("Work Orders", sync_stats.get('WORK_ORDER', {}).get('total', 0), icon="clipboard-list", color="rose", subtitle=sync_stats.get('TICKET', {}).get('total', 0) ~ " tickets") }}
     </div>
 
     <!-- Main Content Grid -->
