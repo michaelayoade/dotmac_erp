@@ -33,8 +33,12 @@ from typing import (
 )
 from uuid import UUID
 
-from babel.numbers import list_currencies
 from sqlalchemy.orm import Session
+
+try:
+    from babel.numbers import list_currencies
+except ModuleNotFoundError:
+    list_currencies = None
 
 logger = logging.getLogger(__name__)
 
@@ -780,8 +784,57 @@ PHONE_PATTERN = re.compile(
 # Currency code pattern (ISO 4217)
 CURRENCY_PATTERN = re.compile(r"^[A-Z]{3}$")
 
-# Valid ISO currency codes from Babel's ISO 4217 registry
-VALID_CURRENCY_CODES = frozenset(list_currencies())
+_FALLBACK_CURRENCY_CODES = frozenset(
+    {
+        "AED",
+        "ARS",
+        "AUD",
+        "BRL",
+        "CAD",
+        "CHF",
+        "CNY",
+        "CZK",
+        "DKK",
+        "EGP",
+        "EUR",
+        "GBP",
+        "GHS",
+        "HKD",
+        "IDR",
+        "INR",
+        "JPY",
+        "KES",
+        "KRW",
+        "MAD",
+        "MXN",
+        "MYR",
+        "NAD",
+        "NGN",
+        "NOK",
+        "NZD",
+        "PHP",
+        "PLN",
+        "QAR",
+        "RUB",
+        "SAR",
+        "SEK",
+        "SGD",
+        "THB",
+        "TRY",
+        "TZS",
+        "UGX",
+        "USD",
+        "XAF",
+        "XOF",
+        "ZAR",
+        "ZMW",
+    }
+)
+
+# Valid ISO currency codes from Babel's ISO 4217 registry when available.
+VALID_CURRENCY_CODES = (
+    frozenset(list_currencies()) if list_currencies else _FALLBACK_CURRENCY_CODES
+)
 
 # Account type mappings for validation
 VALID_ACCOUNT_TYPES = {

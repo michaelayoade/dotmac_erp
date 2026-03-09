@@ -94,11 +94,11 @@ class LeaseVariablePaymentService(ListResponseMixin):
         coerce_uuid(organization_id)
         schedule_id = coerce_uuid(input.schedule_id)
 
-        schedule = (
-            select(LeasePaymentSchedule)
-            .where(LeasePaymentSchedule.schedule_id == schedule_id)
-            .first()
-        )
+        schedule = db.scalars(
+            select(LeasePaymentSchedule).where(
+                LeasePaymentSchedule.schedule_id == schedule_id
+            )
+        ).first()
 
         if not schedule:
             raise HTTPException(status_code=404, detail="Payment schedule not found")
@@ -116,7 +116,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
             + input.variable_amount
         )
 
-        db.commit()
+        db.flush()
         db.refresh(schedule)
 
         return schedule
@@ -148,14 +148,12 @@ class LeaseVariablePaymentService(ListResponseMixin):
         lease_id = coerce_uuid(input.lease_id)
 
         # Load contract
-        contract = (
-            select(LeaseContract)
-            .where(
+        contract = db.scalars(
+            select(LeaseContract).where(
                 LeaseContract.lease_id == lease_id,
                 LeaseContract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             return IndexAdjustmentResult(
@@ -169,9 +167,9 @@ class LeaseVariablePaymentService(ListResponseMixin):
             )
 
         # Load liability and asset
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == lease_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == lease_id)
+        ).first()
         asset = db.scalars(
             select(LeaseAsset).where(LeaseAsset.lease_id == lease_id)
         ).first()
@@ -185,14 +183,14 @@ class LeaseVariablePaymentService(ListResponseMixin):
         adjustment_ratio = input.new_index_value / input.base_index_value
 
         # Get future scheduled payments
-        future_payments = (
-            select(LeasePaymentSchedule)
-            .where(
-                LeasePaymentSchedule.lease_id == lease_id,
-                LeasePaymentSchedule.payment_date >= input.adjustment_date,
-                LeasePaymentSchedule.status != PaymentStatus.PAID,
-            )
-            .all()
+        future_payments = list(
+            db.scalars(
+                select(LeasePaymentSchedule).where(
+                    LeasePaymentSchedule.lease_id == lease_id,
+                    LeasePaymentSchedule.payment_date >= input.adjustment_date,
+                    LeasePaymentSchedule.status != PaymentStatus.PAID,
+                )
+            ).all()
         )
 
         if not future_payments:
@@ -229,7 +227,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
         asset.carrying_amount += liability_adjustment
         asset.modification_adjustments += liability_adjustment
 
-        db.commit()
+        db.flush()
 
         return IndexAdjustmentResult(
             success=True,
@@ -265,7 +263,9 @@ class LeaseVariablePaymentService(ListResponseMixin):
         if not include_paid:
             query = query.where(LeasePaymentSchedule.status != PaymentStatus.PAID)
 
-        return query.order_by(LeasePaymentSchedule.payment_number).all()
+        return list(
+            db.scalars(query.order_by(LeasePaymentSchedule.payment_number)).all()
+        )
 
     @staticmethod
     def get_variable_payment_summary(
@@ -310,7 +310,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
         if to_date:
             query = query.where(LeasePaymentSchedule.payment_date <= to_date)
 
-        payments = query.all()
+        payments = list(db.scalars(query).all())
 
         total_variable = sum(p.variable_payment for p in payments)
         total_index_adjustment = sum(p.index_adjustment_amount for p in payments)
@@ -345,11 +345,11 @@ class LeaseVariablePaymentService(ListResponseMixin):
         """
         schedule_id = coerce_uuid(schedule_id)
 
-        schedule = (
-            select(LeasePaymentSchedule)
-            .where(LeasePaymentSchedule.schedule_id == schedule_id)
-            .first()
-        )
+        schedule = db.scalars(
+            select(LeasePaymentSchedule).where(
+                LeasePaymentSchedule.schedule_id == schedule_id
+            )
+        ).first()
 
         if not schedule:
             raise HTTPException(status_code=404, detail="Payment schedule not found")
@@ -364,7 +364,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
         schedule.actual_payment_amount = actual_payment_amount
         schedule.payment_reference = payment_reference
 
-        db.commit()
+        db.flush()
         db.refresh(schedule)
 
         return schedule
@@ -398,20 +398,22 @@ class LeaseVariablePaymentService(ListResponseMixin):
             )
             .values(status=PaymentStatus.OVERDUE)
         )
-        db.commit()
+        db.flush()
 
         # Return overdue payments
-        return (
-            select(LeasePaymentSchedule)
-            .join(
-                LeaseContract, LeasePaymentSchedule.lease_id == LeaseContract.lease_id
-            )
-            .where(
-                LeaseContract.organization_id == org_id,
-                LeasePaymentSchedule.status == PaymentStatus.OVERDUE,
-            )
-            .order_by(LeasePaymentSchedule.payment_date)
-            .all()
+        return list(
+            db.scalars(
+                select(LeasePaymentSchedule)
+                .join(
+                    LeaseContract,
+                    LeasePaymentSchedule.lease_id == LeaseContract.lease_id,
+                )
+                .where(
+                    LeaseContract.organization_id == org_id,
+                    LeasePaymentSchedule.status == PaymentStatus.OVERDUE,
+                )
+                .order_by(LeasePaymentSchedule.payment_date)
+            ).all()
         )
 
 

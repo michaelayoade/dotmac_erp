@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import status_badge, live_search, pagination, action_buttons, empty_state, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, icon_svg %}
+{% from "components/macros.html" import status_badge, compact_filters, filter_custom_select_field, filter_select_field, pagination, action_buttons, empty_state, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, icon_svg %}
 
 {% block page_title %}Inventory Items{% endblock %}
 
@@ -76,33 +76,31 @@
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
-        entity_type="items",
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "active", "label": "Active"},
-                    {"value": "inactive", "label": "Inactive"},
-                    {"value": "discontinued", "label": "Discontinued"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/inventory/items",
-        placeholder="Search by code, name, or barcode..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search by code, name, or barcode..."
     ) %}
-        <label for="inventory-filter-category" class="sr-only">Filter by category</label>
-        <select id="inventory-filter-category" name="category" class="form-select" aria-label="Filter by category" {{ search_attrs }}>
-            <option value="">All Categories</option>
+        {{ filter_select_field(
+            "status",
+            "Status",
+            status,
+            [
+                {"value": "active", "label": "Active"},
+                {"value": "inactive", "label": "Inactive"},
+                {"value": "discontinued", "label": "Discontinued"}
+            ],
+            filter_attrs
+        ) }}
+        {% call filter_custom_select_field("category", "Category", filter_attrs) %}
             {% for cat in categories %}
             <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
                 {{ cat.category_code }} - {{ cat.category_name }}
             </option>
             {% endfor %}
-        </select>
+        {% endcall %}
     {% endcall %}
 
     <div id="results-container">

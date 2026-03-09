@@ -1297,32 +1297,17 @@ class ARInvoiceService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Find posted invoices past due date
-        try:
-            invoices = (
-                select(Invoice)
-                .where(
-                    and_(
-                        Invoice.organization_id == org_id,
-                        Invoice.status.in_(
-                            [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
-                        ),
-                        Invoice.due_date < ref_date,
-                    )
+        invoices = db.scalars(
+            select(Invoice).where(
+                and_(
+                    Invoice.organization_id == org_id,
+                    Invoice.status.in_(
+                        [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
+                    ),
+                    Invoice.due_date < ref_date,
                 )
-                .all()
             )
-        except Exception:
-            invoices = db.scalars(
-                select(Invoice).where(
-                    and_(
-                        Invoice.organization_id == org_id,
-                        Invoice.status.in_(
-                            [InvoiceStatus.POSTED, InvoiceStatus.PARTIALLY_PAID]
-                        ),
-                        Invoice.due_date < ref_date,
-                    )
-                )
-            ).all()
+        ).all()
 
         count = 0
         for invoice in invoices:
@@ -1398,11 +1383,12 @@ class ARInvoiceService(ListResponseMixin):
         if not invoice or invoice.organization_id != org_id:
             raise NotFoundError("Invoice not found")
 
-        return (
-            select(InvoiceLine)
-            .where(InvoiceLine.invoice_id == inv_id)
-            .order_by(InvoiceLine.line_number)
-            .all()
+        return list(
+            db.scalars(
+                select(InvoiceLine)
+                .where(InvoiceLine.invoice_id == inv_id)
+                .order_by(InvoiceLine.line_number)
+            ).all()
         )
 
     @staticmethod
@@ -1483,7 +1469,7 @@ class ARInvoiceService(ListResponseMixin):
             )
 
         query = query.order_by(Invoice.invoice_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).unique().all())
 
     @staticmethod
     def delete_invoice(

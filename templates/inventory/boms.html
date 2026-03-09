@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, empty_state, live_search, icon_svg %}
+{% from "components/macros.html" import pagination, empty_state, compact_filters, filter_select_field, icon_svg %}
 
 {% block page_title %}Bill of Materials{% endblock %}
 
@@ -72,32 +72,35 @@
     </div>
 
     {# Search & Filters #}
-    {{ live_search(
-        search=search,
-        filters=[
-            {
-                "name": "bom_type",
-                "label": "All Types",
-                "value": bom_type,
-                "options": [
-                    {"value": "ASSEMBLY", "label": "Assembly"},
-                    {"value": "DISASSEMBLY", "label": "Disassembly"},
-                    {"value": "KIT", "label": "Kit"}
-                ]
-            },
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "active", "label": "Active"},
-                    {"value": "inactive", "label": "Inactive"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/inventory/boms",
-        placeholder="Search by BOM name or item..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search by BOM name or item..."
+    ) %}
+        {{ filter_select_field(
+            "bom_type",
+            "BOM Type",
+            bom_type,
+            [
+                {"value": "ASSEMBLY", "label": "Assembly"},
+                {"value": "DISASSEMBLY", "label": "Disassembly"},
+                {"value": "KIT", "label": "Kit"}
+            ],
+            filter_attrs
+        ) }}
+        {{ filter_select_field(
+            "status",
+            "Status",
+            status,
+            [
+                {"value": "active", "label": "Active"},
+                {"value": "inactive", "label": "Inactive"}
+            ],
+            filter_attrs
+        ) }}
+    {% endcall %}
 
     <div id="results-container">
     <!-- BOMs Table -->
@@ -173,7 +176,7 @@
     </div>
 
     {% if boms | default([]) | length > 0 %}
-    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status}) }}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status, "bom_type": bom_type}) }}
     {% endif %}
     </div>{# /results-container #}
 </div>

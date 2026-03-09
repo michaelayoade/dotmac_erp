@@ -68,11 +68,15 @@ class SupplierBulkService(BulkActionService[Supplier]):
         )
         invoice_count = coerce_scalar_count(self.db.scalar(count_stmt))
         if invoice_count is None and is_mock_session(self.db):
-            invoice_count = (
-                self.select(SupplierInvoice)
-                .where(SupplierInvoice.supplier_id == entity.supplier_id)
-                .where(SupplierInvoice.organization_id == self.organization_id)
-                .count()
+            invoice_count = len(
+                list(
+                    self.db.scalars(
+                        select(SupplierInvoice).where(
+                            SupplierInvoice.supplier_id == entity.supplier_id,
+                            SupplierInvoice.organization_id == self.organization_id,
+                        )
+                    ).all()
+                )
             )
         invoice_count = invoice_count or 0
 

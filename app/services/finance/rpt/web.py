@@ -1924,6 +1924,7 @@ class ReportsWebService:
         end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Reports", "reports")
@@ -1934,6 +1935,10 @@ class ReportsWebService:
                 start_date=start_date,
                 end_date=end_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/dashboard.html", context
@@ -1946,6 +1951,7 @@ class ReportsWebService:
         as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Trial Balance", "reports")
@@ -1955,6 +1961,10 @@ class ReportsWebService:
                 str(auth.organization_id),
                 as_of_date=as_of_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"as_of_date": as_of_date},
+            labels={"as_of_date": "As of"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/trial_balance.html", context
@@ -1968,6 +1978,7 @@ class ReportsWebService:
         end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Statement of Profit or Loss", "reports")
@@ -1978,6 +1989,10 @@ class ReportsWebService:
                 start_date=start_date,
                 end_date=end_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/income_statement.html", context
@@ -1990,6 +2005,7 @@ class ReportsWebService:
         as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(
@@ -2001,6 +2017,10 @@ class ReportsWebService:
                 str(auth.organization_id),
                 as_of_date=as_of_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"as_of_date": as_of_date},
+            labels={"as_of_date": "As of"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/balance_sheet.html", context
@@ -2093,6 +2113,7 @@ class ReportsWebService:
         end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Tax Summary", "reports")
@@ -2103,6 +2124,10 @@ class ReportsWebService:
                 start_date=start_date,
                 end_date=end_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/tax_summary.html", context
@@ -2116,6 +2141,7 @@ class ReportsWebService:
         end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Expense Summary", "reports")
@@ -2126,6 +2152,10 @@ class ReportsWebService:
                 start_date=start_date,
                 end_date=end_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/expense_summary.html", context
@@ -2139,6 +2169,7 @@ class ReportsWebService:
         end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Cash Flow Statement", "reports")
@@ -2149,6 +2180,10 @@ class ReportsWebService:
                 start_date=start_date,
                 end_date=end_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/cash_flow.html", context
@@ -2162,6 +2197,7 @@ class ReportsWebService:
         end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Changes in Equity", "reports")
@@ -2172,6 +2208,10 @@ class ReportsWebService:
                 start_date=start_date,
                 end_date=end_date,
             )
+        )
+        context["active_filters"] = build_active_filters(
+            params={"start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
         )
         return templates.TemplateResponse(
             request, "finance/reports/changes_in_equity.html", context
@@ -2187,6 +2227,7 @@ class ReportsWebService:
         budget_code: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
         context = base_context(request, auth, "Budget vs Actual", "reports")
@@ -2199,6 +2240,21 @@ class ReportsWebService:
                 budget_id=budget_id,
                 budget_code=budget_code,
             )
+        )
+        budgets = context.get("budgets", [])
+        context["active_filters"] = build_active_filters(
+            params={
+                "start_date": start_date,
+                "end_date": end_date,
+                "budget_id": budget_id,
+            },
+            labels={"start_date": "From", "end_date": "To", "budget_id": "Budget"},
+            options={
+                "budget_id": {
+                    str(b.budget_id): f"{b.budget_code} - {b.budget_name}"
+                    for b in budgets
+                }
+            },
         )
         return templates.TemplateResponse(
             request, "finance/reports/budget_vs_actual.html", context

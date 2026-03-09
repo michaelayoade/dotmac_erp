@@ -415,16 +415,14 @@ class ReportInstanceService(ListResponseMixin):
             return definition
 
         if request.report_code:
-            definition = (
-                select(ReportDefinition)
-                .where(
+            definition = db.scalars(
+                select(ReportDefinition).where(
                     and_(
                         ReportDefinition.organization_id == organization_id,
                         ReportDefinition.report_code == request.report_code,
                     )
                 )
-                .first()
-            )
+            ).first()
             if definition:
                 return definition
 
@@ -645,7 +643,8 @@ class ReportInstanceService(ListResponseMixin):
                 ReportInstance.organization_id == coerce_uuid(organization_id)
             )
 
-        return stmt.order_by(ReportInstance.queued_at).limit(limit).all()
+        stmt = stmt.order_by(ReportInstance.queued_at).limit(limit)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def get_generation_statistics(
@@ -673,7 +672,7 @@ class ReportInstanceService(ListResponseMixin):
                 ReportInstance.report_def_id == coerce_uuid(report_def_id)
             )
 
-        instances = stmt.all()
+        instances = list(db.scalars(stmt).all())
 
         total = len(instances)
         completed = len([i for i in instances if i.status == ReportStatus.COMPLETED])
@@ -720,22 +719,22 @@ class ReportInstanceService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
 
-        instances = (
-            select(ReportInstance)
-            .where(
-                and_(
-                    ReportInstance.organization_id == org_id,
-                    ReportInstance.generated_at < cutoff_date,
-                    ReportInstance.status.in_(
-                        [
-                            ReportStatus.COMPLETED,
-                            ReportStatus.FAILED,
-                            ReportStatus.CANCELLED,
-                        ]
-                    ),
+        instances = list(
+            db.scalars(
+                select(ReportInstance).where(
+                    and_(
+                        ReportInstance.organization_id == org_id,
+                        ReportInstance.generated_at < cutoff_date,
+                        ReportInstance.status.in_(
+                            [
+                                ReportStatus.COMPLETED,
+                                ReportStatus.FAILED,
+                                ReportStatus.CANCELLED,
+                            ]
+                        ),
+                    )
                 )
-            )
-            .all()
+            ).all()
         )
 
         count = len(instances)
@@ -839,7 +838,7 @@ class ReportInstanceService(ListResponseMixin):
             .limit(limit)
             .offset(offset)
         )
-        return stmt.all()
+        return list(db.scalars(stmt).all())
 
 
 # Module-level singleton instance

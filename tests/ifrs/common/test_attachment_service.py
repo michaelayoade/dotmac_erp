@@ -337,12 +337,11 @@ class TestListForEntity:
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.all.return_value = attachments
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = attachments
 
-        with patch("app.services.finance.common.attachment.Attachment"):
-            result = AttachmentService.list_for_entity(
-                mock_db, org_id, "SUPPLIER_INVOICE", entity_id
-            )
+        result = AttachmentService.list_for_entity(
+            mock_db, org_id, "SUPPLIER_INVOICE", entity_id
+        )
 
         assert result == attachments
         assert len(result) == 2
@@ -353,12 +352,11 @@ class TestListForEntity:
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
-        with patch("app.services.finance.common.attachment.Attachment"):
-            result = AttachmentService.list_for_entity(
-                mock_db, org_id, "SUPPLIER_INVOICE", entity_id
-            )
+        result = AttachmentService.list_for_entity(
+            mock_db, org_id, "SUPPLIER_INVOICE", entity_id
+        )
 
         assert result == []
 
@@ -373,7 +371,7 @@ class TestDeleteAttachment:
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = attachment
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = attachment
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"test content")
@@ -383,7 +381,6 @@ class TestDeleteAttachment:
                 patch.object(
                     AttachmentService, "get_file_path", return_value=Path(f.name)
                 ),
-                patch("app.services.finance.common.attachment.Attachment"),
             ):
                 result = AttachmentService.delete(
                     mock_db, str(attachment.attachment_id), org_id
@@ -398,10 +395,9 @@ class TestDeleteAttachment:
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.first.return_value = None
 
-        with patch("app.services.finance.common.attachment.Attachment"):
-            result = AttachmentService.delete(mock_db, str(uuid4()), org_id)
+        result = AttachmentService.delete(mock_db, str(uuid4()), org_id)
 
         assert result is False
         mock_db.delete.assert_not_called()
@@ -415,12 +411,11 @@ class TestCountForEntity:
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.scalar.return_value = 5
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = 5
 
-        with patch("app.services.finance.common.attachment.Attachment"):
-            result = AttachmentService.count_for_entity(
-                mock_db, org_id, "SUPPLIER_INVOICE", entity_id
-            )
+        result = AttachmentService.count_for_entity(
+            mock_db, org_id, "SUPPLIER_INVOICE", entity_id
+        )
 
         assert result == 5
 
@@ -429,12 +424,11 @@ class TestCountForEntity:
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.scalar.return_value = None
-        mock_db.query.return_value = mock_query
+        mock_db.scalar.return_value = None
 
-        with patch("app.services.finance.common.attachment.Attachment"):
-            result = AttachmentService.count_for_entity(
-                mock_db, org_id, "SUPPLIER_INVOICE", entity_id
-            )
+        result = AttachmentService.count_for_entity(
+            mock_db, org_id, "SUPPLIER_INVOICE", entity_id
+        )
 
         assert result == 0
 

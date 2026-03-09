@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, empty_state, live_search, icon_svg %}
+{% from "components/macros.html" import pagination, empty_state, compact_filters, filter_select_field, icon_svg %}
 
 {% block page_title %}Price Lists{% endblock %}
 
@@ -74,23 +74,25 @@
     </div>
 
     <!-- Search & Filters -->
-    {{ live_search(
+    {% call(filter_attrs) compact_filters(
+        base_url="/inventory/price-lists",
+        active_filters=active_filters | default([]),
+        show_search=true,
         search=search if search else '',
-        filters=[
-            {
-                'name': 'price_list_type',
-                'label': 'All Types',
-                'value': price_list_type if price_list_type else '',
-                'options': [
-                    {'value': 'SALES', 'label': 'Sales'},
-                    {'value': 'PURCHASE', 'label': 'Purchase'},
-                    {'value': 'TRANSFER', 'label': 'Transfer'},
-                ]
-            }
-        ],
-        base_url='/inventory/price-lists',
-        placeholder='Search by name or code...'
-    ) }}
+        search_placeholder="Search by name or code..."
+    ) %}
+        {{ filter_select_field(
+            "price_list_type",
+            "Type",
+            price_list_type if price_list_type else "",
+            [
+                {"value": "SALES", "label": "Sales"},
+                {"value": "PURCHASE", "label": "Purchase"},
+                {"value": "TRANSFER", "label": "Transfer"}
+            ],
+            filter_attrs
+        ) }}
+    {% endcall %}
 
     <!-- Price Lists Table -->
     <div id="results-container">
@@ -163,7 +165,9 @@
             page=page | default(1),
             total_pages=total_pages | default(1),
             total_count=total_count | default(price_lists | length if price_lists else 0),
-            limit=limit | default(50)
+            limit=limit | default(50),
+            search=search,
+            filters={"price_list_type": price_list_type}
         ) }}
     </div>
     </div>

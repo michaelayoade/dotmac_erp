@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_custom_select_field, filter_select_field, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, icon_svg %}
 
 {% block page_title %}Fixed Assets{% endblock %}
 
@@ -36,29 +36,29 @@
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "ACTIVE", "label": "Active"},
-                    {"value": "DISPOSED", "label": "Disposed"},
-                    {"value": "FULLY_DEPRECIATED", "label": "Fully Depreciated"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/fixed-assets/assets",
-        placeholder="Search assets by number or name..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search assets by number or name..."
     ) %}
-        <select name="category_id" class="form-select">
-            <option value="">All Categories</option>
+        {{ filter_select_field(
+            "status",
+            "Status",
+            status,
+            [
+                {"value": "ACTIVE", "label": "Active"},
+                {"value": "DISPOSED", "label": "Disposed"},
+                {"value": "FULLY_DEPRECIATED", "label": "Fully Depreciated"}
+            ],
+            filter_attrs
+        ) }}
+        {% call filter_custom_select_field("category", "Category", filter_attrs) %}
             {% for cat in categories %}
-            <option value="{{ cat.category_id }}" {{ 'selected' if category_id == cat.category_id|string else '' }}>{{ cat.category_name }}</option>
+            <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>{{ cat.category_name }}</option>
             {% endfor %}
-        </select>
+        {% endcall %}
     {% endcall %}
 
     <div id="results-container">
@@ -122,10 +122,10 @@
                             <td colspan="9" class="py-12">
                                 {{ empty_state(
                                     'No assets found',
-                                    'Get started by registering your first fixed asset' if not (search or category_id or status) else 'Try adjusting your search or filter criteria',
+                                    'Get started by registering your first fixed asset' if not (search or category or status) else 'Try adjusting your search or filter criteria',
                                     'building',
-                                    'New Asset' if not (search or category_id or status) else none,
-                                    '/fixed-assets/assets/new' if not (search or category_id or status) else none
+                                    'New Asset' if not (search or category or status) else none,
+                                    '/fixed-assets/assets/new' if not (search or category or status) else none
                                 ) }}
                             </td>
                         </tr>
@@ -141,7 +141,7 @@
                 total_count=total_count | default(assets | length if assets else 0),
                 limit=limit | default(50),
                 search=search,
-                filters={"category_id": category_id, "status": status}
+                filters={"category": category, "status": status}
             ) }}
         </div>
 

@@ -31,6 +31,7 @@ from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
 from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.common.numbering import SyncNumberingService
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
@@ -226,14 +227,15 @@ class InventoryWebService:
         item_code_preview = InventoryWebService._sequence_preview(sequence, today)
 
         # Get categories for dropdown
-        categories = (
-            select(ItemCategory)
-            .where(
-                ItemCategory.organization_id == org_id,
-                ItemCategory.is_active.is_(True),
-            )
-            .order_by(ItemCategory.category_code)
-            .all()
+        categories = list(
+            db.scalars(
+                select(ItemCategory)
+                .where(
+                    ItemCategory.organization_id == org_id,
+                    ItemCategory.is_active.is_(True),
+                )
+                .order_by(ItemCategory.category_code)
+            ).all()
         )
 
         # Get GL accounts for inline category creation modal
@@ -496,6 +498,26 @@ class InventoryWebService:
             "total_pages": total_pages,
             "active_count": active_count,
             "stock_count": stock_count,
+            "active_filters": build_active_filters(
+                params={
+                    "search": search or "",
+                    "category": category or "",
+                    "status": status or "",
+                },
+                labels={
+                    "search": "Search",
+                    "category": "Category",
+                    "status": "Status",
+                },
+                options={
+                    "category": {
+                        str(cat.category_id): (
+                            f"{cat.category_code} - {cat.category_name}"
+                        )
+                        for cat in categories
+                    }
+                },
+            ),
         }
 
     @staticmethod
@@ -1036,6 +1058,10 @@ class InventoryWebService:
             "limit": limit,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": build_active_filters(
+                params={"search": search or "", "status": status or ""},
+                labels={"search": "Search", "status": "Status"},
+            ),
         }
 
     @staticmethod
@@ -1330,6 +1356,10 @@ class InventoryWebService:
             "limit": limit,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": build_active_filters(
+                params={"search": search or "", "status": status or ""},
+                labels={"search": "Search", "status": "Status"},
+            ),
         }
 
     @staticmethod

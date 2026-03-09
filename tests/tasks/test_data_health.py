@@ -16,10 +16,10 @@ class TestCleanupOldNotifications:
     def test_deletes_old_read_notifications(self) -> None:
         """Old read notifications are deleted."""
         mock_db = MagicMock()
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.delete.return_value = 5
+        mock_db.execute.side_effect = [
+            MagicMock(rowcount=5),
+            MagicMock(rowcount=0),
+        ]
 
         with patch("app.tasks.data_health.SessionLocal") as mock_session:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
@@ -35,10 +35,7 @@ class TestCleanupOldNotifications:
     def test_handles_exception_gracefully(self) -> None:
         """Exceptions during cleanup are caught and reported."""
         mock_db = MagicMock()
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.delete.side_effect = RuntimeError("DB error")
+        mock_db.execute.side_effect = RuntimeError("DB error")
 
         with patch("app.tasks.data_health.SessionLocal") as mock_session:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)

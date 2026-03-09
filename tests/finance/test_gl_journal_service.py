@@ -245,10 +245,6 @@ def test_submit_approve_post_void_and_reverse():
 
 def test_list_filters():
     db = MagicMock()
-    query = MagicMock()
-    db.query.return_value = query
-    query.filter.return_value = query
-    query.order_by.return_value = query
-    query.limit.return_value.offset.return_value.all.return_value = []
+    db.scalars.return_value.all.return_value = []
 
     JournalService.list(db, organization_id=str(uuid4()))

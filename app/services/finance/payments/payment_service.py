@@ -121,22 +121,13 @@ class PaymentService:
 
         # Check for existing active payment intent to prevent duplicate payments
         active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
-        try:
-            existing_intent = (
-                self.select(PaymentIntent)
-                .where(PaymentIntent.source_type == "INVOICE")
-                .where(PaymentIntent.source_id == inv_id)
-                .where(PaymentIntent.status.in_(active_statuses))
-                .first()
+        existing_intent = self.db.scalar(
+            select(PaymentIntent).where(
+                PaymentIntent.source_type == "INVOICE",
+                PaymentIntent.source_id == inv_id,
+                PaymentIntent.status.in_(active_statuses),
             )
-        except Exception:
-            existing_intent = self.db.scalar(
-                select(PaymentIntent).where(
-                    PaymentIntent.source_type == "INVOICE",
-                    PaymentIntent.source_id == inv_id,
-                    PaymentIntent.status.in_(active_statuses),
-                )
-            )
+        )
         if existing_intent:
             expires_at = existing_intent.expires_at
             if expires_at and expires_at.tzinfo is None:
@@ -1329,18 +1320,11 @@ class PaymentService:
             error_message: Error description (for FAILED status)
         """
         # Find batch item by payment intent
-        try:
-            batch_item = (
-                self.select(TransferBatchItem)
-                .where(TransferBatchItem.payment_intent_id == intent.intent_id)
-                .first()
+        batch_item = self.db.scalar(
+            select(TransferBatchItem).where(
+                TransferBatchItem.payment_intent_id == intent.intent_id
             )
-        except Exception:
-            batch_item = self.db.scalar(
-                select(TransferBatchItem).where(
-                    TransferBatchItem.payment_intent_id == intent.intent_id
-                )
-            )
+        )
 
         if not batch_item:
             # Intent is not part of a batch

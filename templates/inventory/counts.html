@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import status_badge, pagination, empty_state, live_search, icon_svg %}
+{% from "components/macros.html" import status_badge, pagination, empty_state, compact_filters, filter_custom_select_field, filter_select_field, icon_svg %}
 
 {% block page_title %}Stock Counts{% endblock %}
 
@@ -70,32 +70,32 @@
     </div>
 
     <!-- Search & Filters -->
-    {% call(search_attrs) live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "DRAFT", "label": "Draft"},
-                    {"value": "IN_PROGRESS", "label": "In Progress"},
-                    {"value": "COMPLETED", "label": "Completed"},
-                    {"value": "POSTED", "label": "Posted"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/inventory/counts",
-        placeholder="Search by count number..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search by count number..."
     ) %}
-        <select name="warehouse" class="form-select" {{ search_attrs }}>
-            <option value="">All Warehouses</option>
+        {{ filter_select_field(
+            "status",
+            "Status",
+            status,
+            [
+                {"value": "DRAFT", "label": "Draft"},
+                {"value": "IN_PROGRESS", "label": "In Progress"},
+                {"value": "COMPLETED", "label": "Completed"},
+                {"value": "POSTED", "label": "Posted"}
+            ],
+            filter_attrs
+        ) }}
+        {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
             {% for wh in warehouses | default([]) %}
             <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
                 {{ wh.warehouse_name }}
             </option>
             {% endfor %}
-        </select>
+        {% endcall %}
     {% endcall %}
 
     <div id="results-container">
@@ -183,7 +183,7 @@
     </div>
 
     {% if counts | default([]) | length > 0 %}
-    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status}) }}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status, "warehouse": warehouse}) }}
     {% endif %}
     </div>{# /results-container #}
 </div>

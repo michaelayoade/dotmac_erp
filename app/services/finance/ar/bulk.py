@@ -63,10 +63,15 @@ class CustomerBulkService(BulkActionService[Customer]):
         A customer cannot be deleted if they have any invoices.
         """
         # Check for associated invoices
+        from sqlalchemy import func, select
+
         invoice_count = (
-            self.select(Invoice)
-            .where(Invoice.customer_id == entity.customer_id)
-            .count()
+            self.db.scalar(
+                select(func.count(Invoice.invoice_id)).where(
+                    Invoice.customer_id == entity.customer_id
+                )
+            )
+            or 0
         )
 
         if invoice_count > 0:
@@ -116,7 +121,7 @@ class CustomerBulkService(BulkActionService[Customer]):
             status=status,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(query).all())
         return self._build_csv(entities)
 
 

@@ -288,10 +288,6 @@ def test_submit_approve_post_void_hold_release_record_payment():
 def test_list_overdue_requires_filters():
     db = MagicMock()
     org_id = uuid4()
-    query = MagicMock()
-    db.query.return_value = query
-    query.filter.return_value = query
-    query.order_by.return_value = query
-    query.limit.return_value.offset.return_value.all.return_value = []
+    db.scalars.return_value.all.return_value = []
 
     SupplierInvoiceService.list(db, organization_id=str(org_id), overdue_only=True)

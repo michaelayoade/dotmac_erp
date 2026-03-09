@@ -85,7 +85,7 @@ class TestCreateCategory:
     ):
         """Test successful category creation."""
         # No existing category
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         category_service.create_category(mock_db, org_id, sample_category_input)
 
@@ -104,7 +104,7 @@ class TestCreateCategory:
             organization_id=org_id,
             category_code=sample_category_input.category_code,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             category_service.create_category(mock_db, org_id, sample_category_input)
@@ -143,7 +143,7 @@ class TestListCategories:
     def test_list_all_categories(self, category_service, mock_db, org_id):
         """Test listing all categories."""
         categories = [MockItemCategory(organization_id=org_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = categories
+        mock_db.scalars.return_value.all.return_value = categories
 
         result = category_service.list(mock_db, str(org_id))
 
@@ -152,7 +152,7 @@ class TestListCategories:
     def test_list_active_categories_only(self, category_service, mock_db, org_id):
         """Test listing only active categories."""
         categories = [MockItemCategory(organization_id=org_id, is_active=True)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = categories
+        mock_db.scalars.return_value.all.return_value = categories
 
         result = category_service.list(mock_db, str(org_id), is_active=True)
 
@@ -170,7 +170,7 @@ class TestCreateItem:
     ):
         """Test successful item creation."""
         # No existing item
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         # Category exists and is active
         category = MockItemCategory(
@@ -197,7 +197,7 @@ class TestCreateItem:
             organization_id=org_id,
             item_code=sample_item_input.item_code,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        mock_db.scalars.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc:
             item_service.create_item(mock_db, org_id, sample_item_input)
@@ -212,7 +212,7 @@ class TestCreateItem:
         from fastapi import HTTPException
 
         # No existing item
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
         # Category not found
         mock_db.get.return_value = None
 
@@ -229,7 +229,7 @@ class TestCreateItem:
         from fastapi import HTTPException
 
         # No existing item
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
         # Category is inactive
         category = MockItemCategory(
             category_id=sample_item_input.category_id,
@@ -275,7 +275,7 @@ class TestGetItemByCode:
     def test_get_by_code_success(self, item_service, mock_db, org_id):
         """Test getting item by code."""
         item = MockItem(organization_id=org_id, item_code="ITEM-001")
-        mock_db.query.return_value.filter.return_value.first.return_value = item
+        mock_db.scalars.return_value.first.return_value = item
 
         result = item_service.get_by_code(mock_db, org_id, "ITEM-001")
 
@@ -283,7 +283,7 @@ class TestGetItemByCode:
 
     def test_get_by_code_not_found(self, item_service, mock_db, org_id):
         """Test getting non-existent item by code returns None."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = item_service.get_by_code(mock_db, org_id, "NOTFOUND")
 
@@ -437,7 +437,7 @@ class TestListItems:
     def test_list_all_items(self, item_service, mock_db, org_id):
         """Test listing all items."""
         items = [MockItem(organization_id=org_id) for _ in range(5)]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = items
+        mock_db.scalars.return_value.all.return_value = items
 
         result = item_service.list(mock_db, str(org_id))
 
@@ -446,7 +446,7 @@ class TestListItems:
     def test_list_with_type_filter(self, item_service, mock_db, org_id):
         """Test listing items with type filter."""
         items = [MockItem(organization_id=org_id, item_type=MockItemType.INVENTORY)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = items
+        mock_db.scalars.return_value.all.return_value = items
 
         result = item_service.list(mock_db, str(org_id), item_type=ItemType.INVENTORY)
 
@@ -455,7 +455,7 @@ class TestListItems:
     def test_list_with_search(self, item_service, mock_db, org_id):
         """Test listing items with search filter."""
         items = [MockItem(organization_id=org_id, item_name="Test Widget")]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = items
+        mock_db.scalars.return_value.all.return_value = items
 
         result = item_service.list(mock_db, str(org_id), search="Widget")
 

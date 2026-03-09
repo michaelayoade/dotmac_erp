@@ -333,7 +333,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = ARPostingAdapter.post_invoice(
             db=mock_db,
@@ -363,7 +363,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -404,7 +404,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_invoice_line
         ]
 
@@ -462,7 +462,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -519,7 +519,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -583,7 +583,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -640,7 +640,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -700,7 +700,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -749,7 +749,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_invoice_line
         ]
 
@@ -797,7 +797,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_invoice_line
         ]
 
@@ -847,7 +847,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_invoice_line
         ]
 
@@ -907,7 +907,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             line
         ]
 
@@ -960,7 +960,7 @@ class TestPostInvoice:
             return None
 
         mock_db.get.side_effect = get_side_effect
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_invoice_line
         ]
 
@@ -1401,7 +1401,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = create_tax_transactions(
             db=mock_db,
@@ -1427,7 +1427,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             fiscal_period
         )
 
@@ -1455,7 +1455,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("0"),  # But zero amount
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             fiscal_period
         )
 
@@ -1485,7 +1485,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             fiscal_period
         )
 
@@ -1527,7 +1527,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("50.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             fiscal_period
         )
 
@@ -1562,7 +1562,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             fiscal_period
         )
 
@@ -1612,7 +1612,7 @@ class TestCreateTaxTransactions:
             ),
         ]
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.scalars.return_value.first.return_value = (
             fiscal_period
         )
 

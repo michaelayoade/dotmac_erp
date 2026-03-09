@@ -16,6 +16,7 @@ from starlette.datastructures import UploadFile
 
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
+from app.services.common_filters import build_active_filters
 from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -498,6 +499,7 @@ class OperationsInventoryWebService:
         db: Session,
         status: str | None = None,
         search: str | None = None,
+        warehouse: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Stock counts list page."""
@@ -556,6 +558,13 @@ class OperationsInventoryWebService:
                     InventoryCount.count_description.ilike(term),
                 )
             )
+        if warehouse:
+            from uuid import UUID as UUID_Type
+
+            try:
+                stmt = stmt.where(InventoryCount.warehouse_id == UUID_Type(warehouse))
+            except ValueError:
+                pass
 
         # Pagination
         filtered_total = (
@@ -582,6 +591,24 @@ class OperationsInventoryWebService:
             ).all()
         )
 
+        active_filters = build_active_filters(
+            params={
+                "search": search or "",
+                "status": status or "",
+                "warehouse": warehouse or "",
+            },
+            labels={
+                "search": "Search",
+                "status": "Status",
+                "warehouse": "Warehouse",
+            },
+            options={
+                "warehouse": {
+                    str(wh.warehouse_id): wh.warehouse_name for wh in warehouses
+                }
+            },
+        )
+
         context.update(
             {
                 "total_count": total_count,
@@ -592,9 +619,10 @@ class OperationsInventoryWebService:
                 "warehouses": warehouses,
                 "search": search or "",
                 "status": status or "",
-                "warehouse": "",
+                "warehouse": warehouse or "",
                 "page": page,
                 "total_pages": total_pages,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "inventory/counts.html", context)
@@ -609,6 +637,7 @@ class OperationsInventoryWebService:
         auth: WebAuthContext,
         db: Session,
         search: str | None = None,
+        bom_type: str | None = None,
         status: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
@@ -666,14 +695,14 @@ class OperationsInventoryWebService:
                     BillOfMaterials.bom_code.ilike(term),
                 )
             )
-        if hasattr(BillOfMaterials, "bom_type") and status in (
+        if hasattr(BillOfMaterials, "bom_type") and bom_type in (
             "ASSEMBLY",
             "DISASSEMBLY",
             "KIT",
             "PHANTOM",
         ):
             try:
-                stmt = stmt.where(BillOfMaterials.bom_type == BOMType(status))
+                stmt = stmt.where(BillOfMaterials.bom_type == BOMType(bom_type))
             except ValueError:
                 pass
 
@@ -694,6 +723,19 @@ class OperationsInventoryWebService:
         )
         boms = list(db.scalars(stmt).all())
 
+        active_filters = build_active_filters(
+            params={
+                "search": search or "",
+                "bom_type": bom_type or "",
+                "status": status or "",
+            },
+            labels={
+                "search": "Search",
+                "bom_type": "BOM Type",
+                "status": "Status",
+            },
+        )
+
         context.update(
             {
                 "total_count": total_count,
@@ -702,10 +744,11 @@ class OperationsInventoryWebService:
                 "kit_count": kit_count,
                 "boms": boms,
                 "search": search or "",
-                "bom_type": "",
+                "bom_type": bom_type or "",
                 "status": status or "",
                 "page": page,
                 "total_pages": total_pages,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "inventory/boms.html", context)
@@ -720,7 +763,7 @@ class OperationsInventoryWebService:
         auth: WebAuthContext,
         db: Session,
         search: str | None = None,
-        list_type: str | None = None,
+        price_list_type: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Price lists page."""
@@ -763,9 +806,11 @@ class OperationsInventoryWebService:
 
         # Build filtered query
         stmt = select(PriceList).where(base_filter)
-        if list_type:
+        if price_list_type:
             try:
-                stmt = stmt.where(PriceList.price_list_type == PriceListType(list_type))
+                stmt = stmt.where(
+                    PriceList.price_list_type == PriceListType(price_list_type)
+                )
             except ValueError:
                 pass
         if search:
@@ -791,6 +836,17 @@ class OperationsInventoryWebService:
         )
         price_lists = list(db.scalars(stmt).all())
 
+        active_filters = build_active_filters(
+            params={
+                "search": search or "",
+                "price_list_type": price_list_type or "",
+            },
+            labels={
+                "search": "Search",
+                "price_list_type": "Type",
+            },
+        )
+
         context.update(
             {
                 "total_count": total_count,
@@ -799,9 +855,10 @@ class OperationsInventoryWebService:
                 "active_count": active_count,
                 "price_lists": price_lists,
                 "search": search or "",
-                "price_list_type": list_type or "",
+                "price_list_type": price_list_type or "",
                 "page": page,
                 "total_pages": total_pages,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(
@@ -948,6 +1005,24 @@ class OperationsInventoryWebService:
             ).all()
         )
 
+        active_filters = build_active_filters(
+            params={
+                "search": search or "",
+                "status": status or "",
+                "warehouse": warehouse or "",
+            },
+            labels={
+                "search": "Search",
+                "status": "Status",
+                "warehouse": "Warehouse",
+            },
+            options={
+                "warehouse": {
+                    str(wh.warehouse_id): wh.warehouse_name for wh in warehouses
+                }
+            },
+        )
+
         context.update(
             {
                 "total_count": total_count,
@@ -963,6 +1038,7 @@ class OperationsInventoryWebService:
                 "warehouse": warehouse or "",
                 "page": page,
                 "total_pages": total_pages,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "inventory/lots.html", context)

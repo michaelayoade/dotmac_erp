@@ -39,14 +39,15 @@
     </div>
     {% endif %}
 
-    {% from "components/macros.html" import live_search, pagination, icon_svg, status_badge, empty_state %}
-    {% call(search_attrs) live_search(search=search, base_url="/procurement/contracts", placeholder="Search contracts...") %}
-        <select name="status" class="form-select" {{ search_attrs }}>
-            <option value="">All Status</option>
-            {% for s in contract_statuses %}
-            <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
+    {% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg, status_badge, empty_state %}
+    {% call(filter_attrs) compact_filters(
+        base_url="/procurement/contracts",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search contracts..."
+    ) %}
+    {{ filter_select_field("status", "Status", filter_status, contract_statuses | map(attribute='value') | list, filter_attrs, "All Status", true) }}
     {% endcall %}
 
     <div id="results-container">

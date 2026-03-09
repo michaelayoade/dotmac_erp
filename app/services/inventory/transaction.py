@@ -128,13 +128,15 @@ class InventoryTransactionService(ListResponseMixin):
             ),
             else_=InventoryTransaction.quantity,
         )
-        current_qty = select(func.sum(net_qty_expr)).where(
-            and_(
-                InventoryTransaction.organization_id == org_id,
-                InventoryTransaction.item_id == itm_id,
-                InventoryTransaction.warehouse_id == wh_id,
+        current_qty = db.scalar(
+            select(func.sum(net_qty_expr)).where(
+                and_(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.item_id == itm_id,
+                    InventoryTransaction.warehouse_id == wh_id,
+                )
             )
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
         # Get current average cost from item
         item = db.get(Item, itm_id)
@@ -189,16 +191,14 @@ class InventoryTransactionService(ListResponseMixin):
             ),
             else_=InventoryTransaction.quantity,
         )
-        balance = (
-            select(func.sum(net_qty_expr))
-            .where(
+        balance = db.scalar(
+            select(func.sum(net_qty_expr)).where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
                     InventoryTransaction.warehouse_id == wh_id,
                 )
             )
-            .scalar()
         )
 
         return balance or Decimal("0")
@@ -616,15 +616,16 @@ class InventoryTransactionService(ListResponseMixin):
 
         # Get lots ordered by received date (oldest first)
         lots = list(
-            select(InventoryLot)
-            .where(
-                InventoryLot.item_id == itm_id,
-                InventoryLot.quantity_on_hand > 0,
-                InventoryLot.is_active == True,
-                InventoryLot.is_quarantined == False,
-            )
-            .order_by(InventoryLot.received_date.asc())
-            .all()
+            db.scalars(
+                select(InventoryLot)
+                .where(
+                    InventoryLot.item_id == itm_id,
+                    InventoryLot.quantity_on_hand > 0,
+                    InventoryLot.is_active == True,
+                    InventoryLot.is_quarantined == False,
+                )
+                .order_by(InventoryLot.received_date.asc())
+            ).all()
         )
 
         total_available = sum(lot.quantity_on_hand for lot in lots)
@@ -1145,10 +1146,11 @@ class InventoryTransactionService(ListResponseMixin):
             query = query.where(InventoryTransaction.transaction_date <= end_dt)
 
         return list(
-            query.order_by(InventoryTransaction.transaction_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+            db.scalars(
+                query.order_by(InventoryTransaction.transaction_date.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
 

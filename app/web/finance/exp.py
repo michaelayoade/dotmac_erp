@@ -113,6 +113,7 @@ def expense_list(
             page=page,
         )
     )
+    context["list_base_url"] = "/expense/list"
     return templates.TemplateResponse(request, "expense/list.html", context)
 
 
@@ -397,6 +398,7 @@ def expense_cards(
     status: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    search: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -409,8 +411,10 @@ def expense_cards(
             status=status,
             start_date=start_date,
             end_date=end_date,
+            search=search,
         )
     )
+    context["list_base_url"] = "/expense/cards"
     return templates.TemplateResponse(request, "expense/list.html", context)
 
 

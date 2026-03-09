@@ -81,14 +81,14 @@
             <select name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 {% for s in statuses %}
-                <option value="{{ s.value }}" {{ 'selected' if status == s.value else '' }}>{{ s.value | replace('_', ' ') | title }}</option>
+                <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
                 {% endfor %}
             </select>
     </div>
     <div>
             <select name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Vehicles</option>
-                {% for v in vehicles %}
+                {% for v in pool_vehicles %}
                 <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>
                 {% endfor %}
             </select>

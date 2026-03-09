@@ -107,11 +107,14 @@ def cleanup_old_hook_executions(
             if not execution_ids:
                 return {"deleted": 0, "errors": []}
 
-            deleted = (
-                select(ServiceHookExecution)
-                .where(ServiceHookExecution.execution_id.in_(execution_ids))
-                .delete(synchronize_session=False)
+            from sqlalchemy import delete
+
+            result = db.execute(
+                delete(ServiceHookExecution).where(
+                    ServiceHookExecution.execution_id.in_(execution_ids)
+                )
             )
+            deleted = result.rowcount
             db.commit()
         except Exception as exc:
             db.rollback()

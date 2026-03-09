@@ -76,26 +76,15 @@ def _resolve_tax_accounts(
     if not tax_code_ids:
         return {}
 
-    try:
-        tax_codes = (
-            select(TaxCode)
-            .where(
-                and_(
-                    TaxCode.organization_id == organization_id,
-                    TaxCode.tax_code_id.in_(tax_code_ids),
-                    TaxCode.tax_collected_account_id.isnot(None),
-                )
-            )
-            .all()
-        )
-    except Exception:
-        tax_codes = db.scalars(
-            select(TaxCode).where(
+    tax_codes = db.scalars(
+        select(TaxCode).where(
+            and_(
                 TaxCode.organization_id == organization_id,
                 TaxCode.tax_code_id.in_(tax_code_ids),
                 TaxCode.tax_collected_account_id.isnot(None),
             )
-        ).all()
+        )
+    ).all()
 
     accounts_by_tax_code: dict[UUID, UUID] = {}
     for tax_code in tax_codes:
@@ -169,46 +158,27 @@ def post_invoice(
         return ARPostingResult(success=False, message="Customer not found")
 
     # Load invoice lines
-    try:
-        lines = (
+    lines = list(
+        db.scalars(
             select(InvoiceLine)
             .where(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
-            .all()
-        )
-    except Exception:
-        lines = list(
-            db.scalars(
-                select(InvoiceLine)
-                .where(InvoiceLine.invoice_id == inv_id)
-                .order_by(InvoiceLine.line_number)
-            ).all()
-        )
+        ).all()
+    )
 
     if not lines:
         return ARPostingResult(success=False, message="Invoice has no lines")
 
     # Get fiscal period for inventory transactions
-    try:
-        fiscal_period = (
-            select(FiscalPeriod)
-            .where(
-                and_(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= invoice.invoice_date,
-                    FiscalPeriod.end_date >= invoice.invoice_date,
-                )
-            )
-            .first()
-        )
-    except Exception:
-        fiscal_period = db.scalar(
-            select(FiscalPeriod).where(
+    fiscal_period = db.scalars(
+        select(FiscalPeriod).where(
+            and_(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= invoice.invoice_date,
                 FiscalPeriod.end_date >= invoice.invoice_date,
             )
         )
+    ).first()
 
     # Check if there are inventory lines
     inventory_lines = [line for line in lines if line.item_id]

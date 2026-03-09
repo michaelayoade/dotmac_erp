@@ -36,6 +36,7 @@ from app.services.common import (
     ValidationError,
     coerce_uuid,
 )
+from app.services.common_filters import build_active_filters
 from app.services.pm.web.import_web import project_import_web_service
 from app.services.recent_activity import get_recent_activity_for_record
 from app.services.storage import get_storage
@@ -540,6 +541,10 @@ def list_projects(
         "completed_count": status_counts.get("COMPLETED", 0),
         "on_hold_count": status_counts.get("ON_HOLD", 0),
         "planning_count": status_counts.get("PLANNING", 0),
+        "active_filters": build_active_filters(
+            params={"status": status, "search": search},
+            labels={"search": "Search"},
+        ),
     }
 
     return templates.TemplateResponse(request, "projects/list.html", context)

@@ -31,7 +31,7 @@ class TestCanDelete:
 
     def test_can_delete_non_control(self, mock_db, mock_account, organization_id):
         """Non-control accounts without journal entries can be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -46,7 +46,7 @@ class TestCanDelete:
         self, mock_db, mock_account, organization_id
     ):
         """Accounts with journal lines cannot be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 50
+        mock_db.scalar.return_value = 50
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -59,7 +59,7 @@ class TestCanDelete:
 
     def test_can_delete_no_journal_lines(self, mock_db, mock_account, organization_id):
         """Accounts without journal lines can be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -73,7 +73,7 @@ class TestCanDelete:
     def test_returns_journal_count(self, mock_db, organization_id):
         """Error message should include the journal entry count."""
         account = MockAccount(account_name="Test Account")
-        mock_db.query.return_value.filter.return_value.count.return_value = 100
+        mock_db.scalar.return_value = 100
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -88,7 +88,7 @@ class TestCanDelete:
     ):
         """Control account check should run before journal check."""
         # Even if there are no journal entries, control account should fail
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -102,7 +102,7 @@ class TestCanDelete:
     def test_error_includes_account_name(self, mock_db, organization_id):
         """Error message should include the account name."""
         account = MockAccount(account_name="Cash at Bank", is_control_account=False)
-        mock_db.query.return_value.filter.return_value.count.return_value = 25
+        mock_db.scalar.return_value = 25
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -126,7 +126,7 @@ class TestCanDelete:
 
     def test_returns_tuple_format(self, mock_db, mock_account, organization_id):
         """Method should return a tuple of (bool, str)."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -352,11 +352,11 @@ class TestBulkDelete:
         account1 = MockAccount(is_control_account=False)
         account2 = MockAccount(is_control_account=False)
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             account1,
             account2,
         ]
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -376,7 +376,7 @@ class TestBulkDelete:
             account_name="AR Control", is_control_account=True
         )
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             control_account
         ]
 
@@ -395,8 +395,8 @@ class TestBulkDelete:
         """Accounts with journal entries should fail to delete."""
         account = MockAccount(account_name="Revenue", is_control_account=False)
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [account]
-        mock_db.query.return_value.filter.return_value.count.return_value = 100
+        mock_db.scalars.return_value.all.return_value = [account]
+        mock_db.scalar.return_value = 100
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -414,11 +414,11 @@ class TestBulkDelete:
         deletable = MockAccount(account_name="Deletable", is_control_account=False)
         control = MockAccount(account_name="Control", is_control_account=True)
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             deletable,
             control,
         ]
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -453,7 +453,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_headers(self, mock_db, mock_account, organization_id):
         """CSV export should include correct headers."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_account]
+        mock_db.scalars.return_value.all.return_value = [mock_account]
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService
@@ -477,7 +477,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_account, organization_id):
         """CSV export should include entity data."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [mock_account]
+        mock_db.scalars.return_value.all.return_value = [mock_account]
 
         with patch("app.services.finance.gl.bulk.Account", MagicMock()):
             from app.services.finance.gl.bulk import AccountBulkService

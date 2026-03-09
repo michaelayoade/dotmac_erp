@@ -107,16 +107,14 @@ class ReportDefinitionService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Check for duplicate report code
-        existing = (
-            select(ReportDefinition)
-            .where(
+        existing = db.scalars(
+            select(ReportDefinition).where(
                 and_(
                     ReportDefinition.organization_id == org_id,
                     ReportDefinition.report_code == input.report_code,
                 )
             )
-            .first()
-        )
+        ).first()
         if existing:
             raise HTTPException(
                 status_code=400,
@@ -364,16 +362,14 @@ class ReportDefinitionService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Source definition not found")
 
         # Check for duplicate
-        existing = (
-            select(ReportDefinition)
-            .where(
+        existing = db.scalars(
+            select(ReportDefinition).where(
                 and_(
                     ReportDefinition.organization_id == org_id,
                     ReportDefinition.report_code == new_report_code,
                 )
             )
-            .first()
-        )
+        ).first()
         if existing:
             raise HTTPException(
                 status_code=400,
@@ -415,16 +411,14 @@ class ReportDefinitionService(ListResponseMixin):
         report_code: str,
     ) -> ReportDefinition | None:
         """Get report definition by code."""
-        return (
-            select(ReportDefinition)
-            .where(
+        return db.scalars(
+            select(ReportDefinition).where(
                 and_(
                     ReportDefinition.organization_id == coerce_uuid(organization_id),
                     ReportDefinition.report_code == report_code,
                 )
             )
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def get_by_type(
@@ -433,17 +427,19 @@ class ReportDefinitionService(ListResponseMixin):
         report_type: ReportType,
     ) -> builtins.list[ReportDefinition]:
         """Get report definitions by type."""
-        return (
-            select(ReportDefinition)
-            .where(
-                and_(
-                    ReportDefinition.organization_id == coerce_uuid(organization_id),
-                    ReportDefinition.report_type == report_type,
-                    ReportDefinition.is_active == True,
+        return list(
+            db.scalars(
+                select(ReportDefinition)
+                .where(
+                    and_(
+                        ReportDefinition.organization_id
+                        == coerce_uuid(organization_id),
+                        ReportDefinition.report_type == report_type,
+                        ReportDefinition.is_active == True,
+                    )
                 )
-            )
-            .order_by(ReportDefinition.report_name)
-            .all()
+                .order_by(ReportDefinition.report_name)
+            ).all()
         )
 
     @staticmethod
@@ -517,11 +513,12 @@ class ReportDefinitionService(ListResponseMixin):
         if is_system_report is not None:
             stmt = stmt.where(ReportDefinition.is_system_report == is_system_report)
 
-        return (
-            stmt.order_by(ReportDefinition.category, ReportDefinition.report_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+        return list(
+            db.scalars(
+                stmt.order_by(ReportDefinition.category, ReportDefinition.report_name)
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
 

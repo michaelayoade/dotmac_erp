@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, live_search, sortable_th, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_custom_select_field, filter_select_field, pagination, status_badge, empty_state, sortable_th, icon_svg %}
 
 {% block page_title %}Imported Statements{% endblock %}
 
@@ -42,28 +42,35 @@
     </div>
 
     {# ── Search + Filters ── #}
-    {% call(search_attrs) live_search(
-        search=search | default('', true),
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/banking/statements/imports",
-        placeholder="Search statement number...",
-        debounce_ms=300
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search statement number...",
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
     ) %}
-    <select name="account_id" class="form-select w-auto min-w-[180px]" {{ search_attrs }}>
-        <option value="">All Bank Accounts</option>
+    {% call filter_custom_select_field("account_id", "Bank Account", filter_attrs) %}
         {% for acc in accounts %}
         <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
             {{ acc.bank_name }} - {{ acc.account_number }}
         </option>
         {% endfor %}
-    </select>
-    <select name="status" class="form-select w-auto min-w-[130px]" {{ search_attrs }}>
-        <option value="">All Status</option>
-        <option value="imported" {{ 'selected' if status == 'imported' else '' }}>Imported</option>
-        <option value="processing" {{ 'selected' if status == 'processing' else '' }}>Processing</option>
-        <option value="closed" {{ 'selected' if status == 'closed' else '' }}>Reconciled</option>
-    </select>
-    <input type="date" name="start_date" value="{{ start_date if start_date else '' }}" class="form-input w-auto" placeholder="From" title="From date" {{ search_attrs }}>
-    <input type="date" name="end_date" value="{{ end_date if end_date else '' }}" class="form-input w-auto" placeholder="To" title="To date" {{ search_attrs }}>
+    {% endcall %}
+    {{ filter_select_field(
+        "status",
+        "Status",
+        status,
+        [
+            {"value": "imported", "label": "Imported"},
+            {"value": "processing", "label": "Processing"},
+            {"value": "closed", "label": "Reconciled"}
+        ],
+        filter_attrs,
+        "All Status"
+    ) }}
     {% endcall %}
 
     {# ── Results ── #}

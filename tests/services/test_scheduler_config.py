@@ -115,7 +115,7 @@ class TestGetSettingValue:
         mock_setting = MagicMock()
         mock_setting.value_text = "text_value"
         mock_setting.value_json = None
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _get_setting_value(mock_db, SettingDomain.scheduler, "test_key")
 
@@ -127,7 +127,7 @@ class TestGetSettingValue:
         mock_setting = MagicMock()
         mock_setting.value_text = None
         mock_setting.value_json = {"key": "value"}
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _get_setting_value(mock_db, SettingDomain.scheduler, "test_key")
 
@@ -139,7 +139,7 @@ class TestGetSettingValue:
         mock_setting = MagicMock()
         mock_setting.value_text = "text_priority"
         mock_setting.value_json = {"ignored": True}
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _get_setting_value(mock_db, SettingDomain.scheduler, "test_key")
 
@@ -149,7 +149,7 @@ class TestGetSettingValue:
         """Inactive settings should not be returned (query filters by is_active)."""
         mock_db = MagicMock()
         # Setting up the filter chain to return None (no active setting found)
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = _get_setting_value(mock_db, SettingDomain.scheduler, "test_key")
 
@@ -158,7 +158,7 @@ class TestGetSettingValue:
     def test_get_setting_value_missing(self):
         """Should return None when setting doesn't exist."""
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = _get_setting_value(mock_db, SettingDomain.scheduler, "nonexistent")
 
@@ -178,7 +178,7 @@ class TestEffectiveInt:
         # DB would return different value
         mock_setting = MagicMock()
         mock_setting.value_text = "50"
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _effective_int(
             mock_db, SettingDomain.scheduler, "db_key", "TEST_INT", default=10
@@ -193,7 +193,7 @@ class TestEffectiveInt:
         mock_setting = MagicMock()
         mock_setting.value_text = "75"
         mock_setting.value_json = None
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _effective_int(
             mock_db, SettingDomain.scheduler, "db_key", "UNSET_INT", default=10
@@ -205,7 +205,7 @@ class TestEffectiveInt:
         """Should fall back to default when env and DB are not set."""
         monkeypatch.delenv("MISSING_INT", raising=False)
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = _effective_int(
             mock_db, SettingDomain.scheduler, "db_key", "MISSING_INT", default=42
@@ -220,7 +220,7 @@ class TestEffectiveInt:
         mock_setting = MagicMock()
         mock_setting.value_text = "not_a_number"
         mock_setting.value_json = None
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _effective_int(
             mock_db, SettingDomain.scheduler, "db_key", "UNSET_INT", default=99
@@ -241,7 +241,7 @@ class TestEffectiveStr:
         mock_db = MagicMock()
         mock_setting = MagicMock()
         mock_setting.value_text = "db_value"
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _effective_str(
             mock_db, SettingDomain.scheduler, "db_key", "TEST_STR", default="default"
@@ -256,7 +256,7 @@ class TestEffectiveStr:
         mock_setting = MagicMock()
         mock_setting.value_text = "from_db"
         mock_setting.value_json = None
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = mock_setting
+        mock_db.scalars.return_value.first.return_value = mock_setting
 
         result = _effective_str(
             mock_db, SettingDomain.scheduler, "db_key", "UNSET_STR", default="default"
@@ -268,7 +268,7 @@ class TestEffectiveStr:
         """Should fall back to default when env and DB are not set."""
         monkeypatch.delenv("MISSING_STR", raising=False)
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = _effective_str(
             mock_db,
@@ -284,7 +284,7 @@ class TestEffectiveStr:
         """Should return None when default is None and no other value."""
         monkeypatch.delenv("MISSING_STR", raising=False)
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = _effective_str(
             mock_db, SettingDomain.scheduler, "db_key", "MISSING_STR", default=None
@@ -309,7 +309,7 @@ class TestGetCeleryConfig:
 
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
-        mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_session.scalars.return_value.first.return_value = None
 
         config = get_celery_config()
 
@@ -328,7 +328,7 @@ class TestGetCeleryConfig:
 
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
-        mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_session.scalars.return_value.first.return_value = None
 
         config = get_celery_config()
 
@@ -345,7 +345,7 @@ class TestGetCeleryConfig:
 
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
-        mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_session.scalars.return_value.first.return_value = None
 
         config = get_celery_config()
 
@@ -367,7 +367,7 @@ class TestGetCeleryConfig:
             mock_setting.value_json = None
             return mock_setting
 
-        mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.first = mock_first
+        mock_session.scalars.return_value.first = mock_first
 
         config = get_celery_config()
 
@@ -396,7 +396,7 @@ class TestGetCeleryConfig:
         """Should always close the database session."""
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
-        mock_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_session.scalars.return_value.first.return_value = None
 
         get_celery_config()
 
@@ -414,7 +414,7 @@ class TestBuildBeatSchedule:
         """Should return only builtin tasks when no DB tasks exist."""
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
-        mock_session.query.return_value.filter.return_value.all.return_value = []
+        mock_session.scalars.return_value.all.return_value = []
 
         schedule = build_beat_schedule()
 
@@ -445,9 +445,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -472,9 +470,7 @@ class TestBuildBeatSchedule:
         mock_interval_task.args_json = None
         mock_interval_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_interval_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_interval_task]
 
         schedule = build_beat_schedule()
 
@@ -499,9 +495,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -526,9 +520,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -551,9 +543,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -576,9 +566,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = ["arg1", "arg2"]
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -601,9 +589,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = {"key": "value"}
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -626,9 +612,7 @@ class TestBuildBeatSchedule:
         mock_task.args_json = None
         mock_task.kwargs_json = None
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
-            mock_task
-        ]
+        mock_session.scalars.return_value.all.return_value = [mock_task]
 
         schedule = build_beat_schedule()
 
@@ -655,7 +639,7 @@ class TestBuildBeatSchedule:
         """Should always close the database session."""
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
-        mock_session.query.return_value.filter.return_value.all.return_value = []
+        mock_session.scalars.return_value.all.return_value = []
 
         build_beat_schedule()
 
@@ -685,7 +669,7 @@ class TestBuildBeatSchedule:
         task2.args_json = ["arg"]
         task2.kwargs_json = {"key": "val"}
 
-        mock_session.query.return_value.filter.return_value.all.return_value = [
+        mock_session.scalars.return_value.all.return_value = [
             task1,
             task2,
         ]

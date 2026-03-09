@@ -107,10 +107,7 @@ def test_expired_invoice_intent_allows_new_payment():
         expires_at=datetime.now(UTC) - timedelta(minutes=1),
     )
 
-    query = MagicMock()
-    query.filter.return_value = query
-    query.first.return_value = expired_intent
-    db.query.return_value = query
+    db.scalar.return_value = expired_intent
 
     def _get(model, _id):
         if model.__name__ == "Invoice":

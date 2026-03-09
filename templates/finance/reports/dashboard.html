@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
+{% from "components/macros.html" import compact_filters, icon_svg, status_badge, empty_state %}
 
 {% block page_title %}Reports{% endblock %}
 
@@ -15,24 +15,19 @@
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-8">
     <!-- Period Filter -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <div class="flex-1 min-w-[150px]">
-                <label class="form-label">Start date</label>
-                <input type="date" name="start_date" value="{{ key_metrics.start_date_iso }}" class="form-input">
-            </div>
-            <div class="flex-1 min-w-[150px]">
-                <label class="form-label">End date</label>
-                <input type="date" name="end_date" value="{{ key_metrics.end_date_iso }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-primary">
-                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
-                Apply filter
-            </button>
-            <div class="flex-shrink-0">
-                <p class="text-sm text-slate-500 dark:text-slate-400">Period: <span class="font-medium text-slate-700 dark:text-slate-300">{{ key_metrics.period_name }}</span></p>
-            </div>
-        </form>
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/reports",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=key_metrics.start_date_iso,
+        end_date=key_metrics.end_date_iso,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}
+    {% endcall %}
+
+    <div class="px-1">
+        <p class="text-sm text-slate-500 dark:text-slate-400">Period: <span class="font-medium text-slate-700 dark:text-slate-300">{{ key_metrics.period_name }}</span></p>
     </div>
 
     <!-- Key Metrics Summary Cards -->

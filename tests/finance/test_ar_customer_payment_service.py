@@ -261,7 +261,7 @@ def test_post_payment_success_without_wht():
         return None
 
     db.get.side_effect = _get
-    db.query.return_value.filter.return_value.all.return_value = []
+    db.scalars.return_value.all.return_value = []
 
     journal = SimpleNamespace(journal_entry_id=uuid4())
     posting_result = SimpleNamespace(

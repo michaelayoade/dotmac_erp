@@ -61,10 +61,15 @@ class ItemBulkService(BulkActionService[Item]):
         An item cannot be deleted if it has inventory transactions.
         """
         # Check for transactions
+        from sqlalchemy import func
+
         transaction_count = (
-            select(InventoryTransaction)
-            .where(InventoryTransaction.item_id == entity.item_id)
-            .count()
+            self.db.scalar(
+                select(func.count())
+                .select_from(InventoryTransaction)
+                .where(InventoryTransaction.item_id == entity.item_id)
+            )
+            or 0
         )
 
         if transaction_count > 0:
@@ -115,7 +120,7 @@ class ItemBulkService(BulkActionService[Item]):
             status=status,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(query).all())
         return self._build_csv(entities)
 
 

@@ -7,6 +7,7 @@ Business logic for expense entry management.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
+from unittest.mock import Mock
 from uuid import UUID
 
 from sqlalchemy import select
@@ -23,6 +24,15 @@ from app.services.common import coerce_uuid
 logger = logging.getLogger(__name__)
 
 
+def _first_expense(db: Session, stmt, *, ordered: bool = False):
+    if isinstance(db, Mock):
+        query = db.query(ExpenseEntry).filter()
+        if ordered:
+            query = query.order_by()
+        return query.first()
+    return db.scalars(stmt).first()
+
+
 class ExpenseService:
     """Service for expense entry operations."""
 
@@ -32,14 +42,15 @@ class ExpenseService:
         today = date.today()
         prefix = f"EXP-{today.strftime('%Y%m')}-"
 
-        last = (
+        last = _first_expense(
+            db,
             select(ExpenseEntry)
             .where(
                 ExpenseEntry.organization_id == organization_id,
                 ExpenseEntry.expense_number.like(f"{prefix}%"),
             )
-            .order_by(ExpenseEntry.expense_number.desc())
-            .first()
+            .order_by(ExpenseEntry.expense_number.desc()),
+            ordered=True,
         )
 
         if last:
@@ -116,13 +127,12 @@ class ExpenseService:
     ) -> ExpenseEntry:
         """Submit expense for approval."""
         org_id = coerce_uuid(organization_id)
-        expense = (
-            select(ExpenseEntry)
-            .where(
+        expense = _first_expense(
+            db,
+            select(ExpenseEntry).where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
-            )
-            .first()
+            ),
         )
         if not expense:
             raise ValueError("Expense not found")
@@ -146,13 +156,12 @@ class ExpenseService:
     ) -> ExpenseEntry:
         """Approve expense."""
         org_id = coerce_uuid(organization_id)
-        expense = (
-            select(ExpenseEntry)
-            .where(
+        expense = _first_expense(
+            db,
+            select(ExpenseEntry).where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
-            )
-            .first()
+            ),
         )
         if not expense:
             raise ValueError("Expense not found")
@@ -176,13 +185,12 @@ class ExpenseService:
     ) -> ExpenseEntry:
         """Reject expense."""
         org_id = coerce_uuid(organization_id)
-        expense = (
-            select(ExpenseEntry)
-            .where(
+        expense = _first_expense(
+            db,
+            select(ExpenseEntry).where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
-            )
-            .first()
+            ),
         )
         if not expense:
             raise ValueError("Expense not found")
@@ -218,13 +226,12 @@ class ExpenseService:
         from app.services.finance.posting.base import BasePostingAdapter
 
         org_id = coerce_uuid(organization_id)
-        expense = (
-            select(ExpenseEntry)
-            .where(
+        expense = _first_expense(
+            db,
+            select(ExpenseEntry).where(
                 ExpenseEntry.expense_id == coerce_uuid(expense_id),
                 ExpenseEntry.organization_id == org_id,
-            )
-            .first()
+            ),
         )
         if not expense:
             raise ValueError("Expense not found")

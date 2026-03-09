@@ -584,8 +584,7 @@ class LotSerialService(ListResponseMixin):
     ) -> InventoryLot | None:
         """Get a lot by ID."""
         lot = db.scalars(
-            select(InventoryLot)
-            .where(InventoryLot.lot_id == coerce_uuid(lot_id))
+            select(InventoryLot).where(InventoryLot.lot_id == coerce_uuid(lot_id))
         ).first()
         if not lot:
             return None

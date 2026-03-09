@@ -126,7 +126,7 @@ class AssetBulkService(BulkActionService[Asset]):
             status=status,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(query).all())
         return self._build_csv(entities)
 
 

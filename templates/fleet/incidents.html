@@ -81,7 +81,7 @@
             <select name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 {% for s in statuses %}
-                <option value="{{ s.value }}" {{ 'selected' if status == s.value else '' }}>{{ s.value | replace('_', ' ') | title }}</option>
+                <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
                 {% endfor %}
             </select>
     </div>
@@ -89,7 +89,7 @@
             <select name="severity" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Severity</option>
                 {% for sev in severities %}
-                <option value="{{ sev.value }}" {{ 'selected' if severity == sev.value else '' }}>{{ sev.value | title }}</option>
+                <option value="{{ sev }}" {{ 'selected' if severity == sev else '' }}>{{ sev | title }}</option>
                 {% endfor %}
             </select>
     </div>

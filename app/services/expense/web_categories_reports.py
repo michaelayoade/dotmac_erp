@@ -19,6 +19,7 @@ from app.models.expense import (
 from app.models.expense.expense_claim import ExpenseClaimStatus
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.expense.expense_service import ExpenseService, ExpenseServiceError
 from app.services.expense.limit_service import ExpenseLimitService
 from app.services.expense.web_common import ExpenseWebCommonMixin
@@ -59,6 +60,16 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "limit": pagination.limit,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
+                "active_filters": build_active_filters(
+                    params={"search": search, "is_active": is_active},
+                    labels={"search": "Search"},
+                    options={
+                        "is_active": {
+                            "true": "Active",
+                            "false": "Inactive",
+                        }
+                    },
+                ),
             }
         )
         return templates.TemplateResponse(request, "expense/categories.html", context)
@@ -357,6 +368,10 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "report": report_data,
                 "start_date": start_date or report_data["start_date"].isoformat(),
                 "end_date": end_date or report_data["end_date"].isoformat(),
+                "active_filters": build_active_filters(
+                    params={"start_date": start_date, "end_date": end_date},
+                    labels={"start_date": "From", "end_date": "To"},
+                ),
             }
         )
         return templates.TemplateResponse(
@@ -379,6 +394,10 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "report": report_data,
                 "start_date": start_date or report_data["start_date"].isoformat(),
                 "end_date": end_date or report_data["end_date"].isoformat(),
+                "active_filters": build_active_filters(
+                    params={"start_date": start_date, "end_date": end_date},
+                    labels={"start_date": "From", "end_date": "To"},
+                ),
             }
         )
         return templates.TemplateResponse(
@@ -536,6 +555,10 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 "weekly_balance": weekly_balance,
                 "start_date": start_date or report_data["start_date"].isoformat(),
                 "end_date": end_date or report_data["end_date"].isoformat(),
+                "active_filters": build_active_filters(
+                    params={"start_date": start_date, "end_date": end_date},
+                    labels={"start_date": "From", "end_date": "To"},
+                ),
             }
         )
         return templates.TemplateResponse(

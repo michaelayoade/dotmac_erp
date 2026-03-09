@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{%- from "components/macros.html" import status_badge, pagination, live_search, icon_svg %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination, icon_svg %}
 
 {% block title %}Projects{% endblock %}
 
@@ -77,17 +77,14 @@
         </div>
     </div>
 
-    {% call(search_attrs) live_search(
-        search=search or '',
+    {% call(filter_attrs) compact_filters(
         base_url="/projects",
-        placeholder="Search projects..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search or '',
+        search_placeholder="Search projects..."
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
-            <option value="">All Statuses</option>
-            {% for s in statuses %}
-            <option value="{{ s }}" {{ 'selected' if status_filter == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
+    {{ filter_select_field("status", "Status", status_filter, statuses, filter_attrs, "All Statuses", true) }}
     {% endcall %}
 
     <div id="results-container">
@@ -187,9 +184,12 @@
         {{ pagination(
             page=page,
             total_pages=total_pages,
-            total_count=total_count,
-            limit=limit,
-            search=search
+            total_count=total,
+            limit=per_page,
+            search=search,
+            filters={
+                'status': status_filter
+            }
         ) }}
     </div>
     </div>{# /results-container #}

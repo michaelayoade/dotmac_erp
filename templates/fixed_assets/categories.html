@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import status_badge, empty_state, live_search, pagination, icon_svg %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters, filter_select_field, pagination, icon_svg %}
 
 {% block page_title %}Asset Categories{% endblock %}
 
@@ -23,21 +23,21 @@
 <div class="space-y-6">
     <p class="text-sm text-slate-500 dark:text-slate-400">Define depreciation defaults and GL mappings</p>
 
-    {{ live_search(
+    {% call(filter_attrs) compact_filters(
         base_url="/fixed-assets/categories",
-        filters=[
-            {
-                "name": "is_active",
-                "label": "All Status",
-                "value": is_active|string|lower if is_active is not none else "",
-                "options": [
-                    {"value": "true", "label": "Active"},
-                    {"value": "false", "label": "Inactive"}
-                ]
-            }
-        ],
-        placeholder="Search categories..."
-    ) }}
+        active_filters=active_filters | default([])
+    ) %}
+        {{ filter_select_field(
+            "is_active",
+            "Status",
+            is_active|string|lower if is_active is not none else "",
+            [
+                {"value": "true", "label": "Active"},
+                {"value": "false", "label": "Inactive"}
+            ],
+            filter_attrs
+        ) }}
+    {% endcall %}
 
     <div id="results-container">
         <div class="card">
@@ -106,7 +106,7 @@
                 total_pages=total_pages,
                 total_count=total_count,
                 limit=limit,
-                search=search
+                filters={"is_active": is_active|string|lower if is_active is not none else ""}
             ) }}
         </div>
     </div>

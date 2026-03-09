@@ -26,10 +26,7 @@ class TestCleanupOldHookExecutions:
     def test_deletes_old_hook_executions(self) -> None:
         mock_db = MagicMock()
         mock_db.scalars.return_value.all.return_value = [uuid4(), uuid4()]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.delete.return_value = 2
-        mock_db.query.return_value = mock_query
+        mock_db.execute.return_value = MagicMock(rowcount=2)
 
         with patch("app.tasks.hooks.SessionLocal") as mock_session:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)

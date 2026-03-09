@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, live_search, icon_svg %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, filter_select_field, icon_svg %}
 
 {% block page_title %}Warehouses{% endblock %}
 
@@ -31,22 +31,24 @@
     </div>
 
     {# Search and Filters #}
-    {{ live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "active", "label": "Active"},
-                    {"value": "inactive", "label": "Inactive"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/inventory/warehouses",
-        placeholder="Search warehouses..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search warehouses..."
+    ) %}
+        {{ filter_select_field(
+            "status",
+            "Status",
+            status,
+            [
+                {"value": "active", "label": "Active"},
+                {"value": "inactive", "label": "Inactive"}
+            ],
+            filter_attrs
+        ) }}
+    {% endcall %}
 
     <div id="results-container">
     {# Warehouses Table #}

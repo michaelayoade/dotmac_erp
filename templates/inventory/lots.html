@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination, empty_state, status_badge, live_search, icon_svg %}
+{% from "components/macros.html" import pagination, empty_state, status_badge, compact_filters, filter_custom_select_field, filter_select_field, icon_svg %}
 
 {% block page_title %}Lots & Serial Numbers{% endblock %}
 
@@ -76,32 +76,32 @@
     {% endif %}
 
     {# Search & Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "available", "label": "Available"},
-                    {"value": "quarantine", "label": "Quarantined"},
-                    {"value": "expired", "label": "Expired"},
-                    {"value": "depleted", "label": "Depleted"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/inventory/lots",
-        placeholder="Search by lot number or item..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search by lot number or item..."
     ) %}
-        <select name="warehouse" class="form-select" {{ search_attrs }}>
-            <option value="">All Warehouses</option>
+        {{ filter_select_field(
+            "status",
+            "Status",
+            status,
+            [
+                {"value": "available", "label": "Available"},
+                {"value": "quarantine", "label": "Quarantined"},
+                {"value": "expired", "label": "Expired"},
+                {"value": "depleted", "label": "Depleted"}
+            ],
+            filter_attrs
+        ) }}
+        {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
             {% for wh in warehouses | default([]) %}
             <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
                 {{ wh.warehouse_name }}
             </option>
             {% endfor %}
-        </select>
+        {% endcall %}
     {% endcall %}
 
     <div id="results-container">
@@ -173,7 +173,7 @@
     </div>
 
     {% if lots | default([]) | length > 0 %}
-    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status}) }}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=50, search=search, filters={"status": status, "warehouse": warehouse}) }}
     {% endif %}
     </div>{# /results-container #}
 </div>

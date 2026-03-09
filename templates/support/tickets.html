@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import live_search, pagination, icon_svg, status_badge %}
+{% from "components/macros.html" import compact_filters, pagination, icon_svg, status_badge %}
 
 {% block page_title %}Support Tickets{% endblock %}
 
@@ -129,41 +129,43 @@
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/support/tickets",
-        placeholder="Search by ticket number, subject, or email..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search by ticket number, subject, or email..."
     ) %}
         <label for="ticket-filter-status" class="sr-only">Filter by status</label>
-        <select id="ticket-filter-status" name="status" aria-label="Filter by status" class="form-select" {{ search_attrs }}>
+        <select id="ticket-filter-status" name="status" aria-label="Filter by status" class="form-select w-full" {{ filter_attrs }}>
             <option value="">All Status</option>
             {% for s in statuses %}
             <option value="{{ s.value }}" {{ 'selected' if selected_status == s.value }}>{{ s.label }}</option>
             {% endfor %}
         </select>
         <label for="ticket-filter-priority" class="sr-only">Filter by priority</label>
-        <select id="ticket-filter-priority" name="priority" aria-label="Filter by priority" class="form-select" {{ search_attrs }}>
+        <select id="ticket-filter-priority" name="priority" aria-label="Filter by priority" class="form-select w-full" {{ filter_attrs }}>
             <option value="">All Priority</option>
             {% for p in priorities %}
             <option value="{{ p.value }}" {{ 'selected' if selected_priority == p.value }}>{{ p.label }}</option>
             {% endfor %}
         </select>
         <label for="ticket-filter-assigned-to" class="sr-only">Filter by assignee</label>
-        <select id="ticket-filter-assigned-to" name="assigned_to" aria-label="Filter by assignee" class="form-select" {{ search_attrs }}>
+        <select id="ticket-filter-assigned-to" name="assigned_to" aria-label="Filter by assignee" class="form-select w-full" {{ filter_attrs }}>
             <option value="">All Assignees</option>
             {% for emp in employees %}
             <option value="{{ emp.employee_id }}" {{ 'selected' if selected_assigned_to == emp.employee_id }}>{{ emp.full_name }}</option>
             {% endfor %}
         </select>
         <label for="ticket-filter-category" class="sr-only">Filter by category</label>
-        <select id="ticket-filter-category" name="category" aria-label="Filter by category" class="form-select" {{ search_attrs }}>
+        <select id="ticket-filter-category" name="category" aria-label="Filter by category" class="form-select w-full" {{ filter_attrs }}>
             <option value="">All Categories</option>
             {% for c in categories %}
             <option value="{{ c.value }}" {{ 'selected' if selected_category == c.value }}>{{ c.label }}</option>
             {% endfor %}
         </select>
         <label for="ticket-filter-team" class="sr-only">Filter by team</label>
-        <select id="ticket-filter-team" name="team" aria-label="Filter by team" class="form-select" {{ search_attrs }}>
+        <select id="ticket-filter-team" name="team" aria-label="Filter by team" class="form-select w-full" {{ filter_attrs }}>
             <option value="">All Teams</option>
             {% for t in teams %}
             <option value="{{ t.value }}" {{ 'selected' if selected_team == t.value }}>{{ t.label }}</option>
@@ -171,10 +173,10 @@
         </select>
         <label for="ticket-filter-date-from" class="sr-only">Filter from date</label>
         <input id="ticket-filter-date-from" type="date" name="date_from" value="{{ selected_date_from if selected_date_from else '' }}"
-               class="form-input" placeholder="From date" aria-label="Filter from date" {{ search_attrs }}>
+               class="form-input w-full" placeholder="From date" aria-label="Filter from date" {{ filter_attrs }}>
         <label for="ticket-filter-date-to" class="sr-only">Filter to date</label>
         <input id="ticket-filter-date-to" type="date" name="date_to" value="{{ selected_date_to if selected_date_to else '' }}"
-               class="form-input" placeholder="To date" aria-label="Filter to date" {{ search_attrs }}>
+               class="form-input w-full" placeholder="To date" aria-label="Filter to date" {{ filter_attrs }}>
     {% endcall %}
 
     <div id="results-container" class="space-y-6">
@@ -414,9 +416,18 @@
         {{ pagination(
             page=page,
             total_pages=total_pages,
-            total_count=total_count,
-            limit=limit,
-            search=search
+            total_count=total,
+            limit=per_page,
+            search=search,
+            filters={
+                'status': selected_status,
+                'priority': selected_priority,
+                'assigned_to': selected_assigned_to,
+                'category': selected_category,
+                'team': selected_team,
+                'date_from': selected_date_from,
+                'date_to': selected_date_to
+            }
         ) }}
 
         {% else %}

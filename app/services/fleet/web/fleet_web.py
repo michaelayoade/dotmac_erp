@@ -249,6 +249,11 @@ class FleetWebService:
         # Get status counts
         status_counts = service.count_by_status()
 
+        active_filters = build_active_filters(
+            params={"status": status, "vehicle_type": vehicle_type},
+            labels={"status": "Status", "vehicle_type": "Vehicle Type"},
+        )
+
         return {
             "vehicles": result.items,
             "total": result.total,
@@ -263,6 +268,7 @@ class FleetWebService:
             "current_status": status,
             "current_type": vehicle_type,
             "current_department_id": department_id,
+            "active_filters": active_filters,
         }
 
     def vehicle_form_context(
@@ -841,6 +847,7 @@ class FleetWebService:
             return context
         org_id = coerce_uuid(organization_id)
         service = DocumentService(self.db, org_id)
+        vehicle_service = VehicleService(self.db, org_id)
 
         type_filter = DocumentType(document_type) if document_type else None
 
@@ -856,6 +863,10 @@ class FleetWebService:
         # Get expiring and expired counts
         expiring = service.get_expiring_documents(days_before=30)
         expired = service.get_expired_documents()
+        vehicles_result = vehicle_service.list_vehicles(
+            include_disposed=False,
+            params=PaginationParams(limit=200),
+        )
 
         active_filters = build_active_filters(
             params={
@@ -872,6 +883,7 @@ class FleetWebService:
             "has_prev": result.has_prev,
             "expiring_count": len(expiring),
             "expired_count": len(expired),
+            "vehicles": vehicles_result.items,
             "document_types": [t.value for t in DocumentType],
             "current_type": document_type,
             "current_vehicle_id": vehicle_id,

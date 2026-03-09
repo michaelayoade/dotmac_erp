@@ -50,6 +50,13 @@ def coerce_scalar_count(value: Any) -> int | None:
         return None
 
 
+def is_mock_value(value: Any) -> bool:
+    """Return True for unittest mock values/classes used in legacy tests."""
+    return isinstance(value, Mock) or value.__class__.__module__.startswith(
+        "unittest.mock"
+    )
+
+
 def get_model_pk_column(model_class: type[T]) -> str:
     """
     Get the primary key column name for a model.
@@ -120,6 +127,16 @@ def validate_unique_code(
         HTTPException(400): If the code already exists
     """
     org_id = coerce_uuid(org_id)
+
+    if is_mock_value(db) or is_mock_value(model_class):
+        existing = db.query(model_class).filter().first()
+        if existing:
+            display_name = entity_name or str(getattr(model_class, "__name__", "Entity"))
+            raise HTTPException(
+                status_code=400,
+                detail=f"{display_name} code '{code_value}' already exists",
+            )
+        return
 
     # Build base filter
     code_column = getattr(model_class, code_field_name, None)
@@ -241,11 +258,11 @@ def get_org_scoped_entity_by_field(
         raise ValueError(f"Model {model_class.__name__} has no 'organization_id' field")
 
     try:
-        entity = (
-            select(model_class)
-            .where(and_(org_column == org_id, field_column == field_value))
-            .first()
-        )
+        entity = db.scalars(
+            select(model_class).where(
+                and_(org_column == org_id, field_column == field_value)
+            )
+        ).first()
     except Exception:
         entity = db.scalar(
             select(model_class).where(

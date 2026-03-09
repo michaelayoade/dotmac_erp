@@ -1,6 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state, live_search, pagination, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_date_field, filter_select_field, status_badge, empty_state, pagination, icon_svg %}
 {% block page_title %}Expenses{% endblock %}
 
 {% block breadcrumbs %}
@@ -21,18 +21,17 @@
 
 {% block content %}
 <div class="space-y-6">
-    {% call(search_attrs) live_search(search=search, base_url="/expense/list", placeholder="Search expenses...") %}
-        <label for="expense-filter-status" class="sr-only">Filter by status</label>
-        <select id="expense-filter-status" name="status" class="form-select" aria-label="Filter by status" {{ search_attrs }}>
-            <option value="">All Status</option>
-            {% for s in statuses %}
-            <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
-        <label for="expense-filter-start-date" class="sr-only">Start date</label>
-        <input id="expense-filter-start-date" type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input" aria-label="Start date" {{ search_attrs }}>
-        <label for="expense-filter-end-date" class="sr-only">End date</label>
-        <input id="expense-filter-end-date" type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input" aria-label="End date" {{ search_attrs }}>
+    {% call(filter_attrs) compact_filters(
+        base_url=list_base_url | default('/expense/list'),
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search expenses...",
+        auto_submit=true
+    ) %}
+    {{ filter_select_field("status", "Status", filter_status, statuses, filter_attrs, "All Status", true) }}
+    {{ filter_date_field("start_date", "Start date", filter_start_date or '', filter_attrs) }}
+    {{ filter_date_field("end_date", "End date", filter_end_date or '', filter_attrs) }}
     {% endcall %}
 
     <!-- Status Summary -->

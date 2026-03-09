@@ -74,10 +74,8 @@ class TestAddInventoryLayer:
     def test_add_layer_success(self, service, mock_db, org_id):
         """Test successful layer addition."""
         item = MockItem(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = item
-        mock_db.query.return_value.filter.return_value.scalar.return_value = Decimal(
-            "0"
-        )
+        mock_db.scalars.return_value.first.return_value = item
+        mock_db.scalar.side_effect = [Decimal("0"), Decimal("0")]
 
         service.add_inventory_layer(
             mock_db,
@@ -96,7 +94,7 @@ class TestAddInventoryLayer:
         """Test layer addition with invalid item."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.add_inventory_layer(
@@ -117,7 +115,7 @@ class TestConsumeInventoryFifo:
 
     def test_consume_success(self, service, mock_db, org_id, sample_fifo_layers):
         """Test successful FIFO consumption."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
+        mock_db.scalars.return_value.all.return_value = sample_fifo_layers
 
         result = service.consume_inventory_fifo(mock_db, org_id, uuid4(), Decimal("60"))
 
@@ -133,7 +131,7 @@ class TestConsumeInventoryFifo:
         """Test consumption with insufficient inventory."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
+        mock_db.scalars.return_value.all.return_value = sample_fifo_layers
 
         with pytest.raises(HTTPException) as exc:
             service.consume_inventory_fifo(
@@ -150,7 +148,7 @@ class TestConsumeInventoryFifo:
         self, service, mock_db, org_id, sample_fifo_layers
     ):
         """Test consumption from single layer."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
+        mock_db.scalars.return_value.all.return_value = sample_fifo_layers
 
         result = service.consume_inventory_fifo(mock_db, org_id, uuid4(), Decimal("30"))
 
@@ -167,7 +165,7 @@ class TestGetFifoInventory:
         self, service, mock_db, org_id, sample_fifo_layers
     ):
         """Test getting FIFO inventory state."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = sample_fifo_layers
+        mock_db.scalars.return_value.all.return_value = sample_fifo_layers
 
         result = service.get_fifo_inventory(mock_db, org_id, uuid4())
 
@@ -178,7 +176,7 @@ class TestGetFifoInventory:
 
     def test_get_fifo_inventory_empty(self, service, mock_db, org_id):
         """Test getting empty FIFO inventory."""
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = service.get_fifo_inventory(mock_db, org_id, uuid4())
 
@@ -319,7 +317,7 @@ class TestCreateValuationRecord:
         """Test creating a new valuation record."""
         item = MockItem(organization_id=org_id, base_uom="EACH")
         item.costing_method = CostingMethod.WEIGHTED_AVERAGE
-        mock_db.query.return_value.filter.return_value.first.side_effect = [item, None]
+        mock_db.scalars.return_value.first.side_effect = [item, None]
 
         fifo_inv = FIFOInventory(
             item_id=item.item_id,
@@ -360,7 +358,7 @@ class TestCreateValuationRecord:
         """Test creating valuation for non-existent item."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         nrv_calc = NRVCalculation(
             item_id=uuid4(),
@@ -404,7 +402,7 @@ class TestGetValuationSummary:
                 write_down_amount=Decimal("0"),
             ),
         ]
-        mock_db.query.return_value.filter.return_value.all.return_value = valuations
+        mock_db.scalars.return_value.all.return_value = valuations
 
         result = service.get_valuation_summary(mock_db, org_id, uuid4())
 
@@ -414,7 +412,7 @@ class TestGetValuationSummary:
 
     def test_get_summary_empty(self, service, mock_db, org_id):
         """Test getting summary with no valuations."""
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         result = service.get_valuation_summary(mock_db, org_id, uuid4())
 

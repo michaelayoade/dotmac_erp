@@ -165,14 +165,15 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return list(
-            select(Attachment)
-            .where(
-                Attachment.organization_id == org_id,
-                Attachment.entity_type == entity_type,
-                Attachment.entity_id == ent_id,
-            )
-            .order_by(Attachment.uploaded_at.desc())
-            .all()
+            db.scalars(
+                select(Attachment)
+                .where(
+                    Attachment.organization_id == org_id,
+                    Attachment.entity_type == entity_type,
+                    Attachment.entity_id == ent_id,
+                )
+                .order_by(Attachment.uploaded_at.desc())
+            ).all()
         )
 
     @staticmethod
@@ -185,14 +186,12 @@ class AttachmentService:
         att_id = coerce_uuid(attachment_id)
         org_id = coerce_uuid(organization_id)
 
-        attachment = (
-            select(Attachment)
-            .where(
+        attachment = db.scalars(
+            select(Attachment).where(
                 Attachment.attachment_id == att_id,
                 Attachment.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not attachment:
             return False
@@ -224,13 +223,13 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return (
-            select(func.count(Attachment.attachment_id))
-            .where(
-                Attachment.organization_id == org_id,
-                Attachment.entity_type == entity_type,
-                Attachment.entity_id == ent_id,
+            db.scalar(
+                select(func.count(Attachment.attachment_id)).where(
+                    Attachment.organization_id == org_id,
+                    Attachment.entity_type == entity_type,
+                    Attachment.entity_id == ent_id,
+                )
             )
-            .scalar()
             or 0
         )
 

@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import live_search, pagination, empty_state, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination, empty_state, icon_svg %}
 
 {% block content %}
 <div class="space-y-6">
@@ -14,22 +14,25 @@
         </a>
     </div>
 
-    {{ live_search(
-        search=search,
-        filters=[
-            {
-                "name": "is_active",
-                "label": "All Status",
-                "value": is_active if is_active is not none else "",
-                "options": [
-                    {"value": "true", "label": "Active"},
-                    {"value": "false", "label": "Inactive"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/expense/categories",
-        placeholder="Search categories..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search categories..."
+    ) %}
+    {{ filter_select_field(
+        "is_active",
+        "Status",
+        'true' if is_active == true else ('false' if is_active == false else ''),
+        [
+            {"value": "true", "label": "Active"},
+            {"value": "false", "label": "Inactive"}
+        ],
+        filter_attrs,
+        "All Status"
     ) }}
+    {% endcall %}
 
     <div id="results-container">
     <div class="card overflow-hidden">

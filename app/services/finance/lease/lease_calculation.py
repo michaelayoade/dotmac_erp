@@ -268,9 +268,9 @@ class LeaseCalculationService(ListResponseMixin):
         if not contract:
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
         if not liability:
             raise HTTPException(status_code=404, detail="Lease liability not found")
@@ -352,9 +352,9 @@ class LeaseCalculationService(ListResponseMixin):
         if not contract:
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
         if not liability:
             raise HTTPException(status_code=404, detail="Lease liability not found")

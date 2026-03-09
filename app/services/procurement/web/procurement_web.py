@@ -185,7 +185,8 @@ class ProcurementWebService:
             limit=limit,
         )
         active_filters = build_active_filters(
-            params={"status": status, "fiscal_year": fiscal_year}
+            params={"status": status, "fiscal_year": fiscal_year, "search": search},
+            labels={"search": "Search"},
         )
         return {
             "plans": plans,
@@ -262,7 +263,8 @@ class ProcurementWebService:
             limit=limit,
         )
         active_filters = build_active_filters(
-            params={"status": status, "urgency": urgency}
+            params={"status": status, "urgency": urgency, "search": search},
+            labels={"search": "Search"},
         )
         return {
             "requisitions": requisitions,
@@ -336,7 +338,14 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
-        active_filters = build_active_filters(params={"status": status})
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "method": procurement_method,
+                "search": search,
+            },
+            labels={"method": "Method", "search": "Search"},
+        )
         return {
             "rfqs": rfqs,
             "total": total,
@@ -425,7 +434,10 @@ class ProcurementWebService:
             ).all()
             rfq_map = {rfq.rfq_id: rfq for rfq in rfqs}
 
-        active_filters = build_active_filters(params={"status": status})
+        active_filters = build_active_filters(
+            params={"status": status, "search": search},
+            labels={"search": "Search"},
+        )
         return {
             "evaluations": evaluations,
             "total": total,
@@ -517,7 +529,10 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
-        active_filters = build_active_filters(params={"status": status})
+        active_filters = build_active_filters(
+            params={"status": status, "search": search},
+            labels={"search": "Search"},
+        )
         return {
             "contracts": contracts,
             "total": total,

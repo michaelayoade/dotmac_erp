@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import compact_filters, empty_state, filter_date_field, icon_svg, period_shortcuts %}
 {% block page_title %}AP aging report{% endblock %}
 
 {% block breadcrumbs %}
@@ -23,19 +23,15 @@
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-6">
     <!-- Filter Card -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            {{ period_shortcuts(mode="as_of") }}
-            <div class="flex-1 min-w-[200px]">
-                <label class="form-label">As of date</label>
-                <input type="date" name="as_of_date" value="{{ as_of_date_iso }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-primary">
-                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
-                Refresh
-            </button>
-        </form>
-    </div>
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/reports/ap-aging",
+        active_filters=active_filters | default([]),
+        auto_submit=false,
+        show_apply_button=true
+    ) %}
+    {{ period_shortcuts(mode="as_of") }}
+    {{ filter_date_field("as_of_date", "As of date", as_of_date_iso) }}
+    {% endcall %}
 
     <!-- Report Header -->
     <div class="card p-6 print:shadow-none print:border-0">

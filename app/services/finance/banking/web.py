@@ -2761,29 +2761,32 @@ class BankingWebService:
         matched_lines = sum(lc["matched"] for lc in line_counts.values())
 
         # ── Active filters ──
-        active_filters: list[dict[str, str]] = []
-        base_params = ""
-        if account_id:
-            acct = next(
-                (a for a in accounts if str(a.bank_account_id) == account_id),
-                None,
-            )
-            label = (
-                f"{acct.bank_name} - {acct.account_number}"
-                if acct
-                else "Selected Account"
-            )
-            active_filters.append({"label": label, "param": "account_id"})
-            base_params += f"&account_id={account_id}"
-        if status:
-            active_filters.append(
-                {
-                    "label": f"Status: {status.replace('_', ' ').title()}",
-                    "param": "status",
-                }
-            )
-        if search:
-            active_filters.append({"label": f'Search: "{search}"', "param": "search"})
+        active_filters = build_active_filters(
+            params={
+                "account_id": account_id,
+                "status": status,
+                "search": search,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={
+                "status": "Status",
+                "search": "Search",
+                "start_date": "From",
+                "end_date": "To",
+            },
+            options={
+                "account_id": {
+                    str(a.bank_account_id): f"{a.bank_name} - {a.account_number}"
+                    for a in accounts
+                },
+                "status": {
+                    "imported": "Imported",
+                    "processing": "Processing",
+                    "closed": "Reconciled",
+                },
+            },
+        )
 
         # ── Build statement views with real matched counts ──
         statement_views = []

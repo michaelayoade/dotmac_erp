@@ -90,7 +90,12 @@ class ExpenseLimitWebService:
         total_pages = (result.total + per_page - 1) // per_page
 
         active_filters = build_active_filters(
-            params={"scope_type": scope_type, "is_active": is_active},
+            params={
+                "scope_type": scope_type,
+                "is_active": is_active,
+                "search": search,
+            },
+            labels={"search": "Search"},
         )
         context = base_context(request, auth, "Expense Limits", "limits")
         context.update(

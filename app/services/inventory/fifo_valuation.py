@@ -115,8 +115,7 @@ class FIFOValuationService(ListResponseMixin):
 
         # Validate item
         item = db.scalars(
-            select(Item)
-            .where(
+            select(Item).where(
                 Item.item_id == item_id,
                 Item.organization_id == org_id,
             )
@@ -457,8 +456,7 @@ class FIFOValuationService(ListResponseMixin):
 
         # Get item details - verify belongs to organization
         item = db.scalars(
-            select(Item)
-            .where(
+            select(Item).where(
                 Item.item_id == item_id,
                 Item.organization_id == org_id,
             )
@@ -471,8 +469,7 @@ class FIFOValuationService(ListResponseMixin):
 
         # Check for existing valuation
         existing = db.scalars(
-            select(InventoryValuation)
-            .where(
+            select(InventoryValuation).where(
                 InventoryValuation.fiscal_period_id == period_id,
                 InventoryValuation.item_id == item_id,
                 InventoryValuation.warehouse_id == warehouse_id,
@@ -545,8 +542,7 @@ class FIFOValuationService(ListResponseMixin):
 
         valuations = list(
             db.scalars(
-                select(InventoryValuation)
-                .where(
+                select(InventoryValuation).where(
                     InventoryValuation.organization_id == org_id,
                     InventoryValuation.fiscal_period_id == period_id,
                 )

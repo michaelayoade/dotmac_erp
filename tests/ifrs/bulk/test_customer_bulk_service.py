@@ -19,7 +19,7 @@ class TestCanDelete:
 
     def test_can_delete_no_invoices(self, mock_db, mock_customer, organization_id):
         """Customer with no invoices can be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -32,7 +32,7 @@ class TestCanDelete:
 
     def test_cannot_delete_with_invoices(self, mock_db, mock_customer, organization_id):
         """Customer with invoices cannot be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 8
+        mock_db.scalar.return_value = 8
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -46,7 +46,7 @@ class TestCanDelete:
     def test_returns_invoice_count(self, mock_db, organization_id):
         """Error message should include the invoice count."""
         customer = MockCustomer(legal_name="ABC Corp")
-        mock_db.query.return_value.filter.return_value.count.return_value = 15
+        mock_db.scalar.return_value = 15
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -59,7 +59,7 @@ class TestCanDelete:
     def test_returns_customer_name_in_message(self, mock_db, organization_id):
         """Error message should include the customer name."""
         customer = MockCustomer(legal_name="XYZ Industries Ltd")
-        mock_db.query.return_value.filter.return_value.count.return_value = 5
+        mock_db.scalar.return_value = 5
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -71,7 +71,7 @@ class TestCanDelete:
 
     def test_returns_tuple_format(self, mock_db, mock_customer, organization_id):
         """Method should return a tuple of (bool, str)."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -350,11 +350,11 @@ class TestBulkDelete:
         customer1 = MockCustomer()
         customer2 = MockCustomer()
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             customer1,
             customer2,
         ]
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -373,18 +373,12 @@ class TestBulkDelete:
         customer1 = MockCustomer(legal_name="No Invoices")
         customer2 = MockCustomer(legal_name="Has Invoices")
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             customer1,
             customer2,
         ]
 
-        call_count = [0]
-
-        def mock_count():
-            call_count[0] += 1
-            return 0 if call_count[0] == 1 else 3
-
-        mock_db.query.return_value.filter.return_value.count = mock_count
+        mock_db.scalar.side_effect = [0, 3]
 
         with patch("app.services.finance.ar.bulk.Customer", MagicMock()):
             from app.services.finance.ar.bulk import CustomerBulkService
@@ -420,7 +414,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_headers(self, mock_db, mock_customer, organization_id):
         """CSV export should include correct headers."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_customer
         ]
 
@@ -445,7 +439,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_customer, organization_id):
         """CSV export should include entity data."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_customer
         ]
 

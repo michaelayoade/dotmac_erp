@@ -214,7 +214,7 @@ class TestInitiateExpenseTransfer:
         claim = _make_claim(org_id=org_id)
         intent = _make_intent(org_id=org_id, source_id=claim.claim_id)
 
-        db.scalar.return_value = claim
+        db.scalar.side_effect = [claim, None]
 
         # process_successful_transfer re-fetches with FOR UPDATE
         execute_result = MagicMock()
@@ -225,12 +225,6 @@ class TestInitiateExpenseTransfer:
 
         transfer_result = _make_paystack_transfer_result(status="success")
         client_cm = _paystack_client_context(initiate_result=transfer_result)
-
-        # Stub _update_batch_item_status (no batch)
-        batch_query = MagicMock()
-        batch_query.filter.return_value = batch_query
-        batch_query.first.return_value = None
-        db.query.return_value = batch_query
 
         svc = self._svc(db, org_id)
 
@@ -386,10 +380,7 @@ class TestProcessSuccessfulTransfer:
         db.execute.return_value = execute_result
         db.get.return_value = claim
         # _update_batch_item_status → no batch
-        batch_query = MagicMock()
-        batch_query.filter.return_value = batch_query
-        batch_query.first.return_value = None
-        db.query.return_value = batch_query
+        db.scalar.return_value = None
 
     # -- normal path: PROCESSING → COMPLETED --
 
@@ -536,10 +527,7 @@ class TestProcessSuccessfulTransfer:
         db.execute.return_value = execute_result
         db.get.return_value = None  # claim missing
 
-        batch_query = MagicMock()
-        batch_query.filter.return_value = batch_query
-        batch_query.first.return_value = None
-        db.query.return_value = batch_query
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
         svc.process_successful_transfer(
@@ -648,10 +636,7 @@ class TestMarkTransferFailed:
         db = MagicMock()
         intent = _make_intent(org_id=org_id, status=PaymentIntentStatus.PROCESSING)
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
         svc.mark_transfer_failed(intent, "Insufficient balance")
@@ -670,10 +655,7 @@ class TestMarkTransferFailed:
             source_id=claim.claim_id,
         )
         db.get.return_value = claim
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
         svc.mark_transfer_failed(intent, "Bank rejected")
@@ -692,10 +674,7 @@ class TestMarkTransferFailed:
             source_id=claim.claim_id,
         )
         db.get.return_value = claim
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
         svc.mark_transfer_failed(intent, "Timeout")
@@ -735,10 +714,7 @@ class TestPollTransferStatus:
         db.execute.return_value = execute_result
         db.get.return_value = claim
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         verify_result = _make_paystack_verify_result(status="success", fee=5000)
         client_cm = _paystack_client_context(verify_result=verify_result)
@@ -765,10 +741,7 @@ class TestPollTransferStatus:
         )
         db.get.return_value = None  # no claim lookup needed
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         verify_result = _make_paystack_verify_result(
             status="failed", reason="Insufficient funds"
@@ -821,10 +794,7 @@ class TestPollTransferStatus:
         )
         db.get.return_value = claim
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         verify_result = _make_paystack_verify_result(
             status="reversed", reason="Account closed"
@@ -914,10 +884,7 @@ class TestProcessTransferReversal:
         )
         db.get.return_value = claim
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
         svc.process_transfer_reversal(
@@ -1215,10 +1182,7 @@ class TestEdgeCases:
         execute_result.scalar_one_or_none.return_value = intent
         db.execute.return_value = execute_result
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
         svc.process_successful_transfer(
@@ -1248,10 +1212,7 @@ class TestEdgeCases:
         db.execute.return_value = execute_result
         db.get.return_value = claim
 
-        batch_q = MagicMock()
-        batch_q.filter.return_value = batch_q
-        batch_q.first.return_value = None
-        db.query.return_value = batch_q
+        db.scalar.return_value = None
 
         svc = self._svc(db, org_id)
 

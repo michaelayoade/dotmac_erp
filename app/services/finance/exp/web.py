@@ -124,8 +124,13 @@ class ExpenseWebService:
         counts = {s.value: c for s, c in status_counts}
 
         active_filters = build_active_filters(
-            params={"status": status, "start_date": start_date, "end_date": end_date},
-            labels={"start_date": "From", "end_date": "To"},
+            params={
+                "status": status,
+                "start_date": start_date,
+                "end_date": end_date,
+                "search": search,
+            },
+            labels={"start_date": "From", "end_date": "To", "search": "Search"},
         )
         return {
             "expenses": items,

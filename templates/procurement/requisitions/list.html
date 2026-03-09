@@ -1,6 +1,6 @@
 {% extends "procurement/base_procurement.html" %}
 
-{%- from "components/macros.html" import status_badge, pagination, live_search, icon_svg %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination, icon_svg %}
 {% block page_title %}Purchase Requisitions{% endblock %}
 
 {% block breadcrumbs %}
@@ -40,19 +40,15 @@
     </div>
     {% endif %}
 
-    {% call(search_attrs) live_search(search=search, base_url="/procurement/requisitions", placeholder="Search requisitions...") %}
-        <select name="status" class="form-select" {{ search_attrs }}>
-            <option value="">All Status</option>
-            {% for s in req_statuses %}
-            <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
-        <select name="urgency" class="form-select" {{ search_attrs }}>
-            <option value="">All Urgency</option>
-            {% for u in urgency_levels %}
-            <option value="{{ u.value }}" {% if filter_urgency == u.value %}selected{% endif %}>{{ u.value | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
+    {% call(filter_attrs) compact_filters(
+        base_url="/procurement/requisitions",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search requisitions..."
+    ) %}
+    {{ filter_select_field("status", "Status", filter_status, req_statuses | map(attribute='value') | list, filter_attrs, "All Status", true) }}
+    {{ filter_select_field("urgency", "Urgency", filter_urgency, urgency_levels | map(attribute='value') | list, filter_attrs, "All Urgency", true) }}
     {% endcall %}
 
     <div id="results-container">

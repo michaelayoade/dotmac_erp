@@ -296,9 +296,7 @@ def test_mark_overdue_and_list_requires_org():
     org_id = uuid4()
 
     invoice = SimpleNamespace(balance_due=Decimal("10.00"), status=InvoiceStatus.POSTED)
-    query = MagicMock()
-    query.filter.return_value.all.return_value = [invoice]
-    db.query.return_value = query
+    db.scalars.return_value.all.return_value = [invoice]
 
     count = ARInvoiceService.mark_overdue(db, org_id, as_of_date=date.today())
     assert count == 1

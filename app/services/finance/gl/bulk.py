@@ -85,10 +85,14 @@ class AccountBulkService(BulkActionService[Account]):
         )
         journal_count = coerce_scalar_count(self.db.scalar(count_stmt))
         if journal_count is None and is_mock_session(self.db):
-            journal_count = (
-                self.select(JournalEntryLine)
-                .where(JournalEntryLine.account_id == entity.account_id)
-                .count()
+            journal_count = len(
+                list(
+                    self.db.scalars(
+                        select(JournalEntryLine).where(
+                            JournalEntryLine.account_id == entity.account_id,
+                        )
+                    ).all()
+                )
             )
         journal_count = journal_count or 0
 
@@ -154,7 +158,7 @@ class AccountBulkService(BulkActionService[Account]):
             status=status,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(query).all())
         return self._build_csv(entities)
 
 
@@ -247,7 +251,7 @@ class JournalBulkService(BulkActionService[JournalEntry]):
             end_date=end_date,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(query).all())
         return self._build_csv(entities)
 
     async def bulk_post(self, ids: list[UUID]) -> BulkActionResult:

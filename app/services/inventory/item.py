@@ -110,8 +110,7 @@ class ItemCategoryService(ListResponseMixin):
 
         # Check for duplicate
         existing = db.scalars(
-            select(ItemCategory)
-            .where(
+            select(ItemCategory).where(
                 and_(
                     ItemCategory.organization_id == org_id,
                     ItemCategory.category_code == input.category_code,
@@ -225,16 +224,19 @@ class ItemCategoryService(ListResponseMixin):
         # Check if category has active items
         from app.models.inventory.item import Item
 
-        active_items_count = db.scalar(
-            select(func.count())
-            .select_from(Item)
-            .where(
-                and_(
-                    Item.category_id == cat_id,
-                    Item.is_active.is_(True),
+        active_items_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(Item)
+                .where(
+                    and_(
+                        Item.category_id == cat_id,
+                        Item.is_active.is_(True),
+                    )
                 )
             )
-        ) or 0
+            or 0
+        )
 
         if active_items_count > 0:
             raise HTTPException(
@@ -355,8 +357,7 @@ class ItemService(ListResponseMixin):
 
         # Check for duplicate
         existing = db.scalars(
-            select(Item)
-            .where(
+            select(Item).where(
                 and_(
                     Item.organization_id == org_id,
                     Item.item_code == input.item_code,
@@ -556,8 +557,7 @@ class ItemService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         return db.scalars(
-            select(Item)
-            .where(
+            select(Item).where(
                 and_(
                     Item.organization_id == org_id,
                     Item.item_code == item_code,

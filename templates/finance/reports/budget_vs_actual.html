@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts, pivot_table %}
+{% from "components/macros.html" import compact_filters, empty_state, filter_custom_select_field, icon_svg, period_shortcuts, pivot_table %}
 {% block page_title %}Budget vs actual{% endblock %}
 
 {% block breadcrumbs %}
@@ -22,36 +22,25 @@
 
 {% block content %}
 <div class="max-w-5xl mx-auto space-y-6">
-    <div class="card p-4">
-        <form method="get" class="grid gap-4 md:grid-cols-4">
-            {{ period_shortcuts(mode="range") }}
-            <div>
-                <label class="form-label">Start date</label>
-                <input type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">
-            </div>
-            <div>
-                <label class="form-label">End date</label>
-                <input type="date" name="end_date" value="{{ end_date_iso }}" class="form-input">
-            </div>
-            <div>
-                <label class="form-label">Budget</label>
-                <select name="budget_id" class="form-select">
-                    <option value="">All budgets</option>
-                    {% for b in budgets %}
-                    <option value="{{ b.budget_id }}" {% if b.budget_id == budget_id %}selected{% endif %}>
-                        {{ b.budget_code }} - {{ b.budget_name }} ({{ b.status | replace('_', ' ') | title }})
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="md:col-span-4">
-                <button type="submit" class="btn btn-primary">
-                    {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
-                    Refresh
-                </button>
-            </div>
-        </form>
-    </div>
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/reports/budget-vs-actual",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date_iso,
+        end_date=end_date_iso,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}
+    {{ period_shortcuts(mode="range") }}
+    {% call filter_custom_select_field("budget_id", "Budget", "") %}
+        <option value="">All budgets</option>
+        {% for b in budgets %}
+        <option value="{{ b.budget_id }}" {% if b.budget_id == budget_id %}selected{% endif %}>
+            {{ b.budget_code }} - {{ b.budget_name }} ({{ b.status | replace('_', ' ') | title }})
+        </option>
+        {% endfor %}
+    {% endcall %}
+    {% endcall %}
 
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "Budget vs actual" %}

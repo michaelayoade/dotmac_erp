@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, live_search, sortable_th, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_custom_select_field, filter_select_field, pagination, status_badge, empty_state, sortable_th, icon_svg %}
 
 {% block page_title %}Bank Transactions{% endblock %}
 
@@ -60,36 +60,49 @@
         </span>
     </div>
 
-    {# ── Search + Filters (always visible) ── #}
-    {% call(search_attrs) live_search(
-        search=search | default('', true),
+    {# ── Search + Filters ── #}
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/banking/statements",
-        placeholder="Search description, reference, payee...",
-        debounce_ms=300
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search description, reference, payee...",
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
     ) %}
-    <select name="account_id" class="form-select w-auto min-w-[180px]" data-testid="bank-statements-account" {{ search_attrs }}>
-        <option value="">All Bank Accounts</option>
+    {% call filter_custom_select_field("account_id", "Bank Account", filter_attrs ~ ' data-testid="bank-statements-account"') %}
         {% for acc in accounts %}
         <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
             {{ acc.bank_name }} - {{ acc.account_number }}
         </option>
         {% endfor %}
-    </select>
-    <select name="status" class="form-select w-auto min-w-[140px]" {{ search_attrs }}>
-        <option value="">Category Status</option>
-        <option value="SUGGESTED" {{ 'selected' if status == 'SUGGESTED' else '' }}>Suggested</option>
-        <option value="ACCEPTED" {{ 'selected' if status == 'ACCEPTED' else '' }}>Accepted</option>
-        <option value="REJECTED" {{ 'selected' if status == 'REJECTED' else '' }}>Rejected</option>
-        <option value="AUTO_APPLIED" {{ 'selected' if status == 'AUTO_APPLIED' else '' }}>Auto-applied</option>
-        <option value="FLAGGED" {{ 'selected' if status == 'FLAGGED' else '' }}>Flagged</option>
-    </select>
-    <select name="match_status" class="form-select w-auto min-w-[130px]" {{ search_attrs }}>
-        <option value="">Match Status</option>
-        <option value="matched" {{ 'selected' if match_status == 'matched' else '' }}>Matched</option>
-        <option value="unmatched" {{ 'selected' if match_status == 'unmatched' else '' }}>Unmatched</option>
-    </select>
-    <input type="date" name="start_date" value="{{ start_date if start_date else '' }}" class="form-input w-auto" placeholder="From" title="From date" {{ search_attrs }}>
-    <input type="date" name="end_date" value="{{ end_date if end_date else '' }}" class="form-input w-auto" placeholder="To" title="To date" {{ search_attrs }}>
+    {% endcall %}
+    {{ filter_select_field(
+        "status",
+        "Category Status",
+        status,
+        [
+            {"value": "SUGGESTED", "label": "Suggested"},
+            {"value": "ACCEPTED", "label": "Accepted"},
+            {"value": "REJECTED", "label": "Rejected"},
+            {"value": "AUTO_APPLIED", "label": "Auto-applied"},
+            {"value": "FLAGGED", "label": "Flagged"}
+        ],
+        filter_attrs,
+        "Category Status"
+    ) }}
+    {{ filter_select_field(
+        "match_status",
+        "Match Status",
+        match_status,
+        [
+            {"value": "matched", "label": "Matched"},
+            {"value": "unmatched", "label": "Unmatched"}
+        ],
+        filter_attrs,
+        "Match Status"
+    ) }}
     {% endcall %}
 
     {# ── Statement Lines Table ── #}

@@ -181,7 +181,7 @@ def test_approve_and_post_payment():
         post_payment.return_value = SimpleNamespace(
             success=True, journal_entry_id=uuid4(), posting_batch_id=uuid4()
         )
-        db.query.return_value.filter.return_value.all.return_value = []
+        db.scalars.return_value.all.return_value = []
         posted = SupplierPaymentService.post_payment(
             db, org_id, payment.payment_id, posted_by_user_id=uuid4()
         )
@@ -247,9 +247,5 @@ def test_mark_cleared_and_list():
     )
     assert cleared.status == APPaymentStatus.CLEARED
 
-    query = MagicMock()
-    db.query.return_value = query
-    query.filter.return_value = query
-    query.order_by.return_value = query
-    query.limit.return_value.offset.return_value.all.return_value = []
+    db.scalars.return_value.all.return_value = []
     SupplierPaymentService.list(db, organization_id=str(org_id))

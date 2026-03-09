@@ -92,14 +92,12 @@ class LeaseModificationService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Load lease contract
-        contract = (
-            select(LeaseContract)
-            .where(
+        contract = db.scalars(
+            select(LeaseContract).where(
                 LeaseContract.lease_id == lease_id,
                 LeaseContract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             return ModificationResult(success=False, message="Lease contract not found")
@@ -111,9 +109,9 @@ class LeaseModificationService(ListResponseMixin):
             )
 
         # Load liability and asset
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == lease_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == lease_id)
+        ).first()
 
         asset = db.scalars(
             select(LeaseAsset).where(LeaseAsset.lease_id == lease_id)
@@ -357,11 +355,9 @@ class LeaseModificationService(ListResponseMixin):
         mod_id = coerce_uuid(modification_id)
         user_id = coerce_uuid(approved_by_user_id)
 
-        modification = (
-            select(LeaseModification)
-            .where(LeaseModification.modification_id == mod_id)
-            .first()
-        )
+        modification = db.scalars(
+            select(LeaseModification).where(LeaseModification.modification_id == mod_id)
+        ).first()
 
         if not modification:
             raise HTTPException(status_code=404, detail="Modification not found")
@@ -387,11 +383,11 @@ class LeaseModificationService(ListResponseMixin):
         organization_id: UUID | None = None,
     ) -> LeaseModification | None:
         """Get a modification by ID."""
-        modification = (
-            select(LeaseModification)
-            .where(LeaseModification.modification_id == coerce_uuid(modification_id))
-            .first()
-        )
+        modification = db.scalars(
+            select(LeaseModification).where(
+                LeaseModification.modification_id == coerce_uuid(modification_id)
+            )
+        ).first()
         if not modification:
             return None
         if organization_id is not None:
@@ -406,11 +402,12 @@ class LeaseModificationService(ListResponseMixin):
         lease_id: UUID,
     ) -> list[LeaseModification]:
         """List all modifications for a lease."""
-        return (
-            select(LeaseModification)
-            .where(LeaseModification.lease_id == coerce_uuid(lease_id))
-            .order_by(LeaseModification.effective_date.desc())
-            .all()
+        return list(
+            db.scalars(
+                select(LeaseModification)
+                .where(LeaseModification.lease_id == coerce_uuid(lease_id))
+                .order_by(LeaseModification.effective_date.desc())
+            ).all()
         )
 
     @staticmethod
@@ -435,11 +432,12 @@ class LeaseModificationService(ListResponseMixin):
         if to_date:
             stmt = stmt.where(LeaseModification.effective_date <= to_date)
 
-        return (
-            stmt.order_by(LeaseModification.effective_date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+        return list(
+            db.scalars(
+                stmt.order_by(LeaseModification.effective_date.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )
 
 

@@ -363,7 +363,9 @@ def build_beat_schedule() -> dict:
     session = SessionLocal()
     try:
         tasks = list(
-            session.scalars(select(ScheduledTask).where(ScheduledTask.enabled.is_(True))).all()
+            session.scalars(
+                select(ScheduledTask).where(ScheduledTask.enabled.is_(True))
+            ).all()
         )
         for task in tasks:
             task_schedule = None

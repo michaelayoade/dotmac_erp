@@ -19,7 +19,7 @@ class TestCanDelete:
 
     def test_can_delete_no_invoices(self, mock_db, mock_supplier, organization_id):
         """Supplier with no invoices can be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -32,7 +32,7 @@ class TestCanDelete:
 
     def test_cannot_delete_with_invoices(self, mock_db, mock_supplier, organization_id):
         """Supplier with invoices cannot be deleted."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 5
+        mock_db.scalar.return_value = 5
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -46,7 +46,7 @@ class TestCanDelete:
     def test_returns_invoice_count(self, mock_db, organization_id):
         """Error message should include the invoice count."""
         supplier = MockSupplier(legal_name="ABC Corp")
-        mock_db.query.return_value.filter.return_value.count.return_value = 10
+        mock_db.scalar.return_value = 10
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -59,7 +59,7 @@ class TestCanDelete:
     def test_returns_supplier_name_in_message(self, mock_db, organization_id):
         """Error message should include the supplier name."""
         supplier = MockSupplier(legal_name="XYZ Suppliers Ltd")
-        mock_db.query.return_value.filter.return_value.count.return_value = 3
+        mock_db.scalar.return_value = 3
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -71,7 +71,7 @@ class TestCanDelete:
 
     def test_returns_tuple_format(self, mock_db, mock_supplier, organization_id):
         """Method should return a tuple of (bool, str)."""
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -281,11 +281,11 @@ class TestBulkDelete:
         supplier1 = MockSupplier()
         supplier2 = MockSupplier()
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             supplier1,
             supplier2,
         ]
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -304,19 +304,12 @@ class TestBulkDelete:
         supplier1 = MockSupplier(legal_name="No Invoices")
         supplier2 = MockSupplier(legal_name="Has Invoices")
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             supplier1,
             supplier2,
         ]
 
-        # Setup count to return 0 for first, 5 for second
-        call_count = [0]
-
-        def mock_count():
-            call_count[0] += 1
-            return 0 if call_count[0] == 1 else 5
-
-        mock_db.query.return_value.filter.return_value.count = mock_count
+        mock_db.scalar.side_effect = [0, 5]
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -336,11 +329,11 @@ class TestBulkDelete:
         supplier1 = MockSupplier()
         supplier2 = MockSupplier()
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             supplier1,
             supplier2,
         ]
-        mock_db.query.return_value.filter.return_value.count.return_value = 10
+        mock_db.scalar.return_value = 10
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -369,8 +362,8 @@ class TestBulkDelete:
     async def test_bulk_delete_commits(self, mock_db, organization_id):
         """Successful deletions should commit."""
         supplier = MockSupplier()
-        mock_db.query.return_value.filter.return_value.all.return_value = [supplier]
-        mock_db.query.return_value.filter.return_value.count.return_value = 0
+        mock_db.scalars.return_value.all.return_value = [supplier]
+        mock_db.scalar.return_value = 0
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -390,7 +383,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_headers(self, mock_db, mock_supplier, organization_id):
         """CSV export should include correct headers."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_supplier
         ]
 
@@ -414,7 +407,7 @@ class TestBulkExport:
     @pytest.mark.asyncio
     async def test_export_csv_data(self, mock_db, mock_supplier, organization_id):
         """CSV export should include entity data."""
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_supplier
         ]
 
@@ -438,7 +431,7 @@ class TestBulkExport:
         """Export with no entities should raise HTTPException."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
         with patch("app.services.finance.ap.bulk.Supplier", MagicMock()):
             from app.services.finance.ap.bulk import SupplierBulkService
@@ -457,7 +450,7 @@ class TestBulkExport:
         """Export should return a Response."""
         from fastapi import Response
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             mock_supplier
         ]
 

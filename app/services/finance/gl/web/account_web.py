@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
+from app.models.finance.gl.account_category import AccountCategory
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -28,6 +29,7 @@ from app.services.finance.gl.web.base import (
     format_currency,
     format_date,
     ifrs_label,
+    parse_category,
 )
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
@@ -106,7 +108,31 @@ class AccountWebService:
             status=status,
         )
 
-        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        category_value = parse_category(category)
+        search_pattern = f"%{search}%" if search else None
+
+        def _count_accounts(is_active: bool | None = None) -> int:
+            count_stmt = (
+                select(func.count(Account.account_id))
+                .select_from(Account)
+                .join(AccountCategory, Account.category_id == AccountCategory.category_id)
+                .where(Account.organization_id == org_id)
+            )
+            if is_active is not None:
+                count_stmt = count_stmt.where(Account.is_active == is_active)
+            if category_value:
+                count_stmt = count_stmt.where(
+                    AccountCategory.ifrs_category == category_value
+                )
+            if search_pattern:
+                count_stmt = count_stmt.where(
+                    (Account.account_code.ilike(search_pattern))
+                    | (Account.account_name.ilike(search_pattern))
+                    | (Account.search_terms.ilike(search_pattern))
+                )
+            return db.scalar(count_stmt) or 0
+
+        total_count = _count_accounts()
         column_map = {
             "account_code": Account.account_code,
             "account_name": Account.account_name,
@@ -160,34 +186,8 @@ class AccountWebService:
                 }
             )
 
-        active_count = (
-            db.scalar(
-                select(func.count()).select_from(
-                    build_account_query(
-                        db=db,
-                        organization_id=organization_id,
-                        search=search,
-                        category=category,
-                        status="active",
-                    ).subquery()
-                )
-            )
-            or 0
-        )
-        inactive_count = (
-            db.scalar(
-                select(func.count()).select_from(
-                    build_account_query(
-                        db=db,
-                        organization_id=organization_id,
-                        search=search,
-                        category=category,
-                        status="inactive",
-                    ).subquery()
-                )
-            )
-            or 0
-        )
+        active_count = _count_accounts(is_active=True)
+        inactive_count = _count_accounts(is_active=False)
         total_pages = max(1, (total_count + limit - 1) // limit)
         active_filters = build_active_filters(
             params={

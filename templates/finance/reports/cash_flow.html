@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts, pivot_table %}
+{% from "components/macros.html" import compact_filters, empty_state, icon_svg, period_shortcuts, pivot_table %}
 {% block page_title %}Cash flow statement{% endblock %}
 
 {% block breadcrumbs %}
@@ -22,23 +22,17 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            {{ period_shortcuts(mode="range") }}
-            <div class="flex-1 min-w-[200px]">
-                <label class="form-label">Start date</label>
-                <input type="date" name="start_date" value="{{ start_date_iso }}" class="form-input">
-            </div>
-            <div class="flex-1 min-w-[200px]">
-                <label class="form-label">End date</label>
-                <input type="date" name="end_date" value="{{ end_date_iso }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-primary">
-                {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}
-                Refresh
-            </button>
-        </form>
-    </div>
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/reports/cash-flow",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date_iso,
+        end_date=end_date_iso,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}
+    {{ period_shortcuts(mode="range") }}
+    {% endcall %}
 
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "Cash flow statement" %}

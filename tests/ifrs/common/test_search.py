@@ -70,6 +70,7 @@ def mock_query():
     """Create a mock SQLAlchemy query."""
     query = MagicMock()
     query.filter = MagicMock(return_value=query)
+    query.where = query.filter
     return query
 
 

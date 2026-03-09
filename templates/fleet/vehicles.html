@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import live_search, status_badge, pagination, action_buttons, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_custom_select_field, status_badge, pagination, action_buttons, icon_svg %}
 
 {% block page_title %}Vehicles{% endblock %}
 
@@ -85,23 +85,20 @@
         </div>
     </div>
 
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/fleet/vehicles",
-        placeholder="Search vehicles..."
+        active_filters=active_filters | default([])
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
-            <option value="">All Status</option>
+        {% call filter_custom_select_field("status", "Status", filter_attrs) %}
             {% for s in statuses %}
-            <option value="{{ s.value }}" {{ 'selected' if status == s.value else '' }}>{{ s.value | replace('_', ' ') | title }}</option>
+            <option value="{{ s.value }}" {{ "selected" if current_status == s.value else "" }}>{{ s.value | replace("_", " ") | title }}</option>
             {% endfor %}
-        </select>
-        <select name="vehicle_type" class="form-select" {{ search_attrs }}>
-            <option value="">All Types</option>
+        {% endcall %}
+        {% call filter_custom_select_field("vehicle_type", "Vehicle Type", filter_attrs) %}
             {% for vt in vehicle_types %}
-            <option value="{{ vt.value }}" {{ 'selected' if vehicle_type == vt.value else '' }}>{{ vt.value | replace('_', ' ') | title }}</option>
+            <option value="{{ vt.value }}" {{ "selected" if current_type == vt.value else "" }}>{{ vt.value | replace("_", " ") | title }}</option>
             {% endfor %}
-        </select>
+        {% endcall %}
     {% endcall %}
 
     <div id="results-container">
@@ -175,7 +172,7 @@
                                     {{ icon_svg("switch-horizontal", "h-8 w-8 text-slate-400 dark:text-slate-500", stroke_width="1.5") }}
                                 </div>
                                 <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-1">No vehicles found</h3>
-                                {% if search or status or vehicle_type %}
+                                {% if current_status or current_type %}
                                 <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Try adjusting your search or filter criteria</p>
                                 <a href="/fleet/vehicles" class="btn btn-secondary mt-4">Clear all filters</a>
                                 {% else %}
@@ -200,7 +197,7 @@
             total_pages=total_pages,
             total_count=total,
             limit=limit,
-            filters={"status": status, "vehicle_type": vehicle_type}
+            filters={"status": current_status, "vehicle_type": current_type}
         ) }}
         {% endif %}
     </div>

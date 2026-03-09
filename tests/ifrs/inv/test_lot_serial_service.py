@@ -4,7 +4,6 @@ Tests for LotSerialService.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -57,7 +56,7 @@ class TestCreateLot:
         )
 
         # Mock item found, no existing lot
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             item,  # Item found
             None,  # No existing lot
         ]
@@ -74,7 +73,7 @@ class TestCreateLot:
         """Test lot creation with invalid item."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.create_lot(mock_db, org_id, sample_lot_input)
@@ -93,7 +92,7 @@ class TestCreateLot:
             organization_id=org_id,
             track_lots=False,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = item
+        mock_db.scalars.return_value.first.return_value = item
 
         with pytest.raises(HTTPException) as exc:
             service.create_lot(mock_db, org_id, sample_lot_input)
@@ -117,7 +116,7 @@ class TestCreateLot:
             lot_number=sample_lot_input.lot_number,
         )
 
-        mock_db.query.return_value.filter.return_value.first.side_effect = [
+        mock_db.scalars.return_value.first.side_effect = [
             item,
             existing_lot,
         ]
@@ -140,7 +139,7 @@ class TestAllocateFromLot:
             quantity_allocated=Decimal("0"),
             is_quarantined=False,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.allocate_from_lot(mock_db, lot.lot_id, Decimal("50"))
 
@@ -152,7 +151,7 @@ class TestAllocateFromLot:
         """Test allocation from non-existent lot."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.allocate_from_lot(mock_db, uuid4(), Decimal("50"))
@@ -167,7 +166,7 @@ class TestAllocateFromLot:
             quantity_available=Decimal("100"),
             is_quarantined=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         with pytest.raises(HTTPException) as exc:
             service.allocate_from_lot(mock_db, lot.lot_id, Decimal("50"))
@@ -183,7 +182,7 @@ class TestAllocateFromLot:
             quantity_available=Decimal("30"),
             is_quarantined=False,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         with pytest.raises(HTTPException) as exc:
             service.allocate_from_lot(mock_db, lot.lot_id, Decimal("50"))
@@ -202,7 +201,7 @@ class TestDeallocateFromLot:
             quantity_allocated=Decimal("50"),
             quantity_available=Decimal("50"),
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.deallocate_from_lot(mock_db, lot.lot_id, Decimal("30"))
 
@@ -214,7 +213,7 @@ class TestDeallocateFromLot:
         """Test deallocation from non-existent lot."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.deallocate_from_lot(mock_db, uuid4(), Decimal("30"))
@@ -233,7 +232,7 @@ class TestConsumeFromLot:
             quantity_available=Decimal("80"),
             is_active=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.consume_from_lot(mock_db, lot.lot_id, Decimal("50"))
 
@@ -247,7 +246,7 @@ class TestConsumeFromLot:
         lot = MockInventoryLot(
             quantity_on_hand=Decimal("30"),
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         with pytest.raises(HTTPException) as exc:
             service.consume_from_lot(mock_db, lot.lot_id, Decimal("50"))
@@ -263,7 +262,7 @@ class TestConsumeFromLot:
             quantity_available=Decimal("50"),
             is_active=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.consume_from_lot(mock_db, lot.lot_id, Decimal("50"))
 
@@ -280,7 +279,7 @@ class TestQuarantineLot:
             quantity_available=Decimal("100"),
             is_quarantined=False,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.quarantine_lot(mock_db, lot.lot_id, "Quality issue")
 
@@ -293,7 +292,7 @@ class TestQuarantineLot:
         """Test quarantine of non-existent lot."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.quarantine_lot(mock_db, uuid4(), "Quality issue")
@@ -313,7 +312,7 @@ class TestReleaseQuarantine:
             is_quarantined=True,
             quarantine_reason="Under review",
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.release_quarantine(mock_db, lot.lot_id, "PASSED")
 
@@ -327,7 +326,7 @@ class TestReleaseQuarantine:
         """Test releasing quarantine on non-existent lot."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.release_quarantine(mock_db, uuid4())
@@ -349,7 +348,7 @@ class TestGetTraceability:
             received_date=date.today(),
         )
 
-        mock_db.query.return_value.filter.return_value.first.side_effect = [lot, item]
+        mock_db.scalars.return_value.first.side_effect = [lot, item]
 
         result = service.get_traceability(mock_db, lot.lot_id)
 
@@ -362,7 +361,7 @@ class TestGetTraceability:
         """Test traceability for non-existent lot."""
         from fastapi import HTTPException
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             service.get_traceability(mock_db, uuid4())
@@ -376,7 +375,7 @@ class TestGetLot:
     def test_get_existing_lot(self, service, mock_db):
         """Test getting existing lot."""
         lot = MockInventoryLot()
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.get(mock_db, str(lot.lot_id))
 
@@ -384,7 +383,7 @@ class TestGetLot:
 
     def test_get_nonexistent_lot(self, service, mock_db):
         """Test getting non-existent lot."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = service.get(mock_db, str(uuid4()))
 
@@ -397,7 +396,7 @@ class TestGetByNumber:
     def test_get_by_number_success(self, service, mock_db):
         """Test getting lot by number."""
         lot = MockInventoryLot(lot_number="LOT-001")
-        mock_db.query.return_value.filter.return_value.first.return_value = lot
+        mock_db.scalars.return_value.first.return_value = lot
 
         result = service.get_by_number(mock_db, lot.item_id, "LOT-001")
 
@@ -405,7 +404,7 @@ class TestGetByNumber:
 
     def test_get_by_number_not_found(self, service, mock_db):
         """Test getting non-existent lot by number."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.first.return_value = None
 
         result = service.get_by_number(mock_db, uuid4(), "NOTFOUND")
 
@@ -419,7 +418,7 @@ class TestListLots:
         """Test listing lots by item."""
         item_id = uuid4()
         lots = [MockInventoryLot(item_id=item_id) for _ in range(3)]
-        mock_db.query.return_value.filter.return_value.filter.return_value.order_by.return_value.all.return_value = lots
+        mock_db.scalars.return_value.all.return_value = lots
 
         result = service.list_by_item(mock_db, item_id)
 
@@ -428,15 +427,7 @@ class TestListLots:
     def test_list_with_filters(self, service, mock_db, org_id):
         """Test listing lots with filters."""
         lots = [MockInventoryLot() for _ in range(2)]
-        # Build the mock chain properly - query returns a mock that has all chained methods
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.join.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = lots
+        mock_db.scalars.return_value.all.return_value = lots
 
         result = service.list(
             mock_db,

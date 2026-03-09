@@ -417,11 +417,12 @@ def _load_audit_settings(db: Session):
         "read_trigger_header": "x-audit-read",
         "read_trigger_query": "audit",
     }
-    rows = (
-        select(DomainSetting)
-        .where(DomainSetting.domain == SettingDomain.audit)
-        .where(DomainSetting.is_active.is_(True))
-        .all()
+    rows = list(
+        db.scalars(
+            select(DomainSetting)
+            .where(DomainSetting.domain == SettingDomain.audit)
+            .where(DomainSetting.is_active.is_(True))
+        ).all()
     )
     if isinstance(rows, Mock):
         rows = []

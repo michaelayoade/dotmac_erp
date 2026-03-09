@@ -81,7 +81,7 @@
             <select name="document_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for dt in document_types %}
-                <option value="{{ dt.value }}" {{ 'selected' if document_type == dt.value else '' }}>{{ dt.value | replace('_', ' ') | title }}</option>
+                <option value="{{ dt }}" {{ 'selected' if document_type == dt else '' }}>{{ dt | replace('_', ' ') | title }}</option>
                 {% endfor %}
             </select>
     </div>

@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import compact_filters, icon_svg %}
 
 {% block content %}
 <div class="space-y-6">
@@ -15,25 +15,17 @@
         </a>
     </div>
 
-    <!-- Date Filter -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="w-44">
-                    <label for="start_date" class="form-label">From</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
-                        class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="end_date" class="form-label">To</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
-                        class="form-input w-full">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
-    </div>
+    {% call(filter_attrs) compact_filters(
+        base_url="/expense/reports/summary",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date,
+        end_date=end_date,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}{% endcall %}
 
+    <div id="results-container" class="space-y-6">
     <!-- Summary Cards -->
     {% set date_params = "start_date=" ~ start_date ~ "&end_date=" ~ end_date %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -164,6 +156,7 @@
         <a href="/expense/reports/trends" class="btn btn-secondary">
             View Trends
         </a>
+    </div>
     </div>
 </div>
 {% endblock %}

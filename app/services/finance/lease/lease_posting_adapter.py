@@ -86,9 +86,9 @@ class LeasePostingAdapter:
             )
 
         # Load liability and asset
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
         asset = db.scalars(
             select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
         ).first()
@@ -261,9 +261,9 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load liability
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
         if not liability:
             return LeasePostingResult(
@@ -409,9 +409,9 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load liability
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
         if not liability:
             return LeasePostingResult(
@@ -712,9 +712,9 @@ class LeasePostingAdapter:
             )
 
         # Load liability and asset
-        liability = (
-            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
         asset = db.scalars(
             select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
         ).first()

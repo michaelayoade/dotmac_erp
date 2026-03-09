@@ -468,7 +468,9 @@ class LeaseContractService(ListResponseMixin):
     ) -> LeaseLiability | None:
         """Get the lease liability for a contract."""
         ls_id = coerce_uuid(lease_id)
-        return select(LeaseLiability).where(LeaseLiability.lease_id == ls_id).first()
+        return db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
     @staticmethod
     def get_asset(
@@ -477,7 +479,9 @@ class LeaseContractService(ListResponseMixin):
     ) -> LeaseAsset | None:
         """Get the ROU asset for a contract."""
         ls_id = coerce_uuid(lease_id)
-        return select(LeaseAsset).where(LeaseAsset.lease_id == ls_id).first()
+        return db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
     @staticmethod
     def list(
@@ -513,7 +517,7 @@ class LeaseContractService(ListResponseMixin):
             query = query.where(LeaseContract.is_lessee == is_lessee)
 
         query = query.order_by(LeaseContract.commencement_date.desc())
-        return list(query.limit(limit).offset(offset).all())
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

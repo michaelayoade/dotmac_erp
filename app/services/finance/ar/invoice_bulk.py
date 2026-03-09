@@ -82,7 +82,7 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
             end_date=end_date,
         )
 
-        entities = query.all()
+        entities = list(self.db.scalars(query).all())
         return self._build_csv(entities)
 
     def can_delete(self, entity: Invoice) -> tuple[bool, str]:

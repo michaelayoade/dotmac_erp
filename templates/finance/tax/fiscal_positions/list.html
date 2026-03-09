@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, live_search, pagination, status_badge, empty_state, stats_card, icon_svg %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination, status_badge, empty_state, stats_card, icon_svg %}
 
 {% block page_title %}Fiscal Positions{% endblock %}
 
@@ -30,12 +30,25 @@
     </div>
 
     {# Search and Filters #}
-    {{ live_search(search=search, base_url="/finance/tax/fiscal-positions", placeholder="Search fiscal positions...",
-        filters=[
-            {"name": "is_active", "label": "All Status", "value": is_active,
-             "options": [{"value": "true", "label": "Active"}, {"value": "false", "label": "Inactive"}]}
-        ]
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/tax/fiscal-positions",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search fiscal positions..."
+    ) %}
+    {{ filter_select_field(
+        "is_active",
+        "Status",
+        is_active,
+        [
+            {"value": "true", "label": "Active"},
+            {"value": "false", "label": "Inactive"}
+        ],
+        filter_attrs,
+        "All Status"
     ) }}
+    {% endcall %}
 
     <div id="results-container">
     {# Fiscal Positions Table #}

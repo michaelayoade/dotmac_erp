@@ -1094,6 +1094,7 @@ def list_counts(
     auth: WebAuthContext = Depends(require_inventory_access),
     status: str | None = None,
     search: str | None = None,
+    warehouse: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -1104,6 +1105,7 @@ def list_counts(
         db=db,
         status=status,
         search=search,
+        warehouse=warehouse,
         page=page,
     )
 
@@ -1225,6 +1227,7 @@ def list_boms(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
     search: str | None = None,
+    bom_type: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
@@ -1235,6 +1238,7 @@ def list_boms(
         auth=auth,
         db=db,
         search=search,
+        bom_type=bom_type,
         status=status,
         page=page,
     )
@@ -1294,6 +1298,7 @@ def list_price_lists(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
     search: str | None = None,
+    price_list_type: str | None = None,
     list_type: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
@@ -1304,7 +1309,7 @@ def list_price_lists(
         auth=auth,
         db=db,
         search=search,
-        list_type=list_type,
+        price_list_type=price_list_type or list_type,
         page=page,
     )
 

@@ -49,26 +49,15 @@ def create_tax_transactions(
     tax_transaction_ids: list[UUID] = []
 
     # Get fiscal period from invoice date
-    try:
-        fiscal_period = (
-            select(FiscalPeriod)
-            .where(
-                and_(
-                    FiscalPeriod.organization_id == organization_id,
-                    FiscalPeriod.start_date <= invoice.invoice_date,
-                    FiscalPeriod.end_date >= invoice.invoice_date,
-                )
-            )
-            .first()
-        )
-    except Exception:
-        fiscal_period = db.scalar(
-            select(FiscalPeriod).where(
+    fiscal_period = db.scalars(
+        select(FiscalPeriod).where(
+            and_(
                 FiscalPeriod.organization_id == organization_id,
                 FiscalPeriod.start_date <= invoice.invoice_date,
                 FiscalPeriod.end_date >= invoice.invoice_date,
             )
         )
+    ).first()
 
     if not fiscal_period:
         # No fiscal period found - skip tax transactions

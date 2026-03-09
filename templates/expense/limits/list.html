@@ -1,5 +1,5 @@
 {% extends "expense/base_expense.html" %}
-{%- from "components/macros.html" import status_badge, live_search, pagination, empty_state, icon_svg %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination, empty_state, icon_svg %}
 
 {% block content %}
 <div class="space-y-6">
@@ -59,28 +59,25 @@
         </a>
     </div>
 
-    {% call(search_attrs) live_search(
-        search=filters.search or '',
-        filters=[
-            {
-                "name": "is_active",
-                "label": "All Status",
-                "value": filters.is_active or "",
-                "options": [
-                    {"value": "true", "label": "Active"},
-                    {"value": "false", "label": "Inactive"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/expense/limits",
-        placeholder="Search limits..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=filters.search or '',
+        search_placeholder="Search limits..."
     ) %}
-        <select name="scope_type" class="form-select" {{ search_attrs }}>
-            <option value="">All Scopes</option>
-            {% for st in scope_types %}
-            <option value="{{ st }}" {{ 'selected' if filters.scope_type == st else '' }}>{{ st | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
+    {{ filter_select_field("scope_type", "Scope", filters.scope_type or '', scope_types, filter_attrs, "All Scopes", true) }}
+    {{ filter_select_field(
+        "is_active",
+        "Status",
+        filters.is_active or '',
+        [
+            {"value": "true", "label": "Active"},
+            {"value": "false", "label": "Inactive"}
+        ],
+        filter_attrs,
+        "All Status"
+    ) }}
     {% endcall %}
 
     <div id="results-container">

@@ -384,6 +384,39 @@ class SupportWebService:
 
         # Pagination
         total_pages = (total + per_page - 1) // per_page
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "priority": priority,
+                "assigned_to": assigned_to,
+                "category": category_id,
+                "team": team_id,
+                "date_from": date_from,
+                "date_to": date_to,
+                "search": search,
+            },
+            labels={
+                "assigned_to": "Assignee",
+                "category": "Category",
+                "team": "Team",
+                "date_from": "From",
+                "date_to": "To",
+                "search": "Search",
+            },
+            options={
+                "status": {s.value: STATUS_STYLES[s]["label"] for s in TicketStatus},
+                "priority": {
+                    p.value: PRIORITY_STYLES[p]["label"] for p in TicketPriority
+                },
+                "assigned_to": {
+                    str(emp["employee_id"]): emp["full_name"] for emp in employees
+                },
+                "category": {
+                    str(c.category_id): c.category_name for c in categories
+                },
+                "team": {str(t.team_id): t.team_name for t in teams},
+            },
+        )
 
         context = {
             **base_context(request, auth, "Support Tickets", "support", db=db),
@@ -419,6 +452,7 @@ class SupportWebService:
             "total_pages": total_pages,
             "has_prev": page > 1,
             "has_next": page < total_pages,
+            "active_filters": active_filters,
         }
 
         return templates.TemplateResponse(request, "support/tickets.html", context)

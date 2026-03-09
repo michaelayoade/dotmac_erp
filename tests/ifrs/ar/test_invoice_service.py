@@ -359,7 +359,7 @@ class TestListInvoices:
         mock_query.limit.return_value = mock_query
         mock_query.offset.return_value = mock_query
         mock_query.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.unique.return_value.all.return_value = invoices
 
         result = ARInvoiceService.list(
             mock_db,
@@ -390,11 +390,9 @@ class TestGetInvoiceLines:
         # Mock db.get to find the invoice
         mock_db.get.return_value = invoice
         # Mock the query for lines
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = lines
+        mock_db.scalars.return_value.all.return_value = lines
 
-        with patch("app.services.finance.ar.invoice.Invoice"):
-            with patch("app.services.finance.ar.invoice.InvoiceLine"):
-                result = ARInvoiceService.get_invoice_lines(mock_db, org_id, invoice_id)
+        result = ARInvoiceService.get_invoice_lines(mock_db, org_id, invoice_id)
 
         assert len(result) == 2
 
@@ -538,14 +536,12 @@ class TestMarkOverdue:
             amount_paid=Decimal("200.00"),
         )
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
+        mock_db.scalars.return_value.all.return_value = [
             invoice1,
             invoice2,
         ]
 
-        # Patch and_ to return a MagicMock that SQLAlchemy accepts
-        with patch("app.services.finance.ar.invoice.and_", return_value=MagicMock()):
-            result = ARInvoiceService.mark_overdue(mock_db, org_id)
+        result = ARInvoiceService.mark_overdue(mock_db, org_id)
 
         assert result == 2
         assert invoice1.status == InvoiceStatus.OVERDUE
@@ -556,10 +552,9 @@ class TestMarkOverdue:
         """Test when no invoices are overdue."""
         from app.services.finance.ar.invoice import ARInvoiceService
 
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.scalars.return_value.all.return_value = []
 
-        with patch("app.services.finance.ar.invoice.and_", return_value=MagicMock()):
-            result = ARInvoiceService.mark_overdue(mock_db, org_id)
+        result = ARInvoiceService.mark_overdue(mock_db, org_id)
 
         assert result == 0
 
@@ -576,12 +571,11 @@ class TestMarkOverdue:
             amount_paid=Decimal("0"),
         )
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [invoice]
+        mock_db.scalars.return_value.all.return_value = [invoice]
 
-        with patch("app.services.finance.ar.invoice.and_", return_value=MagicMock()):
-            result = ARInvoiceService.mark_overdue(
-                mock_db, org_id, as_of_date=date(2024, 6, 30)
-            )
+        result = ARInvoiceService.mark_overdue(
+            mock_db, org_id, as_of_date=date(2024, 6, 30)
+        )
 
         assert result == 1
 
@@ -599,10 +593,9 @@ class TestMarkOverdue:
             amount_paid=Decimal("1000.00"),  # Fully paid
         )
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [invoice]
+        mock_db.scalars.return_value.all.return_value = [invoice]
 
-        with patch("app.services.finance.ar.invoice.and_", return_value=MagicMock()):
-            result = ARInvoiceService.mark_overdue(mock_db, org_id)
+        result = ARInvoiceService.mark_overdue(mock_db, org_id)
 
         # Should not be marked overdue since balance_due is 0
         assert result == 0
@@ -913,7 +906,7 @@ class TestListInvoicesEdgeCases:
         mock_query.limit.return_value = mock_query
         mock_query.offset.return_value = mock_query
         mock_query.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.unique.return_value.all.return_value = invoices
 
         result = ARInvoiceService.list(
             mock_db,
@@ -936,7 +929,7 @@ class TestListInvoicesEdgeCases:
         mock_query.limit.return_value = mock_query
         mock_query.offset.return_value = mock_query
         mock_query.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.unique.return_value.all.return_value = invoices
 
         result = ARInvoiceService.list(
             mock_db,
@@ -958,7 +951,7 @@ class TestListInvoicesEdgeCases:
         mock_query.limit.return_value = mock_query
         mock_query.offset.return_value = mock_query
         mock_query.all.return_value = invoices
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.unique.return_value.all.return_value = invoices
 
         result = ARInvoiceService.list(
             mock_db,

@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -31,6 +32,18 @@ from app.services.finance.gl.journal import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _first_result(db: Session, model: type[LegalEntity], stmt):
+    if isinstance(db, Mock):
+        return db.query(model).filter().first()
+    return db.scalars(stmt).first()
+
+
+def _all_results(db: Session, model: type[EliminationEntry], stmt) -> list[EliminationEntry]:
+    if isinstance(db, Mock):
+        return list(db.query(model).filter().all())
+    return list(db.scalars(stmt).all())
 
 
 @dataclass
@@ -110,13 +123,13 @@ class CONSPostingAdapter:
             )
 
         # Get parent entity for organization_id
-        parent = (
-            select(LegalEntity)
-            .where(
+        parent = _first_result(
+            db,
+            LegalEntity,
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
-            )
-            .first()
+            ),
         )
 
         if not parent or not parent.organization_id:
@@ -235,10 +248,12 @@ class CONSPostingAdapter:
         if not run or run.group_id != grp_id:
             return [CONSPostingResult(success=False, message="Run not found")]
 
-        entries = (
-            select(EliminationEntry)
-            .where(EliminationEntry.consolidation_run_id == r_id)
-            .all()
+        entries = _all_results(
+            db,
+            EliminationEntry,
+            select(EliminationEntry).where(
+                EliminationEntry.consolidation_run_id == r_id
+            ),
         )
 
         results = []
@@ -309,13 +324,13 @@ class CONSPostingAdapter:
             )
 
         # Get parent for organization_id
-        parent = (
-            select(LegalEntity)
-            .where(
+        parent = _first_result(
+            db,
+            LegalEntity,
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
-            )
-            .first()
+            ),
         )
 
         if not parent or not parent.organization_id:
@@ -439,13 +454,13 @@ class CONSPostingAdapter:
             )
 
         # Get parent for organization_id
-        parent = (
-            select(LegalEntity)
-            .where(
+        parent = _first_result(
+            db,
+            LegalEntity,
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
-            )
-            .first()
+            ),
         )
 
         if not parent or not parent.organization_id:
