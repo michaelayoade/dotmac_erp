@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models.inventory.item import Item
@@ -100,12 +100,11 @@ class PriceListService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate code
-        existing = (
+        existing = db.scalars(
             select(PriceList)
             .where(PriceList.organization_id == org_id)
             .where(PriceList.price_list_code == input.price_list_code)
-            .first()
-        )
+        ).first()
 
         if existing:
             raise HTTPException(
@@ -115,8 +114,8 @@ class PriceListService(ListResponseMixin):
 
         # If setting as default, clear other defaults
         if input.is_default:
-            (
-                select(PriceList)
+            db.execute(
+                update(PriceList)
                 .where(
                     and_(
                         PriceList.organization_id == org_id,
@@ -124,7 +123,7 @@ class PriceListService(ListResponseMixin):
                         PriceList.is_default == True,
                     )
                 )
-                .update({"is_default": False}, synchronize_session=False)
+                .values(is_default=False)
             )
 
         price_list = PriceList(
@@ -166,8 +165,8 @@ class PriceListService(ListResponseMixin):
 
         # If setting as default, clear other defaults
         if updates.get("is_default") and not price_list.is_default:
-            (
-                select(PriceList)
+            db.execute(
+                update(PriceList)
                 .where(
                     and_(
                         PriceList.organization_id == org_id,
@@ -175,7 +174,7 @@ class PriceListService(ListResponseMixin):
                         PriceList.is_default == True,
                     )
                 )
-                .update({"is_default": False}, synchronize_session=False)
+                .values(is_default=False)
             )
 
         for key, value in updates.items():
@@ -224,13 +223,12 @@ class PriceListService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Item not found")
 
         # Check for existing item with same quantity break
-        existing = (
+        existing = db.scalars(
             select(PriceListItem)
             .where(PriceListItem.price_list_id == pl_id)
             .where(PriceListItem.item_id == itm_id)
             .where(PriceListItem.min_quantity == input.min_quantity)
-            .first()
-        )
+        ).first()
 
         if existing:
             # Update existing
@@ -364,12 +362,12 @@ class PriceListService(ListResponseMixin):
                 PriceList.is_default.desc(), PriceList.priority.desc()
             )
 
-        price_lists = pl_query.all()
+        price_lists = list(db.scalars(pl_query).all())
 
         # Try each price list in order
         for pl in price_lists:
             # Find matching item price with quantity break
-            item_prices = (
+            item_prices = db.scalars(
                 select(PriceListItem)
                 .where(PriceListItem.price_list_id == pl.price_list_id)
                 .where(PriceListItem.item_id == itm_id)
@@ -388,8 +386,7 @@ class PriceListService(ListResponseMixin):
                     )
                 )
                 .order_by(PriceListItem.min_quantity.desc())
-                .first()
-            )
+            ).first()
 
             if item_prices:
                 # Calculate net price after discounts
@@ -476,7 +473,7 @@ class PriceListService(ListResponseMixin):
         check_date: date,
     ) -> Decimal | None:
         """Get price from base price list."""
-        item_price = (
+        item_price = db.scalars(
             select(PriceListItem)
             .where(PriceListItem.price_list_id == base_price_list_id)
             .where(PriceListItem.item_id == item_id)
@@ -495,8 +492,7 @@ class PriceListService(ListResponseMixin):
                 )
             )
             .order_by(PriceListItem.min_quantity.desc())
-            .first()
-        )
+        ).first()
 
         return item_price.unit_price if item_price else None
 
@@ -538,12 +534,12 @@ class PriceListService(ListResponseMixin):
         if currency_code:
             query = query.where(PriceList.currency_code == currency_code)
 
-        query = query.order_by(PriceList.is_default.desc(), PriceList.priority.desc())
-        return (
-            query.order_by(PriceList.is_default.desc(), PriceList.priority.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        return list(
+            db.scalars(
+                query.order_by(PriceList.is_default.desc(), PriceList.priority.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
     @staticmethod
@@ -562,11 +558,12 @@ class PriceListService(ListResponseMixin):
         if item_id:
             query = query.where(PriceListItem.item_id == coerce_uuid(item_id))
 
-        return (
-            query.order_by(PriceListItem.min_quantity.asc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        return list(
+            db.scalars(
+                query.order_by(PriceListItem.min_quantity.asc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
 

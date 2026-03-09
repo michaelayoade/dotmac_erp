@@ -381,7 +381,7 @@ class ReportSchedulerService(ListResponseMixin):
                 ReportSchedule.organization_id == coerce_uuid(organization_id)
             )
 
-        return list(query.order_by(ReportSchedule.next_run_at).all())
+        return list(db.scalars(query.order_by(ReportSchedule.next_run_at)).all())
 
     @staticmethod
     def get_upcoming_schedules(
@@ -405,16 +405,17 @@ class ReportSchedulerService(ListResponseMixin):
         cutoff = now + timedelta(hours=hours_ahead)
 
         schedules = list(
-            select(ReportSchedule)
-            .join(ReportDefinition)
-            .where(
-                and_(
-                    ReportSchedule.organization_id == org_id,
-                    ReportSchedule.is_active == True,
-                    ReportSchedule.next_run_at <= cutoff,
+            db.scalars(
+                select(ReportSchedule)
+                .join(ReportDefinition)
+                .where(
+                    and_(
+                        ReportSchedule.organization_id == org_id,
+                        ReportSchedule.is_active == True,
+                        ReportSchedule.next_run_at <= cutoff,
+                    )
                 )
-            )
-            .all()
+            ).all()
         )
 
         executions = []
@@ -609,7 +610,7 @@ class ReportSchedulerService(ListResponseMixin):
             query = query.where(ReportSchedule.is_active == is_active)
 
         query = query.order_by(ReportSchedule.schedule_name)
-        return list(query.limit(limit).offset(offset).all())
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

@@ -109,7 +109,7 @@ class ItemCategoryService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = (
+        existing = db.scalars(
             select(ItemCategory)
             .where(
                 and_(
@@ -117,8 +117,7 @@ class ItemCategoryService(ListResponseMixin):
                     ItemCategory.category_code == input.category_code,
                 )
             )
-            .first()
-        )
+        ).first()
 
         if existing:
             raise HTTPException(
@@ -226,7 +225,7 @@ class ItemCategoryService(ListResponseMixin):
         # Check if category has active items
         from app.models.inventory.item import Item
 
-        active_items_count = (
+        active_items_count = db.scalar(
             select(func.count())
             .select_from(Item)
             .where(
@@ -235,9 +234,7 @@ class ItemCategoryService(ListResponseMixin):
                     Item.is_active.is_(True),
                 )
             )
-            .scalar()
-            or 0
-        )
+        ) or 0
 
         if active_items_count > 0:
             raise HTTPException(
@@ -297,7 +294,7 @@ class ItemCategoryService(ListResponseMixin):
             )
 
         query = query.order_by(ItemCategory.category_code)
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
     def count(
@@ -326,7 +323,7 @@ class ItemCategoryService(ListResponseMixin):
                 )
             )
 
-        return query.count() or 0
+        return db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
 
 class ItemService(ListResponseMixin):
@@ -357,7 +354,7 @@ class ItemService(ListResponseMixin):
         cat_id = coerce_uuid(input.category_id)
 
         # Check for duplicate
-        existing = (
+        existing = db.scalars(
             select(Item)
             .where(
                 and_(
@@ -365,8 +362,7 @@ class ItemService(ListResponseMixin):
                     Item.item_code == input.item_code,
                 )
             )
-            .first()
-        )
+        ).first()
 
         if existing:
             raise HTTPException(
@@ -559,7 +555,7 @@ class ItemService(ListResponseMixin):
         """Get an item by code."""
         org_id = coerce_uuid(organization_id)
 
-        return (
+        return db.scalars(
             select(Item)
             .where(
                 and_(
@@ -567,8 +563,7 @@ class ItemService(ListResponseMixin):
                     Item.item_code == item_code,
                 )
             )
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def list(
@@ -615,7 +610,7 @@ class ItemService(ListResponseMixin):
             )
 
         query = query.order_by(Item.item_code)
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instances

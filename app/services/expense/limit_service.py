@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import joinedload
 
 from app.models.expense import (
     ExpenseApproverLimit,
@@ -40,12 +40,12 @@ from app.models.expense.expense_claim_action import (
 )
 from app.models.expense.limit_rule import ExpenseApproverBudgetAdjustment
 from app.services.common import PaginatedResult, PaginationParams
+from app.services.expense.service_common import ExpenseServiceBase
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
-    from app.web.deps import WebAuthContext
 
 __all__ = ["ExpenseLimitService"]
 
@@ -163,7 +163,7 @@ class EligibleApprover:
 # =============================================================================
 
 
-class ExpenseLimitService:
+class ExpenseLimitService(ExpenseServiceBase):
     """Service for expense limit enforcement.
 
     Handles:
@@ -173,14 +173,6 @@ class ExpenseLimitService:
     - Period usage tracking and caching
     - Approver selection and escalation
     """
-
-    def __init__(
-        self,
-        db: Session,
-        ctx: WebAuthContext | None = None,
-    ) -> None:
-        self.db = db
-        self.ctx = ctx
 
     # =========================================================================
     # Limit Rules CRUD

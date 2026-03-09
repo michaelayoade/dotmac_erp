@@ -114,14 +114,13 @@ class FIFOValuationService(ListResponseMixin):
         item_id = coerce_uuid(item_id)
 
         # Validate item
-        item = (
+        item = db.scalars(
             select(Item)
             .where(
                 Item.item_id == item_id,
                 Item.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -145,19 +144,23 @@ class FIFOValuationService(ListResponseMixin):
         db.add(lot)
 
         # Update item average cost
-        total_on_hand = select(func.sum(InventoryLot.quantity_on_hand)).where(
-            InventoryLot.organization_id == org_id,
-            InventoryLot.item_id == item_id,
-            InventoryLot.quantity_on_hand > 0,
-        ).scalar() or Decimal("0")
+        total_on_hand = db.scalar(
+            select(func.sum(InventoryLot.quantity_on_hand)).where(
+                InventoryLot.organization_id == org_id,
+                InventoryLot.item_id == item_id,
+                InventoryLot.quantity_on_hand > 0,
+            )
+        ) or Decimal("0")
 
-        total_value = select(
-            func.sum(InventoryLot.quantity_on_hand * InventoryLot.unit_cost)
-        ).where(
-            InventoryLot.organization_id == org_id,
-            InventoryLot.item_id == item_id,
-            InventoryLot.quantity_on_hand > 0,
-        ).scalar() or Decimal("0")
+        total_value = db.scalar(
+            select(
+                func.sum(InventoryLot.quantity_on_hand * InventoryLot.unit_cost)
+            ).where(
+                InventoryLot.organization_id == org_id,
+                InventoryLot.item_id == item_id,
+                InventoryLot.quantity_on_hand > 0,
+            )
+        ) or Decimal("0")
 
         new_total_qty = total_on_hand + quantity
         new_total_value = total_value + (quantity * unit_cost)
@@ -199,16 +202,17 @@ class FIFOValuationService(ListResponseMixin):
         item_id = coerce_uuid(item_id)
 
         # Get layers ordered by received date (oldest first)
-        layers = (
-            select(InventoryLot)
-            .where(
-                InventoryLot.organization_id == org_id,
-                InventoryLot.item_id == item_id,
-                InventoryLot.quantity_on_hand > 0,
-                InventoryLot.is_active == True,
-            )
-            .order_by(InventoryLot.received_date.asc())
-            .all()
+        layers = list(
+            db.scalars(
+                select(InventoryLot)
+                .where(
+                    InventoryLot.organization_id == org_id,
+                    InventoryLot.item_id == item_id,
+                    InventoryLot.quantity_on_hand > 0,
+                    InventoryLot.is_active == True,
+                )
+                .order_by(InventoryLot.received_date.asc())
+            ).all()
         )
 
         total_available = sum(l.quantity_on_hand for l in layers)
@@ -275,16 +279,17 @@ class FIFOValuationService(ListResponseMixin):
         item_id = coerce_uuid(item_id)
 
         org_id = coerce_uuid(organization_id)
-        layers_data = (
-            select(InventoryLot)
-            .where(
-                InventoryLot.organization_id == org_id,
-                InventoryLot.item_id == item_id,
-                InventoryLot.quantity_on_hand > 0,
-                InventoryLot.is_active == True,
-            )
-            .order_by(InventoryLot.received_date.asc())
-            .all()
+        layers_data = list(
+            db.scalars(
+                select(InventoryLot)
+                .where(
+                    InventoryLot.organization_id == org_id,
+                    InventoryLot.item_id == item_id,
+                    InventoryLot.quantity_on_hand > 0,
+                    InventoryLot.is_active == True,
+                )
+                .order_by(InventoryLot.received_date.asc())
+            ).all()
         )
 
         layers = []
@@ -451,14 +456,13 @@ class FIFOValuationService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # Get item details - verify belongs to organization
-        item = (
+        item = db.scalars(
             select(Item)
             .where(
                 Item.item_id == item_id,
                 Item.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
 
@@ -466,15 +470,14 @@ class FIFOValuationService(ListResponseMixin):
         fifo_inv = FIFOValuationService.get_fifo_inventory(db, org_id, item_id)
 
         # Check for existing valuation
-        existing = (
+        existing = db.scalars(
             select(InventoryValuation)
             .where(
                 InventoryValuation.fiscal_period_id == period_id,
                 InventoryValuation.item_id == item_id,
                 InventoryValuation.warehouse_id == warehouse_id,
             )
-            .first()
-        )
+        ).first()
 
         if existing:
             # Update existing
@@ -540,13 +543,14 @@ class FIFOValuationService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        valuations = (
-            select(InventoryValuation)
-            .where(
-                InventoryValuation.organization_id == org_id,
-                InventoryValuation.fiscal_period_id == period_id,
-            )
-            .all()
+        valuations = list(
+            db.scalars(
+                select(InventoryValuation)
+                .where(
+                    InventoryValuation.organization_id == org_id,
+                    InventoryValuation.fiscal_period_id == period_id,
+                )
+            ).all()
         )
 
         total_cost = sum(v.total_cost for v in valuations)

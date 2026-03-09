@@ -109,12 +109,11 @@ class WarehouseService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = (
+        existing = db.scalars(
             select(Warehouse)
             .where(Warehouse.organization_id == org_id)
             .where(Warehouse.warehouse_code == input.warehouse_code)
-            .first()
-        )
+        ).first()
 
         if existing:
             raise HTTPException(
@@ -172,12 +171,11 @@ class WarehouseService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Warehouse not found")
 
         # Check for duplicate
-        existing = (
+        existing = db.scalars(
             select(WarehouseLocation)
             .where(WarehouseLocation.warehouse_id == wh_id)
             .where(WarehouseLocation.location_code == input.location_code)
-            .first()
-        )
+        ).first()
 
         if existing:
             raise HTTPException(
@@ -411,8 +409,10 @@ class WarehouseService(ListResponseMixin):
                 )
             )
 
-        return (
-            query.order_by(Warehouse.warehouse_code).limit(limit).offset(offset).all()
+        return list(
+            db.scalars(
+                query.order_by(Warehouse.warehouse_code).limit(limit).offset(offset)
+            ).all()
         )
 
     @staticmethod
@@ -431,11 +431,12 @@ class WarehouseService(ListResponseMixin):
         if is_active is not None:
             query = query.where(WarehouseLocation.is_active == is_active)
 
-        return (
-            query.order_by(WarehouseLocation.location_code)
-            .limit(limit)
-            .offset(offset)
-            .all()
+        return list(
+            db.scalars(
+                query.order_by(WarehouseLocation.location_code)
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
     @staticmethod

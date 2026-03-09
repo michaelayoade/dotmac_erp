@@ -23,6 +23,10 @@ from app.services.expense.expense_service import REPORTABLE_EXPENSE_CLAIM_STATUS
 
 
 class ExpenseDashboardChartsMixin:
+    def _resolve_currency(self, db: Session, org_id: UUID) -> str:
+        """Implemented by the dashboard facade."""
+        raise NotImplementedError
+
     def _get_claims_chart_data(
         self, db: Session, org_id: UUID, start_date: date | None
     ) -> dict[str, Any]:

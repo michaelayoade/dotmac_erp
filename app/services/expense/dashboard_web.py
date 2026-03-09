@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 class ExpenseDashboardService(ExpenseDashboardChartsMixin, ExpenseDashboardStatsMixin):
     """Service facade for Expense module dashboard pages."""
 
-    def _resolve_currency(self, db, org_id: str) -> str:
+    def _resolve_currency(self, db, org_id: UUID) -> str:
         """Resolve the org's presentation currency instead of hardcoding."""
         from app.services.finance.platform.org_context import org_context_service
 

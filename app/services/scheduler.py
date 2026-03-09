@@ -91,7 +91,7 @@ class ScheduledTasks(ListResponseMixin):
         else:
             query = query.order_by(sort_column.asc())
 
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
     def update(

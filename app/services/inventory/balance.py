@@ -303,7 +303,7 @@ class InventoryBalanceService:
         category = db.get(ItemCategory, item.category_id) if item.category_id else None
 
         # Get all warehouses with inventory for this item
-        warehouse_ids = (
+        warehouse_ids = db.execute(
             select(InventoryTransaction.warehouse_id)
             .where(
                 and_(
@@ -311,8 +311,8 @@ class InventoryBalanceService:
                     InventoryTransaction.item_id == itm_id,
                 )
             )
-            .all()
-        )
+            .distinct()
+        ).all()
 
         warehouse_balances = []
         total_on_hand = Decimal("0")
@@ -407,7 +407,7 @@ class InventoryBalanceService:
             )
 
         # Get items with reorder point or minimum stock (item-level or category fallback)
-        items = (
+        items = db.execute(
             select(Item, ItemCategory)
             .join(ItemCategory, Item.category_id == ItemCategory.category_id)
             .where(
@@ -418,8 +418,7 @@ class InventoryBalanceService:
                     or_(*stock_filters),
                 )
             )
-            .all()
-        )
+        ).all()
 
         low_stock = []
         for item, category in items:
@@ -606,7 +605,7 @@ class InventoryBalanceService:
         wh_id = coerce_uuid(warehouse_id)
 
         # Get all items with transactions at this warehouse
-        item_ids = (
+        item_ids = db.execute(
             select(InventoryTransaction.item_id)
             .where(
                 and_(
@@ -614,8 +613,8 @@ class InventoryBalanceService:
                     InventoryTransaction.warehouse_id == wh_id,
                 )
             )
-            .all()
-        )
+            .distinct()
+        ).all()
 
         balances = []
         for (item_id,) in item_ids:
@@ -705,7 +704,7 @@ class InventoryBalanceService:
             if warehouse_id:
                 lot_number = f"__GENERAL__:{warehouse_id}"
 
-            general_lot = db.scalar(
+            general_lot = db.scalars(
                 select(InventoryLot).where(
                     and_(
                         InventoryLot.organization_id == org_id,
@@ -713,7 +712,7 @@ class InventoryBalanceService:
                         InventoryLot.lot_number == lot_number,
                     )
                 )
-            )
+            ).first()
 
             if not general_lot:
                 from datetime import date as date_type
@@ -788,7 +787,7 @@ class InventoryBalanceService:
             lot_number = "__GENERAL__"
             if warehouse_id:
                 lot_number = f"__GENERAL__:{warehouse_id}"
-            general_lot = db.scalar(
+            general_lot = db.scalars(
                 select(InventoryLot).where(
                     and_(
                         InventoryLot.organization_id == org_id,
@@ -796,7 +795,7 @@ class InventoryBalanceService:
                         InventoryLot.lot_number == lot_number,
                     )
                 )
-            )
+            ).first()
 
             if general_lot:
                 current_allocated = general_lot.quantity_allocated or Decimal("0")

@@ -85,13 +85,13 @@ class TaxPeriodService(ListResponseMixin):
             )
 
         # Check for overlapping periods
-        stmt = select(TaxPeriod).where(
+        overlap_stmt = select(TaxPeriod).where(
             TaxPeriod.organization_id == org_id,
             TaxPeriod.jurisdiction_id == jurisdiction_id,
             TaxPeriod.start_date <= input.end_date,
             TaxPeriod.end_date >= input.start_date,
         )
-        existing = db.scalars(stmt).first()
+        existing = db.scalars(overlap_stmt).first()
 
         if existing:
             raise HTTPException(
