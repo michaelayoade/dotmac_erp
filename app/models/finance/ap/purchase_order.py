@@ -9,11 +9,13 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     Enum,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -35,6 +37,7 @@ class POStatus(str, enum.Enum):
     RECEIVED = "RECEIVED"
     CANCELLED = "CANCELLED"
     CLOSED = "CLOSED"
+    SUPERSEDED = "SUPERSEDED"
 
 
 class PurchaseOrder(Base):
@@ -131,6 +134,28 @@ class PurchaseOrder(Base):
 
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
+    # Amendment / Variation tracking
+    is_amendment: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    original_po_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("ap.purchase_order.po_id"),
+        nullable=True,
+        comment="Links to the baseline PO being amended",
+    )
+    amendment_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1"),
+        comment="Version counter: baseline=1, first amendment=2, etc.",
+    )
+    amendment_reason: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="Reason for the amendment / variation"
+    )
+    variation_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True,
+        comment="CRM variation identifier for traceability",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -147,6 +172,12 @@ class PurchaseOrder(Base):
         "PurchaseOrderLine",
         back_populates="purchase_order",
         cascade="all, delete-orphan",
+    )
+    original_po: Mapped["PurchaseOrder | None"] = relationship(
+        "PurchaseOrder",
+        remote_side="PurchaseOrder.po_id",
+        foreign_keys=[original_po_id],
+        uselist=False,
     )
 
 
