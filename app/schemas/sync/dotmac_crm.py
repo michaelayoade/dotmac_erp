@@ -561,6 +561,43 @@ class CRMPurchaseOrderPayload(BaseModel):
     items: list[CRMPurchaseOrderItemPayload] = Field(..., min_length=1)
 
 
+class CRMPurchaseOrderVariationPayload(BaseModel):
+    """Variation/amendment payload for an existing PO from CRM.
+
+    Sent when a CRM work order has an approved variation (scope change,
+    price adjustment, etc.).  The ERP creates a new amendment PO linked
+    to the baseline, superseding the original.
+    """
+
+    omni_work_order_id: str = Field(
+        ..., max_length=36, description="CRM work order ID (same as baseline)"
+    )
+    variation_id: str = Field(
+        ..., max_length=36, description="Unique CRM variation identifier"
+    )
+    variation_version: int = Field(
+        ..., ge=2, description="Monotonic version (2 = first amendment)"
+    )
+    amendment_reason: str = Field(
+        ..., max_length=500, description="Reason for the variation"
+    )
+    omni_quote_id: str | None = Field(None, max_length=36)
+    omni_project_id: str | None = Field(None, max_length=36)
+    project_code: str | None = Field(None, max_length=80)
+    project_name: str | None = Field(None, max_length=200)
+    vendor_erp_id: str | None = Field(None, max_length=255)
+    vendor_name: str | None = Field(None, max_length=255)
+    vendor_code: str | None = Field(None, max_length=30)
+    title: str = Field(..., max_length=500)
+    currency: str = Field(settings.default_functional_currency_code, max_length=3)
+    subtotal: Decimal
+    tax_total: Decimal = Decimal("0")
+    total: Decimal
+    approved_at: datetime | None = None
+    approved_by_email: str | None = Field(None, max_length=255)
+    items: list[CRMPurchaseOrderItemPayload] = Field(..., min_length=1)
+
+
 class CRMPurchaseOrderResponse(BaseModel):
     """Response after creating a purchase order from CRM."""
 
@@ -568,3 +605,7 @@ class CRMPurchaseOrderResponse(BaseModel):
     po_id: UUID
     status: str
     omni_work_order_id: str
+    is_amendment: bool = False
+    variation_id: str | None = None
+    amendment_version: int = 1
+    superseded_po_id: UUID | None = None

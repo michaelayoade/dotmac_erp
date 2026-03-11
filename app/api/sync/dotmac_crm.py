@@ -34,6 +34,7 @@ from app.schemas.sync.dotmac_crm import (
     CRMProjectRead,
     CRMPurchaseOrderPayload,
     CRMPurchaseOrderResponse,
+    CRMPurchaseOrderVariationPayload,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
@@ -697,6 +698,43 @@ def create_purchase_order(
     except Exception as e:
         logger.exception(
             "Failed to create purchase order omni_work_order_id=%s",
+            payload.omni_work_order_id,
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+@router.post(
+    "/purchase-orders/variations",
+    response_model=CRMPurchaseOrderResponse,
+    status_code=201,
+)
+def create_purchase_order_variation(
+    payload: CRMPurchaseOrderVariationPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> CRMPurchaseOrderResponse:
+    """
+    Create a PO amendment from a CRM variation approval.
+
+    Idempotent: if a PO amendment with the same variation_id already exists,
+    returns the existing amended PO.  The baseline PO is marked SUPERSEDED.
+    Approval workflow integrity is preserved — the amendment starts in DRAFT.
+    """
+    org_id = auth["organization_id"]
+    person_id = auth["person_id"]
+    service = DotMacCRMSyncService(db)
+
+    try:
+        result = service.create_purchase_order_variation(org_id, payload, person_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "Failed to create PO variation variation_id=%s, wo=%s",
+            payload.variation_id,
             payload.omni_work_order_id,
         )
         raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e

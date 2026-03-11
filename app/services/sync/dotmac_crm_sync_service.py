@@ -54,6 +54,7 @@ from app.schemas.sync.dotmac_crm import (
     CRMProjectRead,
     CRMPurchaseOrderPayload,
     CRMPurchaseOrderResponse,
+    CRMPurchaseOrderVariationPayload,
     CRMTicketActivityEntry,
     CRMTicketCommentItem,
     CRMTicketPayload,
@@ -1694,6 +1695,178 @@ class DotMacCRMSyncService:
         )
         self.db.add(mapping)
         self.db.flush()
+
+    # ============ PO Variation / Amendment (CRM → ERP) ============
+
+    def create_purchase_order_variation(
+        self,
+        org_id: UUID,
+        data: CRMPurchaseOrderVariationPayload,
+        created_by_person_id: UUID,
+    ) -> CRMPurchaseOrderResponse:
+        """
+        Create a PO amendment from a CRM variation approval.
+
+        Strategy:
+        1. Idempotency — if a PO with this variation_id exists, return it.
+        2. Find the baseline PO via the original work-order sync mapping.
+        3. Mark the baseline as SUPERSEDED (preserving audit trail).
+        4. Create a new amendment PO linked to the baseline.
+        5. Update the sync mapping to point to the new PO.
+
+        SoD is maintained: the amendment PO starts in DRAFT and must go
+        through the same approval workflow as the original.
+
+        Raises:
+            ValueError: If baseline PO not found, supplier resolution fails,
+                        or the baseline is already CANCELLED/CLOSED.
+        """
+        from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+        from app.services.finance.ap.purchase_order import (
+            POLineInput,
+            PurchaseOrderInput,
+            PurchaseOrderService,
+        )
+
+        # 1. Idempotency: check if we already created a PO for this variation_id
+        existing_stmt = select(PurchaseOrder).where(
+            PurchaseOrder.organization_id == org_id,
+            PurchaseOrder.variation_id == data.variation_id,
+        )
+        existing_variation_po = self.db.scalar(existing_stmt)
+        if existing_variation_po:
+            logger.info(
+                "PO variation already exists for variation_id=%s, returning",
+                data.variation_id,
+            )
+            return CRMPurchaseOrderResponse(
+                purchase_order_id=existing_variation_po.po_number,
+                po_id=existing_variation_po.po_id,
+                status=existing_variation_po.status.value.lower(),
+                omni_work_order_id=data.omni_work_order_id,
+                is_amendment=True,
+                variation_id=data.variation_id,
+                amendment_version=existing_variation_po.amendment_version,
+                superseded_po_id=existing_variation_po.original_po_id,
+            )
+
+        # 2. Find the baseline PO via sync mapping
+        baseline_mapping = self._get_mapping(
+            org_id, CRMEntityType.PURCHASE_ORDER, data.omni_work_order_id
+        )
+        if not baseline_mapping:
+            raise ValueError(
+                f"No baseline PO found for omni_work_order_id={data.omni_work_order_id}"
+            )
+
+        baseline_po = self.db.get(PurchaseOrder, baseline_mapping.local_entity_id)
+        if not baseline_po:
+            raise ValueError(
+                f"Baseline PO entity missing for mapping={baseline_mapping.mapping_id}"
+            )
+
+        # Prevent amendments on terminal states
+        terminal = {POStatus.CANCELLED, POStatus.CLOSED}
+        if baseline_po.status in terminal:
+            raise ValueError(
+                f"Cannot amend PO {baseline_po.po_number} in {baseline_po.status.value} status"
+            )
+
+        # 3. Resolve dependencies (same as create flow)
+        supplier = self._resolve_supplier(org_id, data.vendor_erp_id, data.vendor_code)
+        project_id = self._resolve_project_id(org_id, data.omni_project_id)
+        approver_person_id = self._resolve_person_id_by_email(
+            org_id, data.approved_by_email
+        )
+        creator_id = approver_person_id or created_by_person_id
+
+        # 4. Build PO input with amendment metadata
+        po_lines: list[POLineInput] = []
+        line_subtotal = sum(i.amount for i in data.items) or Decimal("1")
+        tax_distributed = Decimal("0")
+        for idx, item in enumerate(data.items):
+            if idx == len(data.items) - 1:
+                line_tax = data.tax_total - tax_distributed
+            else:
+                line_tax = (data.tax_total * item.amount / line_subtotal).quantize(
+                    Decimal("0.01")
+                )
+                tax_distributed += line_tax
+            po_lines.append(
+                POLineInput(
+                    description=item.description,
+                    quantity_ordered=item.quantity,
+                    unit_price=item.unit_price,
+                    tax_amount=line_tax,
+                    project_id=project_id,
+                )
+            )
+
+        # Determine version: baseline version + 1, or explicit from payload
+        amendment_version = data.variation_version
+
+        correlation_id = f"crm-wo:{data.omni_work_order_id}:v{amendment_version}"
+
+        po_input = PurchaseOrderInput(
+            supplier_id=supplier.supplier_id,
+            po_date=date.today(),
+            currency_code=data.currency,
+            lines=po_lines,
+            correlation_id=correlation_id,
+            terms_and_conditions=data.title,
+        )
+
+        # 5. Create the amendment PO
+        new_po = PurchaseOrderService.create_po(
+            self.db, org_id, po_input, creator_id
+        )
+
+        # Set amendment-specific fields
+        new_po.is_amendment = True
+        new_po.original_po_id = baseline_po.po_id
+        new_po.amendment_version = amendment_version
+        new_po.amendment_reason = data.amendment_reason
+        new_po.variation_id = data.variation_id
+
+        # 6. Supersede the baseline PO (preserving its data for audit)
+        baseline_po.status = POStatus.SUPERSEDED
+        self.db.flush()
+
+        # 7. Update sync mapping to point to the new PO
+        baseline_mapping.local_entity_id = new_po.po_id
+        baseline_mapping.display_code = new_po.po_number
+        baseline_mapping.display_name = data.title[:255]
+        baseline_mapping.crm_data = {
+            **(baseline_mapping.crm_data or {}),
+            "variation_id": data.variation_id,
+            "variation_version": amendment_version,
+            "amendment_reason": data.amendment_reason,
+            "superseded_po_id": str(baseline_po.po_id),
+            "total": str(data.total),
+        }
+        baseline_mapping.synced_at = datetime.now(UTC)
+
+        self.db.commit()
+
+        logger.info(
+            "Created PO amendment %s (v%d) for variation_id=%s, "
+            "superseding %s",
+            new_po.po_number,
+            amendment_version,
+            data.variation_id,
+            baseline_po.po_number,
+        )
+
+        return CRMPurchaseOrderResponse(
+            purchase_order_id=new_po.po_number,
+            po_id=new_po.po_id,
+            status=new_po.status.value.lower(),
+            omni_work_order_id=data.omni_work_order_id,
+            is_amendment=True,
+            variation_id=data.variation_id,
+            amendment_version=amendment_version,
+            superseded_po_id=baseline_po.po_id,
+        )
 
     # ============ Lookup Helpers ============
 
