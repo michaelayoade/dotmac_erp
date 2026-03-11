@@ -29,7 +29,9 @@
              ]}
         ],
         base_url="/admin/tasks",
-        placeholder="Search tasks..."
+        placeholder="Search tasks...",
+        collapsible=true,
+        active_filter_count=(1 if search else 0) + (1 if status_filter else 0)
     ) }}
 
     <div id="results-container">

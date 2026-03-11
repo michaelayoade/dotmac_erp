@@ -14,10 +14,78 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-6">
-    <div>
-        <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tax & Bank Information</h2>
-        <p class="text-sm text-slate-500 dark:text-slate-400">Update your statutory and payment information for payroll processing.</p>
+<div class="mx-auto max-w-4xl space-y-8" x-data="{ personalDetailsOpen: false }">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tax & Bank Information</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Update your statutory and payment information for payroll processing.</p>
+        </div>
+        {% if has_pending %}
+        <div class="inline-flex items-center gap-2 self-start rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+            {{ icon_svg("clock", "h-4 w-4") }}
+            Pending request awaiting review
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Data Completeness Status -->
+    <div class="card">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Data Completeness</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">See what payroll-related details are already in place before you make changes.</p>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+                <div class="flex items-center gap-2">
+                    {% if employee.bank_account_number and employee.bank_name %}
+                    <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    {% else %}
+                    <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                    </svg>
+                    {% endif %}
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Bank Details</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if tax_profile and tax_profile.tin %}
+                    <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    {% else %}
+                    <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                    </svg>
+                    {% endif %}
+                    <span class="text-sm text-slate-700 dark:text-slate-300">PAYE (TIN)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if tax_profile and tax_profile.rsa_pin and tax_profile.pfa_code %}
+                    <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    {% else %}
+                    <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                    </svg>
+                    {% endif %}
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Pension</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if tax_profile and tax_profile.nhf_number %}
+                    <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    {% else %}
+                    <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                    </svg>
+                    {% endif %}
+                    <span class="text-sm text-slate-700 dark:text-slate-300">NHF</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     {% if success %}
@@ -46,204 +114,218 @@
     </div>
     {% endif %}
 
-    <!-- Info Card -->
-    <div class="rounded-lg bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 p-4">
-        <div class="flex">
-            <svg class="h-5 w-5 text-sky-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-            </svg>
-            <div class="ml-3">
-                <p class="text-sm text-sky-800 dark:text-sky-200">
-                    This information is used for statutory deductions (PAYE, Pension, NHF) and salary payments.
-                    Changes require approval before being applied.
+    <div class="rounded-lg border border-violet-200 bg-violet-50 p-4 dark:border-violet-800 dark:bg-violet-900/20">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("information-circle", "h-5 w-5 text-violet-500 flex-shrink-0 mt-0.5") }}
+            <div class="space-y-2">
+                <p class="text-sm text-violet-800 dark:text-violet-200">
+                    This information is used for salary payments and statutory deductions like PAYE, Pension, and NHF.
+                    Changes require approval before they are applied.
                 </p>
+                {% if has_pending %}
+                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                    Your latest change request is still pending review, so new changes are temporarily disabled.
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
-
-    {% if has_pending %}
-    <!-- Pending Request Warning -->
-    <div class="rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 p-4">
-        <div class="flex">
-            <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-            </svg>
-            <div class="ml-3">
-                <h3 class="text-sm font-medium text-amber-800 dark:text-amber-200">Pending Change Request</h3>
-                <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                    You have a pending change request awaiting approval. You cannot submit new changes until
-                    the current request is reviewed.
-                </p>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 
     {% if recent_requests %}
-    <!-- Recent Change Requests -->
     <div class="card">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Change Requests</h2>
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Change Requests</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">A compact view of your latest updates.</p>
+                </div>
+                <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    {{ recent_requests | length }} total
+                </span>
+            </div>
         </div>
         <div class="divide-y divide-slate-200 dark:divide-slate-700">
-            {% for req in recent_requests[:5] %}
-            <div class="px-6 py-4 flex justify-between items-center">
+            {% for req in recent_requests[:2] %}
+            <div class="flex items-center justify-between gap-4 px-6 py-4">
                 <div>
                     <p class="text-sm font-medium text-slate-900 dark:text-white">
                         {{ req.change_type.value | replace('_', ' ') | title }}
                     </p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {{ req.created_at | format_datetime if req.created_at else 'Unknown' }}
                     </p>
                 </div>
-                <div>
-                    {{ status_badge(req.status.value, 'sm') }}
-                </div>
+                {{ status_badge(req.status.value, 'sm') }}
             </div>
             {% endfor %}
         </div>
     </div>
     {% endif %}
 
-    <form method="post" class="space-y-6">
+    <form method="post" class="space-y-8">
         {{ request.state.csrf_form | safe }}
-        <fieldset {% if has_pending %}disabled{% endif %}>
 
-        <!-- Personal Information -->
-        <div class="card">
-            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Personal Information</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Basic details about you</p>
-            </div>
-            <div class="p-6 space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="phone" class="form-label">Phone Number</label>
-                        <input type="text" name="phone" id="phone"
-                            value="{{ person.phone | default('', true) if person else '' }}"
-                            placeholder="e.g., 08012345678"
-                            class="form-input w-full">
-                    </div>
-                    <div>
-                        <label for="date_of_birth" class="form-label">Date of Birth</label>
-                        <input type="date" name="date_of_birth" id="date_of_birth"
-                            value="{{ person.date_of_birth.isoformat() if person and person.date_of_birth else '' }}"
-                            class="form-input w-full">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="gender" class="form-label">Gender</label>
-                        <select name="gender" id="gender" class="form-select w-full">
-                            <option value="">-- Select --</option>
-                            <option value="female" {% if person and person.gender and person.gender.value == 'female' %}selected{% endif %}>Female</option>
-                            <option value="male" {% if person and person.gender and person.gender.value == 'male' %}selected{% endif %}>Male</option>
-                            <option value="non_binary" {% if person and person.gender and person.gender.value == 'non_binary' %}selected{% endif %}>Non-binary</option>
-                            <option value="other" {% if person and person.gender and person.gender.value == 'other' %}selected{% endif %}>Other</option>
-                            <option value="unknown" {% if person and person.gender and person.gender.value == 'unknown' %}selected{% endif %}>Prefer not to say</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Address -->
-        <div class="card">
-            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Address</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Where you currently live</p>
-            </div>
-            <div class="p-6 space-y-4">
+        <div class="card overflow-hidden">
+            <button type="button"
+                    class="flex w-full items-center justify-between gap-4 px-6 py-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    @click="personalDetailsOpen = !personalDetailsOpen"
+                    aria-expanded="false"
+                    :aria-expanded="personalDetailsOpen.toString()">
                 <div>
-                    <label for="address_line1" class="form-label">Address Line 1</label>
-                    <input type="text" name="address_line1" id="address_line1"
-                        value="{{ person.address_line1 | default('', true) if person else '' }}"
-                        class="form-input w-full">
+                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Personal Details</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Profile, address, and emergency contact information.</p>
                 </div>
-                <div>
-                    <label for="address_line2" class="form-label">Address Line 2</label>
-                    <input type="text" name="address_line2" id="address_line2"
-                        value="{{ person.address_line2 | default('', true) if person else '' }}"
-                        class="form-input w-full">
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label for="city" class="form-label">City</label>
-                        <input type="text" name="city" id="city"
-                            value="{{ person.city | default('', true) if person else '' }}"
-                            class="form-input w-full">
-                    </div>
-                    <div>
-                        <label for="region" class="form-label">State</label>
-                        <input type="text" name="region" id="region"
-                            value="{{ person.region | default('', true) if person else '' }}"
-                            class="form-input w-full">
-                    </div>
-                    <div>
-                        <label for="postal_code" class="form-label">Postal Code</label>
-                        <input type="text" name="postal_code" id="postal_code"
-                            value="{{ person.postal_code | default('', true) if person else '' }}"
-                            class="form-input w-full">
+                <svg class="h-5 w-5 text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': personalDetailsOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div x-show="personalDetailsOpen" x-collapse class="space-y-0">
+                <div class="border-t border-slate-200 px-6 py-4 dark:border-slate-700">
+                    <div class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+                        Open this section when you need to update your profile, home address, or emergency contact details.
                     </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="country_code" class="form-label">Country Code</label>
-                        <input type="text" name="country_code" id="country_code"
-                            value="{{ person.country_code | default('', true) if person else '' }}"
-                            placeholder="NG"
-                            maxlength="2"
-                            class="form-input w-full">
+
+                <fieldset class="space-y-0" {% if has_pending %}disabled{% endif %}>
+                    <div class="border-t border-slate-200 dark:border-slate-700">
+                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Personal Information</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Basic details about you</p>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="phone" class="form-label">Phone Number</label>
+                                    <input type="text" name="phone" id="phone"
+                                        value="{{ person.phone | default('', true) if person else '' }}"
+                                        placeholder="e.g., 08012345678"
+                                        class="form-input w-full">
+                                </div>
+                                <div>
+                                    <label for="date_of_birth" class="form-label">Date of Birth</label>
+                                    <input type="date" name="date_of_birth" id="date_of_birth"
+                                        value="{{ person.date_of_birth.isoformat() if person and person.date_of_birth else '' }}"
+                                        class="form-input w-full">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="gender" class="form-label">Gender</label>
+                                    <select name="gender" id="gender" class="form-select w-full">
+                                        <option value="">-- Select --</option>
+                                        <option value="female" {% if person and person.gender and person.gender.value == 'female' %}selected{% endif %}>Female</option>
+                                        <option value="male" {% if person and person.gender and person.gender.value == 'male' %}selected{% endif %}>Male</option>
+                                        <option value="non_binary" {% if person and person.gender and person.gender.value == 'non_binary' %}selected{% endif %}>Non-binary</option>
+                                        <option value="other" {% if person and person.gender and person.gender.value == 'other' %}selected{% endif %}>Other</option>
+                                        <option value="unknown" {% if person and person.gender and person.gender.value == 'unknown' %}selected{% endif %}>Prefer not to say</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+
+                    <div class="border-t border-slate-200 dark:border-slate-700">
+                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Address</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Where you currently live</p>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label for="address_line1" class="form-label">Address Line 1</label>
+                                <input type="text" name="address_line1" id="address_line1"
+                                    value="{{ person.address_line1 | default('', true) if person else '' }}"
+                                    class="form-input w-full">
+                            </div>
+                            <div>
+                                <label for="address_line2" class="form-label">Address Line 2</label>
+                                <input type="text" name="address_line2" id="address_line2"
+                                    value="{{ person.address_line2 | default('', true) if person else '' }}"
+                                    class="form-input w-full">
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="city" class="form-label">City</label>
+                                    <input type="text" name="city" id="city"
+                                        value="{{ person.city | default('', true) if person else '' }}"
+                                        class="form-input w-full">
+                                </div>
+                                <div>
+                                    <label for="region" class="form-label">State</label>
+                                    <input type="text" name="region" id="region"
+                                        value="{{ person.region | default('', true) if person else '' }}"
+                                        class="form-input w-full">
+                                </div>
+                                <div>
+                                    <label for="postal_code" class="form-label">Postal Code</label>
+                                    <input type="text" name="postal_code" id="postal_code"
+                                        value="{{ person.postal_code | default('', true) if person else '' }}"
+                                        class="form-input w-full">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="country_code" class="form-label">Country Code</label>
+                                    <input type="text" name="country_code" id="country_code"
+                                        value="{{ person.country_code | default('', true) if person else '' }}"
+                                        placeholder="NG"
+                                        maxlength="2"
+                                        class="form-input w-full">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-200 dark:border-slate-700">
+                        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Personal Contact & Emergency</h3>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">How we can reach you and your emergency contact</p>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="personal_email" class="form-label">Personal Email</label>
+                                    <input type="email" name="personal_email" id="personal_email"
+                                        value="{{ employee.personal_email | default('', true) }}"
+                                        class="form-input w-full">
+                                </div>
+                                <div>
+                                    <label for="personal_phone" class="form-label">Personal Phone</label>
+                                    <input type="text" name="personal_phone" id="personal_phone"
+                                        value="{{ employee.personal_phone | default('', true) }}"
+                                        class="form-input w-full">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="emergency_contact_name" class="form-label">Emergency Contact Name</label>
+                                    <input type="text" name="emergency_contact_name" id="emergency_contact_name"
+                                        value="{{ employee.emergency_contact_name | default('', true) }}"
+                                        class="form-input w-full">
+                                </div>
+                                <div>
+                                    <label for="emergency_contact_phone" class="form-label">Emergency Contact Phone</label>
+                                    <input type="text" name="emergency_contact_phone" id="emergency_contact_phone"
+                                        value="{{ employee.emergency_contact_phone | default('', true) }}"
+                                        class="form-input w-full">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
             </div>
         </div>
 
-        <!-- Personal Contact & Emergency -->
-        <div class="card">
-            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Personal Contact & Emergency</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">How we can reach you and your emergency contact</p>
-            </div>
-            <div class="p-6 space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="personal_email" class="form-label">Personal Email</label>
-                        <input type="email" name="personal_email" id="personal_email"
-                            value="{{ employee.personal_email | default('', true) }}"
-                            class="form-input w-full">
-                    </div>
-                    <div>
-                        <label for="personal_phone" class="form-label">Personal Phone</label>
-                        <input type="text" name="personal_phone" id="personal_phone"
-                            value="{{ employee.personal_phone | default('', true) }}"
-                            class="form-input w-full">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="emergency_contact_name" class="form-label">Emergency Contact Name</label>
-                        <input type="text" name="emergency_contact_name" id="emergency_contact_name"
-                            value="{{ employee.emergency_contact_name | default('', true) }}"
-                            class="form-input w-full">
-                    </div>
-                    <div>
-                        <label for="emergency_contact_phone" class="form-label">Emergency Contact Phone</label>
-                        <input type="text" name="emergency_contact_phone" id="emergency_contact_phone"
-                            value="{{ employee.emergency_contact_phone | default('', true) }}"
-                            class="form-input w-full">
-                    </div>
-                </div>
-            </div>
-        </div>
+        <fieldset class="space-y-8" {% if has_pending %}disabled{% endif %}>
 
-        <!-- Bank Details -->
         <div class="card">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Bank Account Details</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">For salary payments</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">For salary payments</p>
             </div>
             <div class="p-6 space-y-4">
+                <div class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+                    Fill these first if you want payroll disbursements to go to the correct account.
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="bank_name" class="form-label">Bank Name <span class="text-rose-500">*</span></label>
@@ -291,9 +373,12 @@
         <div class="card">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tax Identification</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">For PAYE tax filing</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">For PAYE tax filing</p>
             </div>
             <div class="p-6 space-y-4">
+                <div class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+                    Use this section when HR or payroll asks for your TIN or tax remittance state.
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="tin" class="form-label">Tax Identification Number (TIN)</label>
@@ -327,9 +412,12 @@
         <div class="card">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Pension Information</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">PRA 2014 - Retirement Savings Account details</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">PRA 2014 - Retirement Savings Account details</p>
             </div>
             <div class="p-6 space-y-4">
+                <div class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+                    Complete this section if your pension deductions or RSA details need updating.
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="rsa_pin" class="form-label">RSA PIN</label>
@@ -358,9 +446,12 @@
         <div class="card">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">National Housing Fund (NHF)</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">For FMBN contributions</p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">For FMBN contributions</p>
             </div>
-            <div class="p-6">
+            <div class="p-6 space-y-4">
+                <div class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
+                    Only fill this if you already have an NHF registration number.
+                </div>
                 <div class="max-w-md">
                     <label for="nhf_number" class="form-label">NHF Number</label>
                     <input type="text" name="nhf_number" id="nhf_number"
@@ -372,73 +463,16 @@
             </div>
         </div>
 
-        <!-- Data Completeness Status -->
-        <div class="card">
-            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Data Completeness</h2>
-            </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="flex items-center gap-2">
-                        {% if employee.bank_account_number and employee.bank_name %}
-                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
-                        {% else %}
-                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                        </svg>
-                        {% endif %}
-                        <span class="text-sm text-slate-700 dark:text-slate-300">Bank Details</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        {% if tax_profile and tax_profile.tin %}
-                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
-                        {% else %}
-                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                        </svg>
-                        {% endif %}
-                        <span class="text-sm text-slate-700 dark:text-slate-300">PAYE (TIN)</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        {% if tax_profile and tax_profile.rsa_pin and tax_profile.pfa_code %}
-                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
-                        {% else %}
-                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                        </svg>
-                        {% endif %}
-                        <span class="text-sm text-slate-700 dark:text-slate-300">Pension</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        {% if tax_profile and tax_profile.nhf_number %}
-                        <svg class="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
-                        {% else %}
-                        <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-                        </svg>
-                        {% endif %}
-                        <span class="text-sm text-slate-700 dark:text-slate-300">NHF</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Submit Button -->
-        <div class="flex justify-end">
-            <button type="submit" class="btn btn-primary">
-                {{ icon_svg("check-circle", "h-4 w-4 mr-1") }}
-                Submit for Approval
-            </button>
-        </div>
         </fieldset>
+
+        <div class="sticky bottom-4 z-20 flex justify-end">
+            <div class="flex items-center justify-end rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">
+                <button type="submit" class="btn btn-primary" {% if has_pending %}disabled{% endif %}>
+                    {{ icon_svg("check-circle", "h-4 w-4 mr-1") }}
+                    Submit for Approval
+                </button>
+            </div>
+        </div>
     </form>
 </div>
 {% endblock %}

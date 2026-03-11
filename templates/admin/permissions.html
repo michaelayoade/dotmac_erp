@@ -62,7 +62,9 @@
              ]}
         ],
         base_url="/admin/permissions",
-        placeholder="Search permissions..."
+        placeholder="Search permissions...",
+        collapsible=true,
+        active_filter_count=(1 if search else 0) + (1 if status_filter else 0)
     ) }}
 
     <!-- Permissions Table -->

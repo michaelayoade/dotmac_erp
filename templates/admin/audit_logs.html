@@ -12,7 +12,7 @@
         </span>
     </div>
 
-    {% call(search_attrs) live_search(search=search, base_url="/admin/audit-logs", placeholder="Search actions, actors, IP...") %}
+    {% call(search_attrs) live_search(search=search, base_url="/admin/audit-logs", placeholder="Search actions, actors, IP...", collapsible=true, active_filter_count=(1 if search else 0) + (1 if actor_type_filter else 0) + (1 if status_filter else 0) + (1 if start_date_filter else 0) + (1 if end_date_filter else 0)) %}
         <select name="actor_type" class="form-select" {{ search_attrs }}>
             <option value="">All Actor Types</option>
             {% for at in actor_types %}

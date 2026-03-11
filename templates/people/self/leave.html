@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, icon_svg %}
 {% block page_title %}My Leave{% endblock %}
 
 {% block breadcrumbs %}
@@ -14,48 +14,84 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" x-data="{ requestLeaveOpen: false }">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Leave</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Submit leave requests and track balances.</p>
         </div>
+        <button type="button" class="leave-button" @click="requestLeaveOpen = true">
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="leave-particle" aria-hidden="true"></span>
+            <span class="relative z-10 inline-flex items-center gap-2">
+                {{ icon_svg("calendar", "h-4 w-4") }}
+                Apply for Leave
+            </span>
+        </button>
     </div>
 
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Request Leave</h2>
-        <form method="post" action="/people/self/leave/apply" class="mt-4 grid gap-4 sm:grid-cols-2">
-            {{ request.state.csrf_form | safe }}
-            <div>
-                <label for="leave_type_id" class="form-label">Leave Type <span class="text-rose-500">*</span></label>
-                <select name="leave_type_id" id="leave_type_id" class="form-select w-full" required>
-                    {% for lt in leave_types %}
-                    <option value="{{ lt.leave_type_id }}">{{ lt.leave_type_name }}</option>
-                    {% endfor %}
-                </select>
+    <div x-show="requestLeaveOpen"
+         x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="leave-request-modal-title">
+        <div class="absolute inset-0 bg-slate-950/50" @click="requestLeaveOpen = false"></div>
+        <div class="relative w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+             @click.away="requestLeaveOpen = false"
+             @keydown.escape.window="requestLeaveOpen = false">
+            <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-6 dark:border-slate-700">
+                <div>
+                    <h2 id="leave-request-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Request Leave</h2>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Submit a new leave application.</p>
+                </div>
+                <button type="button"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors"
+                        @click="requestLeaveOpen = false"
+                        aria-label="Close leave request modal">
+                    &times;
+                </button>
             </div>
-            <div>
-                <label for="from_date" class="form-label">From <span class="text-rose-500">*</span></label>
-                <input type="date" name="from_date" id="from_date" class="form-input w-full" required>
-            </div>
-            <div>
-                <label for="to_date" class="form-label">To <span class="text-rose-500">*</span></label>
-                <input type="date" name="to_date" id="to_date" class="form-input w-full" required>
-            </div>
-            <div class="flex items-end gap-2">
-                <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-                    <input type="checkbox" name="half_day" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
-                    Half day
-                </label>
-            </div>
-            <div class="sm:col-span-2">
-                <label for="reason" class="form-label">Reason</label>
-                <textarea name="reason" id="reason" rows="3" class="form-textarea w-full"></textarea>
-            </div>
-            <div class="sm:col-span-2 flex justify-end">
-                <button type="submit" class="btn btn-primary">Submit Request</button>
-            </div>
-        </form>
+            <form method="post" action="/people/self/leave/apply" class="grid gap-4 p-6 sm:grid-cols-2">
+                {{ request.state.csrf_form | safe }}
+                <div>
+                    <label for="leave_type_id" class="form-label">Leave Type <span class="text-rose-500">*</span></label>
+                    <select name="leave_type_id" id="leave_type_id" class="form-select w-full" required>
+                        {% for lt in leave_types %}
+                        <option value="{{ lt.leave_type_id }}">{{ lt.leave_type_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="from_date" class="form-label">From <span class="text-rose-500">*</span></label>
+                    <input type="date" name="from_date" id="from_date" class="form-input w-full" required>
+                </div>
+                <div>
+                    <label for="to_date" class="form-label">To <span class="text-rose-500">*</span></label>
+                    <input type="date" name="to_date" id="to_date" class="form-input w-full" required>
+                </div>
+                <div class="flex items-end gap-2">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <input type="checkbox" name="half_day" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        Half day
+                    </label>
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="reason" class="form-label">Reason</label>
+                    <textarea name="reason" id="reason" rows="3" class="form-input w-full resize-none" placeholder="Add a short reason for this leave request"></textarea>
+                </div>
+                <div class="sm:col-span-2 flex items-center justify-end gap-3">
+                    <button type="button" class="btn btn-secondary" @click="requestLeaveOpen = false">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="card">
@@ -152,4 +188,73 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const leaveParticles = document.querySelectorAll('.leave-button .leave-particle');
+    leaveParticles.forEach((particle) => {
+        const x = Math.random() * 160 - 80;
+        const y = Math.random() * 160 - 80;
+        particle.style.setProperty('--leave-x', x.toFixed(0) + 'px');
+        particle.style.setProperty('--leave-y', y.toFixed(0) + 'px');
+    });
+});
+</script>
+<style>
+.leave-button {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 180px;
+    padding: 0.65rem 1.1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    background: linear-gradient(135deg, rgba(220, 252, 231, 0.95), rgba(237, 233, 254, 0.9));
+    color: #166534;
+    font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.leave-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(16, 185, 129, 0.18);
+    background: linear-gradient(135deg, rgba(187, 247, 208, 1), rgba(221, 214, 254, 0.95));
+}
+
+.leave-particle {
+    position: absolute;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 30% 30%, #bbf7d0, #10b981 70%);
+    opacity: 0.3;
+    transform: translate(var(--leave-x), var(--leave-y));
+    transition: transform 0.35s ease, opacity 0.35s ease;
+}
+
+.leave-button:hover .leave-particle,
+.leave-button:focus-visible .leave-particle {
+    transform: translate(0, 0);
+    opacity: 0.9;
+}
+
+.leave-button:focus-visible {
+    outline: 2px solid rgba(16, 185, 129, 0.45);
+    outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .leave-button {
+        background: linear-gradient(135deg, rgba(6, 78, 59, 0.75), rgba(76, 29, 149, 0.55));
+        color: #d1fae5;
+        border-color: rgba(52, 211, 153, 0.35);
+    }
+
+    .leave-button:hover {
+        background: linear-gradient(135deg, rgba(6, 95, 70, 0.9), rgba(91, 33, 182, 0.7));
+    }
+}
+</style>
 {% endblock %}

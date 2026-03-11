@@ -883,9 +883,44 @@ if (typeof window.searchAutosuggest === 'undefined') {
    ============================================ #}
 {% macro live_search(search="", filters=[], base_url="", target_id="results-container",
                      placeholder="Search...", show_clear=true, debounce_ms=300,
-                     entity_type="") %}
+                     entity_type="", collapsible=false, active_filter_count=None) %}
 {% set search_id = 'live-search-input-' ~ (target_id | replace(' ', '-') | replace('#', '') | replace('_', '-')) %}
-<div class="card p-4" data-live-search>
+{% set has_filters = filters|length > 0 or caller %}
+{% set derived_active_filter_count = (filters|selectattr('value')|list|length) + (1 if search else 0) %}
+{% set resolved_active_filter_count = active_filter_count if active_filter_count is not none else derived_active_filter_count %}
+{% set has_active_filters = resolved_active_filter_count > 0 %}
+<div class="card{% if not collapsible %} p-4{% endif %}" data-live-search{% if collapsible %} x-data="{ open: {{ 'true' if has_active_filters else 'false' }} }"{% endif %}>
+  {% if collapsible %}
+  <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700"
+       :class="{ 'border-b-0': !open && {{ 'true' if not has_active_filters else 'false' }} }">
+    <button type="button" @click="open = !open"
+            class="inline-flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 transition-colors">
+      <svg class="h-4 w-4 transition-transform duration-200" :class="{ 'rotate-90': open }"
+           fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+      <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+      </svg>
+      Filters
+      {% if has_active_filters %}
+      <span class="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-xs font-semibold text-white bg-teal-600 dark:bg-teal-500 rounded-full">
+        {{ resolved_active_filter_count }}
+      </span>
+      {% endif %}
+    </button>
+
+    {% if show_clear and has_active_filters %}
+    <a href="{{ base_url }}" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
+      <svg class="inline h-3.5 w-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+      Clear all
+    </a>
+    {% endif %}
+  </div>
+  <div x-show="open" x-collapse class="p-4">
+  {% endif %}
   <form method="get" action="{{ base_url }}" class="flex flex-wrap items-center gap-3"
         {% if entity_type %}x-data="liveSearch('{{ entity_type }}')" @submit="showSuggestions = false"{% endif %}>
 
@@ -999,7 +1034,6 @@ if (typeof window.searchAutosuggest === 'undefined') {
     {% endif %}
 
     {# Filter button — visible when filters or caller block present #}
-    {% set has_filters = filters|length > 0 or caller %}
     {% if has_filters %}
     <button type="submit" class="btn btn-secondary"
             hx-get="{{ base_url }}"
@@ -1024,8 +1058,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
     </noscript>
 
     {# Clear Filters Link #}
-    {% set has_active_filters = search or filters|selectattr('value')|list %}
-    {% if show_clear and has_active_filters %}
+    {% if not collapsible and show_clear and has_active_filters %}
     <a href="{{ base_url }}" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
       <svg class="inline h-3.5 w-3.5 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -1034,6 +1067,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
     </a>
     {% endif %}
   </form>
+  {% if collapsible %}
+  </div>
+  {% endif %}
 </div>
 {% endmacro %}
 

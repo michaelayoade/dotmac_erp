@@ -44,7 +44,9 @@
              ]}
         ],
         base_url="/admin/organizations",
-        placeholder="Search organizations..."
+        placeholder="Search organizations...",
+        collapsible=true,
+        active_filter_count=(1 if search else 0) + (1 if status_filter else 0)
     ) }}
 
     <div id="results-container">

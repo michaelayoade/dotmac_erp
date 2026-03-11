@@ -12,7 +12,7 @@
         </span>
     </div>
 
-    {% call(search_attrs) live_search(search=search, base_url="/admin/data-changes", placeholder="Search record ID, reason...") %}
+    {% call(search_attrs) live_search(search=search, base_url="/admin/data-changes", placeholder="Search record ID, reason...", collapsible=true, active_filter_count=(1 if search else 0) + (1 if module_filter else 0) + (1 if entity_filter else 0) + (1 if action_filter else 0)) %}
         <select name="module" class="form-select" {{ search_attrs }}>
             <option value="">All Modules</option>
             {% for m in modules %}
