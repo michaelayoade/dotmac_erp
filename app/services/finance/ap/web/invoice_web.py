@@ -882,6 +882,7 @@ class InvoiceWebService:
                 input=input_data,
                 created_by_user_id=user_id,
             )
+            db.commit()
 
             if "application/json" in content_type:
                 return {"success": True, "invoice_id": str(invoice.invoice_id)}
@@ -892,6 +893,7 @@ class InvoiceWebService:
             )
 
         except Exception as e:
+            db.rollback()
             logger.exception("create_invoice_response: failed")
             if "application/json" in content_type:
                 return JSONResponse(
@@ -935,6 +937,7 @@ class InvoiceWebService:
                 invoice_id=coerce_uuid(invoice_id),
                 input=input_data,
             )
+            db.commit()
 
             if "application/json" in content_type:
                 return JSONResponse(
@@ -946,6 +949,7 @@ class InvoiceWebService:
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             logger.exception("update_invoice_response: failed")
             if "application/json" in content_type:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
@@ -986,7 +990,13 @@ class InvoiceWebService:
         invoice_id: str,
     ) -> HTMLResponse | RedirectResponse:
         """Handle invoice deletion."""
-        error = self.delete_invoice(db, str(auth.organization_id), invoice_id)
+        try:
+            error = self.delete_invoice(db, str(auth.organization_id), invoice_id)
+            if not error:
+                db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
         if error:
             context = base_context(request, auth, "AP Invoice Details", "ap")
@@ -1022,11 +1032,13 @@ class InvoiceWebService:
                 invoice_id=coerce_uuid(invoice_id),
                 submitted_by_user_id=auth.user_id,
             )
+            db.commit()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+submitted+for+approval",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
@@ -1047,11 +1059,13 @@ class InvoiceWebService:
                 invoice_id=coerce_uuid(invoice_id),
                 approved_by_user_id=auth.user_id,
             )
+            db.commit()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+approved",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
@@ -1072,11 +1086,13 @@ class InvoiceWebService:
                 invoice_id=coerce_uuid(invoice_id),
                 posted_by_user_id=auth.user_id,
             )
+            db.commit()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+posted+to+ledger",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
@@ -1098,11 +1114,13 @@ class InvoiceWebService:
                 voided_by_user_id=auth.user_id,
                 reason="Voided via web interface",
             )
+            db.commit()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+voided",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
