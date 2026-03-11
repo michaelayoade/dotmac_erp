@@ -277,7 +277,7 @@ class PAYEExportService:
                 "Transport Allowance",
                 "Other Allowances",
                 "Gross Emolument",
-                "Pension (8%)",
+                "Pension (8% of Basic+Housing+Transport)",
                 "NHF (2.5%)",
                 "NHIS",
                 "Total Relief",

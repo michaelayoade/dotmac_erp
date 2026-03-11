@@ -160,6 +160,9 @@ class TestPAYEIntegration:
         breakdown = PAYEBreakdown(
             annual_gross=Decimal("6000000"),
             annual_basic=Decimal("3600000"),
+            annual_transport=Decimal("0"),
+            annual_housing=Decimal("0"),
+            annual_pension_base=Decimal("3600000"),
             annual_rent=Decimal("1200000"),
             pension_amount=Decimal("288000"),
             pension_rate=Decimal("0.08"),
@@ -271,16 +274,22 @@ class TestPAYECalculationValues:
     """Tests for PAYE calculation value verification."""
 
     def test_monthly_pension_calculation(self):
-        """Verify pension is 8% of basic salary."""
+        """Verify pension is 8% of basic + housing + transport."""
 
-        # Monthly basic: 300,000
-        # Annual basic: 3,600,000
-        # Pension (8%): 288,000 annual, 24,000 monthly
+        # Monthly pension base: 300,000 + 50,000 + 50,000 = 400,000
+        # Annual pension base: 4,800,000
+        # Pension (8%): 384,000 annual, 32,000 monthly
         monthly_basic = Decimal("300000")
-        expected_annual_pension = monthly_basic * 12 * Decimal("0.08")
+        monthly_housing = Decimal("50000")
+        monthly_transport = Decimal("50000")
+        expected_annual_pension = (
+            (monthly_basic + monthly_housing + monthly_transport)
+            * 12
+            * Decimal("0.08")
+        )
         expected_monthly_pension = expected_annual_pension / 12
 
-        assert expected_monthly_pension == Decimal("24000")
+        assert expected_monthly_pension == Decimal("32000")
 
     def test_monthly_nhf_calculation(self):
         """Verify NHF is 2.5% of basic salary."""

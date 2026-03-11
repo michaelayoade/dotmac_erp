@@ -14,8 +14,9 @@ Example Calculation:
     Gross Monthly: ₦500,000 | Basic Monthly: ₦300,000 | Annual Rent: ₦1,200,000
 
     Annual Gross:     ₦6,000,000
-    Pension (8%):    -₦288,000   (of ₦3.6M basic)
-    NHF (2.5%):      -₦90,000
+    Pension Base:     ₦3,600,000
+    Pension (8%):    -₦288,000
+    NHF (2.5%):      -₦90,000   (of ₦3.6M basic)
     Rent Relief:     -₦240,000   (20% of ₦1.2M)
     ───────────────────────────────────────
     Taxable Income:   ₦5,382,000
@@ -83,6 +84,9 @@ class PAYEBreakdown:
     # Input amounts (annual)
     annual_gross: Decimal
     annual_basic: Decimal
+    annual_transport: Decimal
+    annual_housing: Decimal
+    annual_pension_base: Decimal
     annual_rent: Decimal
 
     # Statutory deductions (annual)
@@ -153,6 +157,9 @@ class PAYEBreakdown:
         return {
             "annual_gross": str(self.annual_gross),
             "annual_basic": str(self.annual_basic),
+            "annual_transport": str(self.annual_transport),
+            "annual_housing": str(self.annual_housing),
+            "annual_pension_base": str(self.annual_pension_base),
             "annual_rent": str(self.annual_rent),
             "pension_amount": str(self.pension_amount),
             "pension_rate": str(self.pension_rate),
@@ -288,6 +295,8 @@ class PAYECalculator:
         gross_monthly: Decimal,
         basic_monthly: Decimal,
         employee_id: UUID | None = None,
+        transport_monthly: Decimal | None = None,
+        housing_monthly: Decimal | None = None,
         annual_rent: Decimal | None = None,
         rent_verified: bool = False,
         pension_rate: Decimal | None = None,
@@ -304,6 +313,8 @@ class PAYECalculator:
             gross_monthly: Monthly gross salary
             basic_monthly: Monthly basic salary (for statutory deductions)
             employee_id: Optional employee ID for profile lookup
+            transport_monthly: Monthly transport allowance for pension base
+            housing_monthly: Monthly housing allowance for pension base
             annual_rent: Annual rent (for rent relief)
             rent_verified: Whether rent documentation is verified
             pension_rate: Override pension rate (default 8%)
@@ -358,10 +369,13 @@ class PAYECalculator:
         # Annualize amounts
         annual_gross = gross_monthly * self.MONTHS_PER_YEAR
         annual_basic = basic_monthly * self.MONTHS_PER_YEAR
+        annual_transport = (transport_monthly or Decimal("0")) * self.MONTHS_PER_YEAR
+        annual_housing = (housing_monthly or Decimal("0")) * self.MONTHS_PER_YEAR
+        annual_pension_base = annual_basic + annual_transport + annual_housing
 
-        # Calculate statutory deductions (based on basic salary)
-        pension_amount = annual_basic * _pension_rate
-        employer_pension_amount = annual_basic * _employer_pension_rate
+        # Pension uses basic + transport + housing, while NHF/NHIS remain basic-based.
+        pension_amount = annual_pension_base * _pension_rate
+        employer_pension_amount = annual_pension_base * _employer_pension_rate
         nhf_amount = annual_basic * _nhf_rate
         nhis_amount = annual_basic * _nhis_rate
         total_statutory = pension_amount + nhf_amount + nhis_amount
@@ -435,6 +449,9 @@ class PAYECalculator:
         return PAYEBreakdown(
             annual_gross=annual_gross,
             annual_basic=annual_basic,
+            annual_transport=annual_transport,
+            annual_housing=annual_housing,
+            annual_pension_base=annual_pension_base,
             annual_rent=_annual_rent,
             pension_amount=pension_amount,
             pension_rate=_pension_rate,

@@ -317,6 +317,9 @@ class TestPAYEBreakdownCompatibility:
         defaults = {
             "annual_gross": Decimal("6000000"),
             "annual_basic": Decimal("3600000"),
+            "annual_transport": Decimal("0"),
+            "annual_housing": Decimal("0"),
+            "annual_pension_base": Decimal("3600000"),
             "annual_rent": Decimal("0"),
             "pension_amount": Decimal("288000"),
             "pension_rate": Decimal("0.08"),

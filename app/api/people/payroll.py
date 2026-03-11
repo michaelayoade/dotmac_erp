@@ -436,10 +436,10 @@ def export_salary_slips(
             "Transport Allowance (Trsp)",
             "Other Allowances (Other)",
             "Gross",
-            "Employee Pension (8%) (Pen)",
+            "Employee Pension (8% of Basic+Transport+Housing) (Pen)",
             "National Housing Fund (2.5%) (NHF)",
             "PAYE Tax (PAYE)",
-            "Employer Pension Contribution (PEN-ER)",
+            "Employer Pension Contribution (10% of Basic+Transport+Housing) (PEN-ER)",
             "Deductions",
             "Net Pay",
             "Status",
@@ -878,6 +878,18 @@ class PAYECalculateRequest(BaseModel):
         le=float(MAX_MONTHLY_SALARY),
         description="Monthly basic salary (max ₦1B)",
     )
+    housing_monthly: PyDecimal = Field(
+        PyDecimal("0"),
+        ge=0,
+        le=float(MAX_MONTHLY_SALARY),
+        description="Monthly housing allowance included in pension base",
+    )
+    transport_monthly: PyDecimal = Field(
+        PyDecimal("0"),
+        ge=0,
+        le=float(MAX_MONTHLY_SALARY),
+        description="Monthly transport allowance included in pension base",
+    )
     annual_rent: PyDecimal | None = Field(
         None,
         ge=0,
@@ -919,6 +931,9 @@ class PAYEBreakdownResponse(BaseModel):
     # Input amounts (annual)
     annual_gross: str
     annual_basic: str
+    annual_transport: str
+    annual_housing: str
+    annual_pension_base: str
     annual_rent: str
 
     # Statutory deductions (annual)
@@ -1100,6 +1115,8 @@ def calculate_paye_tax(
         organization_id=organization_id,
         gross_monthly=data.gross_monthly,
         basic_monthly=data.basic_monthly,
+        housing_monthly=data.housing_monthly,
+        transport_monthly=data.transport_monthly,
         employee_id=data.employee_id,
         annual_rent=data.annual_rent,
         rent_verified=data.rent_verified,

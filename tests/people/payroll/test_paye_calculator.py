@@ -276,7 +276,7 @@ class TestPAYECalculator:
         Example: ₦500,000/month gross, ₦300,000/month basic, ₦1.2M rent
         Expected:
         - Annual Gross: ₦6,000,000
-        - Pension (8%): -₦288,000 (of ₦3.6M basic)
+        - Pension (8%): -₦288,000
         - NHF (2.5%): -₦90,000
         - Rent Relief: -₦240,000 (20% of ₦1.2M)
         - Taxable Income: ₦5,382,000
@@ -449,8 +449,31 @@ class TestPAYECalculator:
         assert result.nhis_rate == Decimal("0.01")
 
         # Verify amounts use custom rates
-        expected_pension = result.annual_basic * Decimal("0.10")
+        expected_pension = result.annual_pension_base * Decimal("0.10")
         assert result.pension_amount == expected_pension
+
+    def test_pension_uses_basic_housing_and_transport(
+        self, mock_db, org_id, nta_2025_bands
+    ):
+        """Employee and employer pension should use basic + housing + transport."""
+        mock_db.scalars.return_value.all.return_value = nta_2025_bands
+        mock_db.scalar.return_value = None
+
+        calculator = PAYECalculator(mock_db)
+
+        result = calculator.calculate(
+            organization_id=org_id,
+            gross_monthly=Decimal("500000"),
+            basic_monthly=Decimal("300000"),
+            housing_monthly=Decimal("50000"),
+            transport_monthly=Decimal("50000"),
+        )
+
+        assert result.annual_pension_base == Decimal("4800000")
+        assert result.pension_amount == Decimal("384000")
+        assert result.employer_pension_amount == Decimal("480000")
+        assert result.monthly_pension == Decimal("32000.00")
+        assert result.monthly_employer_pension == Decimal("40000.00")
 
     def test_breakdown_to_dict(self, mock_db, org_id, nta_2025_bands):
         """Test PAYEBreakdown serialization."""

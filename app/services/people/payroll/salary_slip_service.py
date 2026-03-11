@@ -102,6 +102,20 @@ class SalarySlipService:
         return is_contract or is_contract_structure
 
     @staticmethod
+    def _collect_pension_base_components(
+        component_code: str, amount: Decimal, *, basic: Decimal, housing: Decimal, transport: Decimal
+    ) -> tuple[Decimal, Decimal, Decimal]:
+        """Track earning components that contribute to the pension base."""
+        code = (component_code or "").upper()
+        if code == BASIC_COMPONENT_CODE:
+            basic = amount
+        elif code == "HOUSING":
+            housing += amount
+        elif code == "TRANSPORT":
+            transport += amount
+        return basic, housing, transport
+
+    @staticmethod
     def get_or_create_statutory_component(
         db: Session,
         organization_id: UUID,
@@ -455,6 +469,8 @@ class SalarySlipService:
         # Calculate and add earnings from structure
         gross_pay = Decimal("0")
         basic_pay = Decimal("0")  # Track basic salary for PAYE calculation
+        housing_pay = Decimal("0")
+        transport_pay = Decimal("0")
         base_amount = assignment.base or Decimal("0")
         variable_amount = assignment.variable or Decimal("0")
 
@@ -486,8 +502,15 @@ class SalarySlipService:
                 amount = amount * (payment_days / total_working_days)
 
             # Track BASIC component for PAYE calculation
-            if component.component_code == BASIC_COMPONENT_CODE:
-                basic_pay = amount
+            basic_pay, housing_pay, transport_pay = (
+                SalarySlipService._collect_pension_base_components(
+                    component.component_code,
+                    amount,
+                    basic=basic_pay,
+                    housing=housing_pay,
+                    transport=transport_pay,
+                )
+            )
 
             earning_line = SalarySlipEarning(
                 slip_id=slip.slip_id,
@@ -531,16 +554,22 @@ class SalarySlipService:
                 )
                 full_gross = gross_pay / proration_factor
                 full_basic = basic_pay / proration_factor
+                full_housing = housing_pay / proration_factor
+                full_transport = transport_pay / proration_factor
             else:
                 proration_factor = Decimal("1")
                 full_gross = gross_pay
                 full_basic = basic_pay
+                full_housing = housing_pay
+                full_transport = transport_pay
 
             calculator = PAYECalculator(db)
             paye_breakdown = calculator.calculate(
                 organization_id=org_id,
                 gross_monthly=full_gross,
                 basic_monthly=full_basic,
+                housing_monthly=full_housing,
+                transport_monthly=full_transport,
                 employee_id=emp_id,
                 as_of_date=input.start_date,
             )
@@ -574,7 +603,7 @@ class SalarySlipService:
                 (
                     PENSION_COMPONENT_CODE,
                     paye_breakdown.monthly_pension,
-                    "Pension (8% of Basic)",
+                    "Pension (8% of Basic + Transport + Housing)",
                     False,
                 ),
                 (
@@ -588,7 +617,7 @@ class SalarySlipService:
                 (
                     EMPLOYER_PENSION_COMPONENT_CODE,
                     paye_breakdown.monthly_employer_pension,
-                    "Employer Pension (10% of Basic)",
+                    "Employer Pension (10% of Basic + Transport + Housing)",
                     True,
                 ),
             ]
@@ -867,6 +896,8 @@ class SalarySlipService:
 
         gross_pay = Decimal("0")
         basic_pay = Decimal("0")
+        housing_pay = Decimal("0")
+        transport_pay = Decimal("0")
         base_amount = assignment.base or Decimal("0")
         variable_amount = assignment.variable or Decimal("0")
 
@@ -893,8 +924,15 @@ class SalarySlipService:
             if component.depends_on_payment_days and total_working_days > 0:
                 amount = amount * (payment_days / total_working_days)
 
-            if component.component_code == BASIC_COMPONENT_CODE:
-                basic_pay = amount
+            basic_pay, housing_pay, transport_pay = (
+                SalarySlipService._collect_pension_base_components(
+                    component.component_code,
+                    amount,
+                    basic=basic_pay,
+                    housing=housing_pay,
+                    transport=transport_pay,
+                )
+            )
 
             slip.earnings.append(
                 SalarySlipEarning(
@@ -930,6 +968,8 @@ class SalarySlipService:
                 organization_id=org_id,
                 gross_monthly=gross_pay,
                 basic_monthly=basic_pay,
+                housing_monthly=housing_pay,
+                transport_monthly=transport_pay,
                 employee_id=emp_id,
                 as_of_date=input.start_date,
             )
@@ -942,7 +982,7 @@ class SalarySlipService:
                 (
                     PENSION_COMPONENT_CODE,
                     paye_breakdown.monthly_pension,
-                    "Pension (8% of Basic)",
+                    "Pension (8% of Basic + Transport + Housing)",
                     False,
                 ),
                 (
@@ -956,7 +996,7 @@ class SalarySlipService:
                 (
                     EMPLOYER_PENSION_COMPONENT_CODE,
                     paye_breakdown.monthly_employer_pension,
-                    "Employer Pension (10% of Basic)",
+                    "Employer Pension (10% of Basic + Transport + Housing)",
                     True,
                 ),
             ]

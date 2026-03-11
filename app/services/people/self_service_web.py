@@ -4,6 +4,7 @@ Self-service web view service for employees and managers.
 
 from __future__ import annotations
 
+import calendar
 import json
 import logging
 from datetime import UTC, date, datetime, timedelta
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
 from app.models.finance.core_org.pfa_directory import PFADirectory
+from app.models.people.attendance import Attendance, AttendanceStatus
 from app.models.people.exp import (
     ExpenseClaim,
     ExpenseClaimAction,
@@ -26,7 +28,12 @@ from app.models.people.exp import (
     ExpenseClaimStatus,
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
+from app.models.people.leave import (
+    Holiday,
+    HolidayList,
+    LeaveApplication,
+    LeaveApplicationStatus,
+)
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.scheduling import ScheduleStatus, SwapRequestStatus
@@ -56,6 +63,169 @@ logger = logging.getLogger(__name__)
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
+
+    @staticmethod
+    def _resolve_month_range(
+        month_value: str | None, fallback_date: date
+    ) -> tuple[date, date, str, str, str]:
+        """Resolve the selected month and adjacent month navigation values."""
+        if month_value:
+            try:
+                year, month_num = [int(part) for part in month_value.split("-", 1)]
+                start_date = date(year, month_num, 1)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400, detail="Invalid month format"
+                ) from exc
+        else:
+            start_date = fallback_date.replace(day=1)
+
+        _, last_day = calendar.monthrange(start_date.year, start_date.month)
+        end_date = start_date.replace(day=last_day)
+        selected_month = start_date.strftime("%Y-%m")
+
+        previous_month = (start_date - timedelta(days=1)).replace(day=1).strftime(
+            "%Y-%m"
+        )
+        next_month = (end_date + timedelta(days=1)).replace(day=1).strftime("%Y-%m")
+
+        return start_date, end_date, selected_month, previous_month, next_month
+
+    def _get_holiday_map(
+        self,
+        db: Session,
+        org_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> dict[date, str]:
+        """Return holiday dates and names for the selected month."""
+        holiday_rows = db.execute(
+            select(Holiday.holiday_date, Holiday.holiday_name)
+            .join(HolidayList, Holiday.holiday_list_id == HolidayList.holiday_list_id)
+            .where(
+                HolidayList.organization_id == org_id,
+                HolidayList.is_active == True,  # noqa: E712
+                HolidayList.from_date <= end_date,
+                HolidayList.to_date >= start_date,
+                Holiday.holiday_date >= start_date,
+                Holiday.holiday_date <= end_date,
+            )
+            .order_by(Holiday.holiday_date)
+        ).all()
+
+        return {holiday_date: holiday_name for holiday_date, holiday_name in holiday_rows}
+
+    @staticmethod
+    def _build_attendance_calendar(
+        *,
+        month_start: date,
+        month_end: date,
+        today: date,
+        holiday_map: dict[date, str],
+        record_by_date: dict[date, Attendance],
+        org_tzinfo,
+    ) -> tuple[list[list[dict]], dict[str, int]]:
+        """Build a month calendar grid with normalized per-day statuses."""
+
+        def _format_time(value: datetime | None) -> str:
+            if not value:
+                return "-"
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=UTC)
+            return value.astimezone(org_tzinfo).strftime("%H:%M")
+
+        def _format_hours(value: Decimal | None) -> str:
+            if value is None:
+                return "-"
+            return str(value)
+
+        status_meta = {
+            "present": ("Present", "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800"),
+            "absent": ("Absent", "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800"),
+            "half_day": ("Half Day", "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800"),
+            "on_leave": ("On Leave", "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"),
+            "holiday": ("Holiday", "bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800"),
+            "work_from_home": ("Work From Home", "bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-800"),
+            "missed": ("Missed", "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"),
+            "future": ("Upcoming", "bg-white text-slate-500 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800"),
+        }
+
+        calendar_weeks: list[list[dict]] = []
+        calendar_counts = {
+            "present": 0,
+            "missed": 0,
+            "absent": 0,
+            "half_day": 0,
+            "on_leave": 0,
+            "holiday": 0,
+        }
+        month_matrix = calendar.Calendar(firstweekday=0).monthdatescalendar(
+            month_start.year, month_start.month
+        )
+
+        for week in month_matrix:
+            week_days: list[dict] = []
+            for day_date in week:
+                record = record_by_date.get(day_date)
+                holiday_name = holiday_map.get(day_date)
+
+                if record:
+                    status_key = {
+                        AttendanceStatus.PRESENT: "present",
+                        AttendanceStatus.ABSENT: "absent",
+                        AttendanceStatus.HALF_DAY: "half_day",
+                        AttendanceStatus.ON_LEAVE: "on_leave",
+                        AttendanceStatus.HOLIDAY: "holiday",
+                        AttendanceStatus.WORK_FROM_HOME: "work_from_home",
+                    }.get(record.status, "missed")
+                    note = holiday_name or (
+                        record.remarks.strip() if record.remarks else None
+                    )
+                elif holiday_name:
+                    status_key = "holiday"
+                    note = holiday_name
+                elif day_date > today:
+                    status_key = "future"
+                    note = None
+                else:
+                    status_key = "missed"
+                    note = "Attendance not marked"
+
+                if day_date.month == month_start.month:
+                    if status_key == "present":
+                        calendar_counts["present"] += 1
+                    elif status_key == "missed":
+                        calendar_counts["missed"] += 1
+                    elif status_key == "absent":
+                        calendar_counts["absent"] += 1
+                    elif status_key == "half_day":
+                        calendar_counts["half_day"] += 1
+                    elif status_key == "on_leave":
+                        calendar_counts["on_leave"] += 1
+                    elif status_key == "holiday":
+                        calendar_counts["holiday"] += 1
+
+                label, classes = status_meta[status_key]
+                week_days.append(
+                    {
+                        "date": day_date,
+                        "day_number": day_date.day,
+                        "is_current_month": day_date.month == month_start.month,
+                        "is_today": day_date == today,
+                        "is_weekend": day_date.weekday() >= 5,
+                        "status_key": status_key,
+                        "status_label": label,
+                        "status_classes": classes,
+                        "holiday_name": holiday_name,
+                        "note": note,
+                        "check_in_display": _format_time(record.check_in) if record else "-",
+                        "check_out_display": _format_time(record.check_out) if record else "-",
+                        "working_hours_display": _format_hours(record.working_hours) if record else "-",
+                    }
+                )
+            calendar_weeks.append(week_days)
+
+        return calendar_weeks, calendar_counts
 
     @staticmethod
     def _has_named_role(db: Session, person_id: UUID, role_names: set[str]) -> bool:
@@ -758,26 +928,40 @@ class SelfServiceWebService:
                 value = value.replace(tzinfo=UTC)
             return value.astimezone(org_tzinfo).strftime("%H:%M")
 
-        if month:
-            try:
-                year, month_num = [int(part) for part in month.split("-", 1)]
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=400, detail="Invalid month format"
-                ) from exc
-            summary = svc.get_employee_monthly_summary(
-                org_id, employee_id, year, month_num
+        month_start, month_end, selected_month, previous_month, next_month = (
+            self._resolve_month_range(month, today)
+        )
+        summary = svc.get_employee_monthly_summary(
+            org_id, employee_id, month_start.year, month_start.month
+        )
+
+        month_records = list(
+            db.scalars(
+                select(Attendance)
+                .where(
+                    Attendance.organization_id == org_id,
+                    Attendance.employee_id == employee_id,
+                    Attendance.attendance_date >= month_start,
+                    Attendance.attendance_date <= month_end,
+                )
+                .order_by(Attendance.attendance_date)
             )
-        else:
-            summary = svc.get_employee_monthly_summary(
-                org_id, employee_id, today.year, today.month
-            )
+        )
+        holiday_map = self._get_holiday_map(db, org_id, month_start, month_end)
+        calendar_weeks, calendar_counts = self._build_attendance_calendar(
+            month_start=month_start,
+            month_end=month_end,
+            today=today,
+            holiday_map=holiday_map,
+            record_by_date={record.attendance_date: record for record in month_records},
+            org_tzinfo=org_tzinfo,
+        )
 
         recent = svc.list_attendance(
             org_id,
             employee_id=employee_id,
-            from_date=today.replace(day=1),
-            to_date=today,
+            from_date=month_start,
+            to_date=month_end,
             pagination=PaginationParams(offset=0, limit=10),
         )
 
@@ -792,6 +976,12 @@ class SelfServiceWebService:
                     today_record.check_out if today_record else None
                 ),
                 "summary": summary,
+                "calendar_weeks": calendar_weeks,
+                "calendar_counts": calendar_counts,
+                "selected_month": selected_month,
+                "selected_month_label": month_start.strftime("%B %Y"),
+                "previous_month": previous_month,
+                "next_month": next_month,
                 "recent_records": [
                     {
                         "attendance_date": rec.attendance_date,
@@ -802,7 +992,7 @@ class SelfServiceWebService:
                     }
                     for rec in recent.items
                 ],
-                "month": month,
+                "month": selected_month,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
