@@ -230,11 +230,13 @@ def download_avatar(
 def download_branding(
     org_id: UUID,
     filename: str,
-    organization_id: UUID = Depends(require_organization_id),
 ):
-    """Download a branding asset (authenticated, org-scoped)."""
-    if org_id != organization_id:
-        raise HTTPException(status_code=404, detail="Asset not found")
+    """Download a branding asset (public — logos/favicons are not sensitive).
+
+    Branding assets are referenced from public pages (login, careers) so this
+    endpoint must be accessible without authentication.  Path-traversal is
+    prevented by validating the filename component.
+    """
     if Path(filename).name != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
@@ -277,7 +279,6 @@ def legacy_download_generated(
 def legacy_download_branding(
     org_id: UUID,
     filename: str,
-    organization_id: UUID = Depends(require_organization_id),
 ):
-    """Legacy branding URL support (authenticated, org-scoped)."""
-    return download_branding(org_id, filename, organization_id=organization_id)
+    """Legacy branding URL support (public, delegates to main handler)."""
+    return download_branding(org_id, filename)

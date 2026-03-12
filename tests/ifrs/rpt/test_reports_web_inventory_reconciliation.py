@@ -5,7 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from app.services.finance.rpt.web import ReportsWebService
+from app.services.finance.rpt.inventory_valuation import (
+    inventory_valuation_reconciliation_context,
+)
 
 
 def test_inventory_valuation_reconciliation_context_success():
@@ -20,12 +22,10 @@ def test_inventory_valuation_reconciliation_context_success():
     )
 
     with patch(
-        "app.services.finance.rpt.web.ValuationReconciliationService.reconcile"
-    ) as mock_reconcile:
-        mock_reconcile.return_value = mock_result
-        context = ReportsWebService.inventory_valuation_reconciliation_context(
-            db, str(org_id)
-        )
+        "app.services.finance.rpt.inventory_valuation.ValuationReconciliationService"
+    ) as mock_cls:
+        mock_cls.return_value.reconcile.return_value = mock_result
+        context = inventory_valuation_reconciliation_context(db, str(org_id))
 
     assert context["has_data"] is True
     assert context["fiscal_period_id"] == str(mock_result.fiscal_period_id)
@@ -38,12 +38,12 @@ def test_inventory_valuation_reconciliation_context_no_period():
     org_id = uuid4()
 
     with patch(
-        "app.services.finance.rpt.web.ValuationReconciliationService.reconcile"
-    ) as mock_reconcile:
-        mock_reconcile.side_effect = ValueError("No fiscal period found")
-        context = ReportsWebService.inventory_valuation_reconciliation_context(
-            db, str(org_id)
+        "app.services.finance.rpt.inventory_valuation.ValuationReconciliationService"
+    ) as mock_cls:
+        mock_cls.return_value.reconcile.side_effect = ValueError(
+            "No fiscal period found"
         )
+        context = inventory_valuation_reconciliation_context(db, str(org_id))
 
     assert context["has_data"] is False
     assert context["fiscal_period_id"] == ""

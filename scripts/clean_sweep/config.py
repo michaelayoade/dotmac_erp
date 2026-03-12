@@ -152,8 +152,8 @@ ACCOUNT_MAPPING: dict[str, str] = {
     "TDS Payable - DT": "2110",  # → WHT
     "Trade and Other Payables - DT": "2000",  # → Trade Payables
     "Trade and Other Payables (USD) - DT": "2000",  # → Trade Payables
-    "Withholding Tax - DT": "2110",  # → WHT
-    "Withholding Tax Liabilities - DT": "2110",  # → WHT
+    "Withholding Tax - DT": "1420",  # → Withholding Taxes (ASSET — WHT deducted by customers)
+    "Withholding Tax Liabilities - DT": "2110",  # → WHT (LIABILITY — WHT deducted from suppliers)
     # ── Equity (3xxx) ──────────────────────────────────────────────
     "Directors Account - DT": "3200",  # → Directors Current Account
     "Dividend disbursed - DT": "3100",  # → Retained Earnings

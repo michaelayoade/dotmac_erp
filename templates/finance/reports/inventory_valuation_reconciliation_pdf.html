@@ -1,0 +1,42 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Inventory Valuation Reconciliation — {{ org_name }}{% endblock %}
+{% block report_title %}Inventory Valuation Reconciliation{% endblock %}
+{% block report_meta %}
+{% if fiscal_period_id %}
+<p class="meta-line">Fiscal Period: {{ fiscal_period_id }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+{% if has_data %}
+<!-- Status -->
+{% if is_balanced %}
+<div class="status-banner status-balanced">Inventory Valuation is Reconciled ✓</div>
+{% else %}
+<div class="status-banner status-unbalanced">Inventory Valuation is NOT Reconciled ✗</div>
+{% endif %}
+
+<!-- Summary Cards -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Inventory (WAC Ledger)</p>
+      <p class="summary-value">{{ inventory_total }}</p>
+    </td>
+    <td>
+      <p class="summary-label">GL Control Balance</p>
+      <p class="summary-value">{{ gl_total }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Difference</p>
+      <p class="summary-value {{ 'text-emerald' if is_balanced else 'text-rose' }}">{{ difference }}</p>
+    </td>
+  </tr>
+</table>
+{% else %}
+<div class="notes">
+  <p>No data available. No open fiscal period was found for this organization.</p>
+</div>
+{% endif %}
+{% endblock %}

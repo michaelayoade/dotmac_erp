@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
@@ -701,7 +702,7 @@ class BankFeeStrategy(MatchStrategy):
                     line.line_id,
                     action="bank-fee",
                 )
-                posting_result = BasePostingAdapter.post_to_ledger(
+                posting_result = service._post_with_period_fallback(
                     ctx.db,
                     organization_id=ctx.organization_id,
                     journal_entry_id=journal.journal_entry_id,
@@ -934,7 +935,7 @@ class InterbankCounterpartStrategy(MatchStrategy):
                         settlement_line.line_id,
                         action="settlement",
                     )
-                    posting_result = BasePostingAdapter.post_to_ledger(
+                    posting_result = service._post_with_period_fallback(
                         ctx.db,
                         organization_id=ctx.organization_id,
                         journal_entry_id=journal.journal_entry_id,
@@ -1017,6 +1018,203 @@ class InterbankCounterpartStrategy(MatchStrategy):
                 ctx.result.errors.append(f"Line {settlement_line.line_number}: {exc}")
 
 
+_ACC_PAY_RE = re.compile(r"ACC-PAY-\d{4}-\d+")
+
+
+@dataclass(frozen=True)
+class ExpenseReimbursementStrategy(MatchStrategy):
+    """Match bank lines to expense claim reimbursements.
+
+    Looks for ``ACC-PAY-YYYY-NNNNN`` in the bank line description, matches
+    it against ``expense_claim.payment_reference``, then creates the
+    reimbursement journal via ``ExpensePostingAdapter`` and matches the
+    bank line to the resulting bank-GL journal line.
+    """
+
+    strategy_id: str = "expense_reimbursement"
+    provider_key: str = "expense_claim"
+
+    def run(self, service: Any, ctx: ReconciliationRunContext) -> None:  # noqa: C901
+        if not ctx.policy.allows_strategy(self.strategy_id):
+            return
+        still_unmatched = ctx.still_unmatched_lines()
+        if not still_unmatched:
+            return
+
+        import logging
+
+        from sqlalchemy import select as sa_select
+
+        from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+        from app.services.expense.expense_posting_adapter import (
+            ExpensePostingAdapter,
+        )
+
+        logger = logging.getLogger(__name__)
+
+        # Collect candidate lines that mention ACC-PAY references
+        candidates: list[tuple[BankStatementLine, str]] = []
+        for line in still_unmatched:
+            text = line.description or ""
+            m = _ACC_PAY_RE.search(text)
+            if not m:
+                # Also check the reference field
+                text = line.reference or ""
+                m = _ACC_PAY_RE.search(text)
+            if m:
+                candidates.append((line, m.group(0)))
+
+        if not candidates:
+            return
+
+        logger.info(
+            "Expense reimbursement pass: %d candidate lines",
+            len(candidates),
+        )
+
+        for line, acc_pay_ref in candidates:
+            try:
+                # Look up expense claim by payment_reference
+                claim = ctx.db.scalar(
+                    sa_select(ExpenseClaim).where(
+                        ExpenseClaim.organization_id == ctx.organization_id,
+                        ExpenseClaim.payment_reference == acc_pay_ref,
+                        ExpenseClaim.status == ExpenseClaimStatus.PAID,
+                    )
+                )
+                if not claim:
+                    logger.debug(
+                        "No PAID expense claim for ref %s",
+                        acc_pay_ref,
+                    )
+                    continue
+
+                # If reimbursement journal already exists, try to match
+                # against the existing journal line directly.
+                if claim.reimbursement_journal_id:
+                    journal_line = service._find_journal_line(
+                        ctx.db,
+                        ctx.organization_id,
+                        f"exp-reimb-{claim.claim_id}",
+                        ctx.bank_account.gl_account_id,
+                    )
+                    if not journal_line:
+                        # Try finding by journal entry directly
+                        from app.models.finance.gl.journal_entry_line import (
+                            JournalEntryLine,
+                        )
+
+                        journal_line = ctx.db.scalar(
+                            sa_select(JournalEntryLine).where(
+                                JournalEntryLine.journal_entry_id
+                                == claim.reimbursement_journal_id,
+                                JournalEntryLine.account_id
+                                == ctx.bank_account.gl_account_id,
+                            )
+                        )
+                    if journal_line:
+                        _perform_match(
+                            service,
+                            ctx,
+                            line,
+                            journal_line,
+                            source_type="EXPENSE_REIMBURSEMENT",
+                            source_id=claim.claim_id,
+                            confidence=95,
+                            explanation=(
+                                f"Expense reimbursement {claim.claim_number} "
+                                f"({acc_pay_ref})"
+                            ),
+                        )
+                        logger.info(
+                            "Matched line %s to existing reimbursement "
+                            "journal for claim %s",
+                            line.line_id,
+                            claim.claim_number,
+                        )
+                    continue
+
+                # Create reimbursement journal via the posting adapter
+                correlation_id = f"exp-reimb-{claim.claim_id}"
+                posting_result = ExpensePostingAdapter.post_expense_reimbursement(
+                    ctx.db,
+                    ctx.organization_id,
+                    claim.claim_id,
+                    posting_date=line.transaction_date,
+                    posted_by_user_id=service.SYSTEM_USER_ID,
+                    bank_account_id=ctx.bank_account.bank_account_id,
+                    payment_reference=acc_pay_ref,
+                    correlation_id=correlation_id,
+                )
+
+                if not posting_result.success:
+                    logger.warning(
+                        "Failed to post reimbursement for claim %s: %s",
+                        claim.claim_number,
+                        posting_result.message,
+                    )
+                    ctx.result.errors.append(
+                        f"Line {line.line_number}: {posting_result.message}"
+                    )
+                    continue
+
+                # Find the bank-side journal line and match
+                journal_line = service._find_journal_line(
+                    ctx.db,
+                    ctx.organization_id,
+                    correlation_id,
+                    ctx.bank_account.gl_account_id,
+                )
+                if not journal_line:
+                    # Fallback: find by journal_entry_id + account
+                    from app.models.finance.gl.journal_entry_line import (
+                        JournalEntryLine,
+                    )
+
+                    journal_line = ctx.db.scalar(
+                        sa_select(JournalEntryLine).where(
+                            JournalEntryLine.journal_entry_id
+                            == posting_result.journal_entry_id,
+                            JournalEntryLine.account_id
+                            == ctx.bank_account.gl_account_id,
+                        )
+                    )
+                if not journal_line:
+                    logger.warning(
+                        "Created reimbursement journal %s for claim %s but "
+                        "couldn't find bank GL line",
+                        posting_result.journal_entry_id,
+                        claim.claim_number,
+                    )
+                    continue
+
+                _perform_match(
+                    service,
+                    ctx,
+                    line,
+                    journal_line,
+                    source_type="EXPENSE_REIMBURSEMENT",
+                    source_id=claim.claim_id,
+                    confidence=95,
+                    explanation=(
+                        f"Expense reimbursement {claim.claim_number} ({acc_pay_ref})"
+                    ),
+                )
+                logger.info(
+                    "Matched line %s → claim %s via reimbursement journal %s",
+                    line.line_id,
+                    claim.claim_number,
+                    posting_result.journal_entry_id,
+                )
+            except Exception as exc:
+                service.logger.exception(
+                    "Error matching expense line %s: %s",
+                    line.line_id,
+                    exc,
+                )
+                ctx.result.errors.append(f"Line {line.line_number}: {exc}")
+
+
 @dataclass(frozen=True)
 class LegacyCustomRuleStrategy(MatchStrategy):
     strategy_id: str = "legacy_custom_rules"
@@ -1062,6 +1260,7 @@ class ProgrammaticReconciliationEngine:
             CustomerReceiptReferenceStrategy(),
             BankFeeStrategy(),
             InterbankCounterpartStrategy(),
+            ExpenseReimbursementStrategy(),
             LegacyCustomRuleStrategy(),
         )
 

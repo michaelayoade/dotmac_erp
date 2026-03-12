@@ -55,6 +55,11 @@ SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
 # this floor is enforced client-side after parsing each record's date.
 SPLYNX_SYNC_MIN_DATE = date(2026, 1, 1)
 
+# Sentinel UUID recorded in ExternalSync.local_entity_id for pre-2026 records
+# that are skipped.  This prevents _has_changed() from returning True every
+# cycle (the column is NOT NULL, so we cannot use None).
+_PRE_CUTOFF_SENTINEL = UUID("00000000-0000-0000-0000-000000000001")
+
 
 class PaystackReconcileResult(TypedDict):
     matched_by_reference: int
@@ -1152,6 +1157,11 @@ class SplynxSyncService:
 
         # Skip records before the sync floor date (pre-2026 data managed via ERPNext)
         if invoice_date < SPLYNX_SYNC_MIN_DATE:
+            self._record_sync(
+                EntityType.INVOICE,
+                str(splynx_invoice.id),
+                _PRE_CUTOFF_SENTINEL,
+            )
             result.skipped += 1
             return
 
@@ -1535,6 +1545,11 @@ class SplynxSyncService:
 
         # Skip records before the sync floor date (pre-2026 data managed via ERPNext)
         if payment_date < SPLYNX_SYNC_MIN_DATE:
+            self._record_sync(
+                EntityType.PAYMENT,
+                str(splynx_payment.id),
+                _PRE_CUTOFF_SENTINEL,
+            )
             result.skipped += 1
             return
 
@@ -2126,6 +2141,11 @@ class SplynxSyncService:
 
         # Skip records before the sync floor date (pre-2026 data managed via ERPNext)
         if cn_date < SPLYNX_SYNC_MIN_DATE:
+            self._record_sync(
+                EntityType.CREDIT_NOTE,
+                str(splynx_cn.id),
+                _PRE_CUTOFF_SENTINEL,
+            )
             result.skipped += 1
             return
 

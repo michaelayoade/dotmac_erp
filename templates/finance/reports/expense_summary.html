@@ -15,6 +15,10 @@
 {% endblock %}
 
 {% block header_actions %}
+<a href="/finance/reports/expense-summary/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print

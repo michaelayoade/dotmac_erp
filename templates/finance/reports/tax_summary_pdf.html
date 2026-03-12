@@ -1,0 +1,83 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Tax Summary — {{ org_name }}{% endblock %}
+{% block report_title %}Tax Summary{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<!-- Summary -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Output Tax (Collected)</p>
+      <p class="summary-value">{{ output_tax }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Input Tax (Paid)</p>
+      <p class="summary-value">{{ input_tax }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Net Tax {{ '(Payable)' if is_payable else '(Receivable)' }}</p>
+      <p class="summary-value {{ 'text-rose' if is_payable else 'text-emerald' }}">{{ net_tax }}</p>
+    </td>
+    <td>
+      <p class="summary-label">WHT</p>
+      <p class="summary-value">{{ withholding }}</p>
+    </td>
+  </tr>
+</table>
+
+<!-- Breakdown -->
+{% if tax_breakdown %}
+<p class="section-heading">Tax Breakdown by Type</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Tax Type</th>
+      <th class="num">Output</th>
+      <th class="num">Input</th>
+      <th class="num">Net</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in tax_breakdown %}
+    <tr>
+      <td>{{ row.tax_type }}</td>
+      <td class="num">{{ row.output }}</td>
+      <td class="num">{{ row.input }}</td>
+      <td class="num {{ 'text-rose' if row.net_raw is defined and row.net_raw > 0 else 'text-emerald' }}">{{ row.net }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Deadlines -->
+{% if upcoming_deadlines %}
+<p class="section-heading">Upcoming Filing Deadlines</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Period</th>
+      <th>Due Date</th>
+      <th class="center">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in upcoming_deadlines %}
+    <tr>
+      <td>{{ d.period_name }}</td>
+      <td class="nowrap">{{ d.due_date }}</td>
+      <td class="center {{ 'text-rose bold' if d.is_overdue else 'text-emerald' }}">
+        {{ 'OVERDUE' if d.is_overdue else d.days_until ~ ' days' }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

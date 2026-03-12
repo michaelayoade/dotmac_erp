@@ -489,6 +489,16 @@ def seed_default_tax_data(
         summary,
         description="Seeded withholding tax payable account",
     )
+    withholding_receivable = _ensure_account(
+        db,
+        org_id,
+        assets_category.category_id,
+        "WHT-RCV",
+        "Withholding Tax Receivable",
+        NormalBalance.DEBIT,
+        summary,
+        description="Seeded WHT receivable account — WHT deducted by customers (tax asset)",
+    )
     vat_input = _ensure_account(
         db,
         org_id,
@@ -598,7 +608,7 @@ def seed_default_tax_data(
                 TaxType.WITHHOLDING,
                 config.withholding_rate,
                 withholding_payable.account_id,
-                None,
+                withholding_receivable.account_id,
                 None,
                 summary,
                 is_recoverable=False,

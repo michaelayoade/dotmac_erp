@@ -1,0 +1,57 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Trial Balance — {{ org_name }}{% endblock %}
+{% block report_title %}Trial Balance{% endblock %}
+{% block report_meta %}
+<p class="meta-line">As at {{ as_of_date if as_of_date else 'Current Date' }}</p>
+{% if period_name %}<p class="meta-line">Period: {{ period_name }}</p>{% endif %}
+{% endblock %}
+
+{% block report_body %}
+{% if is_balanced %}
+<div class="status-banner status-balanced">Trial Balance is Balanced ✓</div>
+{% else %}
+<div class="status-banner status-unbalanced">Trial Balance is NOT Balanced ✗</div>
+{% endif %}
+
+{% macro account_section(title, items) %}
+<p class="section-heading">{{ title }}</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Code</th>
+      <th>Account Name</th>
+      <th class="num" style="width: 20%;">Debit</th>
+      <th class="num" style="width: 20%;">Credit</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.debit if item.debit else '' }}</td>
+      <td class="num">{{ item.credit if item.credit else '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{{ account_section('Assets', assets) }}
+{{ account_section('Liabilities', liabilities) }}
+{{ account_section('Equity', equity) }}
+{{ account_section('Revenue', revenue) }}
+{{ account_section('Expenses', expenses) }}
+
+<table class="report-table">
+  <tbody>
+    <tr class="grandtotal">
+      <td style="width: 12%;"></td>
+      <td class="bold">TOTAL</td>
+      <td class="num bold" style="width: 20%;">{{ total_debit }}</td>
+      <td class="num bold" style="width: 20%;">{{ total_credit }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endblock %}

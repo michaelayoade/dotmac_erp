@@ -1,0 +1,690 @@
+{% extends "finance/base_finance.html" %}
+
+{% from "components/macros.html" import compact_filters, empty_state, icon_svg, stats_card, period_shortcuts %}
+{% block page_title %}Management Accounts{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/reports" class="hover:text-slate-700 dark:hover:text-slate-300">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="text-slate-700 dark:text-slate-300" aria-current="page">Management Accounts</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/finance/reports/management-accounts/export?start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export CSV
+</a>
+<a href="/finance/reports/management-accounts/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
+<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
+    Print
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+    <!-- Filter Card -->
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/reports/management-accounts",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date_iso,
+        end_date=end_date_iso,
+        auto_submit=false,
+        show_apply_button=true
+    ) %}
+    {{ period_shortcuts(mode="range") }}
+    {% endcall %}
+
+    <div id="results-container">
+
+    <!-- Print Header -->
+    <div class="card p-6 print:shadow-none print:border-0">
+        {% set doc_title = "Management Accounts" %}
+        {% set doc_number = period_name %}
+        {% include "partials/_document_header.html" %}
+        <div class="text-center mb-6 print:mb-4">
+            <p class="text-slate-500 dark:text-slate-400">For the period {{ start_date }} to {{ end_date }}</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ currency_code }} · Unaudited · Prepared {{ prepared_date }}</p>
+        </div>
+
+        <!-- ═══════════════ KPI Cards ═══════════════ -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {{ stats_card(
+                label="Net Revenue",
+                value=total_revenue,
+                icon="trending-up",
+                color="teal"
+            ) }}
+            {{ stats_card(
+                label="Gross Profit",
+                value=gross_profit,
+                icon="chart",
+                color="emerald",
+                subtitle=gp_margin ~ "% margin"
+            ) }}
+            {{ stats_card(
+                label="Operating Profit",
+                value=operating_profit,
+                icon="currency",
+                color="blue" if is_profit else "rose",
+                subtitle=op_margin ~ "% margin"
+            ) }}
+            {{ stats_card(
+                label="Total Assets",
+                value=total_assets,
+                icon="building",
+                color="violet"
+            ) }}
+        </div>
+
+        <!-- ═══════════════ SECTION 1: INCOME STATEMENT ═══════════════ -->
+        <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-teal-200 dark:border-teal-800 pb-2">
+                1. Statement of Profit or Loss
+            </h2>
+
+            <!-- Revenue -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Revenue</h3>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b-2 border-slate-200 dark:border-slate-700">
+                            <th scope="col" class="py-2 px-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400 w-20">Code</th>
+                            <th scope="col" class="py-2 px-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Account</th>
+                            <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 w-40">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in revenue_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.amount_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %}">
+                                {% if item.amount_raw < 0 %}({{ item.amount | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ item.amount }}{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="p-0">{{ empty_state("No revenue", "No revenue recorded for this period.") }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-300 dark:border-slate-600">
+                            <td class="py-3 px-2"></td>
+                            <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Net Revenue</td>
+                            <td class="py-3 px-2 text-right font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">{{ total_revenue }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Cost of Sales -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Cost of Sales</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in cost_of_sales_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-40">{{ item.amount }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="p-0">{{ empty_state("No cost of sales", "No COS recorded for this period.") }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Cost of Sales</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-rose-600 dark:text-rose-400">{{ total_cos }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Gross Profit -->
+            <div class="flex justify-between items-center py-3 px-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                <span class="font-semibold text-slate-900 dark:text-white">Gross Profit</span>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-medium px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300">{{ gp_margin }}% margin</span>
+                    <span class="font-mono tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{{ gross_profit }}</span>
+                </div>
+            </div>
+
+            <!-- Operating Expenses -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Operating Expenses</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in opex_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.amount_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if item.amount_raw < 0 %}({{ item.amount | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ item.amount }}{% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="p-0">{{ empty_state("No expenses", "No operating expenses for this period.") }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Operating Expenses</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-rose-600 dark:text-rose-400">{{ total_opex }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Operating Profit -->
+            <div class="flex justify-between items-center py-4 px-4 rounded-lg {% if is_profit %}bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800{% else %}bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800{% endif %}">
+                <span class="text-lg font-bold text-slate-900 dark:text-white">Operating Profit</span>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-medium px-2 py-0.5 rounded {% if is_profit %}bg-emerald-100 dark:bg-emerald-800/40 text-emerald-700 dark:text-emerald-300{% else %}bg-rose-100 dark:bg-rose-800/40 text-rose-700 dark:text-rose-300{% endif %}">{{ op_margin }}% margin</span>
+                    <span class="text-xl font-mono tabular-nums font-bold {% if is_profit %}text-emerald-700 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ operating_profit }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="my-8 border-t border-slate-200 dark:border-slate-700"></div>
+
+        <!-- ═══════════════ SECTION 2: BALANCE SHEET ═══════════════ -->
+        <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-teal-200 dark:border-teal-800 pb-2">
+                2. Statement of Financial Position
+                <span class="text-sm font-normal text-slate-400 ml-2">as at {{ end_date }}</span>
+            </h2>
+
+            <!-- Non-Current Assets -->
+            {% if fa_items %}
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Non-Current Assets</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in fa_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.amount_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if item.amount_raw < 0 %}({{ item.amount | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ item.amount }}{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Non-Current Assets</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ total_nca }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Current Assets -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Current Assets</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in ca_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-40">{{ item.amount }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="p-0">{{ empty_state("No current assets", "No current assets found.") }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Current Assets</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ total_ca }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Total Assets -->
+            <div class="flex justify-between items-center py-3 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <span class="font-bold text-slate-900 dark:text-white">Total Assets</span>
+                <span class="font-mono tabular-nums font-bold text-slate-900 dark:text-white">{{ total_assets }}</span>
+            </div>
+
+            <!-- Equity -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Equity</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in equity_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-40">{{ item.amount }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white italic">Current Year Profit</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} w-40">{{ current_year_profit }}</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Equity</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">
+                                {% set total_eq_with_profit = total_equity_raw + current_year_profit_raw %}
+                                {{ total_eq_with_profit | format_currency if total_eq_with_profit is defined else total_equity }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Non-Current Liabilities -->
+            {% if ncl_items %}
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Non-Current Liabilities</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in ncl_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-40">{{ item.amount }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Non-Current Liabilities</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ total_ncl }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% endif %}
+
+            <!-- Current Liabilities -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Current Liabilities</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        {% for item in cl_items %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 font-mono text-xs text-slate-500 dark:text-slate-400 w-20">{{ item.account_code }}</td>
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-40">{{ item.amount }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="p-0">{{ empty_state("No liabilities", "No current liabilities found.") }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t border-slate-200 dark:border-slate-700">
+                            <td class="py-2 px-2"></td>
+                            <td class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Total Current Liabilities</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{{ total_cl }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Total Equity & Liabilities -->
+            <div class="flex justify-between items-center py-3 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <span class="font-bold text-slate-900 dark:text-white">Total Equity &amp; Liabilities</span>
+                <span class="font-mono tabular-nums font-bold text-slate-900 dark:text-white">{{ total_equity_and_liabilities }}</span>
+            </div>
+        </div>
+
+        <div class="my-8 border-t border-slate-200 dark:border-slate-700"></div>
+
+        <!-- ═══════════════ SECTION 3: CASH FLOW STATEMENT ═══════════════ -->
+        <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-teal-200 dark:border-teal-800 pb-2">
+                3. Statement of Cash Flows
+                <span class="text-sm font-normal text-slate-400 ml-2">(Indirect Method)</span>
+            </h2>
+
+            <!-- Operating Activities -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Cash Flows from Operating Activities</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-900 dark:text-white">Operating Profit</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if operating_profit_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">{{ operating_profit }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-6">Depreciation &amp; Amortisation</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white w-40">{{ depreciation_charge }}</td>
+                        </tr>
+                        <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-6 font-medium italic">Working Capital Changes:</td>
+                            <td class="py-2 px-2 w-40"></td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-10">(Increase)/Decrease in Trade Receivables</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_receivables_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_receivables_raw < 0 %}({{ chg_receivables | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_receivables }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-10">(Increase)/Decrease in Inventory</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_inventory_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_inventory_raw < 0 %}({{ chg_inventory | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_inventory }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-10">(Increase)/Decrease in Other Current Assets</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_other_ca_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_other_ca_raw < 0 %}({{ chg_other_ca | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_other_ca }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-10">Increase/(Decrease) in Trade Payables</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_payables_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_payables_raw < 0 %}({{ chg_payables | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_payables }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-10">Increase/(Decrease) in Other Current Liabilities</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_other_cl_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_other_cl_raw < 0 %}({{ chg_other_cl | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_other_cl }}{% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-300 dark:border-slate-600">
+                            <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Net Cash from Operating Activities</td>
+                            <td class="py-3 px-2 text-right font-mono tabular-nums font-semibold {% if cash_from_operations_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                                {% if cash_from_operations_raw < 0 %}({{ cash_from_operations | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ cash_from_operations }}{% endif %}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Investing Activities -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Cash Flows from Investing Activities</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-6">Purchase of Property, Plant &amp; Equipment</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if capex_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if capex_raw < 0 %}({{ capex | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ capex }}{% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-300 dark:border-slate-600">
+                            <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Net Cash from Investing Activities</td>
+                            <td class="py-3 px-2 text-right font-mono tabular-nums font-semibold {% if cash_from_investing_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                                {% if cash_from_investing_raw < 0 %}({{ cash_from_investing | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ cash_from_investing }}{% endif %}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Financing Activities -->
+            <div>
+                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Cash Flows from Financing Activities</h3>
+                <table class="w-full text-sm">
+                    <tbody>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-6">Net Borrowings Movement</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_ncl_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_ncl_raw < 0 %}({{ chg_ncl | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_ncl }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr class="border-b border-slate-100 dark:border-slate-800">
+                            <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-6">Equity Movements</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if chg_equity_movement_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-white{% endif %} w-40">
+                                {% if chg_equity_movement_raw < 0 %}({{ chg_equity_movement | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ chg_equity_movement }}{% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="border-t-2 border-slate-300 dark:border-slate-600">
+                            <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Net Cash from Financing Activities</td>
+                            <td class="py-3 px-2 text-right font-mono tabular-nums font-semibold {% if cash_from_financing_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                                {% if cash_from_financing_raw < 0 %}({{ cash_from_financing | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ cash_from_financing }}{% endif %}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <!-- Net Change & Closing Cash -->
+            <div class="space-y-2">
+                <div class="flex justify-between items-center py-3 px-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <span class="font-medium text-slate-900 dark:text-white">Net Change in Cash &amp; Cash Equivalents</span>
+                    <span class="font-mono tabular-nums font-semibold {% if net_cash_change_raw < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                        {% if net_cash_change_raw < 0 %}({{ net_cash_change | replace('-', '') | replace('(', '') | replace(')', '') }}){% else %}{{ net_cash_change }}{% endif %}
+                    </span>
+                </div>
+                <div class="flex justify-between items-center py-2 px-4">
+                    <span class="text-sm text-slate-500 dark:text-slate-400">Opening Cash &amp; Cash Equivalents</span>
+                    <span class="font-mono tabular-nums text-sm text-slate-600 dark:text-slate-400">{{ ob_cash }}</span>
+                </div>
+                <div class="flex justify-between items-center py-3 px-4 rounded-lg {% if closing_cash_raw >= 0 %}bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800{% else %}bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800{% endif %}">
+                    <span class="font-bold text-slate-900 dark:text-white">Closing Cash &amp; Cash Equivalents</span>
+                    <span class="font-mono tabular-nums font-bold {% if closing_cash_raw >= 0 %}text-emerald-700 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}">{{ closing_cash }}</span>
+                </div>
+                {% if cash_total_raw %}
+                <div class="flex justify-between items-center py-2 px-4">
+                    <span class="text-xs text-slate-400 dark:text-slate-500 italic">Per Balance Sheet — Cash &amp; Bank</span>
+                    <span class="font-mono tabular-nums text-xs text-slate-400 dark:text-slate-500">{{ cash_total }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="my-8 border-t border-slate-200 dark:border-slate-700"></div>
+
+        <!-- ═══════════════ SECTION 4: CHANGES IN EQUITY ═══════════════ -->
+        <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-teal-200 dark:border-teal-800 pb-2">
+                4. Statement of Changes in Equity
+                <span class="text-sm font-normal text-slate-400 ml-2">for the period {{ start_date }} to {{ end_date }}</span>
+            </h2>
+
+            <table class="w-full text-sm">
+                <tbody>
+                    <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/30">
+                        <td class="py-3 px-2 font-semibold text-slate-900 dark:text-white">Opening Equity</td>
+                        <td class="py-3 px-2 text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white w-40">{{ opening_equity_total }}</td>
+                    </tr>
+                    {% for item in ob_equity_items %}
+                    <tr class="border-b border-slate-100 dark:border-slate-800">
+                        <td class="py-2 px-2 text-slate-600 dark:text-slate-400 pl-6">{{ item.account_name }}</td>
+                        <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-500 dark:text-slate-400 w-40">{{ item.amount }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="border-b border-slate-200 dark:border-slate-700">
+                        <td class="py-3 px-2 text-slate-900 dark:text-white pl-6 font-medium">Comprehensive Income (Profit for the Period)</td>
+                        <td class="py-3 px-2 text-right font-mono tabular-nums font-semibold {% if is_profit %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %} w-40">{{ operating_profit }}</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr class="border-t-2 border-slate-300 dark:border-slate-600">
+                        <td class="py-3 px-2 font-bold text-slate-900 dark:text-white">Closing Equity</td>
+                        <td class="py-3 px-2 text-right font-mono tabular-nums font-bold text-slate-900 dark:text-white">{{ closing_equity_total }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="my-8 border-t border-slate-200 dark:border-slate-700"></div>
+
+        <!-- ═══════════════ SECTION 5: MONTHLY TRENDS ═══════════════ -->
+        {% if monthly_data %}
+        <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-teal-200 dark:border-teal-800 pb-2">
+                5. Monthly Performance
+            </h2>
+
+            <div class="relative" style="height: 320px">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+
+            <div class="table-container">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b-2 border-slate-200 dark:border-slate-700">
+                            <th scope="col" class="py-2 px-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">Month</th>
+                            <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Revenue</th>
+                            <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">COS</th>
+                            <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">OPEX</th>
+                            <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">Net Profit</th>
+                            <th scope="col" class="py-2 px-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 hidden sm:table-cell">Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in monthly_data %}
+                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                            <td class="py-2 px-2 font-medium text-slate-900 dark:text-white">{{ m.month }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ m.revenue_formatted }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ m.cos_formatted }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ m.opex_formatted }}</td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums {% if m.net_profit < 0 %}text-rose-600 dark:text-rose-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                                {{ m.net_profit_formatted }}
+                            </td>
+                            <td class="py-2 px-2 text-right font-mono tabular-nums hidden sm:table-cell {% if m.margin < 0 %}text-rose-600 dark:text-rose-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ m.margin }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="my-8 border-t border-slate-200 dark:border-slate-700"></div>
+        {% endif %}
+
+        <!-- ═══════════════ SECTION 4: KEY RATIOS ═══════════════ -->
+        <div class="space-y-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white border-b-2 border-teal-200 dark:border-teal-800 pb-2">
+                6. Key Financial Ratios
+            </h2>
+
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- GP Margin -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">GP Margin</div>
+                    <div class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ gp_margin }}<span class="text-sm font-normal text-slate-400">%</span></div>
+                    <div class="mt-2 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-teal-500 rounded-full" style="width: {{ [gp_margin, 100] | min }}%"></div>
+                    </div>
+                </div>
+                <!-- OP Margin -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">OP Margin</div>
+                    <div class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ op_margin }}<span class="text-sm font-normal text-slate-400">%</span></div>
+                    <div class="mt-2 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-teal-500 rounded-full" style="width: {{ [op_margin, 100] | min }}%"></div>
+                    </div>
+                </div>
+                <!-- Current Ratio -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Current Ratio</div>
+                    <div class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ current_ratio }}<span class="text-sm font-normal text-slate-400">×</span></div>
+                    <div class="mt-2 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full bg-emerald-500 rounded-full" style="width: {{ [current_ratio / 10 * 100, 100] | min }}%"></div>
+                    </div>
+                </div>
+                <!-- Debt-to-Equity -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Debt/Equity</div>
+                    <div class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ debt_to_equity }}<span class="text-sm font-normal text-slate-400">×</span></div>
+                    <div class="mt-2 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full {% if debt_to_equity > 2 %}bg-rose-500{% elif debt_to_equity > 1 %}bg-amber-500{% else %}bg-emerald-500{% endif %} rounded-full" style="width: {{ [debt_to_equity / 3 * 100, 100] | min }}%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Receivable Days -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Receivable Days</div>
+                    <div class="text-2xl font-bold {% if receivable_days > 120 %}text-rose-600 dark:text-rose-400{% elif receivable_days > 60 %}text-amber-600 dark:text-amber-400{% else %}text-slate-900 dark:text-white{% endif %} font-mono">{{ receivable_days }}<span class="text-sm font-normal text-slate-400"> days</span></div>
+                </div>
+                <!-- Payable Days -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Payable Days</div>
+                    <div class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ payable_days }}<span class="text-sm font-normal text-slate-400"> days</span></div>
+                </div>
+                <!-- Quick Ratio -->
+                <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Quick Ratio</div>
+                    <div class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ quick_ratio }}<span class="text-sm font-normal text-slate-400">×</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Print Footer -->
+        <div class="hidden print:block mt-8 pt-4 border-t border-slate-200 text-xs text-slate-400 text-center">
+            <p>{{ org_name }} — Management Accounts · {{ start_date }} to {{ end_date }} · Unaudited</p>
+            <p class="mt-1">Prepared {{ prepared_date }} · Computer Generated Document</p>
+        </div>
+    </div>
+
+    </div>
+</div>
+
+{% if monthly_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var ctx = document.getElementById('monthlyChart');
+    if (!ctx) return;
+    var data = {{ monthly_data | tojson }};
+    var labels = data.map(function(m) { return m.month_short; });
+    var revenue = data.map(function(m) { return m.revenue; });
+    var cos = data.map(function(m) { return m.cos; });
+    var opex = data.map(function(m) { return m.opex; });
+    var netProfit = data.map(function(m) { return m.net_profit; });
+    var fmt = function(v) { return '\u20A6' + (v / 1e6).toFixed(0) + 'M'; };
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                { label: 'Revenue', data: revenue, backgroundColor: 'rgba(13,148,136,.7)', borderRadius: 3, order: 2 },
+                { label: 'COS', data: cos, backgroundColor: 'rgba(225,29,72,.5)', borderRadius: 3, order: 3 },
+                { label: 'OPEX', data: opex, backgroundColor: 'rgba(217,119,6,.5)', borderRadius: 3, order: 4 },
+                { label: 'Net Profit', data: netProfit, type: 'line', borderColor: '#0f172a', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#0f172a', tension: 0.3, order: 1 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top', align: 'end', labels: { usePointStyle: true, pointStyle: 'rectRounded', padding: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: function(c) { return ' ' + c.dataset.label + ': ' + fmt(c.raw); } } }
+            },
+            scales: {
+                x: { grid: { display: false } },
+                y: { ticks: { callback: function(v) { return fmt(v); }, maxTicksLimit: 6 }, grid: { color: 'rgba(0,0,0,.04)' } }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

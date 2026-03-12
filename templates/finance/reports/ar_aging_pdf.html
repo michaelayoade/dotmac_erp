@@ -1,0 +1,74 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}AR Aging Report — {{ org_name }}{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_title %}AR Aging Report{% endblock %}
+{% block report_meta %}
+<p class="meta-line">As at {{ as_of_date if as_of_date else 'Current Date' }}</p>
+{% endblock %}
+
+{% block report_body %}
+<!-- Summary -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Current</p>
+      <p class="summary-value text-emerald">{{ total_current }}</p>
+    </td>
+    <td>
+      <p class="summary-label">1–30 Days</p>
+      <p class="summary-value text-amber">{{ total_1_30 }}</p>
+    </td>
+    <td>
+      <p class="summary-label">31–60 Days</p>
+      <p class="summary-value text-amber">{{ total_31_60 }}</p>
+    </td>
+    <td>
+      <p class="summary-label">61–90 Days</p>
+      <p class="summary-value text-rose">{{ total_61_90 }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Over 90 Days</p>
+      <p class="summary-value text-rose">{{ total_over_90 }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Grand Total</p>
+      <p class="summary-value">{{ grand_total }}</p>
+    </td>
+  </tr>
+</table>
+
+{% macro aging_table(title, items) %}
+{% if items %}
+<p class="subsection-heading">{{ title }}</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 15%;">Invoice #</th>
+      <th>Customer</th>
+      <th style="width: 12%;">Due Date</th>
+      <th class="num" style="width: 10%;">Days</th>
+      <th class="num" style="width: 18%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for inv in items %}
+    <tr>
+      <td>{{ inv.invoice_number }}</td>
+      <td>{{ inv.customer_name }}</td>
+      <td class="nowrap">{{ inv.due_date }}</td>
+      <td class="num">{{ inv.days_overdue }}</td>
+      <td class="num">{{ inv.amount }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endmacro %}
+
+{{ aging_table('Over 90 Days', over_90) }}
+{{ aging_table('61–90 Days', days_61_90) }}
+{{ aging_table('31–60 Days', days_31_60) }}
+{{ aging_table('1–30 Days', days_1_30) }}
+{{ aging_table('Current', current) }}
+{% endblock %}

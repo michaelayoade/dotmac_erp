@@ -18,6 +18,10 @@
     {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
     Export CSV
 </a>
+<a href="/finance/reports/trial-balance/export?format=pdf&as_of_date={{ as_of_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
@@ -75,80 +79,25 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- Assets Section -->
-                    {% if assets %}
-                    <tr class="bg-slate-50 dark:bg-slate-800/50">
-                        <td colspan="4" class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Assets</td>
-                    </tr>
-                    {% for item in assets %}
-                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                    {% macro tb_row(item) %}
+                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 {{ 'opacity-60' if item.is_inactive else '' }}">
                         <td class="py-2 px-2 font-mono text-slate-600 dark:text-slate-400">{{ item.account_code }}</td>
-                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
+                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}{% if item.is_inactive %} <span class="text-xs text-amber-600 dark:text-amber-400">(inactive)</span>{% endif %}</td>
                         <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.debit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.debit or '-' }}</td>
                         <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.credit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.credit or '-' }}</td>
                     </tr>
-                    {% endfor %}
-                    {% endif %}
+                    {% endmacro %}
 
-                    <!-- Liabilities Section -->
-                    {% if liabilities %}
+                    {% for section_name, section_items in [('Assets', assets), ('Liabilities', liabilities), ('Equity', equity), ('Revenue', revenue), ('Expenses', expenses)] %}
+                    {% if section_items %}
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
-                        <td colspan="4" class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Liabilities</td>
+                        <td colspan="4" class="py-2 px-2 font-semibold text-slate-900 dark:text-white">{{ section_name }}</td>
                     </tr>
-                    {% for item in liabilities %}
-                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                        <td class="py-2 px-2 font-mono text-slate-600 dark:text-slate-400">{{ item.account_code }}</td>
-                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.debit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.debit or '-' }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.credit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.credit or '-' }}</td>
-                    </tr>
+                    {% for item in section_items %}
+                    {{ tb_row(item) }}
                     {% endfor %}
                     {% endif %}
-
-                    <!-- Equity Section -->
-                    {% if equity %}
-                    <tr class="bg-slate-50 dark:bg-slate-800/50">
-                        <td colspan="4" class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Equity</td>
-                    </tr>
-                    {% for item in equity %}
-                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                        <td class="py-2 px-2 font-mono text-slate-600 dark:text-slate-400">{{ item.account_code }}</td>
-                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.debit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.debit or '-' }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.credit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.credit or '-' }}</td>
-                    </tr>
                     {% endfor %}
-                    {% endif %}
-
-                    <!-- Revenue Section -->
-                    {% if revenue %}
-                    <tr class="bg-slate-50 dark:bg-slate-800/50">
-                        <td colspan="4" class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Revenue</td>
-                    </tr>
-                    {% for item in revenue %}
-                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                        <td class="py-2 px-2 font-mono text-slate-600 dark:text-slate-400">{{ item.account_code }}</td>
-                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.debit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.debit or '-' }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.credit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.credit or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% endif %}
-
-                    <!-- Expenses Section -->
-                    {% if expenses %}
-                    <tr class="bg-slate-50 dark:bg-slate-800/50">
-                        <td colspan="4" class="py-2 px-2 font-semibold text-slate-900 dark:text-white">Expenses</td>
-                    </tr>
-                    {% for item in expenses %}
-                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                        <td class="py-2 px-2 font-mono text-slate-600 dark:text-slate-400">{{ item.account_code }}</td>
-                        <td class="py-2 px-2 text-slate-900 dark:text-white">{{ item.account_name }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.debit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.debit or '-' }}</td>
-                        <td class="py-2 px-2 text-right font-mono tabular-nums {% if item.credit %}text-slate-900 dark:text-white{% else %}text-slate-400 dark:text-slate-500{% endif %}">{{ item.credit or '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% endif %}
                 </tbody>
                 <tfoot>
                     <tr class="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800">

@@ -20,7 +20,7 @@
 
     <!-- Hero Stats -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="dashboard-stats">
-        {{ stats_card("Total Employees", stats.total_employees | default(0), icon="users", color="violet", trend="+%s this month" | format(stats.new_hires_this_month) if stats.new_hires_this_month else none) }}
+        {{ stats_card("Total Employees", stats.total_employees | default(0), icon="users", color="violet", trend=stats.new_hires_this_month if stats.new_hires_this_month else none) }}
         {{ stats_card("Active", stats.active_employees | default(0), icon="check-circle", color="emerald", subtitle="%s%% of workforce" | format(stats.active_percentage | default(0))) }}
         {{ stats_card("On Leave Today", stats.on_leave_today | default(0), icon="calendar", color="amber", subtitle="%s pending requests" | format(stats.pending_leave_requests | default(0))) }}
         {{ stats_card("Open Positions", stats.open_positions | default(0), icon="briefcase", color="violet", subtitle="%s applicants" | format(stats.active_applicants | default(0))) }}

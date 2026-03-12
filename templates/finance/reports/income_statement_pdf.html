@@ -1,0 +1,72 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Statement of Profit or Loss — {{ org_name }}{% endblock %}
+{% block report_title %}Statement of Profit or Loss{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% if period_name %}<p class="meta-line">Period: {{ period_name }}</p>{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<p class="section-heading">Revenue</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 22%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in revenue_items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.amount }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="subtotal">
+      <td></td>
+      <td class="bold">Total Revenue</td>
+      <td class="num bold">{{ total_revenue }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="section-heading">Expenses</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 22%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in expense_items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.amount }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="subtotal">
+      <td></td>
+      <td class="bold">Total Expenses</td>
+      <td class="num bold">{{ total_expenses }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="report-table mt">
+  <tbody>
+    <tr class="grandtotal">
+      <td style="width: 12%;"></td>
+      <td class="bold">Net {{ 'Profit' if is_profit else 'Loss' }}</td>
+      <td class="num bold {{ 'text-emerald' if is_profit else 'text-rose' }}" style="width: 22%;">{{ net_income }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endblock %}

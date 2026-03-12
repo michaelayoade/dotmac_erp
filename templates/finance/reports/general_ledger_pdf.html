@@ -1,0 +1,52 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}General Ledger — {{ org_name }}{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_title %}General Ledger{% endblock %}
+{% block report_meta %}
+{% if selected_account %}
+<p class="meta-line">Account: {{ selected_account.account_code }} — {{ selected_account.account_name }}</p>
+{% endif %}
+{% if start_date and end_date %}
+<p class="meta-line">Period: {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">Date</th>
+      <th style="width: 12%;">Journal #</th>
+      <th>Description</th>
+      <th style="width: 12%;">Reference</th>
+      <th class="num" style="width: 14%;">Debit</th>
+      <th class="num" style="width: 14%;">Credit</th>
+      <th class="num" style="width: 14%;">Balance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for txn in transactions %}
+    <tr>
+      <td class="nowrap">{{ txn.date }}</td>
+      <td>{{ txn.journal_number }}</td>
+      <td>{{ txn.description }}</td>
+      <td>{{ txn.reference if txn.reference else '' }}</td>
+      <td class="num">{{ txn.debit if txn.debit else '' }}</td>
+      <td class="num">{{ txn.credit if txn.credit else '' }}</td>
+      <td class="num bold">{{ txn.balance }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="center muted">No transactions found.</td></tr>
+    {% endfor %}
+  </tbody>
+  {% if transactions %}
+  <tfoot>
+    <tr class="grandtotal">
+      <td colspan="6" class="bold">Ending Balance</td>
+      <td class="num bold">{{ ending_balance }}</td>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+{% endblock %}

@@ -1,0 +1,356 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Management Accounts — {{ org_name }}{% endblock %}
+{% block report_title %}Management Accounts{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% if period_name %}<p class="meta-line">Period: {{ period_name }}</p>{% endif %}
+<p class="meta-line">Prepared: {{ generated_at }}</p>
+{% endblock %}
+
+{% block extra_styles %}
+.ratio-grid { width: 100%; border-collapse: separate; border-spacing: 8px 6px; }
+.ratio-grid td { border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; background: #f8fafc; width: 25%; }
+.ratio-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; font-weight: 600; }
+.ratio-value { font-size: 13px; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+{% endblock %}
+
+{% block report_body %}
+<!-- Summary Cards -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Net Revenue</p>
+      <p class="summary-value">{{ total_revenue }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Gross Profit</p>
+      <p class="summary-value text-emerald">{{ gross_profit }}</p>
+      <p class="muted" style="font-size: 8px;">Margin: {{ gp_margin }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Operating Profit</p>
+      <p class="summary-value {{ 'text-emerald' if is_profit else 'text-rose' }}">{{ operating_profit }}</p>
+      <p class="muted" style="font-size: 8px;">Margin: {{ op_margin }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Total Assets</p>
+      <p class="summary-value">{{ total_assets }}</p>
+    </td>
+  </tr>
+</table>
+
+<!-- Income Statement -->
+<p class="section-heading">1. Statement of Profit or Loss</p>
+
+{% macro pl_table(title, items, total_label, total_amount) %}
+<p class="subsection-heading">{{ title }}</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 22%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.amount }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="subtotal">
+      <td></td>
+      <td class="bold">{{ total_label }}</td>
+      <td class="num bold">{{ total_amount }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endmacro %}
+
+{{ pl_table('Revenue', revenue_items, 'Net Revenue', total_revenue) }}
+{{ pl_table('Cost of Sales', cost_of_sales_items, 'Total Cost of Sales', total_cos) }}
+
+<table class="report-table">
+  <tbody>
+    <tr class="subtotal">
+      <td style="width: 10%;"></td>
+      <td class="bold">Gross Profit</td>
+      <td class="num bold text-emerald" style="width: 22%;">{{ gross_profit }}</td>
+    </tr>
+  </tbody>
+</table>
+
+{{ pl_table('Operating Expenses', opex_items, 'Total Operating Expenses', total_opex) }}
+
+<table class="report-table">
+  <tbody>
+    <tr class="grandtotal">
+      <td style="width: 10%;"></td>
+      <td class="bold">Operating Profit (EBITDA)</td>
+      <td class="num bold {{ 'text-emerald' if is_profit else 'text-rose' }}" style="width: 22%;">{{ operating_profit }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Balance Sheet -->
+<p class="section-heading page-break">2. Statement of Financial Position</p>
+
+{% macro bs_table(title, items, total_label, total_amount) %}
+{% if items %}
+<p class="subsection-heading">{{ title }}</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 22%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.amount }}</td>
+    </tr>
+    {% endfor %}
+    <tr class="subtotal">
+      <td></td>
+      <td class="bold">{{ total_label }}</td>
+      <td class="num bold">{{ total_amount }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endif %}
+{% endmacro %}
+
+{{ bs_table('Non-Current Assets', fa_items, 'Total Non-Current Assets', total_nca) }}
+{{ bs_table('Current Assets', ca_items, 'Total Current Assets', total_ca) }}
+
+<table class="report-table">
+  <tbody>
+    <tr class="grandtotal">
+      <td style="width: 10%;"></td>
+      <td class="bold">Total Assets</td>
+      <td class="num bold" style="width: 22%;">{{ total_assets }}</td>
+    </tr>
+  </tbody>
+</table>
+
+{{ bs_table('Equity', equity_items, 'Total Equity', total_equity) }}
+{{ bs_table('Non-Current Liabilities', ncl_items, 'Total Non-Current Liabilities', total_ncl) }}
+{{ bs_table('Current Liabilities', cl_items, 'Total Current Liabilities', total_cl) }}
+
+<table class="report-table">
+  <tbody>
+    <tr class="grandtotal">
+      <td style="width: 10%;"></td>
+      <td class="bold">Total Equity &amp; Liabilities</td>
+      <td class="num bold" style="width: 22%;">{{ total_equity_and_liabilities }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Cash Flow Statement -->
+<p class="section-heading page-break">3. Statement of Cash Flows (Indirect Method)</p>
+
+<p class="subsection-heading">Cash Flows from Operating Activities</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th class="num" style="width: 25%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Operating Profit</td>
+      <td class="num bold">{{ operating_profit }}</td>
+    </tr>
+    <tr>
+      <td style="padding-left: 16px;">Depreciation &amp; Amortisation</td>
+      <td class="num">{{ depreciation_charge }}</td>
+    </tr>
+    <tr>
+      <td class="bold" style="padding-left: 16px; font-style: italic;">Working Capital Changes:</td>
+      <td class="num"></td>
+    </tr>
+    <tr>
+      <td style="padding-left: 32px;">(Increase)/Decrease in Trade Receivables</td>
+      <td class="num {{ 'text-rose' if chg_receivables_raw < 0 else '' }}">{{ chg_receivables }}</td>
+    </tr>
+    <tr>
+      <td style="padding-left: 32px;">(Increase)/Decrease in Inventory</td>
+      <td class="num {{ 'text-rose' if chg_inventory_raw < 0 else '' }}">{{ chg_inventory }}</td>
+    </tr>
+    <tr>
+      <td style="padding-left: 32px;">(Increase)/Decrease in Other Current Assets</td>
+      <td class="num {{ 'text-rose' if chg_other_ca_raw < 0 else '' }}">{{ chg_other_ca }}</td>
+    </tr>
+    <tr>
+      <td style="padding-left: 32px;">Increase/(Decrease) in Trade Payables</td>
+      <td class="num {{ 'text-rose' if chg_payables_raw < 0 else '' }}">{{ chg_payables }}</td>
+    </tr>
+    <tr>
+      <td style="padding-left: 32px;">Increase/(Decrease) in Other Current Liabilities</td>
+      <td class="num {{ 'text-rose' if chg_other_cl_raw < 0 else '' }}">{{ chg_other_cl }}</td>
+    </tr>
+    <tr class="grandtotal">
+      <td class="bold">Net Cash from Operating Activities</td>
+      <td class="num bold {{ 'text-emerald' if cash_from_operations_raw >= 0 else 'text-rose' }}">{{ cash_from_operations }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="subsection-heading">Cash Flows from Investing Activities</p>
+<table class="report-table">
+  <tbody>
+    <tr>
+      <td style="padding-left: 16px;">Purchase of Property, Plant &amp; Equipment</td>
+      <td class="num {{ 'text-rose' if capex_raw < 0 else '' }}" style="width: 25%;">{{ capex }}</td>
+    </tr>
+    <tr class="subtotal">
+      <td class="bold">Net Cash from Investing Activities</td>
+      <td class="num bold {{ 'text-emerald' if cash_from_investing_raw >= 0 else 'text-rose' }}" style="width: 25%;">{{ cash_from_investing }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="subsection-heading">Cash Flows from Financing Activities</p>
+<table class="report-table">
+  <tbody>
+    <tr>
+      <td style="padding-left: 16px;">Net Borrowings Movement</td>
+      <td class="num {{ 'text-rose' if chg_ncl_raw < 0 else '' }}" style="width: 25%;">{{ chg_ncl }}</td>
+    </tr>
+    <tr>
+      <td style="padding-left: 16px;">Equity Movements</td>
+      <td class="num {{ 'text-rose' if chg_equity_movement_raw < 0 else '' }}" style="width: 25%;">{{ chg_equity_movement }}</td>
+    </tr>
+    <tr class="subtotal">
+      <td class="bold">Net Cash from Financing Activities</td>
+      <td class="num bold {{ 'text-emerald' if cash_from_financing_raw >= 0 else 'text-rose' }}" style="width: 25%;">{{ cash_from_financing }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<table class="report-table">
+  <tbody>
+    <tr class="grandtotal">
+      <td class="bold">Net Change in Cash &amp; Cash Equivalents</td>
+      <td class="num bold {{ 'text-emerald' if net_cash_change_raw >= 0 else 'text-rose' }}" style="width: 25%;">{{ net_cash_change }}</td>
+    </tr>
+    <tr>
+      <td>Opening Cash &amp; Cash Equivalents</td>
+      <td class="num" style="width: 25%;">{{ ob_cash }}</td>
+    </tr>
+    <tr class="grandtotal">
+      <td class="bold">Closing Cash &amp; Cash Equivalents</td>
+      <td class="num bold {{ 'text-emerald' if closing_cash_raw >= 0 else 'text-rose' }}" style="width: 25%;">{{ closing_cash }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Changes in Equity -->
+<p class="section-heading page-break">4. Statement of Changes in Equity</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Description</th>
+      <th class="num" style="width: 25%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="subtotal">
+      <td class="bold">Opening Equity</td>
+      <td class="num bold">{{ opening_equity_total }}</td>
+    </tr>
+    {% for item in ob_equity_items %}
+    <tr>
+      <td style="padding-left: 16px;">{{ item.account_name }}</td>
+      <td class="num">{{ item.amount }}</td>
+    </tr>
+    {% endfor %}
+    <tr>
+      <td style="padding-left: 16px;">Comprehensive Income (Profit for the Period)</td>
+      <td class="num {{ 'text-emerald' if is_profit else 'text-rose' }}">{{ operating_profit }}</td>
+    </tr>
+    <tr class="grandtotal">
+      <td class="bold">Closing Equity</td>
+      <td class="num bold">{{ closing_equity_total }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Monthly Performance -->
+{% if monthly_data %}
+<p class="section-heading page-break">5. Monthly Performance</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Month</th>
+      <th class="num">Revenue</th>
+      <th class="num">Cost of Sales</th>
+      <th class="num">Operating Expenses</th>
+      <th class="num">Net Profit</th>
+      <th class="num">Margin</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in monthly_data %}
+    <tr>
+      <td>{{ m.month }}</td>
+      <td class="num">{{ m.revenue_formatted }}</td>
+      <td class="num">{{ m.cos_formatted }}</td>
+      <td class="num">{{ m.opex_formatted }}</td>
+      <td class="num {{ 'text-emerald' if m.net_profit >= 0 else 'text-rose' }}">{{ m.net_profit_formatted }}</td>
+      <td class="num">{{ m.margin }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<!-- Key Ratios -->
+<p class="section-heading">6. Key Financial Ratios</p>
+<table class="ratio-grid">
+  <tr>
+    <td>
+      <p class="ratio-label">Gross Profit Margin</p>
+      <p class="ratio-value">{{ gp_margin }}</p>
+    </td>
+    <td>
+      <p class="ratio-label">Operating Profit Margin</p>
+      <p class="ratio-value">{{ op_margin }}</p>
+    </td>
+    <td>
+      <p class="ratio-label">Current Ratio</p>
+      <p class="ratio-value">{{ current_ratio if current_ratio is defined else 'N/A' }}</p>
+    </td>
+    <td>
+      <p class="ratio-label">Debt-to-Equity</p>
+      <p class="ratio-value">{{ debt_to_equity if debt_to_equity is defined else 'N/A' }}</p>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <p class="ratio-label">Quick Ratio</p>
+      <p class="ratio-value">{{ quick_ratio if quick_ratio is defined else 'N/A' }}</p>
+    </td>
+    <td>
+      <p class="ratio-label">Receivable Days</p>
+      <p class="ratio-value">{{ receivable_days if receivable_days is defined else 'N/A' }}</p>
+    </td>
+    <td>
+      <p class="ratio-label">Payable Days</p>
+      <p class="ratio-value">{{ payable_days if payable_days is defined else 'N/A' }}</p>
+    </td>
+    <td></td>
+  </tr>
+</table>
+{% endblock %}

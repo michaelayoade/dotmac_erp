@@ -1,0 +1,84 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Statement of Financial Position — {{ org_name }}{% endblock %}
+{% block report_title %}Statement of Financial Position{% endblock %}
+{% block report_meta %}
+<p class="meta-line">As at {{ as_of_date if as_of_date else 'Current Date' }}</p>
+{% if period_name %}<p class="meta-line">Period: {{ period_name }}</p>{% endif %}
+{% endblock %}
+
+{% block report_body %}
+{% if is_balanced %}
+<div class="status-banner status-balanced">Balance Sheet is Balanced ✓</div>
+{% else %}
+<div class="status-banner status-unbalanced">Balance Sheet is NOT Balanced ✗</div>
+{% endif %}
+
+{% macro bs_section(title, items, total_label, total_amount) %}
+<p class="subsection-heading">{{ title }}</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 22%;">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.amount }}</td>
+    </tr>
+    {% endfor %}
+    {% if total_label %}
+    <tr class="subtotal">
+      <td></td>
+      <td class="bold">{{ total_label }}</td>
+      <td class="num bold">{{ total_amount }}</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endmacro %}
+
+<p class="section-heading">Assets</p>
+{{ bs_section('Non-Current Assets', balance_sheet_lines.non_current_assets if balance_sheet_lines else [], '', '') }}
+{{ bs_section('Current Assets', balance_sheet_lines.current_assets if balance_sheet_lines else asset_items, '', '') }}
+<table class="report-table">
+  <tbody>
+    <tr class="subtotal">
+      <td style="width: 12%;"></td>
+      <td class="bold">Total Assets</td>
+      <td class="num bold" style="width: 22%;">{{ total_assets }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="section-heading">Liabilities</p>
+{{ bs_section('Non-Current Liabilities', balance_sheet_lines.non_current_liabilities if balance_sheet_lines else [], '', '') }}
+{{ bs_section('Current Liabilities', balance_sheet_lines.current_liabilities if balance_sheet_lines else liability_items, '', '') }}
+<table class="report-table">
+  <tbody>
+    <tr class="subtotal">
+      <td style="width: 12%;"></td>
+      <td class="bold">Total Liabilities</td>
+      <td class="num bold" style="width: 22%;">{{ total_liabilities }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="section-heading">Equity</p>
+{{ bs_section('', balance_sheet_lines.equity if balance_sheet_lines else equity_items, 'Total Equity', total_equity) }}
+
+<table class="report-table mt">
+  <tbody>
+    <tr class="grandtotal">
+      <td style="width: 12%;"></td>
+      <td class="bold">Total Liabilities &amp; Equity</td>
+      <td class="num bold" style="width: 22%;">{{ total_liabilities_equity }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endblock %}

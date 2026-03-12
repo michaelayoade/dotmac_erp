@@ -83,6 +83,12 @@ def build_policy_from_config(config: AutoMatchConfigLike) -> ReconciliationPolic
         journal_creation.add("counterpart_transfer")
         auto_post.add("counterpart_transfer")
 
+    # Expense reimbursement matching — always enabled (matches ACC-PAY references)
+    enabled_sources.add("expense_reimbursement")
+    enabled_strategies.add("expense_reimbursement")
+    journal_creation.add("expense_reimbursement")
+    auto_post.add("expense_reimbursement")
+
     # Keep custom DB rules as a legacy extension stage, but behind the same policy surface.
     enabled_strategies.add("legacy_custom_rules")
 

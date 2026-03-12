@@ -12,6 +12,13 @@
 </nav>
 {% endblock %}
 
+{% block header_actions %}
+<a href="/finance/reports/inventory-valuation-reconciliation/export?format=pdf" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-5xl mx-auto space-y-6">
     <div class="card p-6">

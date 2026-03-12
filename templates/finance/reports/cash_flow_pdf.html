@@ -1,0 +1,63 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Cash Flow Statement — {{ org_name }}{% endblock %}
+{% block report_title %}Cash Flow Statement{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<!-- Summary -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Total Inflow</p>
+      <p class="summary-value text-emerald">{{ total_inflow }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Total Outflow</p>
+      <p class="summary-value text-rose">{{ total_outflow }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Net Cash Flow</p>
+      <p class="summary-value">{{ net_cash_flow }}</p>
+    </td>
+  </tr>
+</table>
+
+<!-- Detail -->
+<p class="section-heading">Cash Movement Detail</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 18%;">Inflow</th>
+      <th class="num" style="width: 18%;">Outflow</th>
+      <th class="num" style="width: 18%;">Net</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in cash_movements %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.inflow }}</td>
+      <td class="num">{{ item.outflow }}</td>
+      <td class="num">{{ item.net }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="grandtotal">
+      <td></td>
+      <td class="bold">Total</td>
+      <td class="num bold">{{ total_inflow }}</td>
+      <td class="num bold">{{ total_outflow }}</td>
+      <td class="num bold">{{ net_cash_flow }}</td>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

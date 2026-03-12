@@ -1,0 +1,60 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Expense Summary — {{ org_name }}{% endblock %}
+{% block report_title %}Expense Summary{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<!-- Total -->
+<table class="summary-grid">
+  <tr>
+    <td style="width: 30%;">
+      <p class="summary-label">Total Expenses</p>
+      <p class="summary-value">{{ total_expenses }}</p>
+    </td>
+    <td style="width: 70%;"></td>
+  </tr>
+</table>
+
+<!-- Full breakdown -->
+<p class="section-heading">Expense Breakdown</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">Code</th>
+      <th>Account</th>
+      <th style="width: 14%;">Category</th>
+      <th class="num" style="width: 20%;">Amount</th>
+      <th class="num" style="width: 10%;">%</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in expense_items %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td>{{ item.category if item.category else '' }}</td>
+      <td class="num">{{ item.amount }}</td>
+      <td class="num">
+        {% if total_expenses_raw and item.amount_raw %}
+        {{ '%.1f' | format(item.amount_raw / total_expenses_raw * 100) }}%
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="grandtotal">
+      <td></td>
+      <td class="bold">Total</td>
+      <td></td>
+      <td class="num bold">{{ total_expenses }}</td>
+      <td class="num bold">100%</td>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

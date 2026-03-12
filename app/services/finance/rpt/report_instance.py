@@ -25,7 +25,6 @@ from app.services.finance.rpt.report_definition import (
     ReportDefinitionInput,
     report_definition_service,
 )
-from app.services.finance.rpt.web import reports_web_service
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -545,22 +544,32 @@ class ReportInstanceService(ListResponseMixin):
         report_code = (definition.report_code or "").upper()
 
         if report_code == "TRIAL_BALANCE":
-            return reports_web_service.trial_balance_context(
+            from app.services.finance.rpt.trial_balance import trial_balance_context
+
+            return trial_balance_context(
                 db, str(organization_id), as_of_date=parameters.get("as_of_date")
             )
         if report_code == "INCOME_STATEMENT":
-            return reports_web_service.income_statement_context(
+            from app.services.finance.rpt.income_statement import (
+                income_statement_context,
+            )
+
+            return income_statement_context(
                 db,
                 str(organization_id),
                 start_date=parameters.get("start_date"),
                 end_date=parameters.get("end_date"),
             )
         if report_code == "BALANCE_SHEET":
-            return reports_web_service.balance_sheet_context(
+            from app.services.finance.rpt.balance_sheet import balance_sheet_context
+
+            return balance_sheet_context(
                 db, str(organization_id), as_of_date=parameters.get("as_of_date")
             )
         if report_code == "GENERAL_LEDGER":
-            return reports_web_service.general_ledger_context(
+            from app.services.finance.rpt.general_ledger import general_ledger_context
+
+            return general_ledger_context(
                 db,
                 str(organization_id),
                 account_id=parameters.get("account_id"),
@@ -568,43 +577,61 @@ class ReportInstanceService(ListResponseMixin):
                 end_date=parameters.get("end_date"),
             )
         if report_code == "EXPENSE_SUMMARY":
-            return reports_web_service.expense_summary_context(
+            from app.services.finance.rpt.expense_summary import expense_summary_context
+
+            return expense_summary_context(
                 db,
                 str(organization_id),
                 start_date=parameters.get("start_date"),
                 end_date=parameters.get("end_date"),
             )
         if report_code == "AP_AGING":
-            return reports_web_service.ap_aging_context(
+            from app.services.finance.rpt.aging import ap_aging_context
+
+            return ap_aging_context(
                 db, str(organization_id), as_of_date=parameters.get("as_of_date")
             )
         if report_code == "AR_AGING":
-            return reports_web_service.ar_aging_context(
+            from app.services.finance.rpt.aging import ar_aging_context
+
+            return ar_aging_context(
                 db, str(organization_id), as_of_date=parameters.get("as_of_date")
             )
         if report_code == "TAX_SUMMARY":
-            return reports_web_service.tax_summary_context(
+            from app.services.finance.rpt.tax_summary import tax_summary_context
+
+            return tax_summary_context(
                 db,
                 str(organization_id),
                 start_date=parameters.get("start_date"),
                 end_date=parameters.get("end_date"),
             )
         if report_code == "CASH_FLOW":
-            return reports_web_service.cash_flow_context(
+            from app.services.finance.rpt.cash_flow import cash_flow_context
+
+            return cash_flow_context(
                 db,
                 str(organization_id),
                 start_date=parameters.get("start_date"),
                 end_date=parameters.get("end_date"),
             )
         if report_code == "CHANGES_IN_EQUITY":
-            return reports_web_service.changes_in_equity_context(
+            from app.services.finance.rpt.changes_in_equity import (
+                changes_in_equity_context,
+            )
+
+            return changes_in_equity_context(
                 db,
                 str(organization_id),
                 start_date=parameters.get("start_date"),
                 end_date=parameters.get("end_date"),
             )
         if report_code == "BUDGET_VS_ACTUAL":
-            return reports_web_service.budget_vs_actual_context(
+            from app.services.finance.rpt.budget_vs_actual import (
+                budget_vs_actual_context,
+            )
+
+            return budget_vs_actual_context(
                 db,
                 str(organization_id),
                 start_date=parameters.get("start_date"),

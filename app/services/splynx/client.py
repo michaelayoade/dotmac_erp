@@ -437,14 +437,22 @@ class SplynxClient:
         """
         params: dict[str, Any] = {}
 
-        if date_from:
-            params["date_from"] = date_from.isoformat()
-        if date_to:
-            params["date_to"] = date_to.isoformat()
+        # Splynx API v2 requires main_attributes format (PHP http_build_query
+        # style).  Flat params like date_from/date_to are silently ignored.
+        if date_from and date_to:
+            params["main_attributes[date_created][0]"] = "BETWEEN"
+            params["main_attributes[date_created][1]"] = date_from.isoformat()
+            params["main_attributes[date_created][2]"] = date_to.isoformat()
+        elif date_from:
+            params["main_attributes[date_created][0]"] = ">="
+            params["main_attributes[date_created][1]"] = date_from.isoformat()
+        elif date_to:
+            params["main_attributes[date_created][0]"] = "<="
+            params["main_attributes[date_created][1]"] = date_to.isoformat()
         if status:
-            params["status"] = status
+            params["main_attributes[status]"] = status
         if customer_id:
-            params["customer_id"] = customer_id
+            params["main_attributes[customer_id]"] = customer_id
 
         logger.info("Fetching Splynx invoices with params: %s", params)
 
@@ -531,12 +539,19 @@ class SplynxClient:
         """
         params: dict[str, Any] = {}
 
-        if date_from:
-            params["date_from"] = date_from.isoformat()
-        if date_to:
-            params["date_to"] = date_to.isoformat()
+        # Splynx API v2 main_attributes format — payment date field is "date"
+        if date_from and date_to:
+            params["main_attributes[date][0]"] = "BETWEEN"
+            params["main_attributes[date][1]"] = date_from.isoformat()
+            params["main_attributes[date][2]"] = date_to.isoformat()
+        elif date_from:
+            params["main_attributes[date][0]"] = ">="
+            params["main_attributes[date][1]"] = date_from.isoformat()
+        elif date_to:
+            params["main_attributes[date][0]"] = "<="
+            params["main_attributes[date][1]"] = date_to.isoformat()
         if customer_id:
-            params["customer_id"] = customer_id
+            params["main_attributes[customer_id]"] = customer_id
 
         logger.info("Fetching Splynx payments with params: %s", params)
 
@@ -575,12 +590,20 @@ class SplynxClient:
         """
         params: dict[str, Any] = {}
 
-        if date_from:
-            params["date_from"] = date_from.isoformat()
-        if date_to:
-            params["date_to"] = date_to.isoformat()
+        # Splynx API v2 main_attributes format — credit note date field is
+        # "date_created"
+        if date_from and date_to:
+            params["main_attributes[date_created][0]"] = "BETWEEN"
+            params["main_attributes[date_created][1]"] = date_from.isoformat()
+            params["main_attributes[date_created][2]"] = date_to.isoformat()
+        elif date_from:
+            params["main_attributes[date_created][0]"] = ">="
+            params["main_attributes[date_created][1]"] = date_from.isoformat()
+        elif date_to:
+            params["main_attributes[date_created][0]"] = "<="
+            params["main_attributes[date_created][1]"] = date_to.isoformat()
         if customer_id:
-            params["customer_id"] = customer_id
+            params["main_attributes[customer_id]"] = customer_id
 
         logger.info("Fetching Splynx credit notes with params: %s", params)
 

@@ -18,6 +18,10 @@
     {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
     Export CSV
 </a>
+<a href="/finance/reports/balance-sheet/export?format=pdf&as_of_date={{ as_of_date_iso }}" class="btn btn-secondary h-9 px-3">
+    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+    Export PDF
+</a>
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print

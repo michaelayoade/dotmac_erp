@@ -40,8 +40,13 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    from app.services.finance.posting.base import PostingResult
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -173,6 +178,73 @@ class AutoReconciliationService:
 
     logger = logger
     SYSTEM_USER_ID = SYSTEM_USER_ID
+
+    # ── Helpers ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _post_with_period_fallback(
+        db: Session,
+        *,
+        organization_id: UUID,
+        journal_entry_id: UUID,
+        posting_date: date,
+        idempotency_key: str,
+        source_module: str,
+        correlation_id: str | None,
+        posted_by_user_id: UUID,
+        success_message: str = "Posted successfully",
+        error_prefix: str = "Ledger posting failed",
+    ) -> PostingResult:
+        """Post to ledger, retrying with today's date on closed-period failure.
+
+        Bank fee and settlement journals may reference transaction dates in
+        already-closed fiscal periods.  When the first attempt fails with a
+        period-related error we retry using ``date.today()`` which should fall
+        in the current open period.
+        """
+        from datetime import date as _date
+
+        from app.services.finance.posting.base import BasePostingAdapter
+
+        result = BasePostingAdapter.post_to_ledger(
+            db,
+            organization_id=organization_id,
+            journal_entry_id=journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module=source_module,
+            correlation_id=correlation_id,
+            posted_by_user_id=posted_by_user_id,
+            success_message=success_message,
+            error_prefix=error_prefix,
+        )
+        if result.success:
+            return result
+
+        # Detect closed-period failures and retry with today
+        msg_lower = result.message.lower()
+        if "period" in msg_lower or "closed" in msg_lower:
+            today = _date.today()
+            if today != posting_date:
+                logger.info(
+                    "Posting failed for date %s (period closed); retrying with %s",
+                    posting_date,
+                    today,
+                )
+                return BasePostingAdapter.post_to_ledger(
+                    db,
+                    organization_id=organization_id,
+                    journal_entry_id=journal_entry_id,
+                    posting_date=today,
+                    idempotency_key=idempotency_key,
+                    source_module=source_module,
+                    correlation_id=correlation_id,
+                    posted_by_user_id=posted_by_user_id,
+                    success_message=success_message,
+                    error_prefix=error_prefix,
+                )
+
+        return result
 
     # ── Configuration ──────────────────────────────────────────────
 
@@ -1558,7 +1630,7 @@ class AutoReconciliationService:
                 idempotency_key = BasePostingAdapter.make_idempotency_key(
                     organization_id, "BANKING", line.line_id, action="bank-fee"
                 )
-                posting_result = BasePostingAdapter.post_to_ledger(
+                posting_result = self._post_with_period_fallback(
                     db,
                     organization_id=organization_id,
                     journal_entry_id=journal.journal_entry_id,
@@ -1883,7 +1955,7 @@ class AutoReconciliationService:
                         settlement_line.line_id,
                         action="settlement",
                     )
-                    posting_result = BasePostingAdapter.post_to_ledger(
+                    posting_result = self._post_with_period_fallback(
                         db,
                         organization_id=organization_id,
                         journal_entry_id=journal.journal_entry_id,

@@ -1,0 +1,58 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Statement of Changes in Equity — {{ org_name }}{% endblock %}
+{% block report_title %}Statement of Changes in Equity{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<!-- Summary -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Opening Equity</p>
+      <p class="summary-value">{{ opening_equity }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Change in Equity</p>
+      <p class="summary-value">{{ change_in_equity }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Net Income</p>
+      <p class="summary-value text-emerald">{{ net_income }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Closing Equity</p>
+      <p class="summary-value">{{ closing_equity }}</p>
+    </td>
+  </tr>
+</table>
+
+<!-- Detail -->
+<p class="section-heading">Equity Movement Detail</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 12%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 18%;">Opening Balance</th>
+      <th class="num" style="width: 18%;">Change</th>
+      <th class="num" style="width: 18%;">Closing Balance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in equity_lines %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.opening_balance }}</td>
+      <td class="num">{{ item.change }}</td>
+      <td class="num">{{ item.closing_balance }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

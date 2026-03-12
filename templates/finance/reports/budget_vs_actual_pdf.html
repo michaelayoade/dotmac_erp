@@ -1,0 +1,67 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Budget vs Actual — {{ org_name }}{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_title %}Budget vs Actual{% endblock %}
+{% block report_meta %}
+{% if start_date and end_date %}
+<p class="meta-line">For the period {{ start_date }} to {{ end_date }}</p>
+{% endif %}
+{% endblock %}
+
+{% block report_body %}
+<!-- Summary -->
+<table class="summary-grid">
+  <tr>
+    <td>
+      <p class="summary-label">Total Budget</p>
+      <p class="summary-value">{{ total_budget }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Total Actual</p>
+      <p class="summary-value">{{ total_actual }}</p>
+    </td>
+    <td>
+      <p class="summary-label">Total Variance</p>
+      <p class="summary-value">{{ total_variance }}</p>
+    </td>
+  </tr>
+</table>
+
+<!-- Detail -->
+<p class="section-heading">Budget vs Actual Detail</p>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th style="width: 10%;">Code</th>
+      <th>Account</th>
+      <th class="num" style="width: 16%;">Budget</th>
+      <th class="num" style="width: 16%;">Actual</th>
+      <th class="num" style="width: 16%;">Variance</th>
+      <th class="num" style="width: 10%;">Var %</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in budget_lines %}
+    <tr>
+      <td>{{ item.account_code }}</td>
+      <td>{{ item.account_name }}</td>
+      <td class="num">{{ item.budget }}</td>
+      <td class="num">{{ item.actual }}</td>
+      <td class="num {{ 'text-rose' if item.variance_percent is defined and item.variance_percent|replace('%','')|float < 0 else 'text-emerald' }}">{{ item.variance }}</td>
+      <td class="num">{{ item.variance_percent }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="grandtotal">
+      <td></td>
+      <td class="bold">Total</td>
+      <td class="num bold">{{ total_budget }}</td>
+      <td class="num bold">{{ total_actual }}</td>
+      <td class="num bold">{{ total_variance }}</td>
+      <td></td>
+    </tr>
+  </tfoot>
+</table>
+{% endblock %}

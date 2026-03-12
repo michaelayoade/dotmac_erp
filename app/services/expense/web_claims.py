@@ -362,7 +362,8 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "can_paystack": can_paystack,
                 "has_active_payment": has_active_payment,
                 "action": request.query_params.get("action"),
-                "error": request.query_params.get("error"),
+                "error": request.query_params.get("error_message")
+                or request.query_params.get("error"),
             }
         )
         return _web_facade().templates.TemplateResponse(
@@ -681,6 +682,13 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             resolve_value(db, SettingDomain.expense, "expense_route_to_ap")
         )
         svc = ExpenseService(db)
+
+        def _claim_error_redirect(message: str) -> RedirectResponse:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error_message={quote(message)}",
+                status_code=303,
+            )
+
         try:
             claim = svc.approve_claim(
                 org_id,
@@ -695,38 +703,42 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 ExpenseClaimStatus.PENDING_APPROVAL,
             }:
                 db.rollback()
-                return RedirectResponse(
-                    f"/expense/claims/{claim_id}?error=approve_in_progress",
-                    status_code=303,
+                return _claim_error_redirect(
+                    "Approval is already in progress for this claim."
                 )
             db.flush()
         except ApproverAuthorityError as exc:
             db.rollback()
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
-            )
+            return _claim_error_redirect(str(exc))
         except ExpenseLimitServiceError as exc:
             db.rollback()
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
-            )
+            return _claim_error_redirect(str(exc))
         except ExpenseClaimStatusError:
             db.rollback()
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            return _claim_error_redirect(
+                "This claim can no longer be approved in its current status."
             )
+        except ValueError as exc:
+            db.rollback()
+            message = str(exc).strip() or "Approval could not be completed."
+            if message == "Approver is not assigned to the current approval step":
+                message = (
+                    "You cannot approve this claim yet because it is assigned "
+                    "to a different approval step."
+                )
+            elif message == "Claim has no pending approval steps":
+                message = "This claim has no pending approval step."
+            return _claim_error_redirect(message)
         except ExpenseServiceError as exc:
             db.rollback()
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error={quote(str(exc))}", status_code=303
-            )
+            return _claim_error_redirect(str(exc))
         except Exception:
             db.rollback()
             logging.getLogger(__name__).exception(
                 "Expense claim approval failed", extra={"claim_id": claim_id}
             )
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error=approve_failed", status_code=303
+            return _claim_error_redirect(
+                "Approval failed. Please refresh the claim and try again."
             )
 
         action = (
