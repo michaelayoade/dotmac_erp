@@ -31,10 +31,14 @@
             <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Disciplinary Cases</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">Manage employee policy violations and disciplinary processes</p>
         </div>
-        <a href="/people/hr/discipline/new" class="btn btn-primary">
-            {{ icon_svg("plus", "w-4 h-4 mr-2") }}
+        <button type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-gradient-to-r from-red-500 via-rose-500 to-orange-400 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-red-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-800"
+                onclick="document.getElementById('newCaseModal').classList.remove('hidden')">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25">
+                {{ icon_svg("warning", "h-4 w-4") }}
+            </span>
             New Case
-        </a>
+        </button>
     </div>
 
     <!-- Filters -->
@@ -164,11 +168,41 @@
     <div class="card p-8 text-center">
         {{ icon_svg("document", "w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4") }}
         <p class="text-slate-500 dark:text-slate-400 mb-4">No disciplinary cases found.</p>
-        <a href="/people/hr/discipline/new" class="btn btn-primary">
-            {{ icon_svg("plus", "w-4 h-4 mr-2") }}
+        <button type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-gradient-to-r from-red-500 via-rose-500 to-orange-400 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-red-500/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-red-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:border-red-800"
+                onclick="document.getElementById('newCaseModal').classList.remove('hidden')">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25">
+                {{ icon_svg("warning", "h-4 w-4") }}
+            </span>
             Create First Case
-        </a>
+        </button>
     </div>
     {% endif %}
+</div>
+
+<div id="newCaseModal" class="{% if not show_new_case_modal %}hidden {% endif %}fixed inset-0 z-50 overflow-y-auto" aria-labelledby="new-case-modal-title" role="dialog" aria-modal="true">
+    <div class="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
+        <div class="fixed inset-0 bg-slate-900/55 backdrop-blur-sm transition-opacity" onclick="document.getElementById('newCaseModal').classList.add('hidden')"></div>
+
+        <div class="relative w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex items-start justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
+                <div class="space-y-1 pr-4">
+                    <h3 id="new-case-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">New Disciplinary Case</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Record a policy violation and start the disciplinary process without leaving this page.</p>
+                </div>
+                <button type="button" onclick="document.getElementById('newCaseModal').classList.add('hidden')"
+                        class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        aria-label="Close new case dialog">
+                    {{ icon_svg("x-mark", "h-5 w-5") }}
+                </button>
+            </div>
+
+            <div class="max-h-[85vh] overflow-y-auto px-6 py-6">
+                {% set form_variant = 'modal' %}
+                {% set form_prefix = 'discipline-case-modal' %}
+                {% include "people/hr/discipline/_case_form_inner.html" %}
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

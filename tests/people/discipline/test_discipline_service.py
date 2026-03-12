@@ -313,6 +313,30 @@ class TestWorkflowTransitions:
         with pytest.raises(ValidationError, match="only issue query from DRAFT"):
             service.issue_query(case_id, data)
 
+    def test_issue_query_rejects_past_response_due_date(
+        self, organization_id: uuid.UUID, case_id: uuid.UUID
+    ):
+        """Test issuing query rejects response due dates before today."""
+        mock_case = MockDisciplinaryCase(
+            case_id=case_id,
+            organization_id=organization_id,
+            status=CaseStatus.DRAFT,
+        )
+        db = create_mock_db_session(get_returns={case_id: mock_case})
+
+        service = DisciplineService(db)
+        data = IssueQueryRequest(
+            query_text="Please explain your actions in detail.",
+            response_due_date=date.today() - timedelta(days=1),
+        )
+
+        with pytest.raises(
+            ValidationError, match="Response due date cannot be in the past"
+        ):
+            service.issue_query(case_id, data)
+
+        db.flush.assert_not_called()
+
     def test_record_response_updates_status(
         self,
         organization_id: uuid.UUID,

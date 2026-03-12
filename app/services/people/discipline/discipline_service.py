@@ -392,6 +392,8 @@ class DisciplineService:
 
         if case.status != CaseStatus.DRAFT:
             raise ValidationError("Can only issue query from DRAFT status")
+        if data.response_due_date < date.today():
+            raise ValidationError("Response due date cannot be in the past")
 
         case.query_text = data.query_text
         case.query_issued_date = date.today()

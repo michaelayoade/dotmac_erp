@@ -388,13 +388,13 @@
                     {% if case.status.value == 'DRAFT' %}
                     <form method="post" action="/people/hr/discipline/{{ case.case_id }}/issue-query" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <div>
-                            <label class="label required">Query Text</label>
-                            <textarea name="query_text" class="input" rows="3" required minlength="10" placeholder="Formal query to the employee..."></textarea>
+                        <div class="space-y-2">
+                            <label class="form-label required">Query Text</label>
+                            <textarea name="query_text" class="form-input min-h-[112px]" rows="4" required minlength="10" placeholder="Formal query to the employee..."></textarea>
                         </div>
-                        <div>
-                            <label class="label required">Response Due</label>
-                            <input type="date" name="response_due_date" class="input" required>
+                        <div class="space-y-2">
+                            <label class="form-label required">Response Due</label>
+                            <input type="date" name="response_due_date" class="form-input" min="{{ today_iso }}" required>
                         </div>
                         <button type="submit" class="btn btn-primary w-full">Issue Query</button>
                     </form>

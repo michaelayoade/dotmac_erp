@@ -60,6 +60,19 @@ def parse_uuid(value: str | None) -> UUID | None:
 class DisciplineWebService:
     """HR Admin Discipline Web Service."""
 
+    @staticmethod
+    def _build_case_form_context(
+        form_data: dict | None = None,
+        error: str | None = None,
+    ) -> dict:
+        """Build shared context for the new case form."""
+        return {
+            "violation_types": [v.value for v in ViolationType],
+            "severities": [s.value for s in SeverityLevel],
+            "new_case_error": error,
+            "new_case_form_data": dict(form_data or {}),
+        }
+
     # ─────────────────────────────────────────────────────────────────────────
     # Case List and Detail
     # ─────────────────────────────────────────────────────────────────────────
@@ -75,6 +88,9 @@ class DisciplineWebService:
         employee_id: str | None = None,
         include_closed: bool = False,
         page: int = 1,
+        new_case_error: str | None = None,
+        new_case_form_data: dict | None = None,
+        show_new_case_modal: bool = False,
     ) -> HTMLResponse:
         """Render cases list page for HR admin."""
         org_id = coerce_uuid(auth.organization_id)
@@ -119,7 +135,14 @@ class DisciplineWebService:
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
                 "active_filters": active_filters,
+                "show_new_case_modal": show_new_case_modal,
             }
+        )
+        context.update(
+            self._build_case_form_context(
+                form_data=new_case_form_data,
+                error=new_case_error,
+            )
         )
         return templates.TemplateResponse(
             request, "people/hr/discipline/cases.html", context
@@ -161,6 +184,7 @@ class DisciplineWebService:
                 "statuses": [s.value for s in CaseStatus],
                 "action_types": [a.value for a in ActionType],
                 "document_types": [d.value for d in DocumentType],
+                "today_iso": date.today().isoformat(),
             }
         )
         response = templates.TemplateResponse(
@@ -219,12 +243,10 @@ class DisciplineWebService:
             request, auth, "New Disciplinary Case", "hr-discipline", db=db
         )
         context.update(
-            {
-                "violation_types": [v.value for v in ViolationType],
-                "severities": [s.value for s in SeverityLevel],
-                "error": error,
-                "form_data": working_form_data,
-            }
+            self._build_case_form_context(
+                form_data=working_form_data,
+                error=error,
+            )
         )
         response = templates.TemplateResponse(
             request, "people/hr/discipline/case_form.html", context

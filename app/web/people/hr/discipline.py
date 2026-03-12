@@ -142,12 +142,12 @@ async def create_case(
         reported_by_name = _value("reported_by_name", reported_by_name)
 
     if not employee_id or not violation_type or not severity or not subject:
-        return discipline_web_service.case_new_form_response(
+        return discipline_web_service.list_cases_response(
             request=request,
             auth=auth,
             db=db,
-            error="Employee, violation type, severity, and subject are required.",
-            form_data={
+            new_case_error="Employee, violation type, severity, and subject are required.",
+            new_case_form_data={
                 "employee_id": employee_id or "",
                 "employee_name": employee_name or "",
                 "violation_type": violation_type or "",
@@ -158,6 +158,7 @@ async def create_case(
                 "reported_by_id": reported_by_id or "",
                 "reported_by_name": reported_by_name or "",
             },
+            show_new_case_modal=True,
         )
     try:
         return discipline_web_service.case_create_response(
@@ -173,12 +174,12 @@ async def create_case(
         )
     except Exception as exc:
         message = getattr(exc, "detail", None) or str(exc)
-        return discipline_web_service.case_new_form_response(
+        return discipline_web_service.list_cases_response(
             request=request,
             auth=auth,
             db=db,
-            error=message,
-            form_data={
+            new_case_error=message,
+            new_case_form_data={
                 "employee_id": employee_id or "",
                 "employee_name": employee_name or "",
                 "violation_type": violation_type or "",
@@ -189,6 +190,7 @@ async def create_case(
                 "reported_by_id": reported_by_id or "",
                 "reported_by_name": reported_by_name or "",
             },
+            show_new_case_modal=True,
         )
 
 

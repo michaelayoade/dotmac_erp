@@ -156,39 +156,32 @@ def register_error_handlers(app) -> None:
 
         # For 403 errors on web routes, render a user-friendly forbidden page
         if status_code == 403 and _is_html_request(request):
-            message = (
-                detail
-                if isinstance(detail, str)
-                else "You do not have permission to view this page."
-            )
             return _error_template_response(
                 request,
                 "errors/403.html",
-                {"message": message},
+                {},
                 status_code=403,
-                fallback_title="Forbidden",
+                fallback_title="Access Denied",
             )
 
         # For 404 errors on web routes, render the HTML 404 page
         if status_code == 404 and _is_html_request(request):
-            message = detail if isinstance(detail, str) else "Page not found"
             return _error_template_response(
                 request,
                 "errors/404.html",
-                {"message": message},
+                {},
                 status_code=404,
                 fallback_title="Page Not Found",
             )
 
         # For 400 errors on web routes, render a user-friendly bad request page
         if status_code == 400 and _is_html_request(request):
-            message = _friendly_bad_request_message(detail)
             return _error_template_response(
                 request,
                 "errors/400.html",
-                {"message": message},
+                {},
                 status_code=400,
-                fallback_title="Bad Request",
+                fallback_title="We Need a Few Details",
             )
 
         # For other errors or API requests, return JSON
@@ -283,9 +276,9 @@ def register_error_handlers(app) -> None:
             return _error_template_response(
                 request,
                 "errors/400.html",
-                {"message": message},
+                {},
                 status_code=400,
-                fallback_title="Bad Request",
+                fallback_title="We Need a Few Details",
             )
         return JSONResponse(
             status_code=422,
@@ -303,11 +296,17 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(NotFoundError)
     async def not_found_error_handler(request: Request, exc: NotFoundError):
         """Handle resource not found errors (404)."""
+        logger.warning(
+            "Not found on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/404.html",
-                {"message": exc.message},
+                {},
                 status_code=404,
             )
         return JSONResponse(
@@ -318,11 +317,17 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(ValidationError)
     async def service_validation_error_handler(request: Request, exc: ValidationError):
         """Handle service-level validation errors (400)."""
+        logger.warning(
+            "Validation error on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/400.html",
-                {"message": exc.message},
+                {},
                 status_code=400,
             )
         return JSONResponse(
@@ -333,11 +338,17 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(ConflictError)
     async def conflict_error_handler(request: Request, exc: ConflictError):
         """Handle conflict errors - duplicate resources, invalid state transitions (409)."""
+        logger.warning(
+            "Conflict on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/409.html",
-                {"message": exc.message},
+                {},
                 status_code=409,
             )
         return JSONResponse(
@@ -348,11 +359,17 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(ForbiddenError)
     async def forbidden_error_handler(request: Request, exc: ForbiddenError):
         """Handle forbidden/permission errors (403)."""
+        logger.warning(
+            "Forbidden on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/403.html",
-                {"message": exc.message},
+                {},
                 status_code=403,
             )
         return JSONResponse(
@@ -366,11 +383,18 @@ def register_error_handlers(app) -> None:
 
         Includes Retry-After header per HTTP spec.
         """
+        logger.warning(
+            "Rate limit on %s %s: %s retry_after=%s",
+            request.method,
+            request.url.path,
+            exc.message,
+            exc.retry_after,
+        )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/429.html",
-                {"message": exc.message, "retry_after": exc.retry_after},
+                {},
                 status_code=429,
             )
         return JSONResponse(
@@ -386,6 +410,12 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(AuthenticationError)
     async def authentication_error_handler(request: Request, exc: AuthenticationError):
         """Handle authentication errors (401)."""
+        logger.warning(
+            "Authentication error on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
         if _is_html_request(request):
             next_url = str(request.url.path)
             if request.url.query:
@@ -400,11 +430,17 @@ def register_error_handlers(app) -> None:
     @app.exception_handler(AuthorizationError)
     async def authorization_error_handler(request: Request, exc: AuthorizationError):
         """Handle authorization errors (403)."""
+        logger.warning(
+            "Authorization error on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc.message,
+        )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/403.html",
-                {"message": exc.message},
+                {},
                 status_code=403,
             )
         return JSONResponse(
@@ -418,17 +454,18 @@ def register_error_handlers(app) -> None:
 
         This catches any ServiceError subclass not handled above.
         """
-        logger.warning(
+        logger.error(
             "Service error on %s %s: %s",
             request.method,
             request.url.path,
             exc.message,
+            exc_info=(type(exc), exc, exc.__traceback__),
         )
         if _is_html_request(request):
             return templates.TemplateResponse(
                 request,
                 "errors/500.html",
-                {"message": exc.message},
+                {},
                 status_code=500,
             )
         return JSONResponse(
@@ -449,7 +486,7 @@ def register_error_handlers(app) -> None:
             return templates.TemplateResponse(
                 request,
                 "errors/500.html",
-                {"message": "An unexpected error occurred. Please try again later."},
+                {},
                 status_code=500,
             )
         return JSONResponse(

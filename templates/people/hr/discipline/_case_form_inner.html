@@ -1,0 +1,149 @@
+{% from "components/macros.html" import icon_svg %}
+
+{% if new_case_error %}
+<div class="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+    <div class="flex items-center gap-3">
+        {{ icon_svg("exclamation-circle", "h-5 w-5 text-red-500") }}
+        <p class="text-sm text-red-700 dark:text-red-300">{{ new_case_error }}</p>
+    </div>
+</div>
+{% endif %}
+
+<form method="post" action="/people/hr/discipline/new" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+    <div class="card">
+        <div class="card-header px-6 pt-6">
+            <h3 class="font-medium text-slate-900 dark:text-white">Employee Information</h3>
+        </div>
+        <div class="card-body px-6 pb-6 space-y-6">
+            <div>
+                <label for="{{ form_prefix }}_employee_name" class="form-label required">Employee</label>
+                <div class="relative" data-typeahead-url="/people/hr/discipline/employees/search" data-typeahead-min="2" data-typeahead-limit="8">
+                    <input
+                        type="text"
+                        id="{{ form_prefix }}_employee_name"
+                        name="employee_name"
+                        class="form-input w-full"
+                        placeholder="Search employee..."
+                        autocomplete="off"
+                        required
+                        value="{{ new_case_form_data.get('employee_name', '') }}"
+                        data-typeahead-input
+                    >
+                    <input
+                        type="hidden"
+                        id="{{ form_prefix }}_employee_id"
+                        name="employee_id"
+                        value="{{ new_case_form_data.get('employee_id', '') }}"
+                        data-typeahead-hidden
+                    >
+                    <div data-typeahead-results></div>
+                </div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Search and select the employee involved in the violation.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header px-6 pt-6">
+            <h3 class="font-medium text-slate-900 dark:text-white">Violation Details</h3>
+        </div>
+        <div class="card-body px-6 pb-6 space-y-6">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                    <label for="{{ form_prefix }}_violation_type" class="form-label required">Violation Type</label>
+                    <select id="{{ form_prefix }}_violation_type" name="violation_type" class="form-select w-full" required>
+                        <option value="">Select Type</option>
+                        {% for v in violation_types %}
+                        <option value="{{ v }}" {% if new_case_form_data.get('violation_type') == v %}selected{% endif %}>
+                            {{ v | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="{{ form_prefix }}_severity" class="form-label required">Severity</label>
+                    <select id="{{ form_prefix }}_severity" name="severity" class="form-select w-full" required>
+                        <option value="">Select Severity</option>
+                        {% for s in severities %}
+                        <option value="{{ s }}" {% if new_case_form_data.get('severity') == s %}selected{% endif %}>
+                            {{ s | title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="{{ form_prefix }}_subject" class="form-label required">Subject</label>
+                <input type="text" id="{{ form_prefix }}_subject" name="subject" class="form-input w-full" required placeholder="Brief description of the violation"
+                       value="{{ new_case_form_data.get('subject', '') }}">
+            </div>
+
+            <div>
+                <label for="{{ form_prefix }}_description" class="form-label">Description</label>
+                <textarea id="{{ form_prefix }}_description" name="description" class="form-input w-full" rows="4" placeholder="Detailed description of the incident...">{{ new_case_form_data.get('description', '') }}</textarea>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div>
+                    <label for="{{ form_prefix }}_incident_date" class="form-label">Incident Date</label>
+                    <input type="date" id="{{ form_prefix }}_incident_date" name="incident_date" class="form-input w-full"
+                           value="{{ new_case_form_data.get('incident_date', '') }}">
+                </div>
+                <div>
+                    <label for="{{ form_prefix }}_reported_by_name" class="form-label">Reported By</label>
+                    <div class="relative" data-typeahead-url="/people/hr/discipline/employees/search" data-typeahead-min="2" data-typeahead-limit="8">
+                        <input
+                            type="text"
+                            id="{{ form_prefix }}_reported_by_name"
+                            name="reported_by_name"
+                            class="form-input w-full"
+                            placeholder="Search employee..."
+                            autocomplete="off"
+                            value="{{ new_case_form_data.get('reported_by_name', '') }}"
+                            data-typeahead-input
+                        >
+                        <input
+                            type="hidden"
+                            id="{{ form_prefix }}_reported_by_id"
+                            name="reported_by_id"
+                            value="{{ new_case_form_data.get('reported_by_id', '') }}"
+                            data-typeahead-hidden
+                        >
+                        <div data-typeahead-results></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("information-circle", "w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0") }}
+            <div class="text-sm text-blue-700 dark:text-blue-300">
+                <p class="font-medium">Case Creation</p>
+                <p class="mt-1 text-blue-600 dark:text-blue-400">The case will be created in DRAFT status. You can then issue a formal query to the employee from the case detail page.</p>
+            </div>
+        </div>
+    </div>
+
+    {% if form_variant == 'modal' %}
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-end">
+        <button type="button" onclick="document.getElementById('newCaseModal').classList.add('hidden')" class="btn btn-secondary w-full sm:w-auto">Cancel</button>
+        <button type="submit" class="btn btn-primary w-full sm:w-auto">
+            {{ icon_svg("plus", "w-4 h-4 mr-2") }}
+            Create Case
+        </button>
+    </div>
+    {% else %}
+    <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-6 dark:border-slate-700">
+        <a href="/people/hr/discipline" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">
+            {{ icon_svg("plus", "w-4 h-4 mr-2") }}
+            Create Case
+        </button>
+    </div>
+    {% endif %}
+</form>
