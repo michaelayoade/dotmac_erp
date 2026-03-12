@@ -283,9 +283,7 @@ class TestPAYECalculationValues:
         monthly_housing = Decimal("50000")
         monthly_transport = Decimal("50000")
         expected_annual_pension = (
-            (monthly_basic + monthly_housing + monthly_transport)
-            * 12
-            * Decimal("0.08")
+            (monthly_basic + monthly_housing + monthly_transport) * 12 * Decimal("0.08")
         )
         expected_monthly_pension = expected_annual_pension / 12
 

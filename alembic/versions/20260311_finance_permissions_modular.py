@@ -124,8 +124,8 @@ def upgrade() -> None:
         ).fetchone()
         if not exists:
             conn.exec_driver_sql(
-                "INSERT INTO permissions (id, key, description, is_active) "
-                "VALUES (gen_random_uuid(), %s, %s, true)",
+                "INSERT INTO permissions (id, key, description, is_active, created_at, updated_at) "
+                "VALUES (gen_random_uuid(), %s, %s, true, now(), now())",
                 (perm_key, f"AP permission: {perm_key}"),
             )
 
