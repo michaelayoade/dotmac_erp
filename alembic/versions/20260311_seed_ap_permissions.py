@@ -83,84 +83,126 @@ AP_PERMISSIONS: dict[str, str] = {
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     # Admin: all AP permissions
     "admin": list(AP_PERMISSIONS.keys()),
-
     # Finance Director: all AP permissions
     "finance_director": list(AP_PERMISSIONS.keys()),
-
     # Finance Manager: all except tier3 approval
     "finance_manager": [
-        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
+        "ap:suppliers:read",
+        "ap:suppliers:create",
+        "ap:suppliers:update",
         "ap:suppliers:delete",
-        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update",
-        "ap:invoices:submit", "ap:invoices:approve", "ap:invoices:post",
+        "ap:invoices:read",
+        "ap:invoices:create",
+        "ap:invoices:update",
+        "ap:invoices:submit",
+        "ap:invoices:approve",
+        "ap:invoices:post",
         "ap:invoices:void",
-        "ap:payments:read", "ap:payments:create", "ap:payments:update",
-        "ap:payments:delete", "ap:payments:post", "ap:payments:void",
-        "ap:payments:approve:tier1", "ap:payments:approve:tier2",
-        "ap:purchase_orders:read", "ap:purchase_orders:create",
-        "ap:purchase_orders:update", "ap:purchase_orders:delete",
-        "ap:purchase_orders:submit", "ap:purchase_orders:approve",
+        "ap:payments:read",
+        "ap:payments:create",
+        "ap:payments:update",
+        "ap:payments:delete",
+        "ap:payments:post",
+        "ap:payments:void",
+        "ap:payments:approve:tier1",
+        "ap:payments:approve:tier2",
+        "ap:purchase_orders:read",
+        "ap:purchase_orders:create",
+        "ap:purchase_orders:update",
+        "ap:purchase_orders:delete",
+        "ap:purchase_orders:submit",
+        "ap:purchase_orders:approve",
         "ap:purchase_orders:void",
-        "ap:goods_receipts:read", "ap:goods_receipts:create",
-        "ap:goods_receipts:update", "ap:goods_receipts:approve",
-        "ap:payment_batches:read", "ap:payment_batches:create",
-        "ap:payment_batches:update", "ap:payment_batches:approve",
-        "ap:payment_batches:process", "ap:payment_batches:export",
+        "ap:goods_receipts:read",
+        "ap:goods_receipts:create",
+        "ap:goods_receipts:update",
+        "ap:goods_receipts:approve",
+        "ap:payment_batches:read",
+        "ap:payment_batches:create",
+        "ap:payment_batches:update",
+        "ap:payment_batches:approve",
+        "ap:payment_batches:process",
+        "ap:payment_batches:export",
         "ap:aging:read",
     ],
-
     # Senior Accountant: CRUD + post + tier1 approval (no void, no tier2/3)
     "senior_accountant": [
-        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
+        "ap:suppliers:read",
+        "ap:suppliers:create",
+        "ap:suppliers:update",
         "ap:suppliers:delete",
-        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update",
-        "ap:invoices:submit", "ap:invoices:post",
-        "ap:payments:read", "ap:payments:create", "ap:payments:update",
-        "ap:payments:delete", "ap:payments:approve:tier1",
-        "ap:purchase_orders:read", "ap:purchase_orders:create",
-        "ap:purchase_orders:update", "ap:purchase_orders:delete",
+        "ap:invoices:read",
+        "ap:invoices:create",
+        "ap:invoices:update",
+        "ap:invoices:submit",
+        "ap:invoices:post",
+        "ap:payments:read",
+        "ap:payments:create",
+        "ap:payments:update",
+        "ap:payments:delete",
+        "ap:payments:approve:tier1",
+        "ap:purchase_orders:read",
+        "ap:purchase_orders:create",
+        "ap:purchase_orders:update",
+        "ap:purchase_orders:delete",
         "ap:purchase_orders:submit",
-        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:goods_receipts:read",
+        "ap:goods_receipts:create",
         "ap:goods_receipts:update",
-        "ap:payment_batches:read", "ap:payment_batches:create",
-        "ap:payment_batches:update", "ap:payment_batches:export",
+        "ap:payment_batches:read",
+        "ap:payment_batches:create",
+        "ap:payment_batches:update",
+        "ap:payment_batches:export",
         "ap:aging:read",
     ],
-
     # Accountant: CRUD + submit (no post, no void, no approve)
     "accountant": [
-        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
-        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update",
+        "ap:suppliers:read",
+        "ap:suppliers:create",
+        "ap:suppliers:update",
+        "ap:invoices:read",
+        "ap:invoices:create",
+        "ap:invoices:update",
         "ap:invoices:submit",
-        "ap:payments:read", "ap:payments:create", "ap:payments:update",
+        "ap:payments:read",
+        "ap:payments:create",
+        "ap:payments:update",
         "ap:payments:delete",
-        "ap:purchase_orders:read", "ap:purchase_orders:create",
-        "ap:purchase_orders:update", "ap:purchase_orders:delete",
+        "ap:purchase_orders:read",
+        "ap:purchase_orders:create",
+        "ap:purchase_orders:update",
+        "ap:purchase_orders:delete",
         "ap:purchase_orders:submit",
-        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:goods_receipts:read",
+        "ap:goods_receipts:create",
         "ap:goods_receipts:update",
-        "ap:payment_batches:read", "ap:payment_batches:create",
+        "ap:payment_batches:read",
+        "ap:payment_batches:create",
         "ap:payment_batches:update",
         "ap:aging:read",
     ],
-
     # AP Clerk: least-privilege data entry
     "ap_clerk": [
-        "ap:suppliers:read", "ap:suppliers:create", "ap:suppliers:update",
-        "ap:invoices:read", "ap:invoices:create", "ap:invoices:update",
-        "ap:payments:read", "ap:payments:create",
+        "ap:suppliers:read",
+        "ap:suppliers:create",
+        "ap:suppliers:update",
+        "ap:invoices:read",
+        "ap:invoices:create",
+        "ap:invoices:update",
+        "ap:payments:read",
+        "ap:payments:create",
         "ap:purchase_orders:read",
-        "ap:goods_receipts:read", "ap:goods_receipts:create",
+        "ap:goods_receipts:read",
+        "ap:goods_receipts:create",
         "ap:aging:read",
     ],
-
     # Junior Accountant: minimal create
     "junior_accountant": [
         "ap:suppliers:read",
-        "ap:invoices:read", "ap:invoices:create",
+        "ap:invoices:read",
+        "ap:invoices:create",
         "ap:goods_receipts:read",
     ],
-
     # Finance Viewer: read-only
     "finance_viewer": [
         "ap:suppliers:read",
@@ -168,7 +210,6 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "ap:payments:read",
         "ap:aging:read",
     ],
-
     # Auditor: read-only
     "auditor": [
         "ap:suppliers:read",
@@ -182,6 +223,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _insert_permission(conn, perm_key: str, description: str) -> None:
     """Insert a permission row idempotently."""
@@ -210,6 +252,7 @@ def _insert_role_permission(conn, role_id, perm_id) -> None:
 # ---------------------------------------------------------------------------
 # upgrade
 # ---------------------------------------------------------------------------
+
 
 def upgrade() -> None:
     conn = op.get_bind()
