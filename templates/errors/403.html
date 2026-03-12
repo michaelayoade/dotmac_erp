@@ -2,20 +2,59 @@
 {% from "components/macros.html" import icon_svg %}
 
 {% block title %}Access Denied{% endblock %}
+{% block page_styles %}
+<style>
+.error-403-shine {
+    background-image: linear-gradient(
+        110deg,
+        rgba(251, 113, 133, 0.4) 0%,
+        rgba(253, 164, 175, 0.95) 32%,
+        rgba(244, 63, 94, 0.45) 54%,
+        rgba(255, 228, 230, 0.95) 72%,
+        rgba(251, 113, 133, 0.4) 100%
+    );
+    background-size: 220% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: error403Shimmer 3.2s linear infinite;
+}
+
+.dark .error-403-shine {
+    background-image: linear-gradient(
+        110deg,
+        rgba(136, 19, 55, 0.55) 0%,
+        rgba(251, 113, 133, 0.92) 34%,
+        rgba(159, 18, 57, 0.6) 56%,
+        rgba(255, 228, 230, 0.92) 74%,
+        rgba(136, 19, 55, 0.55) 100%
+    );
+}
+
+@keyframes error403Shimmer {
+    0% {
+        background-position: 200% center;
+    }
+    100% {
+        background-position: -20% center;
+    }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="min-h-[60vh] flex items-center justify-center px-4">
-    <div class="max-w-md text-center">
+<div class="flex min-h-[70vh] items-center justify-center px-4 py-12">
+    <div class="w-full max-w-xl rounded-3xl border border-slate-200/80 bg-white/95 p-8 text-center shadow-xl shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:p-10">
         <div class="mb-6">
-            <span class="text-8xl font-bold text-rose-200 dark:text-rose-900/50">403</span>
+            <span class="error-403-shine text-8xl font-bold">403</span>
         </div>
-        <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mb-3">
+        <h1 class="mb-3 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
             Access Denied
         </h1>
-        <p class="text-slate-600 dark:text-slate-400 mb-8">
-            {{ message | default("You do not have permission to view this page. If you believe this is a mistake, please contact your administrator.", true) }}
+        <p class="mx-auto mb-8 max-w-md text-base leading-7 text-slate-600 dark:text-slate-400">
+            You do not have permission to view this page. If you believe this is a mistake, please contact your administrator.
         </p>
-        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <div class="flex flex-col justify-center gap-3 sm:flex-row">
             <a href="javascript:history.back()" class="btn btn-secondary">
                 {{ icon_svg("arrow-left", "w-4 h-4 mr-2") }}
                 Go Back

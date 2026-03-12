@@ -1,16 +1,68 @@
 {% extends "base.html" %}
-{% from "components/macros.html" import detail_error_state %}
+{% from "components/macros.html" import icon_svg %}
 
 {% block title %}Page Not Found{% endblock %}
+{% block page_styles %}
+<style>
+.error-404-shine {
+    background-image: linear-gradient(
+        110deg,
+        rgba(148, 163, 184, 0.35) 0%,
+        rgba(226, 232, 240, 0.95) 35%,
+        rgba(148, 163, 184, 0.4) 55%,
+        rgba(248, 250, 252, 0.95) 72%,
+        rgba(148, 163, 184, 0.35) 100%
+    );
+    background-size: 220% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: error404Shimmer 3.2s linear infinite;
+}
+
+.dark .error-404-shine {
+    background-image: linear-gradient(
+        110deg,
+        rgba(71, 85, 105, 0.4) 0%,
+        rgba(148, 163, 184, 0.95) 35%,
+        rgba(100, 116, 139, 0.45) 55%,
+        rgba(226, 232, 240, 0.92) 72%,
+        rgba(71, 85, 105, 0.4) 100%
+    );
+}
+
+@keyframes error404Shimmer {
+    0% {
+        background-position: 200% center;
+    }
+    100% {
+        background-position: -20% center;
+    }
+}
+</style>
+{% endblock %}
 
 {% block content %}
-{{ detail_error_state(
-    title=title | default("Page Not Found", true),
-    context=message | default("The page or record you requested is unavailable.", true),
-    recovery_text="Open Dashboard",
-    recovery_href="/dashboard",
-    secondary_text="Go Back",
-    secondary_href="javascript:history.back()",
-    icon="exclamation-circle"
-) }}
+<div class="flex min-h-[70vh] items-center justify-center px-4 py-12">
+    <div class="w-full max-w-xl rounded-3xl border border-slate-200/80 bg-white/95 p-8 text-center shadow-xl shadow-slate-900/5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:p-10">
+        <div class="mb-6">
+            <span class="error-404-shine text-8xl font-bold">404</span>
+        </div>
+        <h1 class="mb-3 text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Page Not Found
+        </h1>
+        <p class="mx-auto mb-8 max-w-md text-base leading-7 text-slate-600 dark:text-slate-400">
+            The page or record you're looking for may have been moved, deleted, or is no longer available.
+        </p>
+        <div class="flex flex-col justify-center gap-3 sm:flex-row">
+            <a href="javascript:history.back()" class="btn btn-secondary">
+                {{ icon_svg("arrow-left", "w-4 h-4 mr-2") }}
+                Go Back
+            </a>
+            <a href="/dashboard" class="btn btn-primary">
+                Dashboard
+            </a>
+        </div>
+    </div>
+</div>
 {% endblock %}

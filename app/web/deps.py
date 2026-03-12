@@ -22,7 +22,7 @@ from app.db import AsyncSessionLocal, SessionLocal, get_auth_db_session
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.models.person import Person
-from app.models.rbac import PersonRole, Role
+from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
 from app.rls import set_current_organization_sync
 from app.services.auth_dependencies import is_session_inactive
@@ -1129,6 +1129,24 @@ def _ensure_admin_role(db: Session, person_id: UUID, roles: list[str]) -> list[s
     return roles
 
 
+def _load_web_permission_scopes(
+    db: Session,
+    person_id: UUID,
+    existing_scopes: list[str],
+) -> list[str]:
+    """Merge token scopes with current DB-backed permission scopes for web auth."""
+    permission_rows = db.scalars(
+        select(Permission.key)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .join(Role, RolePermission.role_id == Role.id)
+        .join(PersonRole, PersonRole.role_id == Role.id)
+        .where(PersonRole.person_id == person_id)
+        .where(Role.is_active.is_(True))
+        .where(Permission.is_active.is_(True))
+    ).all()
+    return list({*existing_scopes, *(str(key) for key in permission_rows if key)})
+
+
 def require_web_auth(
     request: Request,
     authorization: str | None = Header(default=None),
@@ -1240,6 +1258,7 @@ def require_web_auth(
         )
         roles, scopes = _normalize_roles_scopes(roles, scopes)
         roles = _ensure_admin_role(db, person_uuid, roles)
+        scopes = _load_web_permission_scopes(db, person_uuid, scopes)
     else:
         refresh_token = _get_refresh_token_cookie(request, db)
         if not refresh_token:
@@ -1255,6 +1274,7 @@ def require_web_auth(
         roles, scopes = _load_rbac_claims(db, str(person_uuid))
         roles, scopes = _normalize_roles_scopes(roles, scopes)
         roles = _ensure_admin_role(db, person_uuid, roles)
+        scopes = _load_web_permission_scopes(db, person_uuid, scopes)
 
     # Get person details
     person = db.get(Person, person_uuid)
@@ -1395,6 +1415,7 @@ def optional_web_auth(
         )
         roles, scopes = _normalize_roles_scopes(roles, scopes)
         roles = _ensure_admin_role(db, person_uuid, roles)
+        scopes = _load_web_permission_scopes(db, person_uuid, scopes)
     else:
         refresh_token = _get_refresh_token_cookie(request, db)
         if not refresh_token:
@@ -1406,6 +1427,7 @@ def optional_web_auth(
         roles, scopes = _load_rbac_claims(db, str(person_uuid))
         roles, scopes = _normalize_roles_scopes(roles, scopes)
         roles = _ensure_admin_role(db, person_uuid, roles)
+        scopes = _load_web_permission_scopes(db, person_uuid, scopes)
 
     # Get person details
     person = db.get(Person, person_uuid)
