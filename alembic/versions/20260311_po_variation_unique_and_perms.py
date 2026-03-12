@@ -43,6 +43,37 @@ ROLES_WITH_UPDATE_DELETE = [
 ]
 
 
+def _insert_permission(conn, perm_key: str, description: str) -> None:
+    """Insert a permission row in a way that works on old and new schemas."""
+    conn.exec_driver_sql(
+        """
+        INSERT INTO permissions (
+            id,
+            key,
+            description,
+            is_active,
+            created_at,
+            updated_at
+        )
+        VALUES (gen_random_uuid(), %s, %s, true, NOW(), NOW())
+        ON CONFLICT (key) DO NOTHING
+        """,
+        (perm_key, description),
+    )
+
+
+def _insert_role_permission(conn, role_id, perm_id) -> None:
+    """Insert a role-permission mapping without relying on DB defaults."""
+    conn.exec_driver_sql(
+        """
+        INSERT INTO role_permissions (id, role_id, permission_id)
+        VALUES (gen_random_uuid(), %s, %s)
+        ON CONFLICT (role_id, permission_id) DO NOTHING
+        """,
+        (role_id, perm_id),
+    )
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
@@ -58,15 +89,7 @@ def upgrade() -> None:
 
     # 2. Seed new permissions
     for perm_key, description in NEW_PERMISSIONS:
-        exists = conn.exec_driver_sql(
-            "SELECT 1 FROM permissions WHERE key = %s", (perm_key,)
-        ).fetchone()
-        if not exists:
-            conn.exec_driver_sql(
-                "INSERT INTO permissions (id, key, description, is_active, created_at, updated_at) "
-                "VALUES (gen_random_uuid(), %s, %s, true, now(), now())",
-                (perm_key, description),
-            )
+        _insert_permission(conn, perm_key, description)
 
     # 3. Assign new permissions to appropriate roles
     for role_name in ROLES_WITH_UPDATE_DELETE:
@@ -85,17 +108,7 @@ def upgrade() -> None:
                 continue
             perm_id = perm_row[0]
 
-            exists = conn.exec_driver_sql(
-                "SELECT 1 FROM role_permissions "
-                "WHERE role_id = %s AND permission_id = %s",
-                (role_id, perm_id),
-            ).fetchone()
-            if not exists:
-                conn.exec_driver_sql(
-                    "INSERT INTO role_permissions (id, role_id, permission_id) "
-                    "VALUES (gen_random_uuid(), %s, %s)",
-                    (role_id, perm_id),
-                )
+            _insert_role_permission(conn, role_id, perm_id)
 
 
 def downgrade() -> None:

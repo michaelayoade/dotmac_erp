@@ -621,6 +621,50 @@ class TestWitnessManagement:
 
         db.add.assert_called_once()
 
+    def test_add_witness_requires_employee_or_external_name(
+        self, organization_id: uuid.UUID, case_id: uuid.UUID
+    ):
+        """Test witness creation requires either employee or external name."""
+        mock_case = MockDisciplinaryCase(
+            case_id=case_id,
+            organization_id=organization_id,
+        )
+        db = create_mock_db_session(get_returns={case_id: mock_case})
+
+        service = DisciplineService(db)
+        data = CaseWitnessCreate(external_name="   ", external_contact="  ")
+
+        with pytest.raises(
+            ValidationError,
+            match="Select an employee witness or provide an external witness name",
+        ):
+            service.add_witness(case_id, data)
+
+        db.add.assert_not_called()
+        db.flush.assert_not_called()
+
+    def test_add_external_witness_requires_contact(
+        self, organization_id: uuid.UUID, case_id: uuid.UUID
+    ):
+        """External witnesses must include contact details."""
+        mock_case = MockDisciplinaryCase(
+            case_id=case_id,
+            organization_id=organization_id,
+        )
+        db = create_mock_db_session(get_returns={case_id: mock_case})
+
+        service = DisciplineService(db)
+        data = CaseWitnessCreate(external_name="Jane External", external_contact="   ")
+
+        with pytest.raises(
+            ValidationError,
+            match="Provide contact details for an external witness",
+        ):
+            service.add_witness(case_id, data)
+
+        db.add.assert_not_called()
+        db.flush.assert_not_called()
+
     def test_record_witness_statement(self, case_id: uuid.UUID):
         """Test recording a witness statement."""
         witness_id = uuid.uuid4()

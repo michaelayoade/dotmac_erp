@@ -931,11 +931,23 @@ class DisciplineService:
         """Add a witness to a case."""
         case = self.get_case_or_404(case_id)
 
+        external_name = data.external_name.strip() if data.external_name else None
+        external_contact = (
+            data.external_contact.strip() if data.external_contact else None
+        )
+
+        if not data.employee_id and not external_name:
+            raise ValidationError(
+                "Select an employee witness or provide an external witness name"
+            )
+        if not data.employee_id and external_name and not external_contact:
+            raise ValidationError("Provide contact details for an external witness")
+
         witness = CaseWitness(
             case_id=case_id,
             employee_id=data.employee_id,
-            external_name=data.external_name,
-            external_contact=data.external_contact,
+            external_name=external_name,
+            external_contact=external_contact,
             statement=data.statement,
         )
 

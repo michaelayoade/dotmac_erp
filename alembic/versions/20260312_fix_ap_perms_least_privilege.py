@@ -68,17 +68,43 @@ def _get_id(conn, table: str, column: str, value: str):
     return row[0] if row else None
 
 
+def _insert_permission(conn, perm_key: str, description: str) -> None:
+    """Insert a permission row in a way that works on old and new schemas."""
+    conn.exec_driver_sql(
+        """
+        INSERT INTO permissions (
+            id,
+            key,
+            description,
+            is_active,
+            created_at,
+            updated_at
+        )
+        VALUES (gen_random_uuid(), %s, %s, true, NOW(), NOW())
+        ON CONFLICT (key) DO NOTHING
+        """,
+        (perm_key, description),
+    )
+
+
+def _insert_role_permission(conn, role_id, perm_id) -> None:
+    """Insert a role-permission mapping without relying on DB defaults."""
+    conn.exec_driver_sql(
+        """
+        INSERT INTO role_permissions (id, role_id, permission_id)
+        VALUES (gen_random_uuid(), %s, %s)
+        ON CONFLICT (role_id, permission_id) DO NOTHING
+        """,
+        (role_id, perm_id),
+    )
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. Seed the new permission (idempotent)
     perm_key, description = NEW_PERM
-    if not _get_id(conn, "permissions", "key", perm_key):
-        conn.exec_driver_sql(
-            "INSERT INTO permissions (key, description, is_active) "
-            "VALUES (%s, %s, true)",
-            (perm_key, description),
-        )
+    _insert_permission(conn, perm_key, description)
 
     # 2. Assign to roles
     perm_id = _get_id(conn, "permissions", "key", perm_key)
@@ -87,17 +113,7 @@ def upgrade() -> None:
             role_id = _get_id(conn, "roles", "name", role_name)
             if not role_id:
                 continue
-            exists = conn.exec_driver_sql(
-                "SELECT 1 FROM role_permissions "
-                "WHERE role_id = %s AND permission_id = %s",
-                (role_id, perm_id),
-            ).fetchone()
-            if not exists:
-                conn.exec_driver_sql(
-                    "INSERT INTO role_permissions (role_id, permission_id) "
-                    "VALUES (%s, %s)",
-                    (role_id, perm_id),
-                )
+            _insert_role_permission(conn, role_id, perm_id)
 
     # 3. Revoke excess permissions from ap_clerk
     ap_clerk_id = _get_id(conn, "roles", "name", "ap_clerk")

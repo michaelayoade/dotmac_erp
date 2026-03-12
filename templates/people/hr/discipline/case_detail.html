@@ -38,7 +38,7 @@
         <div class="lg:col-span-2 space-y-6">
             <!-- Header Card -->
             <div class="card">
-                <div class="card-body">
+                <div class="card-body p-6">
                     <div class="flex items-start justify-between">
                         <div class="flex items-center gap-4">
                             <div class="w-14 h-14 rounded-full bg-gradient-to-br from-red-400 to-rose-500 flex items-center justify-center text-white">
@@ -49,18 +49,6 @@
                                 <p class="text-sm text-slate-500 dark:text-slate-400">{{ case.subject }}</p>
                             </div>
                         </div>
-                        {% set status_colors = {
-                            'DRAFT': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-                            'QUERY_ISSUED': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-                            'RESPONSE_RECEIVED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-                            'HEARING_SCHEDULED': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-                            'HEARING_COMPLETED': 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-                            'DECISION_MADE': 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
-                            'APPEAL_FILED': 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300',
-                            'APPEAL_DECIDED': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
-                            'CLOSED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-                            'WITHDRAWN': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                        } %}
                         {{ status_badge(case.status.value) }}
                     </div>
                 </div>
@@ -68,10 +56,10 @@
 
             <!-- Employee Info -->
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Employee</h3>
                 </div>
-                <div class="card-body">
+                <div class="card-body px-6 pb-6">
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white text-lg font-bold">
                             {{ case.employee.full_name[0] if case.employee else '?' }}
@@ -93,10 +81,10 @@
 
             <!-- Violation Details -->
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Violation Details</h3>
                 </div>
-                <div class="card-body space-y-4">
+                <div class="card-body px-6 pb-6 space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4">
                         <div>
                             <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</label>
@@ -129,10 +117,10 @@
             <!-- Query Details (if issued) -->
             {% if case.query_text %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Query Issued</h3>
                 </div>
-                <div class="card-body space-y-4">
+                <div class="card-body px-6 pb-6 space-y-4">
                     <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                         <p class="text-sm text-blue-700 dark:text-blue-300 whitespace-pre-wrap">{{ case.query_text }}</p>
                     </div>
@@ -153,10 +141,10 @@
             <!-- Employee Responses -->
             {% if case.responses %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Employee Responses</h3>
                 </div>
-                <div class="card-body space-y-4">
+                <div class="card-body px-6 pb-6 space-y-4">
                     {% for response in case.responses %}
                     <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                         <div class="flex items-start justify-between mb-2">
@@ -184,10 +172,10 @@
             <!-- Hearing Details -->
             {% if case.hearing_date %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Hearing</h3>
                 </div>
-                <div class="card-body space-y-4">
+                <div class="card-body px-6 pb-6 space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                         <div>
                             <label class="text-slate-500 dark:text-slate-400">Date & Time</label>
@@ -217,10 +205,10 @@
             <!-- Decision -->
             {% if case.decision_summary %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Decision</h3>
                 </div>
-                <div class="card-body space-y-4">
+                <div class="card-body px-6 pb-6 space-y-4">
                     <div class="p-4 rounded-lg bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">
                         <p class="text-sm text-teal-700 dark:text-teal-300 whitespace-pre-wrap">{{ case.decision_summary }}</p>
                     </div>
@@ -235,10 +223,10 @@
             <!-- Actions Taken -->
             {% if case.actions %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Disciplinary Actions</h3>
                 </div>
-                <div class="card-body">
+                <div class="card-body px-6 pb-6">
                     <div class="space-y-3">
                         {% for action in case.actions %}
                         <div class="p-4 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -267,7 +255,7 @@
 
             <!-- Documents -->
             <div class="card">
-                <div class="card-header flex items-center justify-between">
+                <div class="card-header flex items-center justify-between px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Documents</h3>
                     {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
                     <button type="button" onclick="document.getElementById('uploadDocModal').classList.remove('hidden')" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
@@ -275,7 +263,7 @@
                     </button>
                     {% endif %}
                 </div>
-                <div class="card-body">
+                <div class="card-body px-6 pb-6">
                     {% if case.documents %}
                     <div class="space-y-2">
                         {% for doc in case.documents %}
@@ -321,10 +309,10 @@
             <!-- Witnesses -->
             {% if case.witnesses %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Witnesses</h3>
                 </div>
-                <div class="card-body">
+                <div class="card-body px-6 pb-6">
                     <div class="space-y-2">
                         {% for witness in case.witnesses %}
                         <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
@@ -352,10 +340,10 @@
         <div class="space-y-6">
             <!-- Timeline -->
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h4 class="font-medium text-slate-900 dark:text-white">Timeline</h4>
                 </div>
-                <div class="card-body">
+                <div class="card-body px-6 pb-6">
                     <div class="space-y-3 text-sm">
                         <div class="flex justify-between">
                             <span class="text-slate-500 dark:text-slate-400">Reported</span>
@@ -392,10 +380,10 @@
             <!-- Workflow Actions -->
             {% if case.status.value not in ['CLOSED', 'WITHDRAWN'] %}
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h4 class="font-medium text-slate-900 dark:text-white">Actions</h4>
                 </div>
-                <div class="card-body space-y-4">
+                <div class="card-body px-6 pb-6 space-y-4">
                     <!-- Issue Query (from DRAFT) -->
                     {% if case.status.value == 'DRAFT' %}
                     <form method="post" action="/people/hr/discipline/{{ case.case_id }}/issue-query" class="space-y-4">
@@ -416,17 +404,17 @@
                     {% if case.status.value in ['QUERY_ISSUED', 'RESPONSE_RECEIVED'] %}
                     <form method="post" action="/people/hr/discipline/{{ case.case_id }}/schedule-hearing" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                        <div>
-                            <label class="label required">Hearing Date & Time</label>
-                            <input type="datetime-local" name="hearing_date" class="input" required>
+                        <div class="space-y-2">
+                            <label class="form-label required">Hearing Date & Time</label>
+                            <input type="datetime-local" name="hearing_date" class="form-input" required>
                         </div>
-                        <div>
-                            <label class="label">Location</label>
-                            <input type="text" name="hearing_location" class="input" placeholder="Meeting room, etc.">
+                        <div class="space-y-2">
+                            <label class="form-label">Location</label>
+                            <input type="text" name="hearing_location" class="form-input" placeholder="Meeting room, etc.">
                         </div>
-                        <div>
-                            <label class="label">Panel Chair</label>
-                            <select name="panel_chair_id" class="input">
+                        <div class="space-y-2">
+                            <label class="form-label">Panel Chair</label>
+                            <select name="panel_chair_id" class="form-select">
                                 <option value="">Select Chair</option>
                                 {% for emp in employees %}
                                 <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
@@ -503,25 +491,28 @@
                             <span>Add Witness</span>
                             {{ icon_svg("chevron-down", "w-4 h-4 transition-transform group-open:rotate-180") }}
                         </summary>
-                        <form method="post" action="/people/hr/discipline/{{ case.case_id }}/witnesses" class="mt-3 space-y-4">
+                        <form method="post" action="/people/hr/discipline/{{ case.case_id }}/witnesses" class="mt-3 space-y-4" onsubmit="const form=this; const employee=form.employee_id.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError); return !showSourceError && !showContactError;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                            <div>
-                                <label class="label">Employee Witness</label>
-                                <select name="employee_id" class="input">
+                            <div class="space-y-2">
+                                <label class="form-label">Employee Witness</label>
+                                <select name="employee_id" class="form-select" onchange="const form=this.form; const employee=this.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); this.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError);">
                                     <option value="">Select Employee</option>
                                     {% for emp in employees %}
                                     <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
                                     {% endfor %}
                                 </select>
+                                <p data-witness-employee-error class="hidden text-xs text-rose-600 dark:text-rose-400">Select an employee witness or enter an external witness name.</p>
                             </div>
                             <p class="text-xs text-slate-500 dark:text-slate-400 text-center">- OR -</p>
-                            <div>
-                                <label class="label">External Name</label>
-                                <input type="text" name="external_name" class="input" placeholder="External witness name">
+                            <div class="space-y-2">
+                                <label class="form-label">External Name</label>
+                                <input type="text" name="external_name" class="form-input" placeholder="External witness name" oninput="const form=this.form; const employee=form.employee_id.value.trim(); const external=(this.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); this.classList.toggle('border-rose-500', showSourceError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError);">
+                                <p data-witness-external-error class="hidden text-xs text-rose-600 dark:text-rose-400">Enter an external witness name or select an employee witness.</p>
                             </div>
-                            <div>
-                                <label class="label">Contact</label>
-                                <input type="text" name="external_contact" class="input" placeholder="Phone or email">
+                            <div class="space-y-2">
+                                <label class="form-label">Contact</label>
+                                <input type="text" name="external_contact" class="form-input" placeholder="Phone or email" oninput="const form=this.form; const employee=form.employee_id.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(this.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); this.classList.toggle('border-rose-500', showContactError);">
+                                <p data-witness-contact-error class="hidden text-xs text-rose-600 dark:text-rose-400">Contact is required when adding an external witness.</p>
                             </div>
                             <button type="submit" class="btn btn-secondary w-full">Add Witness</button>
                         </form>
@@ -551,10 +542,10 @@
 
             <!-- Quick Links -->
             <div class="card">
-                <div class="card-header">
+                <div class="card-header px-6 pt-6">
                     <h4 class="font-medium text-slate-900 dark:text-white">Quick Links</h4>
                 </div>
-                <div class="card-body space-y-2">
+                <div class="card-body px-6 pb-6 space-y-2">
                     {% if case.employee %}
                     <a href="/people/hr/employees/{{ case.employee.employee_id }}" class="btn btn-secondary w-full justify-start">
                         {{ icon_svg("user", "h-4 w-4 mr-2") }}
@@ -572,22 +563,32 @@
 </div>
 
 <!-- Upload Document Modal -->
-<div id="uploadDocModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
-    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+<div id="uploadDocModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="upload-doc-modal-title" role="dialog" aria-modal="true">
+    <div class="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6">
         <!-- Overlay -->
-        <div class="fixed inset-0 bg-slate-500 bg-opacity-75 dark:bg-slate-900 dark:bg-opacity-75 transition-opacity" onclick="document.getElementById('uploadDocModal').classList.add('hidden')"></div>
+        <div class="fixed inset-0 bg-slate-900/55 backdrop-blur-sm transition-opacity" onclick="document.getElementById('uploadDocModal').classList.add('hidden')"></div>
 
         <!-- Modal Content -->
-        <div class="relative inline-block align-bottom bg-white dark:bg-slate-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <div class="relative w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <form method="post" action="/people/hr/discipline/{{ case.case_id }}/documents" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <div class="bg-white dark:bg-slate-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-4">Upload Document</h3>
+                <div class="flex items-start justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
+                    <div class="space-y-1 pr-4">
+                        <h3 id="upload-doc-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Upload Document</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Add evidence, letters, or supporting records to this disciplinary case.</p>
+                    </div>
+                    <button type="button" onclick="document.getElementById('uploadDocModal').classList.add('hidden')"
+                            class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                            aria-label="Close upload dialog">
+                        {{ icon_svg("x-mark", "h-5 w-5") }}
+                    </button>
+                </div>
 
-                    <div class="space-y-4">
-                        <div>
-                            <label class="label required">Document Type</label>
-                            <select name="document_type" class="input" required>
+                <div class="max-h-[75vh] overflow-y-auto px-6 py-5">
+                    <div class="space-y-5">
+                        <div class="space-y-2">
+                            <label class="form-label required">Document Type</label>
+                            <select name="document_type" class="form-select" required>
                                 <option value="">Select Type...</option>
                                 <option value="EVIDENCE">Evidence</option>
                                 <option value="QUERY_LETTER">Query Letter</option>
@@ -601,30 +602,37 @@
                                 <option value="TERMINATION_LETTER">Termination Letter</option>
                                 <option value="OTHER">Other</option>
                             </select>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Choose the category that best matches the uploaded file.</p>
                         </div>
 
-                        {{ file_upload_zone(
-                            name="file",
-                            label="File",
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt,.csv",
-                            max_size_mb=10,
-                            hint="Max 10MB. Allowed: PDF, Word, Excel, Images, Text"
-                        ) }}
-
-                        <div>
-                            <label class="label">Title</label>
-                            <input type="text" name="title" class="input" placeholder="Document title (optional)">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                            {{ file_upload_zone(
+                                name="file",
+                                label="File",
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt,.csv",
+                                max_size_mb=10,
+                                hint="Max 10MB. Allowed: PDF, Word, Excel, Images, Text"
+                            ) }}
                         </div>
 
-                        <div>
-                            <label class="label">Description</label>
-                            <textarea name="description" class="input" rows="2" placeholder="Brief description (optional)"></textarea>
+                        <div class="space-y-2">
+                            <label class="form-label">Title</label>
+                            <input type="text" name="title" class="form-input" placeholder="Document title (optional)">
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-input min-h-[96px]" rows="4" placeholder="Brief description, context, or what this document supports"></textarea>
                         </div>
                     </div>
                 </div>
-                <div class="bg-slate-50 dark:bg-slate-700/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                    <button type="submit" class="btn btn-primary w-full sm:w-auto">Upload</button>
-                    <button type="button" onclick="document.getElementById('uploadDocModal').classList.add('hidden')" class="btn btn-secondary w-full sm:w-auto mt-2 sm:mt-0">Cancel</button>
+
+                <div class="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80 sm:flex-row sm:items-center sm:justify-end">
+                    <button type="button" onclick="document.getElementById('uploadDocModal').classList.add('hidden')" class="btn btn-secondary w-full sm:w-auto">Cancel</button>
+                    <button type="submit" class="btn btn-primary w-full sm:w-auto">
+                        {{ icon_svg("upload", "h-4 w-4 mr-2") }}
+                        Upload Document
+                    </button>
                 </div>
             </form>
         </div>

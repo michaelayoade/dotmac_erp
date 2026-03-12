@@ -612,14 +612,22 @@ class DisciplineWebService:
         service = DisciplineService(db)
         service.get_case_or_404(case_id, organization_id=org_id)
 
-        data = CaseWitnessCreate(
-            employee_id=parse_uuid(employee_id),
-            external_name=external_name,
-            external_contact=external_contact,
-        )
+        try:
+            data = CaseWitnessCreate(
+                employee_id=parse_uuid(employee_id),
+                external_name=external_name,
+                external_contact=external_contact,
+            )
 
-        service.add_witness(case_id, data)
-        db.commit()
+            service.add_witness(case_id, data)
+            db.commit()
+        except ValidationError as exc:
+            db.rollback()
+            message = quote(exc.message or "Unable to add witness.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
 
         return RedirectResponse(
             url=f"/people/hr/discipline/{case_id}?success=witness_added",
