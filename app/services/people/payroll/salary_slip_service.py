@@ -103,7 +103,12 @@ class SalarySlipService:
 
     @staticmethod
     def _collect_pension_base_components(
-        component_code: str, amount: Decimal, *, basic: Decimal, housing: Decimal, transport: Decimal
+        component_code: str,
+        amount: Decimal,
+        *,
+        basic: Decimal,
+        housing: Decimal,
+        transport: Decimal,
     ) -> tuple[Decimal, Decimal, Decimal]:
         """Track earning components that contribute to the pension base."""
         code = (component_code or "").upper()

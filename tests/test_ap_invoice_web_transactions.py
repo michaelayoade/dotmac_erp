@@ -14,9 +14,7 @@ from app.services.finance.ap.web.invoice_web import InvoiceWebService
 async def test_create_invoice_response_commits_on_success(monkeypatch):
     request = MagicMock()
     request.headers = {"content-type": "application/json"}
-    request.json = AsyncMock(
-        return_value={"supplier_id": str(uuid4()), "lines": []}
-    )
+    request.json = AsyncMock(return_value={"supplier_id": str(uuid4()), "lines": []})
     auth = SimpleNamespace(organization_id=uuid4(), person_id=uuid4())
     db = MagicMock()
 
@@ -41,9 +39,7 @@ async def test_create_invoice_response_commits_on_success(monkeypatch):
 async def test_create_invoice_response_rolls_back_on_failure(monkeypatch):
     request = MagicMock()
     request.headers = {"content-type": "application/json"}
-    request.json = AsyncMock(
-        return_value={"supplier_id": str(uuid4()), "lines": []}
-    )
+    request.json = AsyncMock(return_value={"supplier_id": str(uuid4()), "lines": []})
     auth = SimpleNamespace(organization_id=uuid4(), person_id=uuid4())
     db = MagicMock()
 
@@ -72,9 +68,7 @@ async def test_create_invoice_response_rolls_back_on_failure(monkeypatch):
 async def test_update_invoice_response_commits_on_success(monkeypatch):
     request = MagicMock()
     request.headers = {"content-type": "application/json"}
-    request.json = AsyncMock(
-        return_value={"supplier_id": str(uuid4()), "lines": []}
-    )
+    request.json = AsyncMock(return_value={"supplier_id": str(uuid4()), "lines": []})
     auth = SimpleNamespace(organization_id=uuid4())
     db = MagicMock()
 

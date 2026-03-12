@@ -84,8 +84,8 @@ class SelfServiceWebService:
         end_date = start_date.replace(day=last_day)
         selected_month = start_date.strftime("%Y-%m")
 
-        previous_month = (start_date - timedelta(days=1)).replace(day=1).strftime(
-            "%Y-%m"
+        previous_month = (
+            (start_date - timedelta(days=1)).replace(day=1).strftime("%Y-%m")
         )
         next_month = (end_date + timedelta(days=1)).replace(day=1).strftime("%Y-%m")
 
@@ -113,7 +113,9 @@ class SelfServiceWebService:
             .order_by(Holiday.holiday_date)
         ).all()
 
-        return {holiday_date: holiday_name for holiday_date, holiday_name in holiday_rows}
+        return {
+            holiday_date: holiday_name for holiday_date, holiday_name in holiday_rows
+        }
 
     @staticmethod
     def _build_attendance_calendar(
@@ -140,14 +142,38 @@ class SelfServiceWebService:
             return str(value)
 
         status_meta = {
-            "present": ("Present", "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800"),
-            "absent": ("Absent", "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800"),
-            "half_day": ("Half Day", "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800"),
-            "on_leave": ("On Leave", "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800"),
-            "holiday": ("Holiday", "bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800"),
-            "work_from_home": ("Work From Home", "bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-800"),
-            "missed": ("Missed", "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"),
-            "future": ("Upcoming", "bg-white text-slate-500 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800"),
+            "present": (
+                "Present",
+                "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800",
+            ),
+            "absent": (
+                "Absent",
+                "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800",
+            ),
+            "half_day": (
+                "Half Day",
+                "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
+            ),
+            "on_leave": (
+                "On Leave",
+                "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
+            ),
+            "holiday": (
+                "Holiday",
+                "bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800",
+            ),
+            "work_from_home": (
+                "Work From Home",
+                "bg-cyan-50 text-cyan-800 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-800",
+            ),
+            "missed": (
+                "Missed",
+                "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
+            ),
+            "future": (
+                "Upcoming",
+                "bg-white text-slate-500 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
+            ),
         }
 
         calendar_weeks: list[list[dict]] = []
@@ -218,9 +244,15 @@ class SelfServiceWebService:
                         "status_classes": classes,
                         "holiday_name": holiday_name,
                         "note": note,
-                        "check_in_display": _format_time(record.check_in) if record else "-",
-                        "check_out_display": _format_time(record.check_out) if record else "-",
-                        "working_hours_display": _format_hours(record.working_hours) if record else "-",
+                        "check_in_display": _format_time(record.check_in)
+                        if record
+                        else "-",
+                        "check_out_display": _format_time(record.check_out)
+                        if record
+                        else "-",
+                        "working_hours_display": _format_hours(record.working_hours)
+                        if record
+                        else "-",
                     }
                 )
             calendar_weeks.append(week_days)

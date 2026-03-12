@@ -63,8 +63,8 @@ def upgrade() -> None:
         ).fetchone()
         if not exists:
             conn.exec_driver_sql(
-                "INSERT INTO permissions (key, description, is_active) "
-                "VALUES (%s, %s, true)",
+                "INSERT INTO permissions (id, key, description, is_active) "
+                "VALUES (gen_random_uuid(), %s, %s, true)",
                 (perm_key, description),
             )
 
@@ -92,14 +92,12 @@ def upgrade() -> None:
             ).fetchone()
             if not exists:
                 conn.exec_driver_sql(
-                    "INSERT INTO role_permissions (role_id, permission_id) "
-                    "VALUES (%s, %s)",
+                    "INSERT INTO role_permissions (id, role_id, permission_id) "
+                    "VALUES (gen_random_uuid(), %s, %s)",
                     (role_id, perm_id),
                 )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "uq_po_variation_id", table_name="purchase_order", schema="ap"
-    )
+    op.drop_index("uq_po_variation_id", table_name="purchase_order", schema="ap")
     # Permissions remain — harmless if not checked
