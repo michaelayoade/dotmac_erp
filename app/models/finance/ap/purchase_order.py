@@ -50,6 +50,13 @@ class PurchaseOrder(Base):
         UniqueConstraint("organization_id", "po_number", name="uq_po_number"),
         Index("idx_po_supplier", "supplier_id"),
         Index("idx_po_status", "organization_id", "status"),
+        Index(
+            "uq_po_variation_id",
+            "organization_id",
+            "variation_id",
+            unique=True,
+            postgresql_where=text("variation_id IS NOT NULL"),
+        ),
         {"schema": "ap"},
     )
 
@@ -145,14 +152,18 @@ class PurchaseOrder(Base):
         comment="Links to the baseline PO being amended",
     )
     amendment_version: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1, server_default=text("1"),
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
         comment="Version counter: baseline=1, first amendment=2, etc.",
     )
     amendment_reason: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="Reason for the amendment / variation"
     )
     variation_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True,
+        String(36),
+        nullable=True,
         comment="CRM variation identifier for traceability",
     )
 

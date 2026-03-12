@@ -234,6 +234,184 @@ class TestVariationBaselineLookup:
                 org_id, variation_payload, person_id
             )
 
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_raises_when_baseline_superseded(
+        self,
+        mock_select: MagicMock,
+        service: DotMacCRMSyncService,
+        org_id: uuid.UUID,
+        person_id: uuid.UUID,
+        mock_db: MagicMock,
+        variation_payload: CRMPurchaseOrderVariationPayload,
+        baseline_po_id: uuid.UUID,
+    ) -> None:
+        """Should raise ValueError when baseline PO is already SUPERSEDED."""
+        baseline_mapping = MagicMock()
+        baseline_mapping.local_entity_id = baseline_po_id
+
+        baseline_po = MagicMock()
+        baseline_po.po_id = baseline_po_id
+        baseline_po.po_number = "PO-2026-00001"
+        baseline_po.status = POStatus.SUPERSEDED
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None
+            return baseline_mapping
+
+        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.get.return_value = baseline_po
+
+        with pytest.raises(ValueError, match="Cannot amend PO.*SUPERSEDED"):
+            service.create_purchase_order_variation(
+                org_id, variation_payload, person_id
+            )
+
+
+class TestVariationAccountingSafety:
+    """Test that received/invoiced POs cannot be superseded."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_raises_when_baseline_has_received_quantity(
+        self,
+        mock_select: MagicMock,
+        service: DotMacCRMSyncService,
+        org_id: uuid.UUID,
+        person_id: uuid.UUID,
+        mock_db: MagicMock,
+        variation_payload: CRMPurchaseOrderVariationPayload,
+        baseline_po_id: uuid.UUID,
+    ) -> None:
+        """Should block amendment when baseline PO has received quantities."""
+        baseline_mapping = MagicMock()
+        baseline_mapping.local_entity_id = baseline_po_id
+
+        baseline_po = MagicMock()
+        baseline_po.po_id = baseline_po_id
+        baseline_po.po_number = "PO-2026-00001"
+        baseline_po.status = POStatus.APPROVED
+        baseline_po.amount_received = Decimal("10000")
+        baseline_po.amount_invoiced = Decimal("0")
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None
+            return baseline_mapping
+
+        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.get.return_value = baseline_po
+
+        with pytest.raises(ValueError, match="Cannot supersede PO.*amount_received"):
+            service.create_purchase_order_variation(
+                org_id, variation_payload, person_id
+            )
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_raises_when_baseline_has_invoiced_quantity(
+        self,
+        mock_select: MagicMock,
+        service: DotMacCRMSyncService,
+        org_id: uuid.UUID,
+        person_id: uuid.UUID,
+        mock_db: MagicMock,
+        variation_payload: CRMPurchaseOrderVariationPayload,
+        baseline_po_id: uuid.UUID,
+    ) -> None:
+        """Should block amendment when baseline PO has invoiced quantities."""
+        baseline_mapping = MagicMock()
+        baseline_mapping.local_entity_id = baseline_po_id
+
+        baseline_po = MagicMock()
+        baseline_po.po_id = baseline_po_id
+        baseline_po.po_number = "PO-2026-00001"
+        baseline_po.status = POStatus.APPROVED
+        baseline_po.amount_received = Decimal("0")
+        baseline_po.amount_invoiced = Decimal("5000")
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None
+            return baseline_mapping
+
+        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.get.return_value = baseline_po
+
+        with pytest.raises(ValueError, match="Cannot supersede PO.*amount_invoiced"):
+            service.create_purchase_order_variation(
+                org_id, variation_payload, person_id
+            )
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_allows_amendment_when_zero_received_invoiced(
+        self,
+        mock_select: MagicMock,
+        service: DotMacCRMSyncService,
+        org_id: uuid.UUID,
+        person_id: uuid.UUID,
+        mock_db: MagicMock,
+        variation_payload: CRMPurchaseOrderVariationPayload,
+        baseline_po_id: uuid.UUID,
+    ) -> None:
+        """Should allow amendment when PO has zero received/invoiced."""
+        baseline_mapping = MagicMock()
+        baseline_mapping.local_entity_id = baseline_po_id
+        baseline_mapping.crm_data = {"total": "53750"}
+
+        baseline_po = MagicMock()
+        baseline_po.po_id = baseline_po_id
+        baseline_po.po_number = "PO-2026-00001"
+        baseline_po.status = POStatus.APPROVED
+        baseline_po.amount_received = Decimal("0")
+        baseline_po.amount_invoiced = Decimal("0")
+
+        new_po = MagicMock()
+        new_po.po_id = uuid.uuid4()
+        new_po.po_number = "PO-2026-00002"
+        new_po.status = POStatus.DRAFT
+
+        mock_supplier = MagicMock()
+        mock_supplier.supplier_id = uuid.uuid4()
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # No existing variation PO
+            if call_count == 2:
+                return baseline_mapping
+            if call_count == 3:
+                return mock_supplier
+            return None
+
+        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.get.return_value = baseline_po
+
+        with patch(
+            "app.services.finance.ap.purchase_order.PurchaseOrderService.create_po",
+            return_value=new_po,
+        ):
+            result = service.create_purchase_order_variation(
+                org_id, variation_payload, person_id
+            )
+
+        assert result.is_amendment is True
+        assert result.purchase_order_id == "PO-2026-00002"
+        assert baseline_po.status == POStatus.SUPERSEDED
+
 
 class TestVariationCreation:
     """Test the full variation creation flow."""
@@ -261,6 +439,8 @@ class TestVariationCreation:
         baseline_po.po_id = baseline_po_id
         baseline_po.po_number = "PO-2026-00001"
         baseline_po.status = POStatus.APPROVED
+        baseline_po.amount_received = Decimal("0")
+        baseline_po.amount_invoiced = Decimal("0")
 
         new_po = MagicMock()
         new_po.po_id = uuid.uuid4()
@@ -443,3 +623,96 @@ class TestCRMPurchaseOrderResponseVariationFields:
         assert resp.variation_id == "var-xyz"
         assert resp.amendment_version == 3
         assert resp.superseded_po_id == superseded_id
+
+
+class TestVariationIntegrityErrorHandling:
+    """Test DB-level conflict handling when concurrent requests race."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_integrity_error_returns_existing_po(
+        self,
+        mock_select: MagicMock,
+        service: DotMacCRMSyncService,
+        org_id: uuid.UUID,
+        person_id: uuid.UUID,
+        mock_db: MagicMock,
+        variation_payload: CRMPurchaseOrderVariationPayload,
+        baseline_po_id: uuid.UUID,
+    ) -> None:
+        """On IntegrityError (race), rollback and return the existing PO."""
+        from sqlalchemy.exc import IntegrityError
+
+        baseline_mapping = MagicMock()
+        baseline_mapping.local_entity_id = baseline_po_id
+        baseline_mapping.crm_data = {"total": "53750"}
+
+        baseline_po = MagicMock()
+        baseline_po.po_id = baseline_po_id
+        baseline_po.po_number = "PO-2026-00001"
+        baseline_po.status = POStatus.APPROVED
+        baseline_po.amount_received = Decimal("0")
+        baseline_po.amount_invoiced = Decimal("0")
+
+        new_po = MagicMock()
+        new_po.po_id = uuid.uuid4()
+        new_po.po_number = "PO-2026-00002"
+        new_po.status = POStatus.DRAFT
+
+        existing_winner = MagicMock()
+        existing_winner.po_id = uuid.uuid4()
+        existing_winner.po_number = "PO-2026-00003"
+        existing_winner.status = POStatus.DRAFT
+        existing_winner.amendment_version = 2
+        existing_winner.original_po_id = baseline_po_id
+        existing_winner.variation_id = "var-001-xyz"
+
+        mock_supplier = MagicMock()
+        mock_supplier.supplier_id = uuid.uuid4()
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # No existing variation PO (initial check)
+            if call_count == 2:
+                return baseline_mapping
+            if call_count == 3:
+                return mock_supplier
+            if call_count >= 4:
+                return None  # No project/approver
+            return None
+
+        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.get.return_value = baseline_po
+        # Simulate IntegrityError on commit, then return existing on retry query
+        mock_db.commit.side_effect = IntegrityError(
+            "duplicate key", params={}, orig=Exception()
+        )
+
+        # After rollback, the re-query should find the winner
+        def post_rollback_scalar(*args, **kwargs):
+            return existing_winner
+
+        def do_rollback():
+            # After rollback, reset scalar to return the existing winner
+            mock_db.scalar.side_effect = None
+            mock_db.scalar.return_value = existing_winner
+
+        mock_db.rollback.side_effect = do_rollback
+
+        with patch(
+            "app.services.finance.ap.purchase_order.PurchaseOrderService.create_po",
+            return_value=new_po,
+        ):
+            result = service.create_purchase_order_variation(
+                org_id, variation_payload, person_id
+            )
+
+        # Should have rolled back
+        mock_db.rollback.assert_called_once()
+        # Should return the existing winner's data
+        assert result.purchase_order_id == "PO-2026-00003"
+        assert result.is_amendment is True
+        assert result.variation_id == "var-001-xyz"

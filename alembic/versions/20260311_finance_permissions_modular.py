@@ -39,6 +39,8 @@ AP_PERMISSIONS = [
     "ap:invoices:void",
     "ap:payments:read",
     "ap:payments:create",
+    "ap:payments:update",
+    "ap:payments:delete",
     "ap:payments:post",
     "ap:payments:void",
     "ap:payments:approve:tier1",
@@ -46,6 +48,7 @@ AP_PERMISSIONS = [
     "ap:payments:approve:tier3",
     "ap:purchase_orders:read",
     "ap:purchase_orders:create",
+    "ap:purchase_orders:update",
     "ap:purchase_orders:submit",
     "ap:purchase_orders:approve",
     "ap:purchase_orders:void",
@@ -69,7 +72,7 @@ ROLE_AP_PERMS = {
     "admin": AP_PERMISSIONS,
     "finance_director": AP_PERMISSIONS,
     "finance_manager": AP_PERMISSIONS,
-    # Accountant: read + create + update + submit (no approve/post/void)
+    # Accountant: read + create + update + delete + submit (no approve/post/void)
     "senior_accountant": [
         p
         for p in AP_PERMISSIONS
@@ -81,7 +84,8 @@ ROLE_AP_PERMS = {
         for p in AP_PERMISSIONS
         if not any(a in p for a in [":approve", ":post", ":void"])
     ],
-    # AP clerk: full AP access except tier2+ approvals
+    # AP clerk: read + create + update + delete + submit + tier1 approve
+    # (no tier2/tier3 approvals, no post, no void)
     "ap_clerk": [
         p
         for p in AP_PERMISSIONS
@@ -89,6 +93,16 @@ ROLE_AP_PERMS = {
         not in [
             "ap:payments:approve:tier2",
             "ap:payments:approve:tier3",
+            "ap:invoices:approve",
+            "ap:invoices:post",
+            "ap:invoices:void",
+            "ap:payments:post",
+            "ap:payments:void",
+            "ap:purchase_orders:approve",
+            "ap:purchase_orders:void",
+            "ap:goods_receipts:approve",
+            "ap:payment_batches:approve",
+            "ap:payment_batches:process",
         ]
     ],
     # Junior: read only

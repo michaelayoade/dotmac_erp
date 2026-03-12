@@ -21,6 +21,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.config import settings
@@ -1765,11 +1766,24 @@ class DotMacCRMSyncService:
                 f"Baseline PO entity missing for mapping={baseline_mapping.mapping_id}"
             )
 
-        # Prevent amendments on terminal states
-        terminal = {POStatus.CANCELLED, POStatus.CLOSED}
-        if baseline_po.status in terminal:
+        # Prevent amendments on terminal or already-superseded states
+        blocked = {POStatus.CANCELLED, POStatus.CLOSED, POStatus.SUPERSEDED}
+        if baseline_po.status in blocked:
             raise ValueError(
-                f"Cannot amend PO {baseline_po.po_number} in {baseline_po.status.value} status"
+                f"Cannot amend PO {baseline_po.po_number} in "
+                f"{baseline_po.status.value} status"
+            )
+
+        # Accounting safety: block supersede when PO has received or
+        # invoiced quantities — orphaning those financial records is unsafe.
+        # A future residual-safe change-order flow can relax this guard.
+        if baseline_po.amount_received > 0 or baseline_po.amount_invoiced > 0:
+            raise ValueError(
+                f"Cannot supersede PO {baseline_po.po_number}: "
+                f"amount_received={baseline_po.amount_received}, "
+                f"amount_invoiced={baseline_po.amount_invoiced}. "
+                f"POs with received or invoiced quantities cannot be amended "
+                f"until residual-safe change-order logic is implemented."
             )
 
         # 3. Resolve dependencies (same as create flow)
@@ -1817,9 +1831,7 @@ class DotMacCRMSyncService:
         )
 
         # 5. Create the amendment PO
-        new_po = PurchaseOrderService.create_po(
-            self.db, org_id, po_input, creator_id
-        )
+        new_po = PurchaseOrderService.create_po(self.db, org_id, po_input, creator_id)
 
         # Set amendment-specific fields
         new_po.is_amendment = True
@@ -1846,11 +1858,38 @@ class DotMacCRMSyncService:
         }
         baseline_mapping.synced_at = datetime.now(UTC)
 
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # Race condition: another request already created this variation.
+            # Roll back and return the existing PO (idempotent).
+            self.db.rollback()
+            logger.warning(
+                "Concurrent variation creation for variation_id=%s, "
+                "returning existing PO",
+                data.variation_id,
+            )
+            existing = self.db.scalar(
+                select(PurchaseOrder).where(
+                    PurchaseOrder.organization_id == org_id,
+                    PurchaseOrder.variation_id == data.variation_id,
+                )
+            )
+            if existing:
+                return CRMPurchaseOrderResponse(
+                    purchase_order_id=existing.po_number,
+                    po_id=existing.po_id,
+                    status=existing.status.value.lower(),
+                    omni_work_order_id=data.omni_work_order_id,
+                    is_amendment=True,
+                    variation_id=data.variation_id,
+                    amendment_version=existing.amendment_version,
+                    superseded_po_id=existing.original_po_id,
+                )
+            raise  # Re-raise if existing not found (unexpected)
 
         logger.info(
-            "Created PO amendment %s (v%d) for variation_id=%s, "
-            "superseding %s",
+            "Created PO amendment %s (v%d) for variation_id=%s, superseding %s",
             new_po.po_number,
             amendment_version,
             data.variation_id,

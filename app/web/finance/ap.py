@@ -538,7 +538,7 @@ async def create_payment(
 def edit_payment_form(
     request: Request,
     payment_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:payments:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:update")),
     db: Session = Depends(get_db),
 ):
     """Edit AP payment form page."""
@@ -549,7 +549,7 @@ def edit_payment_form(
 async def update_payment(
     request: Request,
     payment_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:payments:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:update")),
     db: Session = Depends(get_db),
 ):
     """Handle AP payment update form submission."""
@@ -561,11 +561,13 @@ def approve_payment(
     request: Request,
     payment_id: str,
     auth: WebAuthContext = Depends(
-        require_any_web_permission([
-            "ap:payments:approve:tier1",
-            "ap:payments:approve:tier2",
-            "ap:payments:approve:tier3",
-        ])
+        require_any_web_permission(
+            [
+                "ap:payments:approve:tier1",
+                "ap:payments:approve:tier2",
+                "ap:payments:approve:tier3",
+            ]
+        )
     ),
     db: Session = Depends(get_db),
 ):
@@ -599,7 +601,7 @@ def void_payment(
 def delete_payment(
     request: Request,
     payment_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:payments:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:delete")),
     db: Session = Depends(get_db),
 ):
     """Delete an AP payment."""
@@ -614,7 +616,7 @@ def delete_payment(
 @router.post("/payments/bulk-delete")
 async def bulk_delete_payments(
     request: Request,
-    auth: WebAuthContext = Depends(require_web_permission("ap:payments:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:delete")),
     db: Session = Depends(get_db),
 ):
     """Bulk delete AP payments (only DRAFT status)."""
@@ -724,7 +726,7 @@ def view_purchase_order(
 def edit_purchase_order_form(
     request: Request,
     po_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:update")),
     db: Session = Depends(get_db),
 ):
     """Edit purchase order form page."""
@@ -745,7 +747,7 @@ async def create_purchase_order(
 async def update_purchase_order(
     request: Request,
     po_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:update")),
     db: Session = Depends(get_db),
 ):
     """Handle purchase order edit form submission."""
@@ -778,7 +780,9 @@ def submit_purchase_order(
 def approve_purchase_order(
     request: Request,
     po_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:approve")),
+    auth: WebAuthContext = Depends(
+        require_web_permission("ap:purchase_orders:approve")
+    ),
     db: Session = Depends(get_db),
 ):
     """Approve purchase order."""
@@ -932,7 +936,7 @@ async def upload_po_attachment(
     po_id: str,
     file: UploadFile = File(...),
     description: str | None = None,
-    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:update")),
     db: Session = Depends(get_db),
 ):
     """Upload an attachment for a purchase order."""
@@ -968,7 +972,7 @@ async def upload_payment_attachment(
     payment_id: str,
     file: UploadFile = File(...),
     description: str | None = None,
-    auth: WebAuthContext = Depends(require_web_permission("ap:payments:create")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:payments:update")),
     db: Session = Depends(get_db),
 ):
     """Upload an attachment for a supplier payment."""
@@ -1003,13 +1007,15 @@ async def upload_supplier_attachment(
 def download_attachment(
     attachment_id: str,
     auth: WebAuthContext = Depends(
-        require_any_web_permission([
-            "ap:invoices:read",
-            "ap:suppliers:read",
-            "ap:payments:read",
-            "ap:purchase_orders:read",
-            "ap:goods_receipts:read",
-        ])
+        require_any_web_permission(
+            [
+                "ap:invoices:read",
+                "ap:suppliers:read",
+                "ap:payments:read",
+                "ap:purchase_orders:read",
+                "ap:goods_receipts:read",
+            ]
+        )
     ),
     db: Session = Depends(get_db),
 ):
@@ -1021,13 +1027,15 @@ def download_attachment(
 def delete_attachment(
     attachment_id: str,
     auth: WebAuthContext = Depends(
-        require_any_web_permission([
-            "ap:invoices:update",
-            "ap:suppliers:update",
-            "ap:payments:create",
-            "ap:purchase_orders:create",
-            "ap:goods_receipts:update",
-        ])
+        require_any_web_permission(
+            [
+                "ap:invoices:update",
+                "ap:suppliers:update",
+                "ap:payments:update",
+                "ap:purchase_orders:update",
+                "ap:goods_receipts:update",
+            ]
+        )
     ),
     db: Session = Depends(get_db),
 ):

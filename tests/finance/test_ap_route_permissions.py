@@ -156,6 +156,18 @@ class TestAPRoutePermissionMapping:
     def test_create_payment_requires_create(self) -> None:
         assert "ap:payments:create" in self.route_perms.get("create_payment", [])
 
+    def test_edit_payment_requires_update(self) -> None:
+        assert "ap:payments:update" in self.route_perms.get("edit_payment_form", [])
+
+    def test_update_payment_requires_update(self) -> None:
+        assert "ap:payments:update" in self.route_perms.get("update_payment", [])
+
+    def test_delete_payment_requires_delete(self) -> None:
+        assert "ap:payments:delete" in self.route_perms.get("delete_payment", [])
+
+    def test_bulk_delete_payments_requires_delete(self) -> None:
+        assert "ap:payments:delete" in self.route_perms.get("bulk_delete_payments", [])
+
     def test_approve_payment_requires_tier_perms(self) -> None:
         perms = self.route_perms.get("approve_payment", [])
         assert "ap:payments:approve:tier1" in perms
@@ -177,6 +189,16 @@ class TestAPRoutePermissionMapping:
     def test_create_po_requires_create(self) -> None:
         assert "ap:purchase_orders:create" in self.route_perms.get(
             "create_purchase_order", []
+        )
+
+    def test_edit_po_requires_update(self) -> None:
+        assert "ap:purchase_orders:update" in self.route_perms.get(
+            "edit_purchase_order_form", []
+        )
+
+    def test_update_po_requires_update(self) -> None:
+        assert "ap:purchase_orders:update" in self.route_perms.get(
+            "update_purchase_order", []
         )
 
     def test_submit_po_requires_submit(self) -> None:
@@ -214,6 +236,34 @@ class TestAPRoutePermissionMapping:
             "list_payment_batches", []
         )
 
+    # Attachments
+    def test_upload_po_attachment_requires_update(self) -> None:
+        assert "ap:purchase_orders:update" in self.route_perms.get(
+            "upload_po_attachment", []
+        )
+
+    def test_upload_payment_attachment_requires_update(self) -> None:
+        assert "ap:payments:update" in self.route_perms.get(
+            "upload_payment_attachment", []
+        )
+
+    def test_upload_supplier_attachment_requires_update(self) -> None:
+        assert "ap:suppliers:update" in self.route_perms.get(
+            "upload_supplier_attachment", []
+        )
+
+    def test_delete_attachment_uses_update_perms(self) -> None:
+        """Attachment deletion must use update perms, not create."""
+        perms = self.route_perms.get("delete_attachment", [])
+        assert "ap:invoices:update" in perms
+        assert "ap:suppliers:update" in perms
+        assert "ap:payments:update" in perms
+        assert "ap:purchase_orders:update" in perms
+        assert "ap:goods_receipts:update" in perms
+        # Must NOT use create perms for delete
+        assert "ap:payments:create" not in perms
+        assert "ap:purchase_orders:create" not in perms
+
     # Aging
     def test_aging_requires_read(self) -> None:
         assert "ap:aging:read" in self.route_perms.get("aging_report", [])
@@ -244,3 +294,17 @@ class TestSoDIntegrity:
         create_perms = set(self.route_perms.get("create_payment", []))
         approve_perms = set(self.route_perms.get("approve_payment", []))
         assert create_perms.isdisjoint(approve_perms)
+
+    def test_edit_and_approve_use_different_permissions(self) -> None:
+        """Editor and approver must require different permissions (SoD)."""
+        edit_perms = set(self.route_perms.get("update_payment", []))
+        approve_perms = set(self.route_perms.get("approve_payment", []))
+        assert edit_perms.isdisjoint(approve_perms), (
+            "Payment update and approve should require different permissions for SoD"
+        )
+
+    def test_po_edit_and_approve_are_separate(self) -> None:
+        """PO editor and approver must require different permissions."""
+        edit_perms = set(self.route_perms.get("update_purchase_order", []))
+        approve_perms = set(self.route_perms.get("approve_purchase_order", []))
+        assert edit_perms.isdisjoint(approve_perms)
