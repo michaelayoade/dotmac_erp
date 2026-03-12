@@ -7,8 +7,8 @@ Goods Receipts, Payment Batches, and AP Aging.
 Permission mapping (see scripts/seed_rbac.py for definitions):
   - Suppliers:   ap:suppliers:{read,create,update,delete}
   - Invoices:    ap:invoices:{read,create,update,submit,approve,post,void}
-  - Payments:    ap:payments:{read,create,post,void,approve:tier1/2/3}
-  - POs:         ap:purchase_orders:{read,create,submit,approve,void}
+  - Payments:    ap:payments:{read,create,update,delete,post,void,approve:tier1/2/3}
+  - POs:         ap:purchase_orders:{read,create,update,delete,submit,approve,void}
   - GRN:         ap:goods_receipts:{read,create,update,approve}
   - Batches:     ap:payment_batches:{read,create,update,approve,process,export}
   - Aging:       ap:aging:read
@@ -758,7 +758,7 @@ async def update_purchase_order(
 def delete_purchase_order(
     request: Request,
     po_id: str,
-    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:void")),
+    auth: WebAuthContext = Depends(require_web_permission("ap:purchase_orders:delete")),
     db: Session = Depends(get_db),
 ):
     """Handle purchase order deletion."""

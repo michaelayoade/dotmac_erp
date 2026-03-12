@@ -11,6 +11,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from scripts.seed_rbac import ROLE_PERMISSIONS
+
 
 def _extract_route_permissions(filepath: str) -> dict[str, list[str]]:
     """Parse the AP routes file and extract permission strings from Depends() calls.
@@ -211,6 +213,11 @@ class TestAPRoutePermissionMapping:
             "approve_purchase_order", []
         )
 
+    def test_delete_po_requires_delete(self) -> None:
+        assert "ap:purchase_orders:delete" in self.route_perms.get(
+            "delete_purchase_order", []
+        )
+
     def test_cancel_po_requires_void(self) -> None:
         assert "ap:purchase_orders:void" in self.route_perms.get(
             "cancel_purchase_order", []
@@ -308,3 +315,41 @@ class TestSoDIntegrity:
         edit_perms = set(self.route_perms.get("update_purchase_order", []))
         approve_perms = set(self.route_perms.get("approve_purchase_order", []))
         assert edit_perms.isdisjoint(approve_perms)
+
+    def test_po_delete_uses_delete_not_create(self) -> None:
+        """PO deletion must use delete permission, never create."""
+        delete_perms = set(self.route_perms.get("delete_purchase_order", []))
+        assert "ap:purchase_orders:delete" in delete_perms
+        assert "ap:purchase_orders:create" not in delete_perms
+
+    def test_payment_delete_uses_delete_not_create(self) -> None:
+        """Payment deletion must use delete permission, never create."""
+        delete_perms = set(self.route_perms.get("delete_payment", []))
+        assert "ap:payments:delete" in delete_perms
+        assert "ap:payments:create" not in delete_perms
+
+
+class TestAPRbacRoleMapping:
+    """Verify seeded AP role permissions keep least privilege."""
+
+    def test_ap_clerk_remains_least_privilege(self) -> None:
+        perms = set(ROLE_PERMISSIONS["ap_clerk"])
+        assert "ap:payments:update" not in perms
+        assert "ap:payments:delete" not in perms
+        assert "ap:purchase_orders:update" not in perms
+        assert "ap:purchase_orders:delete" not in perms
+        assert "ap:purchase_orders:submit" not in perms
+
+    def test_accountant_gets_new_edit_delete_scopes(self) -> None:
+        perms = set(ROLE_PERMISSIONS["accountant"])
+        assert "ap:payments:update" in perms
+        assert "ap:payments:delete" in perms
+        assert "ap:purchase_orders:update" in perms
+        assert "ap:purchase_orders:delete" in perms
+
+    def test_senior_accountant_keeps_submit_without_approve(self) -> None:
+        perms = set(ROLE_PERMISSIONS["senior_accountant"])
+        assert "ap:purchase_orders:submit" in perms
+        assert "ap:purchase_orders:approve" not in perms
+        assert "ap:payments:approve:tier1" in perms
+        assert "ap:payments:approve:tier2" not in perms

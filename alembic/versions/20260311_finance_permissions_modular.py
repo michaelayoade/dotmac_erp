@@ -49,6 +49,7 @@ AP_PERMISSIONS = [
     "ap:purchase_orders:read",
     "ap:purchase_orders:create",
     "ap:purchase_orders:update",
+    "ap:purchase_orders:delete",
     "ap:purchase_orders:submit",
     "ap:purchase_orders:approve",
     "ap:purchase_orders:void",
@@ -84,26 +85,20 @@ ROLE_AP_PERMS = {
         for p in AP_PERMISSIONS
         if not any(a in p for a in [":approve", ":post", ":void"])
     ],
-    # AP clerk: read + create + update + delete + submit + tier1 approve
-    # (no tier2/tier3 approvals, no post, no void)
+    # AP clerk mirrors the least-privilege seed mapping.
     "ap_clerk": [
-        p
-        for p in AP_PERMISSIONS
-        if p
-        not in [
-            "ap:payments:approve:tier2",
-            "ap:payments:approve:tier3",
-            "ap:invoices:approve",
-            "ap:invoices:post",
-            "ap:invoices:void",
-            "ap:payments:post",
-            "ap:payments:void",
-            "ap:purchase_orders:approve",
-            "ap:purchase_orders:void",
-            "ap:goods_receipts:approve",
-            "ap:payment_batches:approve",
-            "ap:payment_batches:process",
-        ]
+        "ap:suppliers:read",
+        "ap:suppliers:create",
+        "ap:suppliers:update",
+        "ap:invoices:read",
+        "ap:invoices:create",
+        "ap:invoices:update",
+        "ap:payments:read",
+        "ap:payments:create",
+        "ap:purchase_orders:read",
+        "ap:goods_receipts:read",
+        "ap:goods_receipts:create",
+        "ap:aging:read",
     ],
     # Junior: read only
     "junior_accountant": [p for p in AP_PERMISSIONS if ":read" in p],

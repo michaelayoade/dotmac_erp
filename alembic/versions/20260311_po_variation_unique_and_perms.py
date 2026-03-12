@@ -31,15 +31,15 @@ NEW_PERMISSIONS = [
     ("ap:purchase_orders:update", "Modify draft purchase orders"),
 ]
 
-# Roles that should get the new update/delete permissions
-# (matches the seed_rbac.py grants for existing create perms)
+# Roles that should get the new update/delete permissions.
+# Keep ap_clerk least-privilege; 20260311_finance_perms already seeds its
+# narrower baseline access and 20260312_fix_ap_perms corrects existing DBs.
 ROLES_WITH_UPDATE_DELETE = [
     "admin",
     "finance_director",
     "finance_manager",
     "senior_accountant",
     "accountant",
-    "ap_clerk",
 ]
 
 

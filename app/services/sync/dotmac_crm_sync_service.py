@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -122,6 +122,27 @@ CRM_SYNC_STATUS_MAP = {
     "canceled": CRMSyncStatus.CANCELLED,
     "archived": CRMSyncStatus.ARCHIVED,
 }
+
+
+def _is_variation_id_conflict(error: IntegrityError) -> bool:
+    """Return True when the IntegrityError is the PO variation unique conflict."""
+    orig = getattr(error, "orig", None)
+    diag = getattr(orig, "diag", None)
+    constraint_name = getattr(diag, "constraint_name", None)
+    if constraint_name == "uq_po_variation_id":
+        return True
+
+    error_text = " ".join(
+        str(part)
+        for part in (
+            getattr(orig, "pgcode", None),
+            getattr(orig, "sqlstate", None),
+            constraint_name,
+            orig,
+        )
+        if part
+    ).lower()
+    return "uq_po_variation_id" in error_text
 
 
 # Valid local_entity_type values for CRMSyncMapping
@@ -1777,7 +1798,27 @@ class DotMacCRMSyncService:
         # Accounting safety: block supersede when PO has received or
         # invoiced quantities — orphaning those financial records is unsafe.
         # A future residual-safe change-order flow can relax this guard.
-        if baseline_po.amount_received > 0 or baseline_po.amount_invoiced > 0:
+        #
+        # Belt-and-suspenders: check both header-level summary amounts AND
+        # individual line quantities.  The header fields are updated by
+        # update_received_amount(), but a race or bug could leave them stale.
+        from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
+
+        has_header_activity = (
+            baseline_po.amount_received > 0 or baseline_po.amount_invoiced > 0
+        )
+        has_line_activity = self.db.scalar(
+            select(PurchaseOrderLine.line_id)
+            .where(
+                PurchaseOrderLine.po_id == baseline_po.po_id,
+                or_(
+                    PurchaseOrderLine.quantity_received > 0,
+                    PurchaseOrderLine.quantity_invoiced > 0,
+                ),
+            )
+            .limit(1)
+        )
+        if has_header_activity or has_line_activity:
             raise ValueError(
                 f"Cannot supersede PO {baseline_po.po_number}: "
                 f"amount_received={baseline_po.amount_received}, "
@@ -1860,7 +1901,11 @@ class DotMacCRMSyncService:
 
         try:
             self.db.commit()
-        except IntegrityError:
+        except IntegrityError as exc:
+            if not _is_variation_id_conflict(exc):
+                self.db.rollback()
+                raise
+
             # Race condition: another request already created this variation.
             # Roll back and return the existing PO (idempotent).
             self.db.rollback()

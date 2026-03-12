@@ -394,6 +394,8 @@ class TestVariationAccountingSafety:
             if call_count == 2:
                 return baseline_mapping
             if call_count == 3:
+                return None  # Line-level activity check (no lines with qty)
+            if call_count == 4:
                 return mock_supplier
             return None
 
@@ -460,6 +462,8 @@ class TestVariationCreation:
             if call_count == 2:
                 return baseline_mapping  # Baseline mapping found
             if call_count == 3:
+                return None  # Line-level activity check (no lines with qty)
+            if call_count == 4:
                 return mock_supplier  # Supplier resolved
             return None  # No project, no approver
 
@@ -640,6 +644,8 @@ class TestVariationIntegrityErrorHandling:
         baseline_po_id: uuid.UUID,
     ) -> None:
         """On IntegrityError (race), rollback and return the existing PO."""
+        from types import SimpleNamespace
+
         from sqlalchemy.exc import IntegrityError
 
         baseline_mapping = MagicMock()
@@ -679,21 +685,21 @@ class TestVariationIntegrityErrorHandling:
             if call_count == 2:
                 return baseline_mapping
             if call_count == 3:
+                return None  # Line-level activity check (no lines with qty)
+            if call_count == 4:
                 return mock_supplier
-            if call_count >= 4:
-                return None  # No project/approver
-            return None
+            return None  # No project/approver
 
         mock_db.scalar.side_effect = scalar_side_effect
         mock_db.get.return_value = baseline_po
         # Simulate IntegrityError on commit, then return existing on retry query
         mock_db.commit.side_effect = IntegrityError(
-            "duplicate key", params={}, orig=Exception()
+            "duplicate key",
+            params={},
+            orig=SimpleNamespace(
+                diag=SimpleNamespace(constraint_name="uq_po_variation_id")
+            ),
         )
-
-        # After rollback, the re-query should find the winner
-        def post_rollback_scalar(*args, **kwargs):
-            return existing_winner
 
         def do_rollback():
             # After rollback, reset scalar to return the existing winner
@@ -716,3 +722,72 @@ class TestVariationIntegrityErrorHandling:
         assert result.purchase_order_id == "PO-2026-00003"
         assert result.is_amendment is True
         assert result.variation_id == "var-001-xyz"
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_non_variation_integrity_error_is_raised(
+        self,
+        mock_select: MagicMock,
+        service: DotMacCRMSyncService,
+        org_id: uuid.UUID,
+        person_id: uuid.UUID,
+        mock_db: MagicMock,
+        variation_payload: CRMPurchaseOrderVariationPayload,
+        baseline_po_id: uuid.UUID,
+    ) -> None:
+        """Non-variation IntegrityErrors must not be treated as idempotent wins."""
+        from types import SimpleNamespace
+
+        from sqlalchemy.exc import IntegrityError
+
+        baseline_mapping = MagicMock()
+        baseline_mapping.local_entity_id = baseline_po_id
+        baseline_mapping.crm_data = {"total": "53750"}
+
+        baseline_po = MagicMock()
+        baseline_po.po_id = baseline_po_id
+        baseline_po.po_number = "PO-2026-00001"
+        baseline_po.status = POStatus.APPROVED
+        baseline_po.amount_received = Decimal("0")
+        baseline_po.amount_invoiced = Decimal("0")
+
+        new_po = MagicMock()
+        new_po.po_id = uuid.uuid4()
+        new_po.po_number = "PO-2026-00002"
+        new_po.status = POStatus.DRAFT
+
+        mock_supplier = MagicMock()
+        mock_supplier.supplier_id = uuid.uuid4()
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None
+            if call_count == 2:
+                return baseline_mapping
+            if call_count == 3:
+                return None
+            if call_count == 4:
+                return mock_supplier
+            return None
+
+        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.get.return_value = baseline_po
+        mock_db.commit.side_effect = IntegrityError(
+            "other constraint",
+            params={},
+            orig=SimpleNamespace(diag=SimpleNamespace(constraint_name="uq_other")),
+        )
+
+        with patch(
+            "app.services.finance.ap.purchase_order.PurchaseOrderService.create_po",
+            return_value=new_po,
+        ):
+            with pytest.raises(IntegrityError):
+                service.create_purchase_order_variation(
+                    org_id, variation_payload, person_id
+                )
+
+        mock_db.rollback.assert_called_once()
