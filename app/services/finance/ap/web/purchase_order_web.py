@@ -576,6 +576,7 @@ class PurchaseOrderWebService:
                 input=input_data,
                 created_by_user_id=user_id,
             )
+            db.commit()
 
             logger.info(
                 "create_purchase_order_response: created PO %s for org %s",
@@ -592,6 +593,7 @@ class PurchaseOrderWebService:
             )
 
         except Exception as e:
+            db.rollback()
             logger.exception("create_purchase_order_response: failed")
             if "application/json" in content_type:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
@@ -639,6 +641,7 @@ class PurchaseOrderWebService:
                 po_id=UUID(po_id),
                 input=input_data,
             )
+            db.commit()
 
             if "application/json" in content_type:
                 return {"success": True, "po_id": str(po.po_id)}
@@ -648,6 +651,7 @@ class PurchaseOrderWebService:
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             logger.exception("update_purchase_order_response: failed for %s", po_id)
             if "application/json" in content_type:
                 return JSONResponse(status_code=400, content={"detail": str(e)})
@@ -698,6 +702,7 @@ class PurchaseOrderWebService:
         error = self.delete_purchase_order(db, str(auth.organization_id), po_id)
 
         if error:
+            db.rollback()
             context = base_context(request, auth, "Purchase Order Details", "ap")
             context.update(
                 self.purchase_order_detail_context(
@@ -711,6 +716,7 @@ class PurchaseOrderWebService:
                 request, "finance/ap/purchase_order_detail.html", context
             )
 
+        db.commit()
         return RedirectResponse(
             url="/finance/ap/purchase-orders?success=Record+deleted+successfully",
             status_code=303,
@@ -737,6 +743,7 @@ class PurchaseOrderWebService:
                 po_id=UUID(po_id),
                 submitted_by_user_id=user_id,
             )
+            db.commit()
             logger.info(
                 "submit_purchase_order_response: submitted PO %s for approval", po_id
             )
@@ -745,6 +752,7 @@ class PurchaseOrderWebService:
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             logger.exception("submit_purchase_order_response: failed for PO %s", po_id)
             context = base_context(request, auth, "Purchase Order Details", "ap")
             context.update(
@@ -780,12 +788,14 @@ class PurchaseOrderWebService:
                 po_id=UUID(po_id),
                 approved_by_user_id=user_id,
             )
+            db.commit()
             logger.info("approve_purchase_order_response: approved PO %s", po_id)
             return RedirectResponse(
                 url=f"/finance/ap/purchase-orders/{po_id}?success=Purchase+order+approved",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             logger.exception("approve_purchase_order_response: failed for PO %s", po_id)
             context = base_context(request, auth, "Purchase Order Details", "ap")
             context.update(
@@ -817,12 +827,14 @@ class PurchaseOrderWebService:
                 organization_id=org_id,
                 po_id=UUID(po_id),
             )
+            db.commit()
             logger.info("cancel_purchase_order_response: cancelled PO %s", po_id)
             return RedirectResponse(
                 url=f"/finance/ap/purchase-orders/{po_id}?success=Purchase+order+cancelled",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             logger.exception("cancel_purchase_order_response: failed for PO %s", po_id)
             context = base_context(request, auth, "Purchase Order Details", "ap")
             context.update(
