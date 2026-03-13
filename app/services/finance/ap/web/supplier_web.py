@@ -700,6 +700,7 @@ class SupplierWebService:
                 organization_id=org_id,
                 input=input_data,
             )
+            db.commit()
 
             return RedirectResponse(
                 url="/finance/ap/suppliers?success=Supplier+created+successfully",
@@ -707,6 +708,7 @@ class SupplierWebService:
             )
 
         except Exception as e:
+            db.rollback()
             logger.exception("create_supplier_response: failed")
             context = base_context(request, auth, "New Supplier", "ap")
             context.update(self.supplier_form_context(db, str(auth.organization_id)))
@@ -738,6 +740,7 @@ class SupplierWebService:
                 supplier_id=UUID(supplier_id),
                 input=input_data,
             )
+            db.commit()
 
             return RedirectResponse(
                 url="/finance/ap/suppliers?success=Supplier+updated+successfully",
@@ -745,6 +748,7 @@ class SupplierWebService:
             )
 
         except Exception as e:
+            db.rollback()
             logger.exception("update_supplier_response: failed")
             context = base_context(request, auth, "Edit Supplier", "ap")
             context.update(
@@ -767,6 +771,7 @@ class SupplierWebService:
         error = self.delete_supplier(db, str(auth.organization_id), supplier_id)
 
         if error:
+            db.rollback()
             context = base_context(request, auth, "Supplier Details", "ap")
             context.update(
                 self.supplier_detail_context(
@@ -776,6 +781,23 @@ class SupplierWebService:
                 )
             )
             context["error"] = error
+            return templates.TemplateResponse(
+                request, "finance/ap/supplier_detail.html", context
+            )
+
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            context = base_context(request, auth, "Supplier Details", "ap")
+            context.update(
+                self.supplier_detail_context(
+                    db,
+                    str(auth.organization_id),
+                    supplier_id,
+                )
+            )
+            context["error"] = f"Failed to delete supplier: {str(e)}"
             return templates.TemplateResponse(
                 request, "finance/ap/supplier_detail.html", context
             )
