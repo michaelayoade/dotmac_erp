@@ -106,11 +106,22 @@ from app.web_home import router as web_home_router
 # Module enablement — driven by ENABLED_MODULES env var.
 # Empty = all modules on (default). Core is always on.
 # ---------------------------------------------------------------------------
-_ALL_MODULES = frozenset({
-    "finance", "people", "fleet", "fixed_assets", "support",
-    "procurement", "projects", "expense", "inventory",
-    "coach", "public_sector", "crm",
-})
+_ALL_MODULES = frozenset(
+    {
+        "finance",
+        "people",
+        "fleet",
+        "fixed_assets",
+        "support",
+        "procurement",
+        "projects",
+        "expense",
+        "inventory",
+        "coach",
+        "public_sector",
+        "crm",
+    }
+)
 
 _raw_enabled = os.getenv("ENABLED_MODULES", "").strip()
 _ENABLED_MODULES: frozenset[str] = (
@@ -567,8 +578,12 @@ if is_module_enabled("finance"):
     _include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
-    _include_api_router(import_export_router, dependencies=[Depends(require_tenant_auth)])
-    _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(
+        import_export_router, dependencies=[Depends(require_tenant_auth)]
+    )
+    _include_api_router(
+        opening_balance_router, dependencies=[Depends(require_tenant_auth)]
+    )
     _include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(payments_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(fx_router, dependencies=[Depends(require_tenant_auth)])
@@ -581,7 +596,9 @@ if is_module_enabled("finance"):
 if is_module_enabled("expense"):
     app.include_router(expense_web_router)
     _include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
-    _include_api_router(expense_limits_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(
+        expense_limits_router, dependencies=[Depends(require_tenant_auth)]
+    )
 
 # ---------------------------------------------------------------------------
 # Support/Helpdesk module

@@ -955,9 +955,9 @@ class WebAuthContext:
         _module_map = {"discipline": "people", "self_service": "people"}
         _always_on = {"settings"}
         return [
-            m for m in modules
-            if m in _always_on
-            or is_module_enabled(_module_map.get(m, m))
+            m
+            for m in modules
+            if m in _always_on or is_module_enabled(_module_map.get(m, m))
         ]
 
     def has_module_access(self, module: str) -> bool:
