@@ -102,6 +102,31 @@ from app.web.support import router as support_web_router
 from app.web.workflow_tasks import router as workflow_tasks_web_router
 from app.web_home import router as web_home_router
 
+# ---------------------------------------------------------------------------
+# Module enablement — driven by ENABLED_MODULES env var.
+# Empty = all modules on (default). Core is always on.
+# ---------------------------------------------------------------------------
+_ALL_MODULES = frozenset({
+    "finance", "people", "fleet", "fixed_assets", "support",
+    "procurement", "projects", "expense", "inventory",
+    "coach", "public_sector", "crm",
+})
+
+_raw_enabled = os.getenv("ENABLED_MODULES", "").strip()
+_ENABLED_MODULES: frozenset[str] = (
+    frozenset(m.strip() for m in _raw_enabled.split(",") if m.strip())
+    if _raw_enabled
+    else _ALL_MODULES
+)
+
+logger = logging.getLogger(__name__)
+logger.info("Enabled modules: %s", sorted(_ENABLED_MODULES))
+
+
+def is_module_enabled(module: str) -> bool:
+    """Check if a module is enabled for this deployment."""
+    return module in _ENABLED_MODULES
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -482,21 +507,14 @@ def _include_api_router(router, dependencies=None):
     app.include_router(router, prefix="/api/v1", dependencies=dependencies)
 
 
+# ---------------------------------------------------------------------------
+# Core routers (always on)
+# ---------------------------------------------------------------------------
 _include_api_router(auth_router, dependencies=[Depends(require_role("admin"))])
 _include_api_router(auth_flow_router)
 _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(me_router)
 _include_api_router(workflow_tasks_router, dependencies=[Depends(require_tenant_auth)])
-app.include_router(
-    coach_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
-app.include_router(
-    people_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
 _include_api_router(audit_router)
 app.include_router(
     settings_router,
@@ -504,115 +522,160 @@ app.include_router(
     dependencies=[Depends(require_tenant_auth)],
 )
 _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(service_hooks_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(web_home_router)
 app.include_router(help_web_router)
 app.include_router(auth_web_router)
 app.include_router(admin_web_router)
-app.include_router(admin_sync_router)  # Admin sync management UI
-app.include_router(admin_crm_sync_router)  # DotMac CRM sync management UI
 app.include_router(profile_web_router)
-app.include_router(finance_web_router, prefix="/finance")
-app.include_router(expense_web_router)
-app.include_router(
-    finance_settings_web_router
-)  # Has its own /settings prefix (finance)
-app.include_router(automation_web_router)  # Has its own /automation prefix
-app.include_router(payroll_alias_web_router)
-app.include_router(people_web_router)
 app.include_router(notifications_web_router)
 app.include_router(workflow_tasks_web_router)
-
-# Finance Accounting Routers (authenticated with tenant context)
-_include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(lease_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(import_export_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(payments_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(fx_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(analysis_router, dependencies=[Depends(require_tenant_auth)])
-# Payments webhook router - NO authentication (uses signature verification)
-_include_api_router(payments_webhook_router)
-
-# People/HR Routers
-_include_api_router(people_hr_router, dependencies=[Depends(require_tenant_auth)])
-
-# Expense Management (independent module)
-_include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(expense_limits_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(service_hooks_router, dependencies=[Depends(require_tenant_auth)])
-
-# Support/Helpdesk
-app.include_router(
-    support_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
-
-# Project Management
-app.include_router(
-    pm_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
-
-# Fleet Management
-app.include_router(
-    fleet_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
-
-# CRM Integration (sync from crm.dotmac.io)
-_include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
-# CRM webhook router - NO authentication (uses HMAC signature verification)
-_include_api_router(crm_webhook_router)
-# DotMac CRM Sync - service auth (API key) for bulk sync, tenant auth for UI endpoints
-_include_api_router(crm_sync_router)
-
-# Public Careers Portal (no authentication required)
-# Serve API under /api/v1 to avoid clashing with web UI routes.
-app.include_router(careers_api_router, prefix="/api/v1")  # API endpoints
-app.include_router(careers_web_router)  # Web UI routes
-app.include_router(careers_short_web_router)  # Short careers links
-
-# Public Onboarding Self-Service Portal (token-based auth, no login required)
-app.include_router(onboarding_portal_router)  # Web UI routes
-
-# Standalone module web routes
-app.include_router(fixed_assets_web_router)  # /fixed-assets/* web routes
-app.include_router(inventory_web_router)  # /inventory/* web routes
-app.include_router(fleet_web_router)  # /fleet/* web routes
-app.include_router(procurement_web_router)  # /procurement/* web routes
-app.include_router(support_web_router)  # /support/* web routes
-app.include_router(projects_web_router)  # /projects/* web routes
 app.include_router(module_settings_web_router)  # /settings/* web routes
-app.include_router(coach_web_router)  # /coach/* web routes
-app.include_router(public_sector_web_router)  # /public-sector/* web routes
+
+# ---------------------------------------------------------------------------
+# People/HR module
+# ---------------------------------------------------------------------------
+if is_module_enabled("people"):
+    app.include_router(
+        people_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    _include_api_router(people_hr_router, dependencies=[Depends(require_tenant_auth)])
+    app.include_router(people_web_router)
+    app.include_router(payroll_alias_web_router)
+    # Careers portal (tied to people/recruitment)
+    app.include_router(careers_api_router, prefix="/api/v1")
+    app.include_router(careers_web_router)
+    app.include_router(careers_short_web_router)
+    app.include_router(onboarding_portal_router)
+
+# ---------------------------------------------------------------------------
+# Finance module
+# ---------------------------------------------------------------------------
+if is_module_enabled("finance"):
+    app.include_router(finance_web_router, prefix="/finance")
+    app.include_router(
+        finance_settings_web_router
+    )  # Has its own /settings prefix (finance)
+    app.include_router(automation_web_router)  # Has its own /automation prefix
+    _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(lease_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(tax_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(cons_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(rpt_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(banking_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(import_export_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(payments_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(fx_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(analysis_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(payments_webhook_router)
+
+# ---------------------------------------------------------------------------
+# Expense module
+# ---------------------------------------------------------------------------
+if is_module_enabled("expense"):
+    app.include_router(expense_web_router)
+    _include_api_router(expense_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(expense_limits_router, dependencies=[Depends(require_tenant_auth)])
+
+# ---------------------------------------------------------------------------
+# Support/Helpdesk module
+# ---------------------------------------------------------------------------
+if is_module_enabled("support"):
+    app.include_router(
+        support_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    app.include_router(support_web_router)
+
+# ---------------------------------------------------------------------------
+# Fleet Management module
+# ---------------------------------------------------------------------------
+if is_module_enabled("fleet"):
+    app.include_router(
+        fleet_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    app.include_router(fleet_web_router)
+
+# ---------------------------------------------------------------------------
+# Fixed Assets module
+# ---------------------------------------------------------------------------
+if is_module_enabled("fixed_assets"):
+    _include_api_router(fa_api_router, dependencies=[Depends(require_tenant_auth)])
+    app.include_router(fixed_assets_web_router)
+
+# ---------------------------------------------------------------------------
+# Inventory module
+# ---------------------------------------------------------------------------
+if is_module_enabled("inventory"):
+    app.include_router(
+        inv_api_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    app.include_router(inventory_web_router)
+
+# ---------------------------------------------------------------------------
+# Procurement module
+# ---------------------------------------------------------------------------
+if is_module_enabled("procurement"):
+    app.include_router(
+        procurement_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    app.include_router(procurement_web_router)
+
+# ---------------------------------------------------------------------------
+# Project Management module
+# ---------------------------------------------------------------------------
+if is_module_enabled("projects"):
+    app.include_router(
+        pm_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    app.include_router(projects_web_router)
+
+# ---------------------------------------------------------------------------
+# CRM Integration module
+# ---------------------------------------------------------------------------
+if is_module_enabled("crm"):
+    _include_api_router(crm_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(crm_webhook_router)
+    _include_api_router(crm_sync_router)
+    app.include_router(admin_sync_router)
+    app.include_router(admin_crm_sync_router)
+
+# ---------------------------------------------------------------------------
+# Coach/Intelligence module
+# ---------------------------------------------------------------------------
+if is_module_enabled("coach"):
+    app.include_router(
+        coach_router,
+        prefix="/api/v1",
+        dependencies=[Depends(require_tenant_auth)],
+    )
+    app.include_router(coach_web_router)
+
+# ---------------------------------------------------------------------------
+# Public Sector (IPSAS) module
+# ---------------------------------------------------------------------------
+if is_module_enabled("public_sector"):
+    _include_api_router(ipsas_router, dependencies=[Depends(require_tenant_auth)])
+    app.include_router(public_sector_web_router)
 
 # Authenticated file downloads (S3-backed)
 app.include_router(files_router)  # /files/* (avatars, resumes, attachments, etc.)
 app.include_router(files_legacy_router)  # /uploads/* (legacy URL compat)
-
-# Standalone module API routes
-_include_api_router(fa_api_router, dependencies=[Depends(require_tenant_auth)])
-app.include_router(
-    inv_api_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
-app.include_router(
-    procurement_router,
-    prefix="/api/v1",
-    dependencies=[Depends(require_tenant_auth)],
-)
-_include_api_router(ipsas_router, dependencies=[Depends(require_tenant_auth)])
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

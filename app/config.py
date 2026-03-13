@@ -69,6 +69,12 @@ class Settings:
     brand_logo_url: str | None = os.getenv("BRAND_LOGO_URL") or None
     brand_mark: str | None = os.getenv("BRAND_MARK") or None  # Auto-derived if not set
 
+    # Module enablement — comma-separated list of enabled modules.
+    # Empty/unset = all modules enabled (default behavior).
+    # Example: ENABLED_MODULES=people,fleet,fixed_assets,support
+    # Core modules (auth, RBAC, audit, settings, notifications, workflows) are always on.
+    enabled_modules: str = os.getenv("ENABLED_MODULES", "")
+
     # Single organization mode - use this org for all operations
     # Set to a UUID to enable single-org mode (no org selection needed)
     default_organization_id: str | None = os.getenv("DEFAULT_ORGANIZATION_ID") or None
