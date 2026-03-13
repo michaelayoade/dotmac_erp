@@ -930,6 +930,7 @@ class PaymentWebService:
                 "bank_accounts": bank_accounts,
                 "invoices": invoices_view,
                 "payment_methods": [method.value for method in APPaymentMethod],
+                "form_data": {},
             }
         )
         context.update(get_currency_context(db, str(auth.organization_id)))
