@@ -896,7 +896,13 @@ class WebAuthContext:
 
     @property
     def accessible_modules(self) -> list[str]:
-        """Get list of modules the user can access."""
+        """Get list of modules the user can access.
+
+        Respects ENABLED_MODULES env var — modules not enabled for this
+        deployment are excluded regardless of user permissions.
+        """
+        from app.main import is_module_enabled
+
         modules = []
         scopes_set = set(self.scopes)
         roles_set = {r.strip().lower() for r in self.roles if r and r.strip()}
@@ -944,7 +950,15 @@ class WebAuthContext:
         if "self:access" in scopes_set:
             modules.append("self_service")
 
-        return modules
+        # Filter by deployment-level enabled modules
+        # "discipline" maps to "people", "settings" is always on
+        _module_map = {"discipline": "people", "self_service": "people"}
+        _always_on = {"settings"}
+        return [
+            m for m in modules
+            if m in _always_on
+            or is_module_enabled(_module_map.get(m, m))
+        ]
 
     def has_module_access(self, module: str) -> bool:
         """Check if user can access a specific module."""
