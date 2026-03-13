@@ -161,8 +161,8 @@ class SplynxSyncService:
     DEFAULT_BANK_NAME_MAPPING: dict[str, str | None] = {
         "zenith 461": "zenith 461",
         "zenith 523": "zenith 523",
-        "paystack": "paystack collections",
-        "pay stack": "paystack collections",
+        "paystack": "paystack",
+        "pay stack": "paystack",
         "uba": "uba 96",
         "flutterwave": "flutterwave",
         "flutter wave": "flutterwave",
@@ -368,10 +368,13 @@ class SplynxSyncService:
                 return m.group(1) in account_search and m.group(2) in account_search
             return False
 
-        # Get ERP bank accounts via ORM (prefer primary first for stable mapping)
+        # Get ERP bank accounts via ORM — active only, prefer primary first
         stmt = (
             select(BankAccount)
-            .where(BankAccount.organization_id == self.organization_id)
+            .where(
+                BankAccount.organization_id == self.organization_id,
+                BankAccount.status == "active",
+            )
             .order_by(BankAccount.is_primary.desc(), BankAccount.created_at.asc())
         )
         accounts = self.db.scalars(stmt).all()
