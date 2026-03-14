@@ -130,6 +130,43 @@ def post_invoice(
     if not invoice or invoice.organization_id != org_id:
         return ARPostingResult(success=False, message="Invoice not found")
 
+    # Idempotency: if this invoice already has a GL journal, skip.
+    if invoice.journal_entry_id is not None:
+        return ARPostingResult(
+            success=True,
+            journal_entry_id=invoice.journal_entry_id,
+            message="Invoice already posted to GL (idempotent)",
+        )
+
+    # Secondary idempotency guard: check if a journal already exists for
+    # this source document (protects against journal_entry_id not being
+    # written back due to RLS or session issues).
+    from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
+
+    existing_journal = db.scalar(
+        select(JournalEntry).where(
+            JournalEntry.source_module == "AR",
+            JournalEntry.source_document_type == "INVOICE",
+            JournalEntry.source_document_id == inv_id,
+            JournalEntry.status.notin_([JournalStatus.VOID, JournalStatus.REVERSED]),
+            JournalEntry.journal_type != JournalType.REVERSAL,
+        )
+    )
+    if existing_journal:
+        # Backfill the missing reference
+        invoice.journal_entry_id = existing_journal.journal_entry_id
+        db.flush()
+        logger.info(
+            "Invoice %s already has journal %s — backfilled reference",
+            inv_id,
+            existing_journal.journal_number,
+        )
+        return ARPostingResult(
+            success=True,
+            journal_entry_id=existing_journal.journal_entry_id,
+            message="Invoice already posted to GL (backfilled reference)",
+        )
+
     # Allow posting for APPROVED (normal workflow) and for invoices that are
     # already in a posted state but missing GL entries (sync/import backfill).
     postable_statuses = {

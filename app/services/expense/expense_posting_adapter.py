@@ -15,7 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.expense.cash_advance import CashAdvance, CashAdvanceStatus
 from app.models.expense.expense_claim import (
@@ -240,8 +240,14 @@ class ExpensePostingAdapter:
                 message="Expense claim posting already initiated (idempotent)",
             )
 
-        # Load items
-        items = list(claim.items)
+        # Load items with categories eagerly to avoid RLS issues
+        # when resolving expense accounts in Celery task sessions.
+        stmt = (
+            select(ExpenseClaimItem)
+            .where(ExpenseClaimItem.claim_id == c_id)
+            .options(selectinload(ExpenseClaimItem.category))
+        )
+        items = list(db.scalars(stmt).all())
         if not items:
             ExpensePostingAdapter._set_action_status(
                 db,
@@ -979,14 +985,26 @@ class ExpensePostingAdapter:
         1. Item-level override (expense_account_id on item)
         2. Category default (expense_account_id on category)
         3. Organization default expense account
+
+        Note: Priority 2 uses the item.category relationship instead of
+        db.get() to avoid RLS filtering in Celery task sessions where
+        app.current_organization_id may not be set.
         """
         # Priority 1: Item-level override
         if item.expense_account_id:
             return item.expense_account_id
 
-        # Priority 2: Category default
+        # Priority 2: Category default — use relationship to bypass RLS,
+        # fall back to explicit query with org filter if relationship is
+        # not loaded.
         if item.category_id:
-            category = db.get(ExpenseCategory, item.category_id)
+            category = item.category if item.category else None
+            if category is None:
+                stmt = select(ExpenseCategory).where(
+                    ExpenseCategory.category_id == item.category_id,
+                    ExpenseCategory.organization_id == organization_id,
+                )
+                category = db.scalar(stmt)
             if category and category.expense_account_id:
                 return category.expense_account_id
 
