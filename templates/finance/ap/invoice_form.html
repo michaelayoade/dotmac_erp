@@ -691,13 +691,14 @@
             {# Bulk apply tax to all lines #}
             <div class="mt-4 flex items-center gap-3">
                 <label class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Apply tax to all lines:</label>
-                <select @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[200px]">
+                <select @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[240px]">
                     <option value="">Select tax code...</option>
                     {% for tax in tax_codes %}
-                    <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%)</option>
+                    <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%){% if tax.is_inclusive %} — Price Inclusive{% endif %}</option>
                     {% endfor %}
                     <option value="__none__">No Tax</option>
                 </select>
+                <span class="text-xs text-slate-400 dark:text-slate-500">Use "Inclusive" if vendor quoted VAT-inclusive prices</span>
             </div>
 
             <div class="line-table-wrap mt-4 -mx-2 px-2">
@@ -800,7 +801,7 @@
                                             class="table-input">
                                         <option value="">No Tax</option>
                                         {% for tax in tax_codes %}
-                                        <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%){% if tax.is_inclusive %} Incl.{% endif %}</option>
+                                        <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%){% if tax.is_inclusive %} — Inclusive{% else %} — Added{% endif %}</option>
                                         {% else %}
                                         <option disabled>No tax codes available</option>
                                         {% endfor %}
@@ -837,10 +838,22 @@
                         <span class="total-label">Tax (VAT)</span>
                         <span class="total-value" x-text="formatCurrency(exclusiveTaxAmount)"></span>
                     </div>
+                    <template x-if="inclusiveTaxAmount > 0">
+                        <div class="total-row">
+                            <span class="total-label text-xs text-slate-400">VAT included in prices</span>
+                            <span class="total-value text-xs text-slate-400" x-text="formatCurrency(inclusiveTaxAmount)"></span>
+                        </div>
+                    </template>
                     <div class="total-row total-final">
                         <span class="total-label">Total</span>
                         <span class="total-value" x-text="formatCurrency(total)"></span>
                     </div>
+                    <template x-if="exclusiveTaxAmount > 0">
+                        <div class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                            Tax of <span x-text="formatCurrency(exclusiveTaxAmount)"></span> will be added to the line amounts.
+                            If vendor prices already include VAT, use "Inclusive" tax code instead.
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
