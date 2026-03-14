@@ -93,12 +93,19 @@ def _notify_admins(state, results: dict) -> None:
         try:
             from sqlalchemy import select
 
-            from app.models.rbac import RoleAssignment
+            from app.models.people.person import Person
+            from app.models.rbac import PersonRole, Role
 
-            # Notify all admin-role users across all orgs
-            stmt = select(
-                RoleAssignment.person_id, RoleAssignment.organization_id
-            ).where(RoleAssignment.role_name.in_(["admin", "finance_manager"]))
+            # Notify all admin/finance_manager-role users across all orgs
+            stmt = (
+                select(PersonRole.person_id, Person.organization_id)
+                .join(Role, PersonRole.role_id == Role.id)
+                .join(Person, PersonRole.person_id == Person.id)
+                .where(
+                    Role.name.in_(["admin", "finance_manager"]),
+                    Role.is_active.is_(True),
+                )
+            )
             rows = db.execute(stmt).all()
 
             for person_id, org_id in rows:
