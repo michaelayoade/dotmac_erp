@@ -59,6 +59,7 @@ class MockInvoice:
         self.ar_control_account_id = ar_control_account_id or uuid.uuid4()
         self.correlation_id = correlation_id or uuid.uuid4()
         self.erpnext_id = erpnext_id
+        self.journal_entry_id = None
 
 
 class MockInvoiceLine:
@@ -207,6 +208,7 @@ def mock_db():
     """Create a mock database session."""
     db = MagicMock()
     db.get = MagicMock(return_value=None)
+    db.scalar = MagicMock(return_value=None)
     db.scalars = MagicMock(return_value=db)
     db.all = MagicMock(return_value=[])
     db.first = MagicMock(return_value=None)
