@@ -36,17 +36,31 @@ def run_nuitka(package: str, output_dir: Path) -> None:
     print(f"Compiling: {package}")
     print(f"{'=' * 60}")
 
+    # Nuitka --module expects a filesystem path (app/services), not dotted (app.services)
+    package_path = package.replace(".", "/")
+    if Path(package_path).is_dir():
+        target = package_path
+    elif Path(f"{package_path}.py").is_file():
+        target = f"{package_path}.py"
+    else:
+        print(
+            f"ERROR: Cannot find {package_path} or {package_path}.py", file=sys.stderr
+        )
+        sys.exit(1)
+
     cmd = [
         sys.executable,
         "-m",
         "nuitka",
         "--module",
-        package,
-        f"--include-package={package}",
+        target,
         f"--output-dir={output_dir}",
         "--remove-output",
         "--no-pyi-file",
     ]
+    # --include-package only applies to directories, not single .py files
+    if Path(package_path).is_dir():
+        cmd.insert(-2, f"--include-package={package}")
 
     result = subprocess.run(cmd, check=False)
     if result.returncode != 0:
