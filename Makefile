@@ -1,4 +1,4 @@
-.PHONY: help test lint type-check format security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup
+.PHONY: help test lint type-check format security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup build-hardened license-gen license-validate
 
 # Default target
 help: ## Show this help
@@ -106,6 +106,17 @@ docker-migrate: ## Run migrations inside Docker + regenerate schema skill
 	docker exec dotmac_erp_app alembic upgrade head
 	@echo "Regenerating schema skill..."
 	@poetry run python scripts/generate_schema_skill.py
+
+# ─── Licensing ───────────────────────────────────────────
+
+build-hardened: ## Build hardened Docker image (Nuitka-compiled)
+	docker build -f Dockerfile.hardened -t dotmac-erp-hardened:local .
+
+license-gen: ## Run license generation CLI (usage: make license-gen ARGS="generate-keypair --out-dir ./keys")
+	poetry run python tools/license_gen.py $(ARGS)
+
+license-validate: ## Validate a .lic file (usage: make license-validate LIC=dotmac.lic PUB=keys/public.pem)
+	poetry run python tools/license_gen.py validate-license --lic $(LIC) --pub $(PUB)
 
 # ─── Pre-commit ───────────────────────────────────────────
 

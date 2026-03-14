@@ -331,6 +331,112 @@ jobs:
         run: poetry run pytest tests/integration/ -v --tb=short --timeout=120 -o "addopts=" -o "confcutdir=tests/integration"
 
   # ---------------------------------------------------------------------------
+  # Hardened Docker Build (Nuitka-compiled, no source)
+  # Builds the on-premise image with compiled .so files.
+  # ---------------------------------------------------------------------------
+  build-hardened:
+    name: Build Hardened Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [lint, type-check, test, docker-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build hardened image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.hardened
+          load: true
+          tags: dotmac-erp-hardened:ci
+          cache-from: type=gha,scope=hardened
+          cache-to: type=gha,mode=max,scope=hardened
+
+      - name: Health check (hardened image)  # pragma: allowlist secret
+        run: |
+          docker network create ci-hardened-net
+          docker run -d --name ci-hard-db --network ci-hardened-net \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=dotmac_erp_ci \
+            --health-cmd "pg_isready -U postgres" \
+            --health-interval 5s \
+            --health-retries 10 \
+            postgres:16
+          docker run -d --name ci-hard-redis --network ci-hardened-net redis:7
+
+          # Wait for PostgreSQL
+          for i in $(seq 1 30); do
+            if docker exec ci-hard-db pg_isready -U postgres > /dev/null 2>&1; then
+              echo "PostgreSQL ready"; break
+            fi
+            echo "Waiting... ($i/30)"; sleep 2
+          done
+
+          # Run migrations
+          docker run --rm --name ci-hard-migrate --network ci-hardened-net \
+            -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-hard-db:5432/dotmac_erp_ci \
+            -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
+            -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
+            -e REDIS_URL=redis://ci-hard-redis:6379/0 \
+            -e DOTMAC_DEV_MODE=true \
+            dotmac-erp-hardened:ci \
+            alembic upgrade head
+
+          # Start app in dev mode (no license file needed for CI)
+          docker run -d --name ci-hard-app --network ci-hardened-net \
+            -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-hard-db:5432/dotmac_erp_ci \
+            -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
+            -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
+            -e REDIS_URL=redis://ci-hard-redis:6379/0 \
+            -e CELERY_BROKER_URL=redis://ci-hard-redis:6379/0 \
+            -e DOTMAC_DEV_MODE=true \
+            dotmac-erp-hardened:ci \
+            uvicorn app.main:app --host 0.0.0.0 --port 8001
+
+          # Wait for health
+          for i in $(seq 1 60); do
+            HEALTH=$(docker exec ci-hard-app python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8001/health').read().decode())" 2>/dev/null || echo "")
+            if echo "$HEALTH" | grep -q '"ok"'; then
+              echo "Hardened health check passed: $HEALTH"; exit 0
+            fi
+            echo "Waiting... ($i/60)"; sleep 3
+          done
+          echo "Health check timed out"; docker logs ci-hard-app; exit 1
+
+      - name: Push hardened image
+        if: success()
+        run: |
+          DATE_TAG=$(date +%Y.%m.%d)
+          SHA_TAG=sha-$(echo "${{ github.sha }}" | cut -c1-7)
+          docker tag dotmac-erp-hardened:ci ghcr.io/${{ github.repository }}_hardened:latest
+          docker tag dotmac-erp-hardened:ci ghcr.io/${{ github.repository }}_hardened:$SHA_TAG
+          docker tag dotmac-erp-hardened:ci ghcr.io/${{ github.repository }}_hardened:$DATE_TAG
+          docker push ghcr.io/${{ github.repository }}_hardened:latest
+          docker push ghcr.io/${{ github.repository }}_hardened:$SHA_TAG
+          docker push ghcr.io/${{ github.repository }}_hardened:$DATE_TAG
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f ci-hard-app ci-hard-db ci-hard-redis 2>/dev/null || true
+          docker network rm ci-hardened-net 2>/dev/null || true
+
+  # ---------------------------------------------------------------------------
   # Publish Docker Image to GHCR
   # Only runs on main branch after all checks pass.
   # Tags: latest, sha-<short>, date (YYYY-MM-DD)

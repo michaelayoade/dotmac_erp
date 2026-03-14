@@ -82,6 +82,7 @@ services:
       - ./static:/app/static:ro
       - ./templates:/app/templates:ro
       - ./app:/app/app:ro
+      - ./license:/app/license:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s

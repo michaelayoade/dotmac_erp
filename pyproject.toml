@@ -37,6 +37,7 @@ msoffcrypto-tool = "^6.0.0"
 openpyxl = "^3.1.5"
 xlrd = "^2.0.1"
 minio = "^7.2.0"
+click = "^8.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.2.2"
@@ -52,6 +53,7 @@ detect-secrets = "^1.5.0"
 bandit = "^1.9.3"
 xlwt = "^1.3.0"
 pytest-timeout = "^2.4.0"
+nuitka = "^2.1"
 
 [tool.ruff]
 line-length = 88
@@ -91,6 +93,7 @@ ignore = [
 "alembic/**/*.py" = ["E402", "F841", "S608"]  # migrations: late imports, unused vars, raw SQL
 "scripts/**/*.py" = ["T20", "E402", "S", "SIM103", "F841", "B905", "F601", "B007"]  # scripts: one-off maintenance scripts
 "app/tools/**/*.py" = ["T20", "S"]  # one-off tools
+"tools/**/*.py" = ["T20", "S"]  # internal CLI tools (license gen, etc.)
 ".claude/hooks/**/*.py" = ["T20", "F841"]  # local workflow hooks
 "app/tasks/data_health.py" = ["S608"]  # data health tasks: conditional SQL with hardcoded fragments
 

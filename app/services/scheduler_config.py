@@ -355,6 +355,11 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(hour=4, minute=15),  # 4:15 AM daily
             "kwargs": {"dry_run": True, "batch_size": 100},
         },
+        # --- Licensing ---
+        "license-revalidation": {
+            "task": "app.tasks.license.revalidate_license",
+            "schedule": crontab(hour=3, minute=0),  # 3:00 AM daily
+        },
     }
 
 

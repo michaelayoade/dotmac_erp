@@ -135,8 +135,20 @@ logger.info("Enabled modules: %s", sorted(_ENABLED_MODULES))
 
 
 def is_module_enabled(module: str) -> bool:
-    """Check if a module is enabled for this deployment."""
-    return module in _ENABLED_MODULES
+    """Check if a module is enabled for this deployment.
+
+    A module must pass two gates:
+    1. ``ENABLED_MODULES`` env var (deployment config)
+    2. License entitlement (on-prem only; dev mode = all modules)
+    """
+    if module not in _ENABLED_MODULES:
+        return False
+    from app.licensing.enforcement import get_licensed_modules
+
+    licensed = get_licensed_modules()  # None in dev mode
+    if licensed is None:
+        return True
+    return module in licensed
 
 
 @asynccontextmanager

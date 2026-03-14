@@ -1,0 +1,113 @@
+# =============================================================================
+# DotMac ERP — Hardened Production Build (4-stage)
+#
+# Produces a Docker image with:
+#   - Core business logic compiled to .so via Nuitka (no Python source)
+#   - Ed25519 public key embedded in compiled licensing module
+#   - License file expected at /app/license/dotmac.lic (volume mount)
+#   - No build tools in final image
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: CSS Builder (same as standard Dockerfile)
+# ---------------------------------------------------------------------------
+FROM node:20-alpine AS css-builder
+
+WORKDIR /build
+
+COPY package.json package-lock.json* ./
+RUN npm ci --silent
+
+COPY tailwind.config.js postcss.config.js ./
+COPY src/css ./src/css
+COPY templates ./templates
+
+RUN npm run build:css
+
+# ---------------------------------------------------------------------------
+# Stage 2: Nuitka Compiler
+#
+# Uses full Python image with GCC toolchain for native compilation.
+# Produces .so shared libraries for protected packages.
+# ---------------------------------------------------------------------------
+FROM python:3.12 AS nuitka-compiler
+
+WORKDIR /app
+
+# Build dependencies for Nuitka
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        g++ \
+        patchelf \
+        ccache \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
+
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main --no-interaction --no-ansi
+RUN pip install --no-cache-dir "pydyf==0.11.0" python-multipart nuitka ordered-set
+
+COPY . .
+
+# Compile protected packages
+RUN python scripts/compile.py --output-dir /build --app-dir app
+
+# ---------------------------------------------------------------------------
+# Stage 3: Production Runtime
+#
+# Slim image with only runtime dependencies. No build tools, no source for
+# compiled packages.
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim AS production
+
+WORKDIR /app
+
+# Runtime dependencies (WeasyPrint, PDF generation)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libcairo2 \
+        libgdk-pixbuf-2.0-0 \
+        libglib2.0-0 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libffi8 \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
+
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main --no-interaction --no-ansi
+RUN pip install --no-cache-dir "pydyf==0.11.0" python-multipart
+
+# Copy compiled .so files from nuitka stage
+COPY --from=nuitka-compiler /build/*.so ./
+
+# Copy the full app tree (with source removed for compiled packages)
+COPY --from=nuitka-compiler /app/app ./app
+COPY --from=nuitka-compiler /app/gunicorn.conf.py ./gunicorn.conf.py
+
+# Copy uncompiled supporting files
+COPY templates ./templates
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+
+# Copy compiled CSS from builder stage
+COPY --from=css-builder /build/static/css/app.css ./static/css/app.css
+
+# Copy remaining static assets
+COPY static ./static
+
+# Create license mount point
+RUN mkdir -p /app/license
+
+# Default: license checks enabled (not dev mode)
+ENV DOTMAC_DEV_MODE=false
+ENV LICENSE_FILE_PATH=/app/license/dotmac.lic
+ENV PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8001
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

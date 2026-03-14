@@ -245,5 +245,17 @@ class Settings:
     coach_cache_ttl_hours: int = int(os.getenv("COACH_CACHE_TTL_HOURS", "24"))
     coach_max_insights_per_run: int = int(os.getenv("COACH_MAX_INSIGHTS_PER_RUN", "20"))
 
+    # ==========================================================================
+    # Licensing (on-premise deployments)
+    # ==========================================================================
+    # Path to the Ed25519-signed license file
+    license_file_path: str = os.getenv("LICENSE_FILE_PATH", "/app/license/dotmac.lic")
+    # When True (default), skip all license validation — for development only
+    license_dev_mode: bool = os.getenv("DOTMAC_DEV_MODE", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
 
 settings = Settings()

@@ -302,8 +302,23 @@ def validate_startup(db: Session | None = None, exit_on_failure: bool = True) ->
             sys.exit(1)
         return False
 
+    # License validation (after DB/config checks pass)
+    validate_license()
+
     logger.info("Startup validation passed")
     return True
+
+
+def validate_license() -> None:
+    """Run license enforcement at startup.
+
+    In dev mode (DOTMAC_DEV_MODE=true, the default), this is a no-op.
+    In production mode, an invalid/missing/expired license will cause
+    the process to exit.
+    """
+    from app.licensing.enforcement import enforce_startup
+
+    enforce_startup()
 
 
 def log_startup_info():
