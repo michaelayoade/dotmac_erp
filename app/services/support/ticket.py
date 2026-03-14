@@ -84,7 +84,6 @@ class TicketService:
             .options(
                 joinedload(Ticket.raised_by),
                 joinedload(Ticket.assigned_to),
-                joinedload(Ticket.project),
             )
         )
 
