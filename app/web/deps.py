@@ -499,6 +499,16 @@ def landing_content() -> dict:
     return content
 
 
+def _is_license_grace() -> bool:
+    """Return True when the license is in its grace period (expired but still functional)."""
+    try:
+        from app.licensing.enforcement import is_in_grace_period
+
+        return is_in_grace_period()
+    except Exception:
+        return False
+
+
 def base_context(
     request: Request,
     auth: "WebAuthContext",
@@ -811,6 +821,7 @@ def base_context(
             "contextual_help_url": contextual_help_url,
             "contextual_article_slug": contextual_article_slug,
             "contextual_help_search_url": f"/help/search?q={quote_plus(page_title)}",
+            "license_grace_period": _is_license_grace(),
         }
         if effective_db and auth.organization_id and get_currency_context is not None:
             try:

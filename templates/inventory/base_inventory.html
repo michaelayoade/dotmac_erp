@@ -204,6 +204,7 @@
         <!-- Page Content -->
         <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">
             <div class="app-page">
+                {% include "partials/_license_banner.html" %}
                 {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
                 {% block content %}{% endblock %}
             </div>

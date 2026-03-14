@@ -4660,5 +4660,75 @@ class AdminWebService:
             context,
         )
 
+    # ------------------------------------------------------------------
+    # License Status
+    # ------------------------------------------------------------------
+
+    def license_response(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> HTMLResponse | RedirectResponse:
+        """License status page."""
+        auth_or_redirect = self._require_admin_web_auth(request, auth)
+        if isinstance(auth_or_redirect, RedirectResponse):
+            return auth_or_redirect
+
+        context = self._license_context()
+
+        return self._render_admin_template(
+            request,
+            db,
+            "admin/license.html",
+            auth_or_redirect,
+            "License",
+            "License Status",
+            "license",
+            context,
+        )
+
+    @staticmethod
+    def _license_context() -> dict:
+        """Build license status context for the template."""
+        from app.licensing.enforcement import get_licensed_modules
+        from app.licensing.fingerprint import get_machine_fingerprint
+        from app.licensing.state import get_license_state
+
+        state = get_license_state()
+        payload = state.payload
+
+        context: dict = {
+            "license_status": state.status.value,
+            "license_error": state.error,
+            "validated_at": state.validated_at.strftime("%d %b %Y, %H:%M UTC")
+            if state.validated_at
+            else None,
+            "machine_fingerprint": get_machine_fingerprint(),
+            "licensed_modules": get_licensed_modules(),
+        }
+
+        if payload:
+            days_left = (payload.expires_at - datetime.now(tz=UTC)).days
+            context.update(
+                {
+                    "license_id": payload.license_id,
+                    "customer_name": payload.customer_name,
+                    "customer_id": payload.customer_id,
+                    "issued_at": payload.issued_at.strftime("%d %b %Y"),
+                    "expires_at": payload.expires_at.strftime("%d %b %Y"),
+                    "days_remaining": max(days_left, 0),
+                    "grace_period_days": payload.grace_period_days,
+                    "max_users": payload.max_users,
+                    "max_organizations": payload.max_organizations,
+                    "modules": payload.modules,
+                    "features": payload.features,
+                    "hardware_fingerprint_required": payload.hardware_fingerprint_required,
+                    "hardware_fingerprint_expected": payload.hardware_fingerprint,
+                }
+            )
+
+        return context
+
 
 admin_web_service = AdminWebService()

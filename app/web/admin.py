@@ -1785,3 +1785,18 @@ def admin_settings_delete(
     return admin_web_service.settings_delete_response(
         request, db, auth, str(setting_id)
     )
+
+
+# ---------------------------------------------------------------------------
+# License Status
+# ---------------------------------------------------------------------------
+
+
+@router.get("/license", response_class=HTMLResponse)
+def admin_license(
+    request: Request,
+    db: Session = Depends(get_db),
+    auth: WebAuthContext = Depends(optional_web_auth),
+):
+    """License status page."""
+    return admin_web_service.license_response(request, db, auth)

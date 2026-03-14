@@ -280,6 +280,13 @@
                         <span x-show="!sidebarCollapsed" x-transition>Sync Management</span>
                     </a>
 
+                    <!-- License -->
+                    <a href="/admin/license"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all {{ 'bg-accent-500/20 text-accent-400' if active_page == 'license' else 'text-slate-400 hover:text-white hover:bg-slate-800' }}">
+                        {{ icon_svg("key", "h-5 w-5 flex-shrink-0") }}
+                        <span x-show="!sidebarCollapsed" x-transition>License</span>
+                    </a>
+
 
             {% with current_module="admin", dark_sidebar=true %}
                 {% include "partials/_module_switcher.html" %}
@@ -355,7 +362,8 @@
 
     <!-- Page Content -->
     <div class="app-page">
-        {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
+        {% include "partials/_license_banner.html" %}
+                {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
         {% block content %}{% endblock %}
     </div>
 </main>

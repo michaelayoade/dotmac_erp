@@ -1,0 +1,15 @@
+{# License Grace Period Banner — shown site-wide when license is expired but within grace #}
+{% if license_grace_period is defined and license_grace_period %}
+<div class="bg-rose-50 dark:bg-rose-900/20 border-b border-rose-200 dark:border-rose-800 px-4 py-2.5">
+    <div class="flex items-center justify-center gap-2 text-sm text-rose-700 dark:text-rose-300">
+        <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+        </svg>
+        <span class="font-medium">License expired</span>
+        <span>&mdash; running in grace period. Please renew to avoid service interruption.</span>
+        {% if auth is defined and auth.is_admin %}
+        <a href="/admin/license" class="ml-2 underline font-medium hover:text-rose-900 dark:hover:text-rose-100">View details</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
