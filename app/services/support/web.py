@@ -119,12 +119,38 @@ def _is_numeric_subject(subject: str) -> bool:
     return cleaned.isdigit()
 
 
+def _normalize_ticket_status(status: TicketStatus | str | None) -> TicketStatus:
+    """Return a valid status enum for rendering, tolerating legacy string/null values."""
+    if isinstance(status, TicketStatus):
+        return status
+    if isinstance(status, str):
+        try:
+            return TicketStatus(status.upper())
+        except ValueError:
+            pass
+    return TicketStatus.OPEN
+
+
+def _normalize_ticket_priority(
+    priority: TicketPriority | str | None,
+) -> TicketPriority:
+    """Return a valid priority enum for rendering, tolerating legacy string/null values."""
+    if isinstance(priority, TicketPriority):
+        return priority
+    if isinstance(priority, str):
+        try:
+            return TicketPriority(priority.upper())
+        except ValueError:
+            pass
+    return TicketPriority.MEDIUM
+
+
 def _format_ticket_for_list(ticket: Ticket) -> dict[str, Any]:
     """Format a ticket for list view display."""
-    status_style = STATUS_STYLES.get(ticket.status, STATUS_STYLES[TicketStatus.OPEN])
-    priority_style = PRIORITY_STYLES.get(
-        ticket.priority, PRIORITY_STYLES[TicketPriority.MEDIUM]
-    )
+    normalized_status = _normalize_ticket_status(ticket.status)
+    normalized_priority = _normalize_ticket_priority(ticket.priority)
+    status_style = STATUS_STYLES[normalized_status]
+    priority_style = PRIORITY_STYLES[normalized_priority]
 
     # Get assigned employee name
     assigned_name = None
@@ -160,10 +186,10 @@ def _format_ticket_for_list(ticket: Ticket) -> dict[str, Any]:
         "description_preview": (ticket.description[:100] + "...")
         if ticket.description and len(ticket.description) > 100
         else ticket.description,
-        "status": ticket.status.value,
+        "status": normalized_status.value,
         "status_label": status_style["label"],
         "status_badge": status_style["badge"],
-        "priority": ticket.priority.value,
+        "priority": normalized_priority.value,
         "priority_label": priority_style["label"],
         "priority_badge": priority_style["badge"],
         "opening_date": ticket.opening_date,
