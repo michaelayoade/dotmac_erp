@@ -65,10 +65,7 @@ def run(*, commit: bool = False) -> dict[str, int]:
 
     with SessionLocal() as db:
         # Set RLS context
-        db.execute(
-            text("SET app.current_organization_id = :org_id"),
-            {"org_id": str(ORG_ID)},
-        )
+        db.execute(text(f"SET app.current_organization_id = '{ORG_ID}'"))
 
         # Import models
         from app.models.expense.expense_claim import (
@@ -76,12 +73,26 @@ def run(*, commit: bool = False) -> dict[str, int]:
             ExpenseClaimItem,
         )
         from app.models.finance.gl.account import Account
+        from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.models.finance.gl.journal_entry import (
             JournalEntry,
             JournalStatus,
             JournalType,
         )
         from app.models.finance.gl.journal_entry_line import JournalEntryLine
+
+        # Get current fiscal period for reclassification journals
+        current_period = db.scalar(
+            select(FiscalPeriod).where(
+                FiscalPeriod.organization_id == ORG_ID,
+                FiscalPeriod.start_date <= date.today(),
+                FiscalPeriod.end_date >= date.today(),
+            )
+        )
+        if not current_period:
+            logger.error("No open fiscal period found for today")
+            return results
+        logger.info("Using fiscal period: %s", current_period.period_name)
 
         # Find the 6099 account
         misposted_account = db.scalar(
@@ -199,9 +210,15 @@ def run(*, commit: bool = False) -> dict[str, int]:
 
             # Create the reclassification journal
             try:
-                from app.services.finance.gl.numbering import SyncNumberingService
+                from app.services.finance.common.numbering import (
+                    SequenceType,
+                    SyncNumberingService,
+                )
 
-                journal_number = SyncNumberingService.next_journal_number(db, ORG_ID)
+                numbering_svc = SyncNumberingService(db)
+                journal_number = numbering_svc.generate_next_number(
+                    ORG_ID, SequenceType.JOURNAL
+                )
 
                 reclass_journal = JournalEntry(
                     organization_id=ORG_ID,
@@ -209,6 +226,8 @@ def run(*, commit: bool = False) -> dict[str, int]:
                     journal_type=JournalType.STANDARD,
                     entry_date=date.today(),
                     posting_date=date.today(),
+                    fiscal_period_id=current_period.fiscal_period_id,
+                    currency_code="NGN",
                     description=(
                         f"Reclassification: {claim.claim_number} — "
                         f"correct expense accounts (was 6099)"
@@ -266,6 +285,9 @@ def run(*, commit: bool = False) -> dict[str, int]:
                 )
 
             except Exception as exc:
+                db.rollback()
+                # Re-set RLS after rollback
+                db.execute(text(f"SET app.current_organization_id = '{ORG_ID}'"))
                 logger.exception(
                     "Failed to create reclassification for %s: %s",
                     claim.claim_number,

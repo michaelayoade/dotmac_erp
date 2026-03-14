@@ -53,10 +53,7 @@ def run(*, commit: bool = False) -> dict[str, int]:
     }
 
     with SessionLocal() as db:
-        db.execute(
-            text("SET app.current_organization_id = :org_id"),
-            {"org_id": str(ORG_ID)},
-        )
+        db.execute(text(f"SET app.current_organization_id = '{ORG_ID}'"))
 
         from app.models.finance.ap.supplier_invoice import (
             SupplierInvoice,

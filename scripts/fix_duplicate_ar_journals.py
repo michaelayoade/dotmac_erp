@@ -57,10 +57,7 @@ def run(*, commit: bool = False) -> dict[str, int]:
     }
 
     with SessionLocal() as db:
-        db.execute(
-            text("SET app.current_organization_id = :org_id"),
-            {"org_id": str(ORG_ID)},
-        )
+        db.execute(text(f"SET app.current_organization_id = '{ORG_ID}'"))
 
         from app.models.finance.ar.invoice import Invoice
         from app.models.finance.gl.journal_entry import (
@@ -162,12 +159,12 @@ def run(*, commit: bool = False) -> dict[str, int]:
                         try:
                             from app.services.finance.gl.reversal import ReversalService
 
-                            reversal_svc = ReversalService(db)
-                            reversal_result = reversal_svc.create_reversal(
+                            reversal_result = ReversalService.create_reversal(
+                                db=db,
                                 organization_id=ORG_ID,
-                                journal_entry_id=dup.journal_entry_id,
+                                original_journal_id=dup.journal_entry_id,
                                 reversal_date=dup.entry_date,
-                                reversed_by_user_id=UUID(
+                                created_by_user_id=UUID(
                                     "00000000-0000-0000-0000-000000000000"
                                 ),
                                 reason=f"Duplicate posting for invoice {inv_id}",
