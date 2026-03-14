@@ -251,6 +251,9 @@ def mock_db():
     db.order_by = MagicMock(return_value=db)
     db.all = MagicMock(return_value=[])
     db.first = MagicMock(return_value=None)
+    # Secondary idempotency guard uses db.scalar() — must return None by default
+    # so tests proceed past the "already posted" check
+    db.scalar = MagicMock(return_value=None)
     return db
 
 
@@ -1437,7 +1440,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.scalars.return_value.first.return_value = fiscal_period
+        mock_db.scalar.return_value = fiscal_period
 
         tax_txn_id = uuid.uuid4()
         mock_tax_txn = MagicMock()
@@ -1478,7 +1481,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("50.00"),
         )
 
-        mock_db.scalars.return_value.first.return_value = fiscal_period
+        mock_db.scalar.return_value = fiscal_period
 
         mock_tax_txn = MagicMock()
         mock_tax_txn.transaction_id = uuid.uuid4()
@@ -1511,7 +1514,7 @@ class TestCreateTaxTransactions:
             tax_amount=Decimal("100.00"),
         )
 
-        mock_db.scalars.return_value.first.return_value = fiscal_period
+        mock_db.scalar.return_value = fiscal_period
 
         mock_tax_service.create_from_invoice_line.side_effect = Exception(
             "Tax service error"
