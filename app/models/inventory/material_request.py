@@ -69,6 +69,11 @@ class MaterialRequest(Base):
         UniqueConstraint(
             "organization_id", "request_number", name="uq_material_request_org_number"
         ),
+        UniqueConstraint(
+            "organization_id",
+            "crm_id",
+            name="uq_material_request_org_crm_id",
+        ),
         Index("idx_material_request_org", "organization_id"),
         Index("idx_material_request_status", "status"),
         Index("idx_material_request_type", "request_type"),

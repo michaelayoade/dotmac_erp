@@ -1367,26 +1367,53 @@ class TestCreateMaterialRequest:
     """Test create_material_request for CRM material request sync."""
 
     @patch("app.services.sync.dotmac_crm_sync_service.select")
-    def test_create_material_request_idempotent(
+    def test_create_material_request_upserts_existing(
         self, mock_select, service, org_id, mock_db
     ):
-        """Should return existing request when omni_id already exists."""
-        from app.models.inventory.material_request import MaterialRequestStatus
+        """Should return existing request unchanged for identical duplicate send."""
+        from app.models.inventory.material_request import (
+            MaterialRequestStatus,
+            MaterialRequestType,
+        )
 
         existing_mr = MagicMock()
         existing_mr.request_id = uuid.uuid4()
         existing_mr.request_number = "MAT-MR-2026-00001"
-        existing_mr.status = MaterialRequestStatus.SUBMITTED
+        existing_mr.status = MaterialRequestStatus.ISSUED
+        existing_mr.request_type = MaterialRequestType.ISSUE
+        existing_mr.schedule_date = None
+        existing_mr.requested_by_id = None
+        existing_mr.project_id = None
+        existing_mr.ticket_id = None
+        existing_mr.remarks = None
 
-        # First scalar call returns existing
-        mock_db.scalar.return_value = existing_mr
+        existing_line = MagicMock()
+        existing_line.item_id = uuid.uuid4()
+        existing_line.sequence = 1
+        existing_line.inventory_item_id = uuid.uuid4()
+        existing_line.warehouse_id = uuid.uuid4()
+        existing_line.requested_qty = Decimal("5")
+        existing_line.uom = "Nos"
+        existing_mr.items = [existing_line]
+
+        mock_item = MagicMock()
+        mock_item.item_id = existing_line.inventory_item_id
+        mock_item.base_uom = "Nos"
+        mock_item.track_lots = False
+        wh_id = existing_line.warehouse_id
+
+        # item lookup -> warehouse lookup -> existing MR lookup
+        mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
 
         payload = CRMMaterialRequestPayload(
             omni_id="crm-mr-123",
             request_type="ISSUE",
+            status="issued",
             items=[
                 CRMMaterialRequestItemPayload(
-                    item_code="ITEM001", quantity=Decimal("5")
+                    item_code="ITEM001",
+                    quantity=Decimal("5"),
+                    from_warehouse_code="Stores - DT",
                 )
             ],
         )
@@ -1396,7 +1423,6 @@ class TestCreateMaterialRequest:
         assert result.request_id == existing_mr.request_id
         assert result.request_number == "MAT-MR-2026-00001"
         assert result.omni_id == "crm-mr-123"
-        # Should not call flush (no new records created)
         mock_db.add.assert_not_called()
 
     @patch("app.services.sync.dotmac_crm_sync_service.select")
@@ -1405,21 +1431,15 @@ class TestCreateMaterialRequest:
     ):
         """Should create MR with items and return response."""
 
-        # No existing MR (first scalar returns None for idempotency check)
-        # Second scalar: item lookup returns mock item
         mock_item = MagicMock()
         mock_item.item_id = uuid.uuid4()
-
-        call_count = 0
-
-        def scalar_side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return None  # No existing MR
-            return mock_item  # Item lookup
-
-        mock_db.scalar.side_effect = scalar_side_effect
+        mock_item.base_uom = "METER"
+        mock_item.track_lots = False
+        wh_id = uuid.uuid4()
+        # item lookup -> warehouse lookup -> existing MR lookup
+        fiscal_period = MagicMock()
+        fiscal_period.fiscal_period_id = uuid.uuid4()
+        mock_db.scalar.side_effect = [mock_item, wh_id, None, fiscal_period]
 
         # Simulate flush() populating request_id on added MR objects
         added_objects: list = []
@@ -1443,46 +1463,49 @@ class TestCreateMaterialRequest:
             payload = CRMMaterialRequestPayload(
                 omni_id="crm-mr-new-456",
                 request_type="ISSUE",
+                status="issued",
                 items=[
                     CRMMaterialRequestItemPayload(
-                        item_code="CABLE-01", quantity=Decimal("10"), uom="METER"
+                        item_code="CABLE-01",
+                        quantity=Decimal("10"),
+                        uom="METER",
+                        from_warehouse_code="Stores - DT",
                     )
                 ],
                 remarks="Needed for installation",
                 schedule_date="2026-03-01",
             )
 
-            result = service.create_material_request(org_id, payload)
+            with patch(
+                "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
+                return_value=Decimal("999"),
+            ):
+                with patch.object(service, "_post_crm_issue_transaction"):
+                    result = service.create_material_request(org_id, payload)
 
         assert result.request_number == "MAT-MR-2026-00001"
-        assert result.status == "SUBMITTED"
+        assert result.status == "ISSUED"
         assert result.omni_id == "crm-mr-new-456"
         assert result.request_id is not None
-        # Should add MR header + 1 line item
-        assert mock_db.add.call_count >= 2
+        # Header is explicitly added; lines are attached through relationship append
+        assert mock_db.add.call_count >= 1
 
     @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_create_material_request_invalid_item(
         self, mock_select, service, org_id, mock_db
     ):
         """Should raise ValueError when item_code not found."""
-        call_count = 0
-
-        def scalar_side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return None  # No existing MR
-            return None  # Item not found
-
-        mock_db.scalar.side_effect = scalar_side_effect
+        mock_db.scalar.return_value = None
 
         payload = CRMMaterialRequestPayload(
             omni_id="crm-mr-bad-item",
             request_type="ISSUE",
+            status="issued",
             items=[
                 CRMMaterialRequestItemPayload(
-                    item_code="NONEXISTENT", quantity=Decimal("1")
+                    item_code="NONEXISTENT",
+                    quantity=Decimal("1"),
+                    from_warehouse_code="Stores - DT",
                 )
             ],
         )
@@ -1500,9 +1523,12 @@ class TestCreateMaterialRequest:
         payload = CRMMaterialRequestPayload(
             omni_id="crm-mr-bad-type",
             request_type="UNKNOWN",
+            status="issued",
             items=[
                 CRMMaterialRequestItemPayload(
-                    item_code="ITEM001", quantity=Decimal("1")
+                    item_code="ITEM001",
+                    quantity=Decimal("1"),
+                    from_warehouse_code="Stores - DT",
                 )
             ],
         )
@@ -1517,19 +1543,14 @@ class TestCreateMaterialRequest:
         """Should resolve project and ticket CRM IDs."""
         mock_item = MagicMock()
         mock_item.item_id = uuid.uuid4()
+        mock_item.base_uom = "Nos"
+        mock_item.track_lots = False
         project_id = uuid.uuid4()
         ticket_id = uuid.uuid4()
-
-        call_count = 0
-
-        def scalar_side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return None  # No existing MR
-            return mock_item  # Item lookup
-
-        mock_db.scalar.side_effect = scalar_side_effect
+        wh_id = uuid.uuid4()
+        fiscal_period = MagicMock()
+        fiscal_period.fiscal_period_id = uuid.uuid4()
+        mock_db.scalar.side_effect = [mock_item, wh_id, None, fiscal_period]
 
         # Simulate flush() populating request_id on added MR objects
         added_objects: list = []
@@ -1560,20 +1581,157 @@ class TestCreateMaterialRequest:
 
                         payload = CRMMaterialRequestPayload(
                             omni_id="crm-mr-linked",
-                            request_type="PURCHASE",
+                            request_type="ISSUE",
+                            status="issued",
                             items=[
                                 CRMMaterialRequestItemPayload(
-                                    item_code="ITEM001", quantity=Decimal("3")
+                                    item_code="ITEM001",
+                                    quantity=Decimal("3"),
+                                    from_warehouse_code="Stores - DT",
                                 )
                             ],
                             project_crm_id="proj-crm-123",
                             ticket_crm_id="ticket-crm-456",
                         )
 
-                        service.create_material_request(org_id, payload)
+                        with patch(
+                            "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
+                            return_value=Decimal("999"),
+                        ):
+                            with patch.object(service, "_post_crm_issue_transaction"):
+                                service.create_material_request(org_id, payload)
 
         mock_resolve_proj.assert_called_once_with(org_id, "proj-crm-123")
         mock_resolve_ticket.assert_called_once_with(org_id, "ticket-crm-456")
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_issued_posts_issue_transactions(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should post inventory issues when CRM status is issued."""
+        from app.models.inventory.material_request import MaterialRequestStatus
+
+        mock_item = MagicMock()
+        mock_item.item_id = uuid.uuid4()
+        mock_item.base_uom = "Nos"
+        mock_item.track_lots = False
+        fiscal_period = MagicMock()
+        fiscal_period.fiscal_period_id = uuid.uuid4()
+        wh_id = uuid.uuid4()
+
+        # item lookup -> warehouse lookup -> existing MR lookup -> fiscal period lookup
+        mock_db.scalar.side_effect = [mock_item, wh_id, None, fiscal_period]
+
+        added_objects: list = []
+        mock_db.add.side_effect = lambda obj: added_objects.append(obj)
+
+        def simulate_flush() -> None:
+            for obj in added_objects:
+                if hasattr(obj, "request_id") and obj.request_id is None:
+                    obj.request_id = uuid.uuid4()
+
+        mock_db.flush.side_effect = simulate_flush
+
+        with patch(
+            "app.services.finance.common.numbering.SyncNumberingService"
+        ) as mock_numbering_cls:
+            mock_numbering = MagicMock()
+            mock_numbering.generate_next_number.return_value = "MAT-MR-2026-00003"
+            mock_numbering_cls.return_value = mock_numbering
+            with patch.object(
+                service,
+                "_snapshot_material_request_lines",
+                return_value=[
+                    {
+                        "line_id": uuid.uuid4(),
+                        "sequence": 1,
+                        "item_id": mock_item.item_id,
+                        "warehouse_id": wh_id,
+                        "requested_qty": Decimal("2"),
+                        "uom": "Nos",
+                    }
+                ],
+            ):
+                with patch.object(
+                    service, "_post_crm_issue_transaction"
+                ) as mock_issue_post:
+                    payload = CRMMaterialRequestPayload(
+                        omni_id="crm-mr-issued-001",
+                        request_type="ISSUE",
+                        status="issued",
+                        items=[
+                            CRMMaterialRequestItemPayload(
+                                item_code="ITEM001",
+                                quantity=Decimal("2"),
+                                from_warehouse_code="Stores - DT",
+                            )
+                        ],
+                    )
+
+                    with patch(
+                        "app.services.inventory.transaction.InventoryTransactionService.get_current_balance",
+                        return_value=Decimal("999"),
+                    ):
+                        result = service.create_material_request(org_id, payload)
+
+        assert result.status == MaterialRequestStatus.ISSUED.value
+        mock_issue_post.assert_called_once()
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_issued_reconcile_existing(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should reject changed duplicate sends for existing omni_id."""
+        from fastapi import HTTPException
+        from app.models.inventory.material_request import (
+            MaterialRequestStatus,
+            MaterialRequestType,
+        )
+
+        existing_mr = MagicMock()
+        existing_mr.request_id = uuid.uuid4()
+        existing_mr.request_number = "MAT-MR-2026-00010"
+        existing_mr.status = MaterialRequestStatus.ISSUED
+        existing_mr.request_type = MaterialRequestType.ISSUE
+        existing_mr.schedule_date = None
+        existing_mr.requested_by_id = None
+        existing_mr.project_id = None
+        existing_mr.ticket_id = None
+        existing_mr.remarks = None
+
+        existing_line = MagicMock()
+        existing_line.item_id = uuid.uuid4()
+        existing_line.sequence = 1
+        existing_line.inventory_item_id = uuid.uuid4()
+        existing_line.warehouse_id = uuid.uuid4()
+        existing_line.requested_qty = Decimal("1")
+        existing_line.uom = "Nos"
+        existing_mr.items = [existing_line]
+
+        mock_item = MagicMock()
+        mock_item.item_id = existing_line.inventory_item_id
+        mock_item.base_uom = "Nos"
+        mock_item.track_lots = False
+        wh_id = existing_line.warehouse_id
+        mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
+
+        payload = CRMMaterialRequestPayload(
+            omni_id="crm-mr-issued-002",
+            request_type="ISSUE",
+            status="issued",
+            items=[
+                CRMMaterialRequestItemPayload(
+                    item_code="ITEM001",
+                    quantity=Decimal("3"),
+                    from_warehouse_code="Stores - DT",
+                )
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            service.create_material_request(org_id, payload)
+
+        assert exc.value.status_code == 409
 
 
 class TestGetMaterialRequestByCrmId:
@@ -1615,7 +1773,9 @@ class TestGetMaterialRequestByCrmId:
         # First scalar: MR lookup
         # Then execute for item names
         mock_db.scalar.return_value = mock_mr
-        mock_db.execute.return_value.all.return_value = [(item_id, "Fiber Cable")]
+        mock_db.execute.return_value.all.return_value = [
+            (item_id, "FIBER-CABLE", "Fiber Cable")
+        ]
 
         result = service.get_material_request_by_crm_id(org_id, "crm-mr-123")
 

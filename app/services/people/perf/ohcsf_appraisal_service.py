@@ -30,7 +30,11 @@ from app.models.people.perf.appraisal import (
 )
 from app.models.people.perf.appraisal_cycle import AppraisalCycle
 from app.models.people.perf.competency_assessment import CompetencyAssessment
+from app.models.people.perf.performance_contract import PerformanceContract
+from app.models.people.perf.pip import PerformanceImprovementPlan
+from app.models.people.perf.pms_enums import ContractStatus
 from app.models.people.perf.pms_enums import CommitteeDecision
+from app.models.people.perf.pms_enums import PIPStatus
 from app.services.people.perf.scoring_engine import OHCSFScoringEngine
 
 if TYPE_CHECKING:
@@ -39,6 +43,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TWO_DP = Decimal("0.01")
+UNDERPERFORMANCE_SCORE_THRESHOLD = Decimal("50.00")
 
 # ---------------------------------------------------------------------------
 # Status transition map
@@ -131,6 +136,24 @@ class OHCSFAppraisalService:
         allowed = OHCSF_STATUS_TRANSITIONS.get(current, set())
         if target not in allowed:
             raise OHCSFAppraisalStatusError(current, target)
+
+    def _enforce_phase_deadline(
+        self,
+        appraisal: Appraisal,
+        *,
+        deadline_field: str,
+        phase_label: str,
+    ) -> None:
+        cycle = getattr(appraisal, "cycle", None)
+        if cycle is None:
+            return
+        deadline = getattr(cycle, deadline_field, None)
+        if not isinstance(deadline, date):
+            return
+        if date.today() > deadline:
+            raise OHCSFAppraisalError(
+                f"Cannot submit {phase_label}: cycle deadline was {deadline.isoformat()}"
+            )
 
     def _check_cascade_up(
         self, org_id: UUID, cycle_id: UUID, employee_id: UUID
@@ -262,12 +285,18 @@ class OHCSFAppraisalService:
         )
 
     def _apply_competency_ratings(
-        self, appraisal_id: UUID, org_id: UUID, competency_ratings: list[dict]
+        self,
+        appraisal_id: UUID,
+        org_id: UUID,
+        competency_ratings: list[dict],
+        *,
+        development_focus_by_competency_id: dict[str, bool],
     ) -> None:
         """Upsert manager final_rating on CompetencyAssessment rows."""
         for entry in competency_ratings:
             comp_id = UUID(str(entry["competency_id"]))
             stmt = select(CompetencyAssessment).where(
+                CompetencyAssessment.organization_id == org_id,
                 CompetencyAssessment.appraisal_id == appraisal_id,
                 CompetencyAssessment.competency_id == comp_id,
             )
@@ -279,8 +308,257 @@ class OHCSFAppraisalService:
                     competency_id=comp_id,
                 )
                 self.db.add(ca)
-            ca.manager_rating = entry.get("manager_rating")
-            ca.final_rating = entry.get("final_rating", entry.get("manager_rating"))
+            manager_raw = entry.get("manager_rating", entry.get("final_rating"))
+            if manager_raw is None:
+                raise OHCSFAppraisalError(
+                    "Missing manager_rating/final_rating for competency rating entry"
+                )
+            final_raw = entry.get("final_rating", manager_raw)
+            if final_raw is None:
+                raise OHCSFAppraisalError(
+                    "Missing final_rating for competency rating entry"
+                )
+            manager_rating = int(manager_raw)
+            final_rating = int(final_raw)
+            ca.manager_rating = manager_rating
+            ca.final_rating = final_rating
+            ca.is_priority = True
+            ca.is_development_focus = development_focus_by_competency_id.get(
+                str(comp_id), False
+            )
+            ca.evidence = str(entry.get("evidence") or "").strip()
+
+    def _validate_competency_ratings_for_contract(
+        self,
+        contract: PerformanceContract,
+        competency_ratings: list[dict] | None,
+    ) -> dict[str, bool]:
+        """Validate competency rating payload against selected contract competencies."""
+        selected = contract.competency_ids or []
+        selected_map: dict[str, bool] = {}
+        for row in selected:
+            selected_map[str(row.get("competency_id") or "").strip()] = bool(
+                row.get("is_development_focus")
+            )
+        selected_map = {cid: is_focus for cid, is_focus in selected_map.items() if cid}
+
+        if competency_ratings is None:
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: manager review must include ratings for all 5 "
+                "selected competencies with evidence"
+            )
+        if len(competency_ratings) != len(selected_map):
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: competency ratings must cover exactly the 5 "
+                "selected contract competencies"
+            )
+
+        seen: set[str] = set()
+        for idx, entry in enumerate(competency_ratings, start=1):
+            comp_id = str(entry.get("competency_id") or "").strip()
+            if not comp_id:
+                raise OHCSFAppraisalError(
+                    f"Cannot progress appraisal: competency rating {idx} is missing competency_id"
+                )
+            if comp_id not in selected_map:
+                raise OHCSFAppraisalError(
+                    "Cannot progress appraisal: competency ratings must match selected "
+                    "contract competencies"
+                )
+            if comp_id in seen:
+                raise OHCSFAppraisalError(
+                    "Cannot progress appraisal: duplicate competency rating entries are not allowed"
+                )
+            seen.add(comp_id)
+
+            manager_rating_raw = entry.get("manager_rating", entry.get("final_rating"))
+            if manager_rating_raw is None:
+                raise OHCSFAppraisalError(
+                    f"Cannot progress appraisal: competency {idx} manager_rating is required"
+                )
+            manager_rating = int(manager_rating_raw)
+            if manager_rating < 1 or manager_rating > 5:
+                raise OHCSFAppraisalError(
+                    "Cannot progress appraisal: competency manager_rating must be between 1 and 5"
+                )
+
+            final_rating_raw = entry.get("final_rating")
+            if final_rating_raw is not None:
+                final_rating = int(final_rating_raw)
+                if final_rating < 1 or final_rating > 5:
+                    raise OHCSFAppraisalError(
+                        "Cannot progress appraisal: competency final_rating must be between 1 and 5"
+                    )
+
+            evidence = str(entry.get("evidence") or "").strip()
+            if not evidence:
+                raise OHCSFAppraisalError(
+                    "Cannot progress appraisal: competency evidence is required for each rating"
+                )
+
+        if seen != set(selected_map.keys()):
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: missing ratings for one or more selected competencies"
+            )
+        return selected_map
+
+    def _ensure_contract_planning_compliance(
+        self, org_id: UUID, appraisal: Appraisal
+    ) -> PerformanceContract:
+        """Ensure appraisal has a compliant performance contract before progression."""
+        contract = self.db.scalar(
+            select(PerformanceContract).where(
+                PerformanceContract.organization_id == org_id,
+                PerformanceContract.employee_id == appraisal.employee_id,
+                PerformanceContract.cycle_id == appraisal.cycle_id,
+                PerformanceContract.status.in_(
+                    [
+                        ContractStatus.ACTIVE,
+                        ContractStatus.PENDING_SIGNATURE,
+                        ContractStatus.DRAFT,
+                    ]
+                ),
+            )
+        )
+        if contract is None:
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: no planning contract found for employee in cycle"
+            )
+
+        objectives = contract.objectives or []
+        if len(objectives) < 3 or len(objectives) > 7:
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: contract must have 3-7 objectives"
+            )
+
+        total_weight = 0
+        for idx, objective in enumerate(objectives, start=1):
+            objective_text = str(
+                objective.get("objective")
+                or objective.get("kra")
+                or objective.get("title")
+                or ""
+            ).strip()
+            if not objective_text:
+                raise OHCSFAppraisalError(
+                    f"Cannot progress appraisal: objective {idx} description is missing"
+                )
+            if not str(objective.get("kpi") or "").strip():
+                raise OHCSFAppraisalError(
+                    f"Cannot progress appraisal: objective {idx} KPI is missing"
+                )
+            if not str(objective.get("target") or "").strip():
+                raise OHCSFAppraisalError(
+                    f"Cannot progress appraisal: objective {idx} target is missing"
+                )
+            total_weight += int(objective.get("weight", 0))
+
+        if total_weight != 70:
+            raise OHCSFAppraisalError(
+                f"Cannot progress appraisal: objective weights must sum to 70 (got {total_weight})"
+            )
+
+        competencies = contract.competency_ids or []
+        if len(competencies) != 5:
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: exactly 5 competencies are required"
+            )
+        if not isinstance(competencies[0], dict):
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: competencies must include development focus flags"
+            )
+
+        competency_ids = [str(c.get("competency_id") or "").strip() for c in competencies]
+        if any(not cid for cid in competency_ids):
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: competency_id missing in competency selection"
+            )
+        if len(set(competency_ids)) != 5:
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: selected competencies must be unique"
+            )
+
+        dev_focus = [c for c in competencies if c.get("is_development_focus")]
+        if len(dev_focus) != 3:
+            raise OHCSFAppraisalError(
+                "Cannot progress appraisal: exactly 3 competencies must be development focus"
+            )
+        return contract
+
+    def _ensure_underperformance_pip_resolution(
+        self, org_id: UUID, appraisal: Appraisal
+    ) -> None:
+        """
+        Enforce PIP gate for underperformance before appraisal completion.
+
+        Rule:
+        - If final_score < 50, a PIP must exist and be resolved before COMPLETED.
+        - Resolved statuses: IMPROVED, ESCALATED, CLOSED.
+        """
+        if appraisal.final_score is None:
+            return
+
+        final_score = Decimal(str(appraisal.final_score)).quantize(
+            TWO_DP, rounding=ROUND_HALF_UP
+        )
+        if final_score <= Decimal("5"):
+            final_score = (final_score * Decimal("20")).quantize(
+                TWO_DP, rounding=ROUND_HALF_UP
+            )
+        if final_score >= UNDERPERFORMANCE_SCORE_THRESHOLD:
+            return
+
+        pip = self.db.scalar(
+            select(PerformanceImprovementPlan).where(
+                PerformanceImprovementPlan.organization_id == org_id,
+                PerformanceImprovementPlan.appraisal_id == appraisal.appraisal_id,
+            )
+        )
+
+        if pip is None:
+            from app.services.people.perf.underperformance_service import (
+                UnderperformanceService,
+            )
+
+            UnderperformanceService(self.db).flag_for_pip(
+                org_id,
+                appraisal.employee_id,
+                trigger_type="score_below_50",
+                triggering_appraisal_id=appraisal.appraisal_id,
+            )
+            raise OHCSFAppraisalError(
+                "Cannot complete appraisal: underperformance detected (score below 50). "
+                "A PIP has been created and must be resolved first."
+            )
+
+        if pip.status not in {PIPStatus.IMPROVED, PIPStatus.ESCALATED, PIPStatus.CLOSED}:
+            raise OHCSFAppraisalError(
+                "Cannot complete appraisal: linked PIP is not resolved "
+                f"(current status: {pip.status.value})."
+            )
+
+    def _trigger_proactive_underperformance_pip(
+        self, org_id: UUID, appraisal: Appraisal
+    ) -> None:
+        """Create PIP early when score already indicates underperformance."""
+        if appraisal.final_score is None:
+            return
+        try:
+            from app.services.people.perf.underperformance_service import (
+                UnderperformanceService,
+            )
+
+            UnderperformanceService(self.db).ensure_pip_for_underperformance(
+                org_id,
+                appraisal_id=appraisal.appraisal_id,
+                employee_id=appraisal.employee_id,
+                final_score=Decimal(str(appraisal.final_score)),
+                trigger_type="score_below_50",
+            )
+        except Exception:
+            logger.exception(
+                "Proactive PIP trigger failed for appraisal %s", appraisal.appraisal_id
+            )
 
     # ------------------------------------------------------------------
     # Workflow actions
@@ -313,6 +591,11 @@ class OHCSFAppraisalService:
             raise OHCSFAppraisalStatusError(
                 appraisal.status, AppraisalStatus.PENDING_REVIEW
             )
+        self._enforce_phase_deadline(
+            appraisal,
+            deadline_field="self_assessment_deadline",
+            phase_label="self-assessment",
+        )
 
         self._check_cascade_up(org_id, appraisal.cycle_id, appraisal.employee_id)
 
@@ -359,6 +642,15 @@ class OHCSFAppraisalService:
         """Manager submits review; calculates composite scores; transitions to PENDING_COUNTERSIGN."""
         appraisal = self._get_or_404(org_id, appraisal_id)
         self._validate_transition(appraisal.status, AppraisalStatus.PENDING_COUNTERSIGN)
+        self._enforce_phase_deadline(
+            appraisal,
+            deadline_field="manager_review_deadline",
+            phase_label="manager review",
+        )
+        contract = self._ensure_contract_planning_compliance(org_id, appraisal)
+        development_focus_by_competency_id = self._validate_competency_ratings_for_contract(
+            contract, competency_ratings
+        )
 
         appraisal.manager_review_date = date.today()
         appraisal.manager_overall_rating = manager_overall_rating
@@ -376,7 +668,12 @@ class OHCSFAppraisalService:
             )
 
         if competency_ratings:
-            self._apply_competency_ratings(appraisal_id, org_id, competency_ratings)
+            self._apply_competency_ratings(
+                appraisal_id,
+                org_id,
+                competency_ratings,
+                development_focus_by_competency_id=development_focus_by_competency_id,
+            )
 
         # Process scoring (10% bucket) — scale 1-5 rating to 0-100
         if process_rating is not None:
@@ -411,6 +708,7 @@ class OHCSFAppraisalService:
         appraisal.final_rating = rating_int
         appraisal.rating_label = label
 
+        self._trigger_proactive_underperformance_pip(org_id, appraisal)
         appraisal.status = AppraisalStatus.PENDING_COUNTERSIGN
         self.db.flush()
         logger.info(
@@ -458,6 +756,11 @@ class OHCSFAppraisalService:
     ) -> Appraisal:
         """Committee reviews countersigned appraisal; transitions to COMPLETED."""
         appraisal = self._get_or_404(org_id, appraisal_id)
+        self._enforce_phase_deadline(
+            appraisal,
+            deadline_field="calibration_deadline",
+            phase_label="committee review",
+        )
 
         # Accept from COUNTERSIGNED (auto-advance) or PENDING_COMMITTEE
         if appraisal.status == AppraisalStatus.COUNTERSIGNED:
@@ -484,6 +787,7 @@ class OHCSFAppraisalService:
             )
             appraisal.rating_label = label
 
+        self._ensure_underperformance_pip_resolution(org_id, appraisal)
         appraisal.status = AppraisalStatus.COMPLETED
         appraisal.completed_on = date.today()
         self.db.flush()

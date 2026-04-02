@@ -432,6 +432,8 @@ class InventoryTransactionService(ListResponseMixin):
         organization_id: UUID,
         input: TransactionInput,
         created_by_user_id: UUID,
+        *,
+        auto_commit: bool = True,
     ) -> InventoryTransaction:
         """
         Create an inventory issue transaction.
@@ -596,8 +598,9 @@ class InventoryTransactionService(ListResponseMixin):
                 posted_by_user_id=user_id,
             )
 
-        db.commit()
-        db.refresh(transaction)
+        if auto_commit:
+            db.commit()
+            db.refresh(transaction)
 
         return transaction
 

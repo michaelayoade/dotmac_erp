@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -623,23 +623,45 @@ def list_people_contacts(
 )
 def create_material_request(
     payload: CRMMaterialRequestPayload,
+    response: Response,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(_get_db),
 ) -> CRMMaterialRequestResponse:
     """
     Create a material request from CRM.
 
-    Idempotent: if omni_id already exists, returns the existing request.
+    Immutable idempotent create-and-issue endpoint for CRM material issues.
     """
+    from app.models.inventory.material_request import MaterialRequest
+
     org_id = auth["organization_id"]
+    person_id = auth["person_id"]
     service = DotMacCRMSyncService(db)
+    existed_before = bool(
+        db.scalar(
+            select(MaterialRequest.request_id).where(
+                MaterialRequest.organization_id == org_id,
+                MaterialRequest.crm_id == payload.omni_id,
+            )
+        )
+    )
 
     try:
-        result = service.create_material_request(org_id, payload)
+        result = service.create_material_request(org_id, payload, person_id)
+        if existed_before:
+            response.status_code = 200
+        else:
+            response.status_code = 201
+        db.commit()
         return result
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
         logger.exception(
             "Failed to create material request omni_id=%s", payload.omni_id
         )

@@ -472,6 +472,7 @@ class CRMMaterialRequestItemPayload(BaseModel):
     item_code: str = Field(..., max_length=50)
     quantity: Decimal = Field(..., gt=0)
     uom: str | None = Field(None, max_length=20)
+    from_warehouse_code: str = Field(..., max_length=100)
 
 
 class CRMMaterialRequestPayload(BaseModel):
@@ -482,6 +483,13 @@ class CRMMaterialRequestPayload(BaseModel):
     )
     request_type: str = Field(
         "ISSUE", description="PURCHASE, TRANSFER, ISSUE, MANUFACTURE"
+    )
+    status: str = Field(
+        ...,
+        description=(
+            "CRM request status mapped to local MaterialRequest status "
+            "(e.g. submitted, issued)"
+        ),
     )
     items: list[CRMMaterialRequestItemPayload] = Field(..., min_length=1)
     project_crm_id: str | None = Field(None, max_length=36)

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import UUID
 
 from sqlalchemy import and_, delete, false, func, or_, select
@@ -30,9 +30,12 @@ from app.models.people.perf import (
     Scorecard,
     ScorecardItem,
 )
+from app.models.people.perf.pip import PerformanceImprovementPlan
+from app.models.people.perf.pms_enums import PIPStatus
 from app.services.common import PaginatedResult, PaginationParams
 
 logger = logging.getLogger(__name__)
+UNDERPERFORMANCE_SCORE_THRESHOLD = Decimal("50.00")
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -142,6 +145,156 @@ class PerformanceService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _ensure_underperformance_pip_resolution(self, org_id: UUID, appraisal: Appraisal) -> None:
+        """Block appraisal completion until underperformance PIP is resolved."""
+        if appraisal.final_score is None:
+            return
+        final_score = Decimal(str(appraisal.final_score))
+        if final_score <= Decimal("5"):
+            final_score = final_score * Decimal("20")
+        if final_score >= UNDERPERFORMANCE_SCORE_THRESHOLD:
+            return
+
+        pip = self.db.scalar(
+            select(PerformanceImprovementPlan).where(
+                PerformanceImprovementPlan.organization_id == org_id,
+                PerformanceImprovementPlan.appraisal_id == appraisal.appraisal_id,
+            )
+        )
+        if pip is None:
+            from app.services.people.perf.underperformance_service import (
+                UnderperformanceService,
+            )
+
+            UnderperformanceService(self.db).flag_for_pip(
+                org_id,
+                appraisal.employee_id,
+                trigger_type="score_below_50",
+                triggering_appraisal_id=appraisal.appraisal_id,
+            )
+            raise PerformanceServiceError(
+                "Cannot complete appraisal: underperformance detected (score below 50). "
+                "A PIP has been created and must be resolved first."
+            )
+
+        if pip.status not in {PIPStatus.IMPROVED, PIPStatus.ESCALATED, PIPStatus.CLOSED}:
+            raise PerformanceServiceError(
+                "Cannot complete appraisal: linked PIP is not resolved "
+                f"(current status: {pip.status.value})."
+            )
+
+    def _ensure_not_prior_year_carryover(
+        self,
+        appraisal: Appraisal,
+        *,
+        action: str,
+    ) -> None:
+        """Prevent workflow operations on carryover appraisals."""
+        if getattr(appraisal, "is_prior_year_carryover", False) is True:
+            raise PerformanceServiceError(
+                f"Cannot {action} a prior-year carryover appraisal"
+            )
+
+    def _get_appraisal_cycle(self, appraisal: Appraisal) -> AppraisalCycle | None:
+        cycle = getattr(appraisal, "cycle", None)
+        if isinstance(cycle, AppraisalCycle):
+            return cycle
+        if appraisal.cycle_id is None:
+            return None
+        cycle_row = self.db.scalar(
+            select(AppraisalCycle).where(
+                AppraisalCycle.organization_id == appraisal.organization_id,
+                AppraisalCycle.cycle_id == appraisal.cycle_id,
+            )
+        )
+        return cycle_row if isinstance(cycle_row, AppraisalCycle) else None
+
+    def _enforce_phase_deadline(
+        self,
+        appraisal: Appraisal,
+        *,
+        deadline_field: str,
+        phase_label: str,
+    ) -> None:
+        cycle = self._get_appraisal_cycle(appraisal)
+        if cycle is None:
+            return
+
+        deadline = getattr(cycle, deadline_field, None)
+        if not isinstance(deadline, date):
+            return
+        if date.today() > deadline:
+            raise PerformanceServiceError(
+                f"Cannot submit {phase_label}: cycle deadline was {deadline.isoformat()}"
+            )
+
+    @staticmethod
+    def _rating_label_from_value(rating: int) -> str:
+        if rating >= 5:
+            return "Outstanding"
+        if rating == 4:
+            return "Excellent"
+        if rating == 3:
+            return "Good"
+        if rating == 2:
+            return "Fair"
+        return "Poor"
+
+    @staticmethod
+    def _normalize_absence_evidence(
+        approved_absence_evidence: dict[str, Any] | None,
+    ) -> dict[str, str] | None:
+        """Validate and normalize approved-absence documentary evidence."""
+        if approved_absence_evidence is None:
+            return None
+        if not isinstance(approved_absence_evidence, dict):
+            raise PerformanceServiceError("Approved absence evidence must be an object")
+
+        normalized: dict[str, str] = {}
+        for key in (
+            "document_type",
+            "document_reference",
+            "approval_reference",
+            "validation_reference",
+            "approving_authority",
+            "audit_reference",
+            "approval_date",
+            "notes",
+        ):
+            value = approved_absence_evidence.get(key)
+            if value is None:
+                continue
+            text_value = str(value).strip()
+            if text_value:
+                normalized[key] = text_value
+
+        if not normalized:
+            return None
+
+        required = (
+            "document_type",
+            "document_reference",
+            "approval_reference",
+            "validation_reference",
+        )
+        missing = [key for key in required if not normalized.get(key)]
+        if missing:
+            raise PerformanceServiceError(
+                "Approved absence evidence is missing required fields: "
+                + ", ".join(missing)
+            )
+
+        approval_date = normalized.get("approval_date")
+        if approval_date:
+            try:
+                date.fromisoformat(approval_date)
+            except ValueError as exc:
+                raise PerformanceServiceError(
+                    "Approved absence evidence approval_date must be in YYYY-MM-DD format"
+                ) from exc
+
+        return normalized
 
     # =========================================================================
     # Appraisal Cycles
@@ -836,10 +989,51 @@ class PerformanceService:
         manager_id: UUID,
         template_id: UUID | None = None,
         kra_scores: list[dict] | None = None,
+        absence_months: int | None = None,
+        approved_absence_evidence: dict[str, Any] | None = None,
     ) -> Appraisal:
         """Create a new appraisal."""
         # Verify cycle exists
         self.get_cycle(org_id, cycle_id)
+        if absence_months is not None and absence_months < 0:
+            raise PerformanceServiceError("Absence months cannot be negative")
+        normalized_absence_evidence = self._normalize_absence_evidence(
+            approved_absence_evidence
+        )
+
+        # Approved absence policy:
+        # - absence <= 6 months: normal appraisal
+        # - absence > 6 months: create carryover appraisal from prior year
+        is_carryover = False
+        carryover_source_id = None
+        carryover_final_score: Decimal | None = None
+        carryover_final_rating: int | None = None
+        carryover_rating_label: str | None = None
+        if absence_months is not None and absence_months > 6:
+            if not normalized_absence_evidence:
+                raise PerformanceServiceError(
+                    "Approved absence documentation is required for absence beyond 6 months"
+                )
+            prior = self.db.scalar(
+                select(Appraisal)
+                .where(
+                    Appraisal.organization_id == org_id,
+                    Appraisal.employee_id == employee_id,
+                    Appraisal.status == AppraisalStatus.COMPLETED,
+                    Appraisal.cycle_id != cycle_id,
+                    Appraisal.is_prior_year_carryover.is_(False),
+                )
+                .order_by(Appraisal.completed_on.desc().nulls_last(), Appraisal.created_at.desc())
+            )
+            if prior is None:
+                raise PerformanceServiceError(
+                    "No prior-year completed appraisal found for carryover"
+                )
+            is_carryover = True
+            carryover_source_id = prior.appraisal_id
+            carryover_final_score = prior.final_score
+            carryover_final_rating = prior.final_rating
+            carryover_rating_label = prior.rating_label
 
         appraisal = Appraisal(
             organization_id=org_id,
@@ -847,14 +1041,22 @@ class PerformanceService:
             cycle_id=cycle_id,
             manager_id=manager_id,
             template_id=template_id,
-            status=AppraisalStatus.DRAFT,
+            status=AppraisalStatus.COMPLETED if is_carryover else AppraisalStatus.DRAFT,
+            is_prior_year_carryover=is_carryover,
+            carryover_source_id=carryover_source_id,
+            absence_months=absence_months,
+            approved_absence_evidence=normalized_absence_evidence,
+            final_score=carryover_final_score,
+            final_rating=carryover_final_rating,
+            rating_label=carryover_rating_label,
+            completed_on=date.today() if is_carryover else None,
         )
 
         self.db.add(appraisal)
         self.db.flush()
 
         # Add KRA scores
-        if kra_scores:
+        if kra_scores and not is_carryover:
             for score_data in kra_scores:
                 score = AppraisalKRAScore(
                     organization_id=org_id,
@@ -875,6 +1077,43 @@ class PerformanceService:
     ) -> Appraisal:
         """Update an appraisal."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
+        self._ensure_not_prior_year_carryover(appraisal, action="update")
+
+        requested_status = kwargs.get("status")
+        if requested_status is not None and requested_status != appraisal.status:
+            allowed = APPRAISAL_STATUS_TRANSITIONS.get(appraisal.status, set())
+            if requested_status not in allowed:
+                raise AppraisalStatusError(
+                    appraisal.status.value,
+                    requested_status.value
+                    if isinstance(requested_status, AppraisalStatus)
+                    else str(requested_status),
+                )
+
+        if "absence_months" in kwargs:
+            absence_months = kwargs["absence_months"]
+            if absence_months is not None and absence_months < 0:
+                raise PerformanceServiceError("Absence months cannot be negative")
+            if absence_months is not None and absence_months > 6:
+                evidence_candidate = kwargs.get(
+                    "approved_absence_evidence", appraisal.approved_absence_evidence
+                )
+                normalized = self._normalize_absence_evidence(evidence_candidate)
+                if not normalized:
+                    raise PerformanceServiceError(
+                        "Approved absence evidence is required when absence exceeds 6 months"
+                    )
+                kwargs["approved_absence_evidence"] = normalized
+            elif absence_months is not None:
+                kwargs["approved_absence_evidence"] = None
+        elif "approved_absence_evidence" in kwargs:
+            kwargs["approved_absence_evidence"] = self._normalize_absence_evidence(
+                kwargs["approved_absence_evidence"]
+            )
+
+        if "approved_absence_evidence" in kwargs:
+            appraisal.approved_absence_evidence = kwargs.pop("approved_absence_evidence")
+
         for key, value in kwargs.items():
             if value is not None and hasattr(appraisal, key):
                 setattr(appraisal, key, value)
@@ -905,6 +1144,7 @@ class PerformanceService:
     ) -> Appraisal:
         """Submit employee self-assessment."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
+        self._ensure_not_prior_year_carryover(appraisal, action="submit self-assessment")
 
         if appraisal.status not in {
             AppraisalStatus.DRAFT,
@@ -913,6 +1153,11 @@ class PerformanceService:
             raise AppraisalStatusError(
                 appraisal.status.value, AppraisalStatus.SELF_ASSESSMENT.value
             )
+        self._enforce_phase_deadline(
+            appraisal,
+            deadline_field="self_assessment_deadline",
+            phase_label="self-assessment",
+        )
 
         appraisal.self_assessment_date = date.today()
         appraisal.self_overall_rating = self_overall_rating
@@ -945,11 +1190,17 @@ class PerformanceService:
     ) -> Appraisal:
         """Submit manager review."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
+        self._ensure_not_prior_year_carryover(appraisal, action="submit manager review")
 
         if appraisal.status != AppraisalStatus.UNDER_REVIEW:
             raise AppraisalStatusError(
                 appraisal.status.value, AppraisalStatus.CALIBRATION.value
             )
+        self._enforce_phase_deadline(
+            appraisal,
+            deadline_field="manager_review_deadline",
+            phase_label="manager review",
+        )
 
         appraisal.manager_review_date = date.today()
         appraisal.manager_overall_rating = manager_overall_rating
@@ -979,19 +1230,23 @@ class PerformanceService:
     ) -> Appraisal:
         """Submit HR calibration."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
+        self._ensure_not_prior_year_carryover(appraisal, action="submit calibration")
 
         if appraisal.status != AppraisalStatus.CALIBRATION:
             raise AppraisalStatusError(
                 appraisal.status.value, AppraisalStatus.COMPLETED.value
             )
+        self._enforce_phase_deadline(
+            appraisal,
+            deadline_field="calibration_deadline",
+            phase_label="calibration",
+        )
 
         appraisal.calibration_date = date.today()
         appraisal.calibrated_rating = calibrated_rating
         appraisal.calibration_notes = calibration_notes
         appraisal.final_rating = calibrated_rating
         appraisal.rating_label = rating_label
-        appraisal.status = AppraisalStatus.COMPLETED
-        appraisal.completed_on = date.today()
 
         # Calculate final KRA scores
         for score in appraisal.kra_scores:
@@ -1008,8 +1263,125 @@ class PerformanceService:
         )
         appraisal.final_score = total_weighted
 
+        # Proactive trigger: create PIP as soon as underperformance is detected.
+        from app.services.people.perf.underperformance_service import (
+            UnderperformanceService,
+        )
+
+        UnderperformanceService(self.db).ensure_pip_for_underperformance(
+            org_id,
+            appraisal_id=appraisal.appraisal_id,
+            employee_id=appraisal.employee_id,
+            final_score=appraisal.final_score,
+            trigger_type="score_below_50",
+        )
+        self._ensure_underperformance_pip_resolution(org_id, appraisal)
+
+        appraisal.status = AppraisalStatus.COMPLETED
+        appraisal.completed_on = date.today()
+
         self.db.flush()
         return appraisal
+
+    def reconcile_department_ratings(
+        self,
+        org_id: UUID,
+        *,
+        cycle_id: UUID,
+        committee_level: str,
+        reconciled_by_id: UUID,
+        entries: list[dict],
+        notes: str | None = None,
+    ) -> dict:
+        """
+        Reconcile completed employee appraisal ratings at committee level.
+
+        This implements explicit staff-committee reconciliation over completed
+        appraisal results, supporting JUNIOR and SENIOR committee stages.
+        """
+        level = committee_level.strip().upper()
+        if level not in {"JUNIOR", "SENIOR"}:
+            raise PerformanceServiceError(
+                "committee_level must be either JUNIOR or SENIOR"
+            )
+        if not entries:
+            raise PerformanceServiceError(
+                "At least one appraisal reconciliation entry is required"
+            )
+
+        adjusted = 0
+        endorsed = 0
+        processed_ids: list[UUID] = []
+        for idx, entry in enumerate(entries, start=1):
+            appraisal_id = entry.get("appraisal_id")
+            if appraisal_id is None:
+                raise PerformanceServiceError(
+                    f"Entry {idx} is missing appraisal_id"
+                )
+
+            appraisal = self.get_appraisal(org_id, UUID(str(appraisal_id)))
+            if appraisal.cycle_id != cycle_id:
+                raise PerformanceServiceError(
+                    f"Appraisal {appraisal.appraisal_id} is not in cycle {cycle_id}"
+                )
+            if appraisal.status != AppraisalStatus.COMPLETED:
+                raise PerformanceServiceError(
+                    f"Appraisal {appraisal.appraisal_id} must be COMPLETED for committee reconciliation"
+                )
+
+            proposed_rating_raw = entry.get("final_rating")
+            if proposed_rating_raw is None:
+                raise PerformanceServiceError(
+                    f"Entry {idx} is missing final_rating"
+                )
+            proposed_rating = int(proposed_rating_raw)
+            if proposed_rating < 1 or proposed_rating > 5:
+                raise PerformanceServiceError(
+                    f"Entry {idx} final_rating must be between 1 and 5"
+                )
+
+            prior_rating = appraisal.final_rating
+            if prior_rating != proposed_rating:
+                appraisal.calibrated_rating = proposed_rating
+                appraisal.final_rating = proposed_rating
+                appraisal.rating_label = self._rating_label_from_value(proposed_rating)
+                appraisal.committee_decision = "ADJUSTED"
+                adjusted += 1
+            else:
+                appraisal.committee_decision = "ENDORSED"
+                endorsed += 1
+
+            comment = str(entry.get("note") or "").strip()
+            combined_notes: list[str] = [f"{level} STAFF COMMITTEE"]
+            if notes:
+                combined_notes.append(notes.strip())
+            if comment:
+                combined_notes.append(comment)
+            appraisal.committee_notes = " | ".join(
+                [segment for segment in combined_notes if segment]
+            )
+            appraisal.committee_review_date = date.today()
+            processed_ids.append(appraisal.appraisal_id)
+
+        self.db.flush()
+        logger.info(
+            "Department rating reconciliation completed: org=%s cycle=%s level=%s adjusted=%d endorsed=%d by=%s",
+            org_id,
+            cycle_id,
+            level,
+            adjusted,
+            endorsed,
+            reconciled_by_id,
+        )
+        return {
+            "committee_level": level,
+            "reconciled_by_id": str(reconciled_by_id),
+            "cycle_id": str(cycle_id),
+            "processed_count": len(processed_ids),
+            "adjusted_count": adjusted,
+            "endorsed_count": endorsed,
+            "appraisal_ids": [str(aid) for aid in processed_ids],
+        }
 
     # =========================================================================
     # Scorecards
