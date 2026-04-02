@@ -89,6 +89,8 @@ from app.tasks.performance import (
     check_upcoming_deadlines,
     complete_cycle,
     generate_cycle_appraisals,
+    process_pms_dispute_deadline_reminders,
+    process_pms_dispute_sla_enforcement,
     process_cycle_phase_transitions,
     sync_all_cycle_progress,
 )
@@ -150,6 +152,8 @@ __all__ = [
     "sync_all_cycle_progress",
     "activate_cycle",
     "complete_cycle",
+    "process_pms_dispute_sla_enforcement",
+    "process_pms_dispute_deadline_reminders",
     # Audit tasks
     "log_audit_event",
     "verify_audit_hash_chain",

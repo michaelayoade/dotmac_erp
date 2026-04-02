@@ -38,6 +38,18 @@ def pms_dashboard(
     return OHCSFDashboardWebService().dashboard_response(request, auth, db)
 
 
+@router.get("/governance", response_class=HTMLResponse)
+def governance_dashboard(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """PMS governance dashboard."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return governance_web_service.governance_dashboard_response(request, auth, db)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Performance Contracts
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,6 +142,53 @@ async def sign_contract_supervisor(
     from app.services.people.perf.web.contract_web import ContractWebService
 
     return ContractWebService().sign_supervisor_response(auth, db, contract_id)
+
+
+@router.post("/contracts/{contract_id}/amend", response_class=HTMLResponse)
+async def amend_contract(
+    request: Request,
+    contract_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create amendment and start staged signoff workflow."""
+    from app.services.people.perf.web.contract_web import ContractWebService
+
+    return await ContractWebService().amend_contract_response(request, auth, db, contract_id)
+
+
+@router.post("/contracts/{contract_id}/amend/approve/{stage}", response_class=HTMLResponse)
+async def approve_contract_amendment_stage(
+    request: Request,
+    contract_id: str,
+    stage: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Approve one stage of amendment signoff chain."""
+    from app.services.people.perf.web.contract_web import ContractWebService
+
+    form_data = await request.form()
+    note = str(form_data.get("signoff_note", "")).strip() or None
+    return ContractWebService().approve_amendment_stage_response(
+        auth, db, contract_id, stage=stage.upper(), note=note
+    )
+
+
+@router.post("/contracts/{contract_id}/amend/reject/{stage}", response_class=HTMLResponse)
+async def reject_contract_amendment_stage(
+    request: Request,
+    contract_id: str,
+    stage: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Reject pending amendment at a specific stage."""
+    from app.services.people.perf.web.contract_web import ContractWebService
+
+    return await ContractWebService().reject_amendment_response(
+        request, auth, db, contract_id, stage=stage.upper()
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -574,6 +633,36 @@ async def reconcile_institutional(
     )
 
 
+@router.post("/institutional/{inst_perf_id}/assign-governance", response_class=HTMLResponse)
+async def assign_institutional_governance(
+    request: Request,
+    inst_perf_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Assign governance owner/reviewer/approver for institutional record."""
+    from app.services.people.perf.web.institutional_web import InstitutionalWebService
+
+    return await InstitutionalWebService().assign_governance_response(
+        request, auth, db, inst_perf_id
+    )
+
+
+@router.post("/institutional/{inst_perf_id}/transition-stage", response_class=HTMLResponse)
+async def transition_institutional_stage(
+    request: Request,
+    inst_perf_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Transition institutional governance workflow stage."""
+    from app.services.people.perf.web.institutional_web import InstitutionalWebService
+
+    return await InstitutionalWebService().transition_governance_response(
+        request, auth, db, inst_perf_id
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Strategic Objectives
 # ─────────────────────────────────────────────────────────────────────────────
@@ -665,4 +754,219 @@ def pms_report(
         auth,
         db,
         report_type=report_type,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Governance Grievances
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/grievances", response_class=HTMLResponse)
+def list_grievances(
+    request: Request,
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """PMS grievance list page."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return governance_web_service.grievances_response(request, auth, db, status, page)
+
+
+@router.get("/grievances/new", response_class=HTMLResponse)
+def new_grievance_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """New grievance form page."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return governance_web_service.grievance_new_form_response(request, auth, db)
+
+
+@router.post("/grievances/new", response_class=HTMLResponse)
+async def create_grievance(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create governance grievance."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return await governance_web_service.grievance_create_response(request, auth, db)
+
+
+@router.post("/grievances/{grievance_id}/assign", response_class=HTMLResponse)
+async def assign_grievance(
+    request: Request,
+    grievance_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Assign grievance to HR/committee officer."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return await governance_web_service.assign_grievance_response(
+        request,
+        auth,
+        db,
+        grievance_id,
+    )
+
+
+@router.post("/grievances/{grievance_id}/resolve", response_class=HTMLResponse)
+async def resolve_grievance(
+    request: Request,
+    grievance_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Resolve grievance with final notes."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return await governance_web_service.resolve_grievance_response(
+        request,
+        auth,
+        db,
+        grievance_id,
+    )
+
+
+@router.post("/grievances/{grievance_id}/escalate", response_class=HTMLResponse)
+async def escalate_grievance(
+    request: Request,
+    grievance_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Escalate unresolved grievance to FCSC."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return await governance_web_service.escalate_grievance_response(
+        request,
+        auth,
+        db,
+        grievance_id,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stakeholder Feedback
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/stakeholder-feedback", response_class=HTMLResponse)
+def list_stakeholder_feedback(
+    request: Request,
+    status: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Stakeholder feedback list page."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return governance_web_service.feedback_response(request, auth, db, status, page)
+
+
+@router.get("/stakeholder-feedback/new", response_class=HTMLResponse)
+def new_stakeholder_feedback_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """New stakeholder feedback form page."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return governance_web_service.feedback_new_form_response(request, auth, db)
+
+
+@router.post("/stakeholder-feedback/new", response_class=HTMLResponse)
+async def create_stakeholder_feedback(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create stakeholder feedback."""
+    from app.services.people.perf.web.governance_web import governance_web_service
+
+    return await governance_web_service.feedback_create_response(request, auth, db)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Rewards and Recognition
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/rewards", response_class=HTMLResponse)
+def rewards_hub(
+    request: Request,
+    status: str | None = None,
+    cycle_id: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Rewards and recognition workflow page."""
+    from app.services.people.perf.web.reward_web import reward_web_service
+
+    return reward_web_service.rewards_hub_response(
+        request,
+        auth,
+        db,
+        status=status,
+        cycle_id=cycle_id,
+        page=page,
+    )
+
+
+@router.post("/rewards/nominate", response_class=HTMLResponse)
+async def nominate_reward(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Create reward nomination from completed appraisal."""
+    from app.services.people.perf.web.reward_web import reward_web_service
+
+    return await reward_web_service.nominate_reward_response(request, auth, db)
+
+
+@router.post("/rewards/{action_id}/approve", response_class=HTMLResponse)
+async def approve_reward(
+    request: Request,
+    action_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Approve pending reward nomination."""
+    from app.services.people.perf.web.reward_web import reward_web_service
+
+    return await reward_web_service.approve_reward_response(
+        request,
+        auth,
+        db,
+        action_id,
+    )
+
+
+@router.post("/rewards/{action_id}/cancel", response_class=HTMLResponse)
+async def cancel_reward(
+    request: Request,
+    action_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Cancel pending reward nomination."""
+    from app.services.people.perf.web.reward_web import reward_web_service
+
+    return await reward_web_service.cancel_reward_response(
+        request,
+        auth,
+        db,
+        action_id,
     )

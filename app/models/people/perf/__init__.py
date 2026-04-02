@@ -18,6 +18,7 @@ from app.models.people.perf.appraisal_template import (
     AppraisalTemplateKRA,
 )
 from app.models.people.perf.competency_assessment import CompetencyAssessment
+from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
 from app.models.people.perf.institutional_performance import (
     InstitutionalCriteriaTemplate,
     InstitutionalPerformance,
@@ -27,6 +28,11 @@ from app.models.people.perf.kra import KRA
 from app.models.people.perf.monthly_review import MonthlyReview
 from app.models.people.perf.performance_contract import PerformanceContract
 from app.models.people.perf.pip import PerformanceImprovementPlan
+from app.models.people.perf.pms_governance import (
+    InstitutionalGovernanceAction,
+    PMSGovernanceGrievance,
+    PMSStakeholderFeedback,
+)
 from app.models.people.perf.pms_enums import (
     AppealDecision,
     AppealStatus,
@@ -65,11 +71,15 @@ __all__ = [
     "AppraisalAppeal",
     "AppraisalOutcomeAction",
     "CompetencyAssessment",
+    "ContractAmendmentWorkflow",
     "InstitutionalCriteriaTemplate",
     "InstitutionalPerformance",
     "MonthlyReview",
     "PerformanceContract",
     "PerformanceImprovementPlan",
+    "InstitutionalGovernanceAction",
+    "PMSGovernanceGrievance",
+    "PMSStakeholderFeedback",
     "StrategicObjective",
     # PMS enums
     "AppealDecision",

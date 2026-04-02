@@ -80,6 +80,7 @@ def test_appraisal_ohcsf_carryover_fields():
     )
     assert a.carryover_source_id is None
     assert a.absence_months is None
+    assert a.approved_absence_evidence is None
 
 
 def test_appraisal_ohcsf_secondment_fields():

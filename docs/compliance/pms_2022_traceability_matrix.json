@@ -1,0 +1,427 @@
+{
+  "standard": "OHCSF PMS Guidelines 2022 (Nigeria Federal Public Service)",
+  "version": "2026-04-02",
+  "clauses": [
+    {
+      "id": "C01",
+      "title": "Introduction and Core PMS Objectives",
+      "feature_refs": [
+        "app/services/people/perf/pms_config_service.py",
+        "app/services/people/perf/web/ohcsf_dashboard_web.py",
+        "templates/people/perf/pms/dashboard.html"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_pms_config_service.py",
+          "cases": [
+            "test_competency_seed_data_has_18_competencies",
+            "test_institutional_weights_sum_to_100"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_ohcsf_reporting_service.py",
+          "cases": [
+            "test_compliance_dashboard_structure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "title": "Institutional Roles and Responsibilities",
+      "feature_refs": [
+        "app/services/people/perf/governance_service.py",
+        "app/services/people/perf/web/institutional_web.py",
+        "templates/people/perf/pms/institutional_detail.html"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_governance_service.py",
+          "cases": [
+            "test_transition_stage_rejects_unauthorized_actor_role",
+            "test_assign_roles_rejects_invalid_actor_role"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "title": "National Governance Instruments and Target Setting",
+      "feature_refs": [
+        "app/services/people/perf/strategic_objective_service.py",
+        "app/models/people/perf/performance_contract.py",
+        "app/services/people/perf/contract_service.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_strategic_objective_service.py",
+          "cases": [
+            "test_returns_objective_with_correct_fields"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_contract_service.py",
+          "cases": [
+            "test_create_contract_succeeds_with_valid_data"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C04",
+      "title": "MDA Performance Management System",
+      "feature_refs": [
+        "app/services/people/perf/institutional_service.py",
+        "app/services/people/perf/web/institutional_web.py",
+        "templates/people/perf/pms/institutional.html"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_institutional_service.py",
+          "cases": [
+            "test_sets_status_to_appraised",
+            "test_calculates_composite_score"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "title": "Institutional KRA Weightings",
+      "feature_refs": [
+        "app/services/people/perf/pms_config_service.py",
+        "app/models/people/perf/institutional_performance.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_pms_config_service.py",
+          "cases": [
+            "test_institutional_weights_has_6_institution_types",
+            "test_institutional_weights_have_8_criteria_each"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "title": "Employee Performance Management System",
+      "feature_refs": [
+        "app/services/people/perf/perf_service.py",
+        "app/services/people/perf/monthly_review_service.py",
+        "app/services/people/perf/ohcsf_appraisal_service.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_monthly_review_service.py",
+          "cases": [
+            "test_submit_sets_status_to_submitted",
+            "test_acknowledge_sets_status_to_acknowledged"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_ohcsf_appraisal_workflow.py",
+          "cases": [
+            "test_from_self_assessment_transitions_to_pending_review"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "title": "EPMS Roles and Responsibilities",
+      "feature_refs": [
+        "app/services/people/perf/governance_service.py",
+        "app/services/people/perf/web/governance_web.py",
+        "app/services/people/perf/web/institutional_web.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_governance_service.py",
+          "cases": [
+            "test_transition_stage_updates_workflow_and_logs_action",
+            "test_create_stakeholder_feedback_logs_servicom_touchpoint_for_record"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C08",
+      "title": "Employee Performance Management Cycle",
+      "feature_refs": [
+        "app/services/people/perf/ohcsf_appraisal_service.py",
+        "app/services/people/perf/monthly_review_service.py",
+        "app/models/people/perf/monthly_review.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_ohcsf_appraisal_workflow.py",
+          "cases": [
+            "test_full_happy_path_chain",
+            "test_transitions_to_completed"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_monthly_review_service.py",
+          "cases": [
+            "test_accepts_first_of_month"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "title": "Employee Performance Planning",
+      "feature_refs": [
+        "app/services/people/perf/contract_service.py",
+        "app/models/people/perf/performance_contract.py",
+        "templates/people/perf/pms/contract_form.html"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_contract_service.py",
+          "cases": [
+            "test_accepts_valid_objectives",
+            "test_rejects_fewer_than_3",
+            "test_rejects_more_than_7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "title": "Job Objectives, KPIs, Targets, Competency Framework",
+      "feature_refs": [
+        "app/services/people/perf/contract_service.py",
+        "app/services/people/perf/ohcsf_appraisal_service.py",
+        "app/models/people/perf/competency_assessment.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_contract_service.py",
+          "cases": [
+            "test_accepts_3_development_focus",
+            "test_rejects_not_exactly_3_development_focus_too_many"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_ohcsf_appraisal_workflow.py",
+          "cases": [
+            "test_requires_competency_evidence_for_each_rating",
+            "test_rejects_competency_not_in_contract_selection"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C11",
+      "title": "Performance Review and Appraisal",
+      "feature_refs": [
+        "app/services/people/perf/perf_service.py",
+        "app/services/people/perf/appeal_service.py",
+        "app/services/people/perf/scoring_engine.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_perf_service_deadlines.py",
+          "cases": [
+            "test_submit_self_assessment_rejects_after_deadline",
+            "test_submit_manager_review_rejects_after_deadline"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_appeal_service.py",
+          "cases": [
+            "test_file_allows_appeal_within_5_working_days"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_ohcsf_composite_scoring.py",
+          "cases": [
+            "test_full_70_20_10_calculation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C12",
+      "title": "Managing Underperformance",
+      "feature_refs": [
+        "app/services/people/perf/underperformance_service.py",
+        "app/services/people/perf/pip_service.py",
+        "app/services/people/perf/perf_service.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_ohcsf_appraisal_workflow.py",
+          "cases": [
+            "test_underperformance_creates_pip_and_blocks_completion",
+            "test_underperformance_with_unresolved_pip_blocks_completion"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_pip_service.py",
+          "cases": [
+            "test_rejects_duration_over_6_months",
+            "test_accepts_valid_extension"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_perf_service_pip_gate.py",
+          "cases": [
+            "test_submit_calibration_blocks_when_linked_pip_unresolved"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C13",
+      "title": "Appraising Employees on Approved Absence",
+      "feature_refs": [
+        "app/services/people/perf/perf_service.py",
+        "app/models/people/perf/appraisal.py",
+        "templates/people/perf/appraisal_form.html"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_perf_service_absence.py",
+          "cases": [
+            "test_create_appraisal_creates_prior_year_carryover_when_absence_over_6",
+            "test_create_appraisal_rejects_absence_evidence_missing_required_fields"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C14",
+      "title": "Post-Appraisal Activities and Reconciliation",
+      "feature_refs": [
+        "app/services/people/perf/perf_service.py",
+        "app/services/people/perf/dispute_sla_service.py",
+        "app/services/people/perf/ohcsf_reporting_service.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_perf_service_reconciliation.py",
+          "cases": [
+            "test_reconcile_department_ratings_adjusts_and_endorses"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_dispute_sla_service.py",
+          "cases": [
+            "test_enforce_overdue_appeals_auto_refers_to_committee"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_ohcsf_reporting_service.py",
+          "cases": [
+            "test_compliance_dashboard_appraisals_section"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C15",
+      "title": "Recognition and Rewards",
+      "feature_refs": [
+        "app/services/people/perf/reward_service.py",
+        "app/services/people/perf/web/reward_web.py",
+        "templates/people/perf/pms/rewards.html"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_reward_service.py",
+          "cases": [
+            "test_nominate_reward_creates_pending_action_and_marks_appraisal",
+            "test_nominate_reward_rejects_unresolved_appeal"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C16",
+      "title": "Other Interventions (Capacity Building and Continuous Learning)",
+      "feature_refs": [
+        "app/services/people/perf/pms_config_service.py",
+        "app/services/people/perf/ohcsf_reporting_service.py"
+      ],
+      "test_refs": [
+        {
+          "path": "tests/people/perf/test_pms_config_service.py",
+          "cases": [
+            "test_competency_seed_data_has_5_clusters"
+          ]
+        },
+        {
+          "path": "tests/people/perf/test_ohcsf_reporting_service.py",
+          "cases": [
+            "test_development_needs_overview_returns_dict"
+          ]
+        }
+      ]
+    }
+  ],
+  "key_insights": [
+    {
+      "id": "KI01",
+      "statement": "Institutional and individual alignment",
+      "evidence_tests": [
+        "tests/people/perf/test_contract_service.py",
+        "tests/people/perf/test_strategic_objective_service.py"
+      ]
+    },
+    {
+      "id": "KI02",
+      "statement": "Clear accountability",
+      "evidence_tests": [
+        "tests/people/perf/test_governance_service.py"
+      ]
+    },
+    {
+      "id": "KI03",
+      "statement": "SMART/OKR measurable targets",
+      "evidence_tests": [
+        "tests/people/perf/test_contract_service.py"
+      ]
+    },
+    {
+      "id": "KI04",
+      "statement": "Competency and behavior assessment",
+      "evidence_tests": [
+        "tests/people/perf/test_ohcsf_appraisal_workflow.py"
+      ]
+    },
+    {
+      "id": "KI05",
+      "statement": "Continuous feedback and improvement",
+      "evidence_tests": [
+        "tests/people/perf/test_monthly_review_service.py",
+        "tests/people/perf/test_pip_service.py"
+      ]
+    },
+    {
+      "id": "KI06",
+      "statement": "Formal underperformance and appeals mechanisms",
+      "evidence_tests": [
+        "tests/people/perf/test_pip_service.py",
+        "tests/people/perf/test_appeal_service.py",
+        "tests/people/perf/test_governance_service.py"
+      ]
+    },
+    {
+      "id": "KI07",
+      "statement": "Data-driven decision making",
+      "evidence_tests": [
+        "tests/people/perf/test_ohcsf_reporting_service.py"
+      ]
+    },
+    {
+      "id": "KI08",
+      "statement": "Transparency and motivation via rewards and governance logs",
+      "evidence_tests": [
+        "tests/people/perf/test_reward_service.py",
+        "tests/people/perf/test_governance_service.py"
+      ]
+    }
+  ]
+}

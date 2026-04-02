@@ -1,0 +1,53 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import empty_state, icon_svg, pagination, status_badge %}
+
+{% block page_title %}Stakeholder Feedback{% endblock %}
+
+{% block header_actions %}
+<a href="/people/perf/pms/stakeholder-feedback/new" class="btn btn-primary">
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+    New Feedback
+</a>
+{% endblock %}
+
+{% block content %}
+<div id="results-container" class="space-y-4">
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Title</th>
+                        <th scope="col" class="hidden md:table-cell">Source</th>
+                        <th scope="col" class="hidden md:table-cell">Channel</th>
+                        <th scope="col" class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td class="text-sm font-medium text-slate-900 dark:text-white">{{ record.title }}</td>
+                        <td class="hidden md:table-cell text-sm text-slate-600 dark:text-slate-400">{{ record.source_type | replace('_', ' ') | title }}</td>
+                        <td class="hidden md:table-cell text-sm text-slate-600 dark:text-slate-400">{{ record.channel | replace('_', ' ') | title }}</td>
+                        <td class="text-center">{{ status_badge(record.status, "sm") }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4">
+                            {{ empty_state(
+                                title="No feedback",
+                                description="No stakeholder feedback has been captured.",
+                                icon="users",
+                                cta_text="New Feedback",
+                                cta_href="/people/perf/pms/stakeholder-feedback/new"
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total) }}
+</div>
+{% endblock %}

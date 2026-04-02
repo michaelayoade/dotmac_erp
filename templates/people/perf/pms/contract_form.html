@@ -215,6 +215,57 @@
             </div>
         </div>
 
+        {# Competencies #}
+        <div class="card overflow-hidden">
+            <div class="card-header px-6 py-5">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Competency Selection</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Required: exactly 5 competencies with exactly 3 marked as development focus.
+                </p>
+            </div>
+            <div class="card-body px-6 py-5 space-y-3">
+                {% set rows = competency_rows if competency_rows is defined and competency_rows else [
+                    {'competency_id': '', 'is_development_focus': false},
+                    {'competency_id': '', 'is_development_focus': false},
+                    {'competency_id': '', 'is_development_focus': false},
+                    {'competency_id': '', 'is_development_focus': false},
+                    {'competency_id': '', 'is_development_focus': false}
+                ] %}
+                {% for row_idx in range(1, 6) %}
+                {% set selected = rows[loop.index0] %}
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                    <div class="sm:col-span-3">
+                        <label class="form-label text-xs" for="competency_id_{{ row_idx }}">
+                            Competency {{ row_idx }} <span class="text-rose-500">*</span>
+                        </label>
+                        <select id="competency_id_{{ row_idx }}" name="competency_id_{{ row_idx }}" class="form-select w-full" required>
+                            <option value="">Select competency</option>
+                            {% for comp in competencies %}
+                            <option value="{{ comp.competency_id }}"
+                                    {% if selected.competency_id == comp.competency_id | string %}selected{% endif %}>
+                                {{ comp.competency_code if comp.competency_code else 'COMP' }} — {{ comp.competency_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label text-xs" for="development_focus_{{ row_idx }}">Dev Focus</label>
+                        <label class="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-slate-300 dark:border-slate-700">
+                            <input id="development_focus_{{ row_idx }}"
+                                   type="checkbox"
+                                   name="development_focus"
+                                   value="{{ row_idx }}"
+                                   class="form-checkbox"
+                                   {% if selected.is_development_focus %}checked{% endif %}>
+                            <span class="text-sm text-slate-700 dark:text-slate-300">Mark</span>
+                        </label>
+                    </div>
+                </div>
+                {% endfor %}
+                <span class="form-hint">Select 5 unique competencies and mark exactly 3 as development focus.</span>
+            </div>
+        </div>
+
         {# Form actions #}
         <div class="flex items-center justify-end gap-3 pb-4">
             <a href="/people/perf/pms/contracts" class="btn btn-secondary">Cancel</a>

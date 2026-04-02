@@ -27,9 +27,9 @@ from app.services.people.perf.contract_service import (
 # ---------------------------------------------------------------------------
 
 VALID_OBJECTIVES = [
-    {"title": "Obj A", "weight": 20},
-    {"title": "Obj B", "weight": 20},
-    {"title": "Obj C", "weight": 30},
+    {"objective": "Obj A", "kpi": "KPI A", "target": "Target A", "weight": 20},
+    {"objective": "Obj B", "kpi": "KPI B", "target": "Target B", "weight": 20},
+    {"objective": "Obj C", "kpi": "KPI C", "target": "Target C", "weight": 30},
 ]  # 3 objectives, total weight = 70
 
 
@@ -37,7 +37,15 @@ def make_objectives(count: int, *, total_weight: int = 70) -> list[dict]:
     """Create `count` objectives with weights distributed to sum to total_weight."""
     per = total_weight // count
     remainder = total_weight - per * count
-    objs = [{"title": f"Obj {i}", "weight": per} for i in range(count)]
+    objs = [
+        {
+            "objective": f"Obj {i}",
+            "kpi": f"KPI {i}",
+            "target": f"Target {i}",
+            "weight": per,
+        }
+        for i in range(count)
+    ]
     if objs:
         objs[0]["weight"] += remainder
     return objs
@@ -130,20 +138,32 @@ class TestValidateObjectives:
 
     def test_rejects_weights_not_summing_to_70(self) -> None:
         objs = [
-            {"title": "A", "weight": 30},
-            {"title": "B", "weight": 30},
-            {"title": "C", "weight": 30},  # total = 90, not 70
+            {"objective": "A", "kpi": "KPI A", "target": "T", "weight": 30},
+            {"objective": "B", "kpi": "KPI B", "target": "T", "weight": 30},
+            {"objective": "C", "kpi": "KPI C", "target": "T", "weight": 30},
         ]
         with pytest.raises(ContractValidationError, match="70"):
             self.service._validate_objectives(objs)
 
     def test_rejects_weights_summing_to_less_than_70(self) -> None:
         objs = [
-            {"title": "A", "weight": 20},
-            {"title": "B", "weight": 20},
-            {"title": "C", "weight": 20},  # total = 60
+            {"objective": "A", "kpi": "KPI A", "target": "T", "weight": 20},
+            {"objective": "B", "kpi": "KPI B", "target": "T", "weight": 20},
+            {"objective": "C", "kpi": "KPI C", "target": "T", "weight": 20},
         ]
         with pytest.raises(ContractValidationError, match="70"):
+            self.service._validate_objectives(objs)
+
+    def test_rejects_missing_kpi(self) -> None:
+        objs = make_objectives(3)
+        objs[0]["kpi"] = ""
+        with pytest.raises(ContractValidationError, match="KPI"):
+            self.service._validate_objectives(objs)
+
+    def test_rejects_missing_target(self) -> None:
+        objs = make_objectives(3)
+        objs[0]["target"] = ""
+        with pytest.raises(ContractValidationError, match="target"):
             self.service._validate_objectives(objs)
 
     def test_boundary_3_objectives_accepted(self) -> None:
@@ -169,7 +189,7 @@ class TestValidateCompetencies:
         self.service._validate_competency_selections(comps)
 
     def test_accepts_exactly_3_when_all_marked(self) -> None:
-        comps = make_competencies(3, dev_focus_count=3)
+        comps = make_competencies(5, dev_focus_count=3)
         self.service._validate_competency_selections(comps)
 
     def test_rejects_not_exactly_3_development_focus_too_few(self) -> None:
@@ -188,8 +208,13 @@ class TestValidateCompetencies:
             self.service._validate_competency_selections(comps)
 
     def test_rejects_empty_competency_list(self) -> None:
-        with pytest.raises(ContractValidationError, match="3"):
+        with pytest.raises(ContractValidationError, match="5"):
             self.service._validate_competency_selections([])
+
+    def test_rejects_not_exactly_five_competencies(self) -> None:
+        comps = make_competencies(4, dev_focus_count=3)
+        with pytest.raises(ContractValidationError, match="5"):
+            self.service._validate_competency_selections(comps)
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +271,8 @@ class TestSignEmployee:
         c.contract_id = uuid.uuid4()
         c.employee_id = uuid.uuid4()
         c.supervisor_id = uuid.uuid4()
+        c.objectives = VALID_OBJECTIVES
+        c.competency_ids = make_competencies()
         return c
 
     def test_sets_employee_signed_date(self) -> None:
@@ -328,6 +355,8 @@ class TestSignSupervisor:
         c.contract_id = uuid.uuid4()
         c.employee_id = uuid.uuid4()
         c.supervisor_id = uuid.uuid4()
+        c.objectives = VALID_OBJECTIVES
+        c.competency_ids = make_competencies()
         return c
 
     def test_sets_supervisor_signed_date(self) -> None:
@@ -399,6 +428,91 @@ class TestSignSupervisor:
             )
 
 
+class TestAmendmentWorkflow:
+    def test_rejects_out_of_order_stage_approval(self) -> None:
+        from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
+
+        db = MagicMock()
+        service = PerformanceContractService(db)
+
+        workflow = ContractAmendmentWorkflow(
+            organization_id=uuid.uuid4(),
+            contract_id=uuid.uuid4(),
+            original_contract_id=uuid.uuid4(),
+            appraisee_id=uuid.uuid4(),
+            appraiser_id=uuid.uuid4(),
+            hod_id=uuid.uuid4(),
+            hr_head_id=uuid.uuid4(),
+            status="PENDING",
+        )
+
+        db.scalar.side_effect = [
+            workflow,
+            MagicMock(employee_id=workflow.appraiser_id),
+        ]
+
+        with pytest.raises(ContractValidationError, match="Appraisee signoff"):
+            service.approve_amendment_stage(
+                workflow.organization_id,
+                workflow.contract_id,
+                stage="APPRAISER",
+                actor_person_id=uuid.uuid4(),
+            )
+
+    def test_final_hr_head_signoff_activates_amended_and_marks_original_amended(self) -> None:
+        from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
+        from app.models.people.perf.performance_contract import PerformanceContract
+        from app.models.people.perf.pms_enums import ContractStatus
+
+        db = MagicMock()
+        service = PerformanceContractService(db)
+
+        workflow = ContractAmendmentWorkflow(
+            organization_id=uuid.uuid4(),
+            contract_id=uuid.uuid4(),
+            original_contract_id=uuid.uuid4(),
+            appraisee_id=uuid.uuid4(),
+            appraiser_id=uuid.uuid4(),
+            hod_id=uuid.uuid4(),
+            hr_head_id=uuid.uuid4(),
+            status="PENDING",
+            appraisee_signed_date=date.today(),
+            appraiser_signed_date=date.today(),
+            hod_signed_date=date.today(),
+        )
+
+        amended_contract = MagicMock(spec=PerformanceContract)
+        amended_contract.organization_id = workflow.organization_id
+        amended_contract.contract_id = workflow.contract_id
+        amended_contract.status = ContractStatus.DRAFT
+        amended_contract.objectives = VALID_OBJECTIVES
+        amended_contract.competency_ids = make_competencies()
+
+        original_contract = MagicMock(spec=PerformanceContract)
+        original_contract.organization_id = workflow.organization_id
+        original_contract.contract_id = workflow.original_contract_id
+        original_contract.status = ContractStatus.ACTIVE
+
+        db.scalar.side_effect = [
+            workflow,
+            MagicMock(employee_id=workflow.hr_head_id),
+            amended_contract,
+            original_contract,
+        ]
+
+        result = service.approve_amendment_stage(
+            workflow.organization_id,
+            workflow.contract_id,
+            stage="HR_HEAD",
+            actor_person_id=uuid.uuid4(),
+        )
+
+        assert result.status == "APPROVED"
+        assert result.hr_head_signed_date == date.today()
+        assert amended_contract.status == ContractStatus.ACTIVE
+        assert original_contract.status == ContractStatus.AMENDED
+
+
 # ---------------------------------------------------------------------------
 # countersign
 # ---------------------------------------------------------------------------
@@ -416,6 +530,8 @@ class TestCountersign:
         c.status = ContractStatus.PENDING_SIGNATURE
         c.organization_id = uuid.uuid4()
         c.contract_id = uuid.uuid4()
+        c.objectives = VALID_OBJECTIVES
+        c.competency_ids = make_competencies()
         return c
 
     def test_sets_countersigner_id_and_date(self) -> None:
@@ -470,7 +586,7 @@ class TestAmendContract:
         c.development_plan = None
         return c
 
-    def test_original_contract_marked_as_amended(self) -> None:
+    def test_original_contract_remains_active_until_signoff_completion(self) -> None:
         from app.models.people.perf.pms_enums import ContractStatus
 
         db = MagicMock()
@@ -489,9 +605,10 @@ class TestAmendContract:
             original.contract_id,
             new_objectives=new_objs,
             amendment_reason="Restructured targets",
+            competency_ids=make_competencies(),
         )
 
-        assert original.status == ContractStatus.AMENDED
+        assert original.status == ContractStatus.ACTIVE
 
     def test_amended_code_has_suffix(self) -> None:
         db = MagicMock()
@@ -507,6 +624,7 @@ class TestAmendContract:
             original.contract_id,
             new_objectives=make_objectives(3),
             amendment_reason="Test",
+            competency_ids=make_competencies(),
         )
 
         assert len(added) == 1
@@ -527,6 +645,7 @@ class TestAmendContract:
             original.contract_id,
             new_objectives=make_objectives(3),
             amendment_reason="Restructured",
+            competency_ids=make_competencies(),
         )
 
         new_contract = added[0]
@@ -545,6 +664,7 @@ class TestAmendContract:
                 original.contract_id,
                 new_objectives=bad_objectives,
                 amendment_reason="Bad",
+                competency_ids=make_competencies(),
             )
 
 
@@ -586,6 +706,7 @@ class TestCreateContract:
             contract_code="PC-2026-001",
             contract_type="INDIVIDUAL",
             objectives=VALID_OBJECTIVES,
+            competency_ids=make_competencies(),
         )
 
     def test_create_contract_succeeds_with_valid_data(self) -> None:
@@ -665,9 +786,9 @@ class TestCreateContract:
         db.scalar.side_effect = [employee, inst_perf]
 
         bad_objectives = [
-            {"title": "A", "weight": 20},
-            {"title": "B", "weight": 20},
-            {"title": "C", "weight": 20},  # total = 60, not 70
+            {"objective": "A", "kpi": "KPI A", "target": "T", "weight": 20},
+            {"objective": "B", "kpi": "KPI B", "target": "T", "weight": 20},
+            {"objective": "C", "kpi": "KPI C", "target": "T", "weight": 20},
         ]
 
         with pytest.raises(ContractValidationError, match="70"):
@@ -700,6 +821,24 @@ class TestContractStatusGuards:
         c.employee_signed_date = None
         c.supervisor_signed_date = None
         c.status = status
+        c.objectives = VALID_OBJECTIVES
+        c.competency_ids = make_competencies()
+        return c
+
+    def _make_pending_contract_with_missing_planning(self):
+        from app.models.people.perf.performance_contract import PerformanceContract
+        from app.models.people.perf.pms_enums import ContractStatus
+
+        c = MagicMock(spec=PerformanceContract)
+        c.organization_id = uuid.uuid4()
+        c.contract_id = uuid.uuid4()
+        c.employee_id = uuid.uuid4()
+        c.supervisor_id = uuid.uuid4()
+        c.employee_signed_date = None
+        c.supervisor_signed_date = None
+        c.status = ContractStatus.PENDING_SIGNATURE
+        c.objectives = make_objectives(3)
+        c.competency_ids = None
         return c
 
     def test_sign_employee_rejects_completed_contract(self) -> None:
@@ -754,6 +893,19 @@ class TestContractStatusGuards:
                 uuid.uuid4(),
             )
 
+    def test_sign_employee_blocks_when_competencies_missing(self) -> None:
+        db = MagicMock()
+        service = PerformanceContractService(db)
+        contract = self._make_pending_contract_with_missing_planning()
+        db.scalar.side_effect = [contract, MagicMock(employee_id=contract.employee_id)]
+
+        with pytest.raises(ContractValidationError, match="competencies"):
+            service.sign_employee(
+                contract.organization_id,
+                contract.contract_id,
+                actor_person_id=uuid.uuid4(),
+            )
+
 
 # ---------------------------------------------------------------------------
 # amend_contract — additional cases
@@ -797,14 +949,15 @@ class TestAmendContractAdditional:
             original.contract_id,
             new_objectives=make_objectives(3),
             amendment_reason="Mid-year restructure",
+            competency_ids=make_competencies(),
         )
 
         assert len(added) == 1
         new_contract = added[0]
         assert new_contract.status == ContractStatus.DRAFT
 
-    def test_amend_sets_original_to_amended(self) -> None:
-        """After amendment, the original contract status becomes AMENDED."""
+    def test_amend_keeps_original_active_pending_signoff(self) -> None:
+        """Amendment request keeps original ACTIVE until final signoff."""
         from app.models.people.perf.pms_enums import ContractStatus
 
         db = MagicMock()
@@ -819,9 +972,10 @@ class TestAmendContractAdditional:
             original.contract_id,
             new_objectives=make_objectives(3),
             amendment_reason="Restructure",
+            competency_ids=make_competencies(),
         )
 
-        assert original.status == ContractStatus.AMENDED
+        assert original.status == ContractStatus.ACTIVE
 
 
 # ---------------------------------------------------------------------------

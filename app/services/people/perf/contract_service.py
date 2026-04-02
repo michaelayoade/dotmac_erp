@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.perf.performance_contract import PerformanceContract
+from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
 from app.models.people.perf.pms_enums import ContractStatus, ContractType
 from app.services.common import PaginatedResult, PaginationParams, paginate
 
@@ -96,6 +97,7 @@ class PerformanceContractService:
 
         Rules:
         - Must contain between 3 and 7 objectives (inclusive).
+        - Each objective must include SMART objective text, KPI, and target.
         - The sum of ``weight`` values must equal exactly 70.
 
         Raises:
@@ -106,7 +108,30 @@ class PerformanceContractService:
             raise ContractValidationError(
                 f"Objectives must be between 3 and 7 (got {count})"
             )
-        total_weight = sum(int(obj.get("weight", 0)) for obj in objectives)
+        total_weight = 0
+        for idx, obj in enumerate(objectives, start=1):
+            objective_text = str(
+                obj.get("objective") or obj.get("kra") or obj.get("title") or ""
+            ).strip()
+            kpi_text = str(obj.get("kpi") or "").strip()
+            target_text = str(obj.get("target") or "").strip()
+            if not objective_text:
+                raise ContractValidationError(
+                    f"Objective {idx} must include objective description"
+                )
+            if not kpi_text:
+                raise ContractValidationError(f"Objective {idx} must include a KPI")
+            if not target_text:
+                raise ContractValidationError(
+                    f"Objective {idx} must include a target"
+                )
+
+            weight = int(obj.get("weight", 0))
+            if weight <= 0:
+                raise ContractValidationError(
+                    f"Objective {idx} weight must be greater than zero"
+                )
+            total_weight += weight
         if total_weight != 70:
             raise ContractValidationError(
                 f"Objective weights must sum to 70 (got {total_weight})"
@@ -116,17 +141,56 @@ class PerformanceContractService:
         """Validate competency development-focus selections.
 
         Rules:
+        - Exactly 5 competencies must be selected.
+        - All selected competency IDs must be unique and non-empty.
         - Exactly 3 competencies must have ``is_development_focus=True``.
 
         Raises:
             ContractValidationError: if the rule is violated.
         """
+        if len(competencies) != 5:
+            raise ContractValidationError(
+                f"Exactly 5 competencies must be selected (got {len(competencies)})"
+            )
+        competency_ids = [str(c.get("competency_id") or "").strip() for c in competencies]
+        if any(not cid for cid in competency_ids):
+            raise ContractValidationError("Each competency entry must include competency_id")
+        if len(set(competency_ids)) != 5:
+            raise ContractValidationError("Selected competencies must be unique")
+
         dev_focus = [c for c in competencies if c.get("is_development_focus")]
         if len(dev_focus) != 3:
             raise ContractValidationError(
                 f"Exactly 3 competencies must be marked as development focus "
                 f"(got {len(dev_focus)})"
             )
+
+    def _validate_competencies_payload(self, competency_ids: list | None) -> None:
+        """Validate competency payload shape and policy rules."""
+        if competency_ids is None:
+            raise ContractValidationError(
+                "Exactly 5 competencies are required for EPMS planning"
+            )
+        if not isinstance(competency_ids, list):
+            raise ContractValidationError("competency_ids must be a list")
+        if not competency_ids:
+            raise ContractValidationError(
+                "Exactly 5 competencies are required for EPMS planning"
+            )
+        if not isinstance(competency_ids[0], dict):
+            raise ContractValidationError(
+                "competency_ids must be a list of objects with competency_id and "
+                "is_development_focus"
+            )
+        self._validate_competency_selections(competency_ids)
+
+    def _validate_contract_planning_compliance(
+        self,
+        contract: PerformanceContract,
+    ) -> None:
+        """Ensure objective and competency planning is complete before activation."""
+        self._validate_objectives(contract.objectives or [])
+        self._validate_competencies_payload(contract.competency_ids)
 
     # ------------------------------------------------------------------
     # Public query methods
@@ -232,14 +296,7 @@ class PerformanceContractService:
                 )
 
         self._validate_objectives(objectives)
-        if competency_ids is not None:
-            # competency_ids here is a list of dicts with is_development_focus
-            if (
-                isinstance(competency_ids, list)
-                and competency_ids
-                and isinstance(competency_ids[0], dict)
-            ):
-                self._validate_competency_selections(competency_ids)
+        self._validate_competencies_payload(competency_ids)
 
         contract = PerformanceContract(
             organization_id=org_id,
@@ -293,6 +350,7 @@ class PerformanceContractService:
             ContractStatus.PENDING_SIGNATURE,
         ):
             raise ContractStatusError(contract.status.value, "PENDING_SIGNATURE")
+        self._validate_contract_planning_compliance(contract)
         contract.employee_signed_date = date.today()
 
         if contract.supervisor_signed_date is not None:
@@ -322,6 +380,7 @@ class PerformanceContractService:
             ContractStatus.PENDING_SIGNATURE,
         ):
             raise ContractStatusError(contract.status.value, "PENDING_SIGNATURE")
+        self._validate_contract_planning_compliance(contract)
         contract.supervisor_signed_date = date.today()
 
         if contract.employee_signed_date is not None:
@@ -352,6 +411,7 @@ class PerformanceContractService:
             ContractStatus.PENDING_SIGNATURE,
         ):
             raise ContractStatusError(contract.status.value, "PENDING_SIGNATURE")
+        self._validate_contract_planning_compliance(contract)
 
         contract.countersigner_id = countersigner_id
         contract.countersigner_date = date.today()
@@ -427,12 +487,7 @@ class PerformanceContractService:
             ContractNotFoundError: if the original contract is not found.
         """
         self._validate_objectives(new_objectives)
-        if (
-            competency_ids is not None
-            and isinstance(competency_ids, list)
-            and (competency_ids and isinstance(competency_ids[0], dict))
-        ):
-            self._validate_competency_selections(competency_ids)
+        self._validate_competencies_payload(competency_ids)
 
         original = self.get_contract(org_id, contract_id)
 
@@ -451,8 +506,6 @@ class PerformanceContractService:
             amendment_reason=amendment_reason,
         )
 
-        original.status = ContractStatus.AMENDED
-
         self.db.add(new_contract)
         self.db.flush()
         logger.info(
@@ -462,3 +515,148 @@ class PerformanceContractService:
             new_contract.contract_code,
         )
         return new_contract
+
+    def create_amendment_workflow(
+        self,
+        org_id: UUID,
+        *,
+        original_contract_id: UUID,
+        new_contract_id: UUID,
+        hod_id: UUID,
+        hr_head_id: UUID,
+        signoff_note: str | None = None,
+    ) -> ContractAmendmentWorkflow:
+        """Create a staged signoff workflow for a proposed amendment."""
+        original = self.get_contract(org_id, original_contract_id)
+
+        workflow = ContractAmendmentWorkflow(
+            organization_id=org_id,
+            contract_id=new_contract_id,
+            original_contract_id=original_contract_id,
+            status="PENDING",
+            appraisee_id=original.employee_id,
+            appraiser_id=original.supervisor_id,
+            hod_id=hod_id,
+            hr_head_id=hr_head_id,
+            signoff_note=signoff_note,
+        )
+        self.db.add(workflow)
+        self.db.flush()
+        return workflow
+
+    def get_active_amendment_workflow(
+        self, org_id: UUID, contract_id: UUID
+    ) -> ContractAmendmentWorkflow | None:
+        return self.db.scalar(
+            select(ContractAmendmentWorkflow).where(
+                ContractAmendmentWorkflow.organization_id == org_id,
+                ContractAmendmentWorkflow.contract_id == contract_id,
+                ContractAmendmentWorkflow.status == "PENDING",
+            )
+        )
+
+    def approve_amendment_stage(
+        self,
+        org_id: UUID,
+        contract_id: UUID,
+        *,
+        stage: str,
+        actor_person_id: UUID,
+        note: str | None = None,
+    ) -> ContractAmendmentWorkflow:
+        """Approve one stage in amendment signoff chain.
+
+        Stages are strictly sequential:
+        APPRAISEE -> APPRAISER -> HOD -> HR_HEAD.
+        Final stage activates amended contract and marks original as AMENDED.
+        """
+        workflow = self.get_active_amendment_workflow(org_id, contract_id)
+        if workflow is None:
+            raise ContractValidationError("No pending amendment workflow for this contract")
+
+        actor_employee_id = self._get_employee_for_person(org_id, actor_person_id)
+        if actor_employee_id is None:
+            raise ContractAuthorizationError("amendment-approve")
+
+        stage_order = ["APPRAISEE", "APPRAISER", "HOD", "HR_HEAD"]
+        if stage not in stage_order:
+            raise ContractValidationError(f"Invalid amendment signoff stage: {stage}")
+
+        # Enforce sequential ordering
+        if stage == "APPRAISER" and workflow.appraisee_signed_date is None:
+            raise ContractValidationError("Appraisee signoff is required first")
+        if stage == "HOD" and workflow.appraiser_signed_date is None:
+            raise ContractValidationError("Appraiser signoff is required first")
+        if stage == "HR_HEAD" and workflow.hod_signed_date is None:
+            raise ContractValidationError("HoD signoff is required first")
+
+        today = date.today()
+        if stage == "APPRAISEE":
+            if actor_employee_id != workflow.appraisee_id:
+                raise ContractAuthorizationError("amendment-approve-appraisee")
+            workflow.appraisee_signed_date = today
+        elif stage == "APPRAISER":
+            if actor_employee_id != workflow.appraiser_id:
+                raise ContractAuthorizationError("amendment-approve-appraiser")
+            workflow.appraiser_signed_date = today
+        elif stage == "HOD":
+            if actor_employee_id != workflow.hod_id:
+                raise ContractAuthorizationError("amendment-approve-hod")
+            workflow.hod_signed_date = today
+        elif stage == "HR_HEAD":
+            if actor_employee_id != workflow.hr_head_id:
+                raise ContractAuthorizationError("amendment-approve-hr-head")
+            workflow.hr_head_signed_date = today
+            workflow.status = "APPROVED"
+
+            amended = self.get_contract(org_id, workflow.contract_id)
+            original = self.get_contract(org_id, workflow.original_contract_id)
+            self._validate_contract_planning_compliance(amended)
+            amended.status = ContractStatus.ACTIVE
+            original.status = ContractStatus.AMENDED
+
+        if note:
+            workflow.signoff_note = note
+
+        self.db.flush()
+        return workflow
+
+    def reject_amendment(
+        self,
+        org_id: UUID,
+        contract_id: UUID,
+        *,
+        stage: str,
+        actor_person_id: UUID,
+        reason: str,
+    ) -> ContractAmendmentWorkflow:
+        """Reject a pending amendment and cancel proposed amended contract."""
+        workflow = self.get_active_amendment_workflow(org_id, contract_id)
+        if workflow is None:
+            raise ContractValidationError("No pending amendment workflow for this contract")
+
+        actor_employee_id = self._get_employee_for_person(org_id, actor_person_id)
+        if actor_employee_id is None:
+            raise ContractAuthorizationError("amendment-reject")
+
+        expected_by_stage = {
+            "APPRAISEE": workflow.appraisee_id,
+            "APPRAISER": workflow.appraiser_id,
+            "HOD": workflow.hod_id,
+            "HR_HEAD": workflow.hr_head_id,
+        }
+        expected = expected_by_stage.get(stage)
+        if expected is None:
+            raise ContractValidationError(f"Invalid amendment rejection stage: {stage}")
+        if actor_employee_id != expected:
+            raise ContractAuthorizationError("amendment-reject-stage")
+
+        workflow.status = "REJECTED"
+        workflow.rejected_by_stage = stage
+        workflow.rejection_reason = reason
+
+        amended = self.get_contract(org_id, workflow.contract_id)
+        amended.status = ContractStatus.CANCELLED
+
+        self.db.flush()
+        return workflow

@@ -331,6 +331,47 @@ def sync_all_cycle_progress() -> dict:
 
 
 @shared_task
+def process_pms_dispute_sla_enforcement() -> dict:
+    """
+    Enforce PMS dispute SLA rules across appeals, grievances, and PIPs.
+
+    Applies automatic escalation actions when unresolved cases exceed
+    their SLA windows (including end-Feb post-appraisal deadlines).
+    """
+    from app.services.people.perf.dispute_sla_service import PMSDisputeSLAService
+
+    logger.info("Processing PMS dispute SLA enforcement")
+    results: dict[str, Any] = {"appeals": {}, "grievances": {}, "pips": {}, "errors": []}
+    with SessionLocal() as db:
+        try:
+            results = PMSDisputeSLAService(db).enforce_all_overdue()
+            db.commit()
+        except Exception as e:
+            logger.exception("PMS dispute SLA enforcement failed: %s", e)
+            db.rollback()
+            results["errors"] = [str(e)]
+    return results
+
+
+@shared_task
+def process_pms_dispute_deadline_reminders(days_ahead: int = 7) -> dict:
+    """
+    Build a watchlist of upcoming PMS dispute deadlines for reminder delivery.
+    """
+    from app.services.people.perf.dispute_sla_service import PMSDisputeSLAService
+
+    logger.info("Processing PMS dispute deadline reminders (%d days)", days_ahead)
+    with SessionLocal() as db:
+        try:
+            return PMSDisputeSLAService(db).collect_upcoming_deadline_reminders(
+                days_ahead=days_ahead
+            )
+        except Exception as e:
+            logger.exception("PMS dispute reminder job failed: %s", e)
+            return {"error": str(e), "days_ahead": days_ahead}
+
+
+@shared_task
 def activate_cycle(cycle_id: str, template_id: str | None = None) -> dict:
     """
     Activate a cycle and generate appraisals for eligible employees.

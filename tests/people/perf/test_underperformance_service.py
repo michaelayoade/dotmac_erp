@@ -588,6 +588,64 @@ class TestFlagForPIP:
         assert result["employee_id"] == str(employee_id)
         db.add.assert_called_once()  # PIP was created and added to session
 
+    def test_creates_pending_outcome_action_when_appraisal_triggered(self) -> None:
+        """When linked to appraisal, create PIP + pending outcome action records."""
+        org_id = uuid.uuid4()
+        employee_id = uuid.uuid4()
+        appraisal_id = uuid.uuid4()
+        employee = make_employee_model(
+            employee_id=employee_id,
+            organization_id=org_id,
+            reports_to_id=uuid.uuid4(),
+        )
+
+        db = MagicMock()
+        db.scalar.side_effect = [employee, 0]
+
+        svc = UnderperformanceService(db)
+        svc.flag_for_pip(
+            org_id,
+            employee_id,
+            trigger_type="score_below_50",
+            triggering_appraisal_id=appraisal_id,
+        )
+
+        # PIP + AppraisalOutcomeAction
+        assert db.add.call_count == 2
+
+
+class TestEnsurePIPForUnderperformance:
+    def test_legacy_scale_score_above_threshold_does_not_create_pip(self) -> None:
+        db = MagicMock()
+        svc = UnderperformanceService(db)
+
+        result = svc.ensure_pip_for_underperformance(
+            uuid.uuid4(),
+            appraisal_id=uuid.uuid4(),
+            employee_id=uuid.uuid4(),
+            final_score=4.0,  # legacy scale => 80%
+        )
+
+        assert result is None
+        db.scalar.assert_not_called()
+
+    def test_returns_exists_when_linked_pip_already_present(self) -> None:
+        db = MagicMock()
+        existing = SimpleNamespace(pip_id=uuid.uuid4(), pip_code="PIP-2026-0009")
+        db.scalar.return_value = existing
+        svc = UnderperformanceService(db)
+
+        result = svc.ensure_pip_for_underperformance(
+            uuid.uuid4(),
+            appraisal_id=uuid.uuid4(),
+            employee_id=uuid.uuid4(),
+            final_score=2.0,  # legacy scale => 40%
+        )
+
+        assert result is not None
+        assert result["status"] == "exists"
+        assert result["pip_code"] == "PIP-2026-0009"
+
 
 # ---------------------------------------------------------------------------
 # detect_annual_trigger — DB-backed detection

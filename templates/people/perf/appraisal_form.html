@@ -99,6 +99,77 @@
                     </select>
                     <p class="text-xs text-slate-500 mt-1">Select a template to pre-populate KRAs, or leave blank to add manually.</p>
                 </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% set absence_evidence = appraisal.approved_absence_evidence if appraisal and appraisal.approved_absence_evidence else {} %}
+                    <div>
+                        <label for="absence_months" class="form-label">Approved Absence (Months)</label>
+                        <input type="number" min="0" max="24" step="1" name="absence_months" id="absence_months"
+                               class="form-input w-full"
+                               value="{{ appraisal.absence_months if appraisal and appraisal.absence_months is not none else (form_data.absence_months if form_data and form_data.absence_months else '') }}">
+                        <p class="text-xs text-slate-500 mt-1">If greater than 6, prior-year carryover will be applied.</p>
+                    </div>
+                    <div>
+                        <label for="absence_document_type" class="form-label">Absence Document Type</label>
+                        <input type="text" name="absence_document_type" id="absence_document_type" class="form-input w-full"
+                               value="{{ form_data.absence_document_type if form_data and form_data.absence_document_type else absence_evidence.get('document_type', '') }}"
+                               placeholder="Leave Approval, Medical Clearance, etc.">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label for="absence_document_reference" class="form-label">Document Reference</label>
+                        <input type="text" name="absence_document_reference" id="absence_document_reference" class="form-input w-full"
+                               value="{{ form_data.absence_document_reference if form_data and form_data.absence_document_reference else absence_evidence.get('document_reference', '') }}"
+                               placeholder="Doc number or file reference">
+                    </div>
+                    <div>
+                        <label for="absence_approval_reference" class="form-label">Approval Reference</label>
+                        <input type="text" name="absence_approval_reference" id="absence_approval_reference" class="form-input w-full"
+                               value="{{ form_data.absence_approval_reference if form_data and form_data.absence_approval_reference else absence_evidence.get('approval_reference', '') }}"
+                               placeholder="Approval memo/reference code">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label for="absence_validation_reference" class="form-label">Validation Reference</label>
+                        <input type="text" name="absence_validation_reference" id="absence_validation_reference" class="form-input w-full"
+                               value="{{ form_data.absence_validation_reference if form_data and form_data.absence_validation_reference else absence_evidence.get('validation_reference', '') }}"
+                               placeholder="HR verification log/ref">
+                    </div>
+                    <div>
+                        <label for="absence_approving_authority" class="form-label">Approving Authority</label>
+                        <input type="text" name="absence_approving_authority" id="absence_approving_authority" class="form-input w-full"
+                               value="{{ form_data.absence_approving_authority if form_data and form_data.absence_approving_authority else absence_evidence.get('approving_authority', '') }}"
+                               placeholder="Name or office">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <label for="absence_approval_date" class="form-label">Approval Date</label>
+                        <input type="date" name="absence_approval_date" id="absence_approval_date" class="form-input w-full"
+                               value="{{ form_data.absence_approval_date if form_data and form_data.absence_approval_date else absence_evidence.get('approval_date', '') }}">
+                    </div>
+                    <div>
+                        <label for="absence_audit_reference" class="form-label">Audit Reference (Optional)</label>
+                        <input type="text" name="absence_audit_reference" id="absence_audit_reference" class="form-input w-full"
+                               value="{{ form_data.absence_audit_reference if form_data and form_data.absence_audit_reference else absence_evidence.get('audit_reference', '') }}"
+                               placeholder="Audit trail reference">
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <label for="absence_evidence_notes" class="form-label">Evidence Notes</label>
+                    <textarea name="absence_evidence_notes" id="absence_evidence_notes" rows="2" class="form-input w-full"
+                              placeholder="Additional context for reviewers">{{ form_data.absence_evidence_notes if form_data and form_data.absence_evidence_notes else absence_evidence.get('notes', '') }}</textarea>
+                    <p class="text-xs text-slate-500 mt-1">
+                        For absence greater than 6 months, document type, document reference, approval reference, and validation reference are required.
+                    </p>
+                    </div>
+                </div>
             </div>
         </div>
 

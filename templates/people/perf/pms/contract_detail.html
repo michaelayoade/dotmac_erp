@@ -92,6 +92,53 @@
     </div>
     {% endif %}
 
+    {% if amendment_workflow %}
+    <div class="p-4 rounded-lg bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+        <div class="flex items-center justify-between gap-4">
+            <div>
+                <p class="text-sm font-medium text-blue-800 dark:text-blue-300">Amendment Signoff Workflow</p>
+                <p class="text-xs text-blue-700 dark:text-blue-400 mt-1">
+                    Status: {{ amendment_workflow.status }}.
+                    Appraisee {{ 'signed' if amendment_workflow.appraisee_signed_date else 'pending' }},
+                    Appraiser {{ 'signed' if amendment_workflow.appraiser_signed_date else 'pending' }},
+                    HoD {{ 'signed' if amendment_workflow.hod_signed_date else 'pending' }},
+                    HR Head {{ 'signed' if amendment_workflow.hr_head_signed_date else 'pending' }}.
+                </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                {% if not amendment_workflow.appraisee_signed_date %}
+                <form method="post" action="/people/perf/pms/contracts/{{ contract.contract_id }}/amend/approve/APPRAISEE">
+                    {{ request.state.csrf_form | safe }}
+                    <button class="btn btn-secondary btn-sm" type="submit">Sign Appraisee</button>
+                </form>
+                {% elif amendment_workflow.appraisee_signed_date and not amendment_workflow.appraiser_signed_date %}
+                <form method="post" action="/people/perf/pms/contracts/{{ contract.contract_id }}/amend/approve/APPRAISER">
+                    {{ request.state.csrf_form | safe }}
+                    <button class="btn btn-secondary btn-sm" type="submit">Sign Appraiser</button>
+                </form>
+                {% elif amendment_workflow.appraiser_signed_date and not amendment_workflow.hod_signed_date %}
+                <form method="post" action="/people/perf/pms/contracts/{{ contract.contract_id }}/amend/approve/HOD">
+                    {{ request.state.csrf_form | safe }}
+                    <button class="btn btn-secondary btn-sm" type="submit">Sign HoD</button>
+                </form>
+                {% elif amendment_workflow.hod_signed_date and not amendment_workflow.hr_head_signed_date %}
+                <form method="post" action="/people/perf/pms/contracts/{{ contract.contract_id }}/amend/approve/HR_HEAD">
+                    {{ request.state.csrf_form | safe }}
+                    <button class="btn btn-primary btn-sm" type="submit">Sign HR Head</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% if amendment_workflow.status == 'PENDING' %}
+        <form method="post" action="/people/perf/pms/contracts/{{ contract.contract_id }}/amend/reject/HR_HEAD" class="mt-3 flex items-center gap-2">
+            {{ request.state.csrf_form | safe }}
+            <input type="text" name="rejection_reason" class="form-input text-sm" placeholder="Rejection reason">
+            <button class="btn btn-danger btn-sm" type="submit">Reject Amendment</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {# Status banner for inactive contracts #}
     {% if contract.status.value == 'CANCELLED' %}
     <div class="p-4 rounded-lg bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700">
@@ -109,6 +156,80 @@
             <span class="text-sm">Reason: {{ contract.amendment_reason }}</span>
             {% endif %}
         </div>
+    </div>
+    {% endif %}
+
+    {% if contract.status.value == 'ACTIVE' and not amendment_workflow %}
+    <div class="card p-6">
+        <h3 class="font-semibold text-slate-900 dark:text-white mb-3">Request Amendment</h3>
+        <form method="post" action="/people/perf/pms/contracts/{{ contract.contract_id }}/amend" class="space-y-3">
+            {{ request.state.csrf_form | safe }}
+            <div>
+                <label class="form-label" for="amendment_reason">Amendment Reason</label>
+                <textarea id="amendment_reason" name="amendment_reason" class="form-textarea" rows="2" required></textarea>
+            </div>
+            <div>
+                <label class="form-label" for="new_objectives_json">New Objectives JSON</label>
+                <textarea id="new_objectives_json" name="new_objectives_json" class="form-textarea font-mono text-xs" rows="6" required>[{"objective":"Objective A","kpi":"KPI A","target":"Target A","weight":20},{"objective":"Objective B","kpi":"KPI B","target":"Target B","weight":20},{"objective":"Objective C","kpi":"KPI C","target":"Target C","weight":30}]</textarea>
+            </div>
+            <div>
+                <label class="form-label">Competency Selection (5 total, 3 development focus)</label>
+                <div class="space-y-2">
+                    {% for row_idx in range(1, 6) %}
+                    {% set selected = selected_competencies[loop.index0] if selected_competencies and selected_competencies|length >= row_idx else {'competency_id': '', 'is_development_focus': false} %}
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+                        <div class="md:col-span-3">
+                            <label class="form-label text-xs" for="competency_id_{{ row_idx }}">Competency {{ row_idx }}</label>
+                            <select class="form-select" id="competency_id_{{ row_idx }}" name="competency_id_{{ row_idx }}" required>
+                                <option value="">Select competency...</option>
+                                {% for comp in competencies %}
+                                <option value="{{ comp.competency_id }}"
+                                        {% if selected.competency_id == comp.competency_id | string %}selected{% endif %}>
+                                    {{ comp.competency_code if comp.competency_code else 'COMP' }} — {{ comp.competency_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label text-xs" for="development_focus_{{ row_idx }}">Dev Focus</label>
+                            <label class="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-slate-300 dark:border-slate-700">
+                                <input id="development_focus_{{ row_idx }}"
+                                       type="checkbox"
+                                       name="development_focus"
+                                       value="{{ row_idx }}"
+                                       class="form-checkbox"
+                                       {% if selected.is_development_focus %}checked{% endif %}>
+                                <span class="text-sm">Mark</span>
+                            </label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="form-label" for="hod_id">HoD Signer</label>
+                    <select class="form-select" id="hod_id" name="hod_id" required>
+                        <option value="">Select HoD...</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}">{{ emp.full_name if emp.full_name else emp.employee_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="hr_head_id">HR Head Signer</label>
+                    <select class="form-select" id="hr_head_id" name="hr_head_id" required>
+                        <option value="">Select HR Head...</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}">{{ emp.full_name if emp.full_name else emp.employee_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button class="btn btn-primary" type="submit">Create Amendment Request</button>
+            </div>
+        </form>
     </div>
     {% endif %}
 

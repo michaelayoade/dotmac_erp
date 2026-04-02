@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 from uuid import UUID
 
 from sqlalchemy import and_, delete, false, func, or_, select
@@ -198,17 +198,16 @@ class PerformanceService:
 
     def _get_appraisal_cycle(self, appraisal: Appraisal) -> AppraisalCycle | None:
         cycle = getattr(appraisal, "cycle", None)
-        if isinstance(cycle, AppraisalCycle):
-            return cycle
+        if cycle is not None:
+            return cast(AppraisalCycle, cycle)
         if appraisal.cycle_id is None:
             return None
-        cycle_row = self.db.scalar(
+        return self.db.scalar(
             select(AppraisalCycle).where(
                 AppraisalCycle.organization_id == appraisal.organization_id,
                 AppraisalCycle.cycle_id == appraisal.cycle_id,
             )
         )
-        return cycle_row if isinstance(cycle_row, AppraisalCycle) else None
 
     def _enforce_phase_deadline(
         self,

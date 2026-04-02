@@ -24,6 +24,7 @@ from app.services.people.hr import (
     OrganizationService,
 )
 from app.services.people.perf import PerformanceService
+from app.services.people.perf.pip_service import PIPService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -45,6 +46,22 @@ def _get_form_str(form: Any, key: str, default: str = "") -> str:
     if isinstance(value, UploadFile) or value is None:
         return default
     return str(value).strip()
+
+
+def _extract_absence_evidence(form_data: Any) -> dict[str, str] | None:
+    evidence = {
+        "document_type": _get_form_str(form_data, "absence_document_type"),
+        "document_reference": _get_form_str(form_data, "absence_document_reference"),
+        "approval_reference": _get_form_str(form_data, "absence_approval_reference"),
+        "validation_reference": _get_form_str(
+            form_data, "absence_validation_reference"
+        ),
+        "approving_authority": _get_form_str(form_data, "absence_approving_authority"),
+        "audit_reference": _get_form_str(form_data, "absence_audit_reference"),
+        "approval_date": _get_form_str(form_data, "absence_approval_date"),
+        "notes": _get_form_str(form_data, "absence_evidence_notes"),
+    }
+    return evidence if any(evidence.values()) else None
 
 
 class PerfWebService:
@@ -152,6 +169,8 @@ class PerfWebService:
             cycle_id = _get_form_str(form_data, "cycle_id")
             manager_id = _get_form_str(form_data, "manager_id")
             template_id = _get_form_str(form_data, "template_id")
+            absence_months = parse_int(_get_form_str(form_data, "absence_months") or None)
+            approved_absence_evidence = _extract_absence_evidence(form_data)
 
             if not employee_id:
                 raise ValueError("Employee is required")
@@ -166,6 +185,8 @@ class PerfWebService:
                 cycle_id=coerce_uuid(cycle_id),
                 manager_id=coerce_uuid(manager_id),
                 template_id=coerce_uuid(template_id) if template_id else None,
+                absence_months=absence_months,
+                approved_absence_evidence=approved_absence_evidence,
             )
             db.commit()
             return RedirectResponse(
@@ -219,10 +240,52 @@ class PerfWebService:
             "perf",
             db=db,
         )
+        pip_gate = None
+        if appraisal.final_score is not None:
+            score_pct = Decimal(str(appraisal.final_score))
+            if score_pct <= Decimal("5"):
+                score_pct = score_pct * Decimal("20")
+        else:
+            score_pct = None
+
+        if score_pct is not None and score_pct < Decimal("50.00"):
+            pip = PIPService(db).get_pip_for_appraisal(org_id, appraisal.appraisal_id)
+            if pip is None:
+                pip_gate = {
+                    "state": "required",
+                    "title": "PIP Required",
+                    "message": (
+                        "Final score is below 50%. A Performance Improvement Plan (PIP) "
+                        "must be created and resolved before appraisal completion."
+                    ),
+                    "pip_url": "/people/perf/pms/pips/new",
+                }
+            elif pip.status.value in {"IMPROVED", "ESCALATED", "CLOSED"}:
+                pip_gate = {
+                    "state": "resolved",
+                    "title": "PIP Resolved",
+                    "message": (
+                        f"Linked PIP {pip.pip_code} is resolved "
+                        f"({pip.status.value.replace('_', ' ').title()})."
+                    ),
+                    "pip_url": f"/people/perf/pms/pips/{pip.pip_id}",
+                }
+            else:
+                pip_gate = {
+                    "state": "pending",
+                    "title": "PIP Resolution Pending",
+                    "message": (
+                        f"Linked PIP {pip.pip_code} is still {pip.status.value}. "
+                        "Complete or escalate it before appraisal completion."
+                    ),
+                    "pip_url": f"/people/perf/pms/pips/{pip.pip_id}",
+                }
+
         context["request"] = request
         context.update(
             {
                 "appraisal": appraisal,
+                "pip_gate": pip_gate,
                 "success": success,
                 "error": error,
             }
@@ -281,10 +344,14 @@ class PerfWebService:
 
         try:
             manager_id = _get_form_str(form_data, "manager_id")
+            absence_months = parse_int(_get_form_str(form_data, "absence_months") or None)
+            approved_absence_evidence = _extract_absence_evidence(form_data)
             svc.update_appraisal(
                 org_id,
                 coerce_uuid(appraisal_id),
                 manager_id=coerce_uuid(manager_id) if manager_id else None,
+                absence_months=absence_months,
+                approved_absence_evidence=approved_absence_evidence,
             )
             db.commit()
             return RedirectResponse(

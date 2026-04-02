@@ -37,6 +37,7 @@ from app.models.people.perf.pms_enums import InstitutionalPerfStatus, Institutio
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
     from app.models.people.perf.appraisal_cycle import AppraisalCycle
+    from app.models.people.perf.pms_governance import InstitutionalGovernanceAction
 
 
 class InstitutionalPerformance(Base, AuditMixin):
@@ -120,6 +121,53 @@ class InstitutionalPerformance(Base, AuditMixin):
         nullable=True,
     )
 
+    # Governance workflow
+    workflow_stage: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="DRAFT",
+        comment="Institutional workflow stage: DRAFT/INTERNAL_REVIEW/CENTRAL_REVIEW/APPROVED/RETURNED/FINAL_SIGNOFF",
+    )
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+    )
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+    )
+    approver_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+    )
+    submitted_for_review_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    central_review_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    approved_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    returned_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    final_signoff_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    workflow_note: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     # Reconciliation
     is_reconciled: Mapped[bool] = mapped_column(
         Boolean,
@@ -167,6 +215,23 @@ class InstitutionalPerformance(Base, AuditMixin):
     reconciled_by: Mapped["Employee | None"] = relationship(
         "Employee",
         foreign_keys=[reconciled_by_id],
+    )
+    owner: Mapped["Employee | None"] = relationship(
+        "Employee",
+        foreign_keys=[owner_id],
+    )
+    reviewer: Mapped["Employee | None"] = relationship(
+        "Employee",
+        foreign_keys=[reviewer_id],
+    )
+    approver: Mapped["Employee | None"] = relationship(
+        "Employee",
+        foreign_keys=[approver_id],
+    )
+    governance_actions: Mapped[list["InstitutionalGovernanceAction"]] = relationship(
+        "InstitutionalGovernanceAction",
+        foreign_keys="InstitutionalGovernanceAction.inst_perf_id",
+        back_populates="institutional_performance",
     )
 
     def __repr__(self) -> str:

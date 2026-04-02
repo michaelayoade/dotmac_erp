@@ -15,6 +15,10 @@ from sqlalchemy.orm import Session
 
 from app.models.people.perf.pms_enums import InstitutionalPerfStatus, InstitutionType
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.people.perf.governance_service import (
+    PMSGovernanceService,
+    WORKFLOW_STAGES,
+)
 from app.services.people.perf.institutional_service import (
     InstitutionalPerfNotFoundError,
     InstitutionalPerformanceService,
@@ -82,7 +86,7 @@ class InstitutionalWebService:
         )
 
         context = base_context(
-            request, auth, "Institutional Performance", "perf", db=db
+            request, auth, "Institutional Performance", "pms-institutional", db=db
         )
         context["request"] = request
         context.update(
@@ -113,10 +117,13 @@ class InstitutionalWebService:
         """Render institutional performance detail page."""
         org_id = coerce_uuid(auth.organization_id)
         svc = InstitutionalPerformanceService(db)
+        governance_svc = PMSGovernanceService(db)
 
         inst_uuid = parse_uuid(inst_perf_id)
         if inst_uuid is None:
-            context = base_context(request, auth, "Record Not Found", "perf", db=db)
+            context = base_context(
+                request, auth, "Record Not Found", "pms-institutional", db=db
+            )
             context["request"] = request
             context.update({"record": None, "error": "Invalid record ID"})
             return templates.TemplateResponse(
@@ -129,7 +136,9 @@ class InstitutionalWebService:
         try:
             record = svc.get_institutional_perf(org_id, inst_uuid)
         except Exception as e:
-            context = base_context(request, auth, "Record Not Found", "perf", db=db)
+            context = base_context(
+                request, auth, "Record Not Found", "pms-institutional", db=db
+            )
             context["request"] = request
             context.update({"record": None, "error": str(e)})
             return templates.TemplateResponse(
@@ -161,16 +170,31 @@ class InstitutionalWebService:
             request,
             auth,
             f"Institutional — {record.institution_type.value if record.institution_type else ''}",
-            "perf",
+            "pms-institutional",
             db=db,
         )
+        from app.services.people.hr import EmployeeFilters
+        from app.services.people.hr.employees import EmployeeService
+
+        emp_svc = EmployeeService(db, org_id)
+        employees = emp_svc.list_employees(
+            EmployeeFilters(is_active=True), PaginationParams(limit=300)
+        ).items
+
         context["request"] = request
         success = request.query_params.get("saved")
+        error = request.query_params.get("error")
         context.update(
             {
                 "record": record,
                 "criteria_list": criteria_list,
                 "success": success,
+                "error": error,
+                "employees": employees,
+                "workflow_stages": WORKFLOW_STAGES,
+                "governance_actions": governance_svc.list_governance_actions(
+                    org_id, inst_perf_id=record.inst_perf_id
+                ),
                 "InstitutionalPerfStatus": InstitutionalPerfStatus,
             }
         )
@@ -226,7 +250,11 @@ class InstitutionalWebService:
         ).items
 
         context = base_context(
-            request, auth, "New Institutional Performance Record", "perf", db=db
+            request,
+            auth,
+            "New Institutional Performance Record",
+            "pms-institutional",
+            db=db,
         )
         context["request"] = request
         context.update(
@@ -320,7 +348,11 @@ class InstitutionalWebService:
             ).items
 
             context = base_context(
-                request, auth, "New Institutional Performance Record", "perf", db=db
+                request,
+                auth,
+                "New Institutional Performance Record",
+                "pms-institutional",
+                db=db,
             )
             context["request"] = request
             context.update(
@@ -336,6 +368,102 @@ class InstitutionalWebService:
             )
             return templates.TemplateResponse(
                 request, "people/perf/pms/institutional_form.html", context
+            )
+
+    async def assign_governance_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        inst_perf_id: str,
+    ) -> RedirectResponse:
+        """Assign owner/reviewer/approver for institutional governance."""
+        form_data = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+        inst_uuid = parse_uuid(inst_perf_id)
+        if not inst_uuid:
+            return RedirectResponse(
+                url="/people/perf/pms/institutional?error=invalid_record",
+                status_code=303,
+            )
+
+        gov = PMSGovernanceService(db)
+        try:
+            gov.assign_governance_roles(
+                org_id,
+                inst_perf_id=inst_uuid,
+                actor_employee_id=auth.employee_id,
+                actor_role="HRM",
+                owner_id=parse_uuid(self._form_text(form_data.get("owner_id"))),
+                reviewer_id=parse_uuid(self._form_text(form_data.get("reviewer_id"))),
+                approver_id=parse_uuid(self._form_text(form_data.get("approver_id"))),
+                note=self._form_text(form_data.get("workflow_note")) or None,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/perf/pms/institutional/{inst_uuid}?saved=1",
+                status_code=303,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to assign governance roles for institutional record %s",
+                inst_uuid,
+            )
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/perf/pms/institutional/{inst_uuid}?error=assign_failed",
+                status_code=303,
+            )
+
+    async def transition_governance_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        inst_perf_id: str,
+    ) -> RedirectResponse:
+        """Transition institutional governance workflow stage."""
+        form_data = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+        inst_uuid = parse_uuid(inst_perf_id)
+        if not inst_uuid:
+            return RedirectResponse(
+                url="/people/perf/pms/institutional?error=invalid_record",
+                status_code=303,
+            )
+
+        gov = PMSGovernanceService(db)
+        target_stage = self._form_text(form_data.get("target_stage"))
+        note = self._form_text(form_data.get("workflow_note")) or None
+        stage_actor_role = {
+            "INTERNAL_REVIEW": "MDA_PRS",
+            "CENTRAL_REVIEW": "FMFBNP",
+            "APPROVED": "OHCSF_PMD",
+            "FINAL_SIGNOFF": "CDCU_OSGF",
+            "RETURNED": "OHCSF_PMD",
+        }.get(target_stage, "OHCSF_PMD")
+        try:
+            gov.transition_stage(
+                org_id,
+                inst_perf_id=inst_uuid,
+                target_stage=target_stage,
+                actor_employee_id=auth.employee_id,
+                actor_role=stage_actor_role,
+                note=note,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/people/perf/pms/institutional/{inst_uuid}?saved=1",
+                status_code=303,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to transition stage for institutional record %s", inst_uuid
+            )
+            db.rollback()
+            return RedirectResponse(
+                url=f"/people/perf/pms/institutional/{inst_uuid}?error=transition_failed",
+                status_code=303,
             )
 
     async def score_institutional_response(

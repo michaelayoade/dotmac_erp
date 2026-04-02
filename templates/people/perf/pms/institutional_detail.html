@@ -42,6 +42,10 @@
                     {{ record.institution_type.value | replace('_', ' ') | title if record.institution_type else 'Institutional Performance' }}
                 </h1>
                 <p class="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400 mt-1">{{ record.inst_perf_id }}</p>
+                <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                    Workflow Stage:
+                    <span class="font-semibold text-slate-900 dark:text-white">{{ record.workflow_stage | replace('_', ' ') | title if record.workflow_stage else 'Draft' }}</span>
+                </p>
             </div>
             <div class="flex items-center gap-3">
                 {% if record.is_reconciled %}
@@ -103,6 +107,74 @@
             <p class="text-sm text-slate-700 dark:text-slate-300">{{ record.notes }}</p>
         </div>
         {% endif %}
+    </div>
+
+    {# Governance Assignment + Stage Control #}
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Governance Assignment</h2>
+            <form method="post" action="/people/perf/pms/institutional/{{ record.inst_perf_id }}/assign-governance" class="space-y-4">
+                {{ request.state.csrf_form | safe }}
+                <div>
+                    <label class="form-label" for="owner_id">Owner (MDA PRS/HRM)</label>
+                    <select class="form-select" id="owner_id" name="owner_id">
+                        <option value="">Unassigned</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}" {% if record.owner_id and record.owner_id == emp.employee_id %}selected{% endif %}>{{ emp.full_name if emp.full_name else emp.employee_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="reviewer_id">Reviewer (OHCSF/FMFBNP)</label>
+                    <select class="form-select" id="reviewer_id" name="reviewer_id">
+                        <option value="">Unassigned</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}" {% if record.reviewer_id and record.reviewer_id == emp.employee_id %}selected{% endif %}>{{ emp.full_name if emp.full_name else emp.employee_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="approver_id">Approver (OSGF/FCSC)</label>
+                    <select class="form-select" id="approver_id" name="approver_id">
+                        <option value="">Unassigned</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.employee_id }}" {% if record.approver_id and record.approver_id == emp.employee_id %}selected{% endif %}>{{ emp.full_name if emp.full_name else emp.employee_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="workflow_note_assign">Note</label>
+                    <textarea class="form-textarea" id="workflow_note_assign" name="workflow_note" rows="2">{{ record.workflow_note if record.workflow_note else '' }}</textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button class="btn btn-primary" type="submit">Save Assignment</button>
+                </div>
+            </form>
+        </div>
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Workflow Stage</h2>
+            <form method="post" action="/people/perf/pms/institutional/{{ record.inst_perf_id }}/transition-stage" class="space-y-4">
+                {{ request.state.csrf_form | safe }}
+                <div>
+                    <label class="form-label" for="target_stage">Next Stage</label>
+                    <select class="form-select" id="target_stage" name="target_stage" required>
+                        <option value="">Select stage...</option>
+                        {% for stage in workflow_stages %}
+                        {% if stage != record.workflow_stage %}
+                        <option value="{{ stage }}">{{ stage | replace('_', ' ') | title }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="workflow_note_stage">Comment</label>
+                    <textarea class="form-textarea" id="workflow_note_stage" name="workflow_note" rows="3" placeholder="Reason for this transition"></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button class="btn btn-primary" type="submit">Transition Stage</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     {# Criteria Scoring Table #}
@@ -200,6 +272,36 @@
                 <p class="text-sm text-slate-700 dark:text-slate-300">{{ record.reconciliation_notes }}</p>
             </div>
             {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if governance_actions %}
+    <div class="card p-6">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Governance Audit Trail</h2>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">When</th>
+                        <th scope="col">Action</th>
+                        <th scope="col" class="hidden md:table-cell">Stage</th>
+                        <th scope="col" class="hidden lg:table-cell">Comment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for action in governance_actions %}
+                    <tr>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ action.created_at | format_date if action.created_at else '—' }}</td>
+                        <td class="text-sm font-medium text-slate-900 dark:text-white">{{ action.action_type | replace('_', ' ') | title }}</td>
+                        <td class="hidden md:table-cell text-sm text-slate-600 dark:text-slate-400">
+                            {{ action.from_stage | replace('_', ' ') | title if action.from_stage else '—' }} → {{ action.to_stage | replace('_', ' ') | title if action.to_stage else '—' }}
+                        </td>
+                        <td class="hidden lg:table-cell text-sm text-slate-600 dark:text-slate-400">{{ action.comment if action.comment else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
     {% endif %}

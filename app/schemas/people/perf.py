@@ -360,6 +360,8 @@ class AppraisalCreate(AppraisalBase):
     """Create appraisal request."""
 
     kra_scores: list[AppraisalKRAScoreCreate] = []
+    absence_months: int | None = None
+    approved_absence_evidence: dict[str, str] | None = None
 
 
 class AppraisalUpdate(BaseModel):
@@ -367,6 +369,8 @@ class AppraisalUpdate(BaseModel):
 
     template_id: UUID | None = None
     manager_id: UUID | None = None
+    absence_months: int | None = None
+    approved_absence_evidence: dict[str, str] | None = None
 
 
 class AppraisalRead(AppraisalBase):
@@ -402,6 +406,8 @@ class AppraisalRead(AppraisalBase):
     final_rating: int | None = None
     rating_label: str | None = None
     completed_on: date | None = None
+    absence_months: int | None = None
+    approved_absence_evidence: dict | None = None
 
     created_at: datetime
     updated_at: datetime | None = None

@@ -8,7 +8,7 @@ Integration tests (actual DB queries) would be separate.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -19,6 +19,7 @@ from app.models.people.perf.appraisal import (
     AppraisalStatus,
 )
 from app.models.people.perf.pms_enums import CommitteeDecision
+from app.models.people.perf.pms_enums import PIPStatus
 from app.services.people.perf.ohcsf_appraisal_service import (
     OHCSF_STATUS_TRANSITIONS,
     CascadeUpViolation,
@@ -63,6 +64,7 @@ def make_appraisal(
     ap.objective_weighted_score = None
     ap.competency_weighted_score = None
     ap.process_weighted_score = None
+    ap.cycle = None
     return ap
 
 
@@ -371,6 +373,19 @@ class TestSubmitSelfAssessment:
         )
         svc.db.flush.assert_called()
 
+    def test_rejects_submission_after_self_assessment_deadline(self) -> None:
+        svc, ap = self._setup()
+        ap.cycle = MagicMock()
+        ap.cycle.self_assessment_deadline = date.today() - timedelta(days=1)
+
+        with pytest.raises(OHCSFAppraisalError, match="self-assessment"):
+            svc.submit_self_assessment_ohcsf(
+                ORG_ID,
+                ap.appraisal_id,
+                self_overall_rating=3,
+                self_summary="Late submission",
+            )
+
 
 # ---------------------------------------------------------------------------
 # submit_manager_review_ohcsf
@@ -378,41 +393,72 @@ class TestSubmitSelfAssessment:
 
 
 class TestSubmitManagerReview:
+    @staticmethod
+    def _build_competency_ratings(contract: object) -> list[dict]:
+        rows = getattr(contract, "competency_ids", [])
+        return [
+            {
+                "competency_id": row["competency_id"],
+                "manager_rating": 4,
+                "evidence": "Observed behavior and delivery outcomes.",
+            }
+            for row in rows
+        ]
+
     def _setup(self, status: AppraisalStatus = AppraisalStatus.UNDER_REVIEW) -> tuple:
+        from types import SimpleNamespace
+
         svc = make_service()
         ap = make_appraisal(status)
         svc.db.get.return_value = ap
         svc.db.scalars.return_value.all.return_value = []
-        svc.db.scalar.return_value = None
-        return svc, ap
+        contract = SimpleNamespace(
+            objectives=[
+                {"objective": "Obj A", "kpi": "KPI A", "target": "Target A", "weight": 20},
+                {"objective": "Obj B", "kpi": "KPI B", "target": "Target B", "weight": 20},
+                {"objective": "Obj C", "kpi": "KPI C", "target": "Target C", "weight": 30},
+            ],
+            competency_ids=[
+                {"competency_id": str(uuid.uuid4()), "is_development_focus": True},
+                {"competency_id": str(uuid.uuid4()), "is_development_focus": True},
+                {"competency_id": str(uuid.uuid4()), "is_development_focus": True},
+                {"competency_id": str(uuid.uuid4()), "is_development_focus": False},
+                {"competency_id": str(uuid.uuid4()), "is_development_focus": False},
+            ],
+        )
+        svc.db.scalar.side_effect = [contract, None, None, None, None, None]
+        return svc, ap, contract
 
     def test_transitions_to_pending_countersign(self) -> None:
-        svc, ap = self._setup()
+        svc, ap, contract = self._setup()
         svc.submit_manager_review_ohcsf(
             ORG_ID,
             ap.appraisal_id,
             manager_overall_rating=4,
             manager_summary="Great performance",
+            competency_ratings=self._build_competency_ratings(contract),
         )
         assert ap.status == AppraisalStatus.PENDING_COUNTERSIGN
 
     def test_sets_manager_review_date(self) -> None:
-        svc, ap = self._setup()
+        svc, ap, contract = self._setup()
         svc.submit_manager_review_ohcsf(
             ORG_ID,
             ap.appraisal_id,
             manager_overall_rating=3,
             manager_summary="OK",
+            competency_ratings=self._build_competency_ratings(contract),
         )
         assert ap.manager_review_date == date.today()
 
     def test_sets_final_score_and_rating(self) -> None:
-        svc, ap = self._setup()
+        svc, ap, contract = self._setup()
         svc.submit_manager_review_ohcsf(
             ORG_ID,
             ap.appraisal_id,
             manager_overall_rating=4,
             manager_summary="Good",
+            competency_ratings=self._build_competency_ratings(contract),
         )
         # With no KRAs or competencies, all zeros → final_score should be set
         assert ap.final_score is not None
@@ -420,7 +466,7 @@ class TestSubmitManagerReview:
         assert ap.rating_label is not None
 
     def test_invalid_status_raises(self) -> None:
-        svc, ap = self._setup(AppraisalStatus.DRAFT)
+        svc, ap, _contract = self._setup(AppraisalStatus.DRAFT)
         with pytest.raises(OHCSFAppraisalStatusError):
             svc.submit_manager_review_ohcsf(
                 ORG_ID,
@@ -430,23 +476,98 @@ class TestSubmitManagerReview:
             )
 
     def test_sets_process_rating(self) -> None:
-        svc, ap = self._setup()
+        svc, ap, contract = self._setup()
         svc.submit_manager_review_ohcsf(
             ORG_ID,
             ap.appraisal_id,
             manager_overall_rating=4,
             manager_summary="OK",
             process_rating=4,
+            competency_ratings=self._build_competency_ratings(contract),
         )
         assert ap.process_manager_rating == 4
         assert ap.process_final_rating == 4
 
     def test_calls_flush(self) -> None:
-        svc, ap = self._setup()
+        svc, ap, contract = self._setup()
         svc.submit_manager_review_ohcsf(
-            ORG_ID, ap.appraisal_id, manager_overall_rating=3, manager_summary="OK"
+            ORG_ID,
+            ap.appraisal_id,
+            manager_overall_rating=3,
+            manager_summary="OK",
+            competency_ratings=self._build_competency_ratings(contract),
         )
         svc.db.flush.assert_called()
+
+    def test_triggers_proactive_pip_check_after_scoring(self) -> None:
+        from unittest.mock import patch
+
+        svc, ap, contract = self._setup()
+        with patch(
+            "app.services.people.perf.underperformance_service.UnderperformanceService.ensure_pip_for_underperformance"
+        ) as proactive:
+            proactive.return_value = None
+            svc.submit_manager_review_ohcsf(
+                ORG_ID,
+                ap.appraisal_id,
+                manager_overall_rating=3,
+                manager_summary="Proactive check",
+                competency_ratings=self._build_competency_ratings(contract),
+            )
+        proactive.assert_called_once()
+
+    def test_blocks_when_contract_planning_missing(self) -> None:
+        svc, ap, _contract = self._setup()
+        svc.db.scalar.side_effect = [None]
+        with pytest.raises(OHCSFAppraisalError, match="planning contract"):
+            svc.submit_manager_review_ohcsf(
+                ORG_ID,
+                ap.appraisal_id,
+                manager_overall_rating=3,
+                manager_summary="Blocked",
+            )
+
+    def test_requires_competency_evidence_for_each_rating(self) -> None:
+        svc, ap, contract = self._setup()
+        ratings = self._build_competency_ratings(contract)
+        ratings[0]["evidence"] = ""
+
+        with pytest.raises(OHCSFAppraisalError, match="evidence is required"):
+            svc.submit_manager_review_ohcsf(
+                ORG_ID,
+                ap.appraisal_id,
+                manager_overall_rating=3,
+                manager_summary="Missing evidence",
+                competency_ratings=ratings,
+            )
+
+    def test_rejects_competency_not_in_contract_selection(self) -> None:
+        svc, ap, contract = self._setup()
+        ratings = self._build_competency_ratings(contract)
+        ratings[0]["competency_id"] = str(uuid.uuid4())
+
+        with pytest.raises(OHCSFAppraisalError, match="must match selected"):
+            svc.submit_manager_review_ohcsf(
+                ORG_ID,
+                ap.appraisal_id,
+                manager_overall_rating=3,
+                manager_summary="Unexpected competency",
+                competency_ratings=ratings,
+            )
+
+    def test_rejects_submission_after_manager_review_deadline(self) -> None:
+        svc, ap, contract = self._setup()
+        ap.cycle = MagicMock()
+        ap.cycle.manager_review_deadline = date.today() - timedelta(days=1)
+
+        with pytest.raises(OHCSFAppraisalError, match="manager review"):
+            svc.submit_manager_review_ohcsf(
+                ORG_ID,
+                ap.appraisal_id,
+                manager_overall_rating=3,
+                manager_summary="Late manager review",
+                competency_ratings=self._build_competency_ratings(contract),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +711,62 @@ class TestSubmitCommitteeReview:
             notes="Well done",
         )
         assert ap.committee_notes == "Well done"
+
+    def test_rejects_submission_after_calibration_deadline(self) -> None:
+        svc, ap = self._setup()
+        ap.cycle = MagicMock()
+        ap.cycle.calibration_deadline = date.today() - timedelta(days=1)
+
+        with pytest.raises(OHCSFAppraisalError, match="committee review"):
+            svc.submit_committee_review(
+                ORG_ID,
+                ap.appraisal_id,
+                decision=CommitteeDecision.ENDORSED,
+            )
+
+    def test_underperformance_creates_pip_and_blocks_completion(self) -> None:
+        from unittest.mock import patch
+
+        svc, ap = self._setup()
+        ap.final_score = Decimal("49.50")
+        svc.db.scalar.return_value = None
+
+        with patch(
+            "app.services.people.perf.underperformance_service.UnderperformanceService.flag_for_pip"
+        ) as flag_for_pip:
+            flag_for_pip.return_value = {"status": "flagged", "pip_code": "PIP-2026-0001"}
+            with pytest.raises(OHCSFAppraisalError, match="PIP has been created"):
+                svc.submit_committee_review(
+                    ORG_ID,
+                    ap.appraisal_id,
+                    decision=CommitteeDecision.ENDORSED,
+                )
+        assert ap.status != AppraisalStatus.COMPLETED
+
+    def test_underperformance_with_unresolved_pip_blocks_completion(self) -> None:
+        svc, ap = self._setup()
+        ap.final_score = Decimal("45.00")
+        svc.db.scalar.return_value = MagicMock(status=PIPStatus.ACTIVE, pip_code="PIP-2026-0002")
+
+        with pytest.raises(OHCSFAppraisalError, match="not resolved"):
+            svc.submit_committee_review(
+                ORG_ID,
+                ap.appraisal_id,
+                decision=CommitteeDecision.ENDORSED,
+            )
+        assert ap.status != AppraisalStatus.COMPLETED
+
+    def test_underperformance_with_resolved_pip_allows_completion(self) -> None:
+        svc, ap = self._setup()
+        ap.final_score = Decimal("48.00")
+        svc.db.scalar.return_value = MagicMock(status=PIPStatus.IMPROVED, pip_code="PIP-2026-0003")
+
+        svc.submit_committee_review(
+            ORG_ID,
+            ap.appraisal_id,
+            decision=CommitteeDecision.ENDORSED,
+        )
+        assert ap.status == AppraisalStatus.COMPLETED
 
 
 # ---------------------------------------------------------------------------

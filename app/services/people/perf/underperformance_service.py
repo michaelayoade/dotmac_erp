@@ -33,6 +33,7 @@ __all__ = [
 _FAIR_SCORE_THRESHOLD = Decimal("70")  # Below this = "Fair" rating
 _FAIR_KPI_RATIO_THRESHOLD = Decimal("0.5")  # ≥ 50% fair KPIs triggers annual PIP
 _QUARTERLY_BELOW_TRIGGER = 3  # 3 quarters below threshold triggers PIP
+_APPRAISAL_UNDERPERFORMANCE_TRIGGER = Decimal("50.00")  # < 50 triggers PIP
 _PROBATION_MONTHS = 21  # Milestone at 21 months of service
 _PROBATION_WINDOW_DAYS = 30  # Flag within 30 days of milestone
 
@@ -252,8 +253,11 @@ class UnderperformanceService:
         from sqlalchemy import func as sa_func
 
         from app.models.people.hr.employee import Employee
+        from app.models.people.perf.appraisal_outcome_action import AppraisalOutcomeAction
         from app.models.people.perf.pip import PerformanceImprovementPlan
         from app.models.people.perf.pms_enums import (  # noqa: F401
+            OutcomeActionStatus,
+            OutcomeActionType,
             PIPCauseCategory,
             PIPStatus,
         )
@@ -298,6 +302,22 @@ class UnderperformanceService:
             appraisal_id=triggering_appraisal_id,
         )
         self.db.add(pip)
+
+        if triggering_appraisal_id is not None:
+            self.db.add(
+                AppraisalOutcomeAction(
+                    organization_id=org_id,
+                    appraisal_id=triggering_appraisal_id,
+                    action_type=OutcomeActionType.PIP,
+                    description=f"PIP initiated: {pip_code} ({trigger_type})",
+                    actioned_date=date.today(),
+                    reference_id=pip.pip_id,
+                    reference_type="pip",
+                    status=OutcomeActionStatus.PENDING,
+                    notes="Auto-created from underperformance trigger",
+                )
+            )
+
         self.db.flush()
 
         logger.info(
@@ -313,6 +333,52 @@ class UnderperformanceService:
             "employee_id": str(employee_id),
             "trigger_type": trigger_type,
         }
+
+    def ensure_pip_for_underperformance(
+        self,
+        org_id: UUID,
+        *,
+        appraisal_id: UUID,
+        employee_id: UUID,
+        final_score: Decimal | float | int,
+        trigger_type: str = "score_below_50",
+    ) -> dict[str, Any] | None:
+        """
+        Proactively ensure a PIP exists when appraisal score is below threshold.
+
+        Returns:
+            - None when score is not underperforming.
+            - ``{"status": "exists", ...}`` when a linked PIP already exists.
+            - ``{"status": "flagged", ...}`` when a new PIP is created.
+        """
+        from app.models.people.perf.pip import PerformanceImprovementPlan
+
+        score = Decimal(str(final_score))
+        score_pct = self._score_to_percentage(score)
+        if score_pct >= _APPRAISAL_UNDERPERFORMANCE_TRIGGER:
+            return None
+
+        existing = self.db.scalar(
+            select(PerformanceImprovementPlan).where(
+                PerformanceImprovementPlan.organization_id == org_id,
+                PerformanceImprovementPlan.appraisal_id == appraisal_id,
+            )
+        )
+        if existing is not None:
+            return {
+                "status": "exists",
+                "pip_id": str(existing.pip_id),
+                "pip_code": existing.pip_code,
+                "employee_id": str(employee_id),
+                "trigger_type": trigger_type,
+            }
+
+        return self.flag_for_pip(
+            org_id,
+            employee_id,
+            trigger_type=trigger_type,
+            triggering_appraisal_id=appraisal_id,
+        )
 
     # -------------------------------------------------------------------------
     # Internal logic helpers — pure functions, no DB access
@@ -416,3 +482,15 @@ class UnderperformanceService:
             "months_of_service": months_of_service,
             "milestone_date": milestone_date,
         }
+    @staticmethod
+    def _score_to_percentage(final_score: Decimal | float | int) -> Decimal:
+        """
+        Normalize appraisal score to a 0-100 scale.
+
+        Legacy appraisal flow stores final_score on a 0-5 scale, while OHCSF
+        uses 0-100. Treat scores <= 5 as 0-5 and convert to percentage.
+        """
+        score = Decimal(str(final_score))
+        if score <= Decimal("5"):
+            return score * Decimal("20")
+        return score

@@ -17,13 +17,14 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -50,6 +51,9 @@ class AppraisalStatus(str, enum.Enum):
     PENDING_COMMITTEE = "PENDING_COMMITTEE"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+
+
+_JSON = JSON().with_variant(JSONB, "postgresql")
 
 
 class Appraisal(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
@@ -243,6 +247,7 @@ class Appraisal(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=True,
     )
     absence_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    approved_absence_evidence: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
 
     # Probation
     is_probation_appraisal: Mapped[bool] = mapped_column(

@@ -551,6 +551,8 @@ def create_appraisal(
         manager_id=payload.manager_id,
         template_id=payload.template_id,
         kra_scores=[score.model_dump() for score in payload.kra_scores],
+        absence_months=payload.absence_months,
+        approved_absence_evidence=payload.approved_absence_evidence,
     )
     return AppraisalRead.model_validate(appraisal)
 

@@ -178,8 +178,8 @@
             </a>
 
             <a href="/people/perf"
-               :aria-current="['perf','perf-cycles','perf-templates','perf-scorecards','pms-dashboard','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports'].includes(activeModule) ? 'page' : false"
-               :class="['perf','perf-cycles','perf-templates','perf-scorecards','pms-dashboard','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               :aria-current="['perf','perf-cycles','perf-templates','perf-scorecards','pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'page' : false"
+               :class="['perf','perf-cycles','perf-templates','perf-scorecards','pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a1 1 0 012 0v16a1 1 0 01-2 0V4zM4 10a1 1 0 011-1h3a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V10zm14-4a1 1 0 011-1h3a1 1 0 011 1v14a1 1 0 01-1 1h-3a1 1 0 01-1-1V6z"/>
@@ -192,7 +192,7 @@
             <div x-data="{
                     pmsOpen: false,
                     init() {
-                        const activePmsModules = ['pms-dashboard','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports'];
+                        const activePmsModules = ['pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'];
                         const stored = localStorage.getItem('peopleSidebarPmsOpen');
                         this.pmsOpen = stored === null
                             ? activePmsModules.includes('{{ active_module | default('') }}')
@@ -227,6 +227,10 @@
                        class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
                         Dashboard
                     </a>
+                    <a href="/people/perf/pms/governance"
+                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
+                        Governance
+                    </a>
                     <a href="/people/perf/pms/contracts"
                        class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
                         Contracts
@@ -254,6 +258,18 @@
                     <a href="/people/perf/pms/reports"
                        class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
                         Reports
+                    </a>
+                    <a href="/people/perf/pms/grievances"
+                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
+                        Grievances
+                    </a>
+                    <a href="/people/perf/pms/stakeholder-feedback"
+                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
+                        Stakeholder Feedback
+                    </a>
+                    <a href="/people/perf/pms/rewards"
+                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
+                        Rewards
                     </a>
                 </div>
             </div>

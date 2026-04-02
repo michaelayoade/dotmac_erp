@@ -1,0 +1,105 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import empty_state, icon_svg, pagination, status_badge %}
+
+{% block page_title %}PMS Grievances{% endblock %}
+
+{% block header_actions %}
+<a href="/people/perf/pms/grievances/new" class="btn btn-primary">
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+    New Grievance
+</a>
+{% endblock %}
+
+{% block content %}
+<div id="results-container" class="space-y-4">
+    {% if saved %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+        Grievance workflow updated successfully.
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Title</th>
+                        <th scope="col" class="hidden md:table-cell">Channel</th>
+                        <th scope="col" class="hidden md:table-cell">Raised</th>
+                        <th scope="col" class="text-center">Status</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td class="text-sm font-medium text-slate-900 dark:text-white">{{ record.title }}</td>
+                        <td class="hidden md:table-cell text-sm text-slate-600 dark:text-slate-400">{{ record.channel | replace('_', ' ') | title }}</td>
+                        <td class="hidden md:table-cell text-sm text-slate-600 dark:text-slate-400">{{ record.raised_date | format_date if record.raised_date else '—' }}</td>
+                        <td class="text-center">{{ status_badge(record.status, "sm") }}</td>
+                        <td class="text-sm">
+                            {% if record.status in ['OPEN', 'UNDER_REVIEW'] %}
+                            <div class="space-y-2">
+                                <form method="post" action="/people/perf/pms/grievances/{{ record.grievance_id }}/assign" class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    {{ request.state.csrf_form | safe }}
+                                    <select name="assigned_to_employee_id" class="form-select text-xs" required>
+                                        <option value="">Assign to...</option>
+                                        {% for employee in employees %}
+                                        <option value="{{ employee.employee_id }}">
+                                            {{ employee.full_name if employee.full_name else employee.employee_code }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="date" name="due_date" class="form-input text-xs" value="{{ record.due_date.isoformat() if record.due_date else '' }}">
+                                    <button type="submit" class="btn btn-secondary btn-sm">Assign</button>
+                                </form>
+                                <form method="post" action="/people/perf/pms/grievances/{{ record.grievance_id }}/resolve" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {{ request.state.csrf_form | safe }}
+                                    <input name="resolution_notes" class="form-input text-xs" placeholder="Resolution notes" required>
+                                    <button type="submit" class="btn btn-primary btn-sm">Resolve</button>
+                                </form>
+                                <form method="post" action="/people/perf/pms/grievances/{{ record.grievance_id }}/escalate" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {{ request.state.csrf_form | safe }}
+                                    <input name="escalation_notes" class="form-input text-xs" placeholder="Escalation note (optional)">
+                                    <button type="submit" class="btn btn-danger btn-sm">Escalate to FCSC</button>
+                                </form>
+                            </div>
+                            {% else %}
+                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                {% if record.status == 'RESOLVED' %}
+                                Resolved {{ record.resolved_date | format_date if record.resolved_date else '' }}
+                                {% elif record.status == 'ESCALATED' %}
+                                Escalated {{ record.escalated_date | format_date if record.escalated_date else '' }}
+                                {% else %}
+                                No actions
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5">
+                            {{ empty_state(
+                                title="No grievances",
+                                description="No PMS grievances have been logged.",
+                                icon="warning",
+                                cta_text="New Grievance",
+                                cta_href="/people/perf/pms/grievances/new"
+                            ) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {{ pagination(page=page, total_pages=total_pages, total_count=total) }}
+</div>
+{% endblock %}

@@ -132,6 +132,20 @@ class PIPService:
         """
         return self._get_or_404(org_id, pip_id)
 
+    def get_pip_for_appraisal(
+        self, org_id: UUID, appraisal_id: UUID
+    ) -> PerformanceImprovementPlan | None:
+        """Return the most recent PIP linked to an appraisal, if any."""
+        stmt = (
+            select(PerformanceImprovementPlan)
+            .where(
+                PerformanceImprovementPlan.organization_id == org_id,
+                PerformanceImprovementPlan.appraisal_id == appraisal_id,
+            )
+            .order_by(PerformanceImprovementPlan.created_at.desc())
+        )
+        return self.db.scalar(stmt)
+
     def list_pips(
         self,
         org_id: UUID,
