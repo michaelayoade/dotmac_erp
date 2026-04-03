@@ -23,6 +23,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -83,6 +84,11 @@ class AppraisalTemplate(Base, AuditMixin, ERPNextSyncMixin):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+    pms_config: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Optional PMS-specific template configuration for government/hybrid flows",
     )
     template_profile: Mapped[AppraisalTemplateProfile] = mapped_column(
         Enum(AppraisalTemplateProfile, name="appraisal_template_profile"),

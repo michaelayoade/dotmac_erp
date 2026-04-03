@@ -17,6 +17,7 @@ from app.models.people.perf import AppraisalTemplateProfile
 from app.models.people.perf.appraisal_cycle import AppraisalCycleStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import (
+    DesignationFilters,
     DepartmentFilters,
     EmployeeFilters,
     OrganizationService,
@@ -51,6 +52,53 @@ class CycleWebService:
         if isinstance(value, str):
             return value.strip()
         return default
+
+    @staticmethod
+    def _default_pms_template_config() -> dict[str, object]:
+        return {
+            "objective_weight_pct": 70,
+            "process_weight_pct": 10,
+            "competency_weight_pct": 20,
+            "required_competency_count": 5,
+            "required_development_focus_count": 3,
+            "evidence_required": True,
+        }
+
+    def _extract_pms_template_config(self, form_data) -> dict[str, object] | None:
+        enabled = self._form_text(form_data.get("pms_config_enabled")).lower() in {
+            "true",
+            "1",
+            "on",
+            "yes",
+        }
+        if not enabled:
+            return None
+        return {
+            "objective_weight_pct": parse_int(
+                self._form_text(form_data.get("objective_weight_pct"))
+            )
+            or 70,
+            "process_weight_pct": parse_int(
+                self._form_text(form_data.get("process_weight_pct"))
+            )
+            or 10,
+            "competency_weight_pct": parse_int(
+                self._form_text(form_data.get("competency_weight_pct"))
+            )
+            or 20,
+            "required_competency_count": parse_int(
+                self._form_text(form_data.get("required_competency_count"))
+            )
+            or 5,
+            "required_development_focus_count": parse_int(
+                self._form_text(form_data.get("required_development_focus_count"))
+            )
+            or 3,
+            "evidence_required": self._form_text(
+                form_data.get("evidence_required"), "false"
+            ).lower()
+            in {"true", "1", "on", "yes"},
+        }
 
     # ─────────────────────────────────────────────────────────────────────────
     # Cycles
@@ -726,6 +774,19 @@ class CycleWebService:
     # Templates
     # ─────────────────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _templates_base_url(request: Request) -> str:
+        # Government PMS access uses /people/perf/pms/templates; private uses /people/perf/templates.
+        if request.url.path.startswith("/people/perf/pms/"):
+            return "/people/perf/pms/templates"
+        return "/people/perf/templates"
+
+    @staticmethod
+    def _templates_active_module(request: Request) -> str:
+        if request.url.path.startswith("/people/perf/pms/"):
+            return "pms-templates"
+        return "perf"
+
     def list_templates_response(
         self,
         request: Request,
@@ -761,7 +822,14 @@ class CycleWebService:
             PaginationParams(limit=100),
         ).items
 
-        context = base_context(request, auth, "Appraisal Templates", "perf", db=db)
+        templates_base_url = self._templates_base_url(request)
+        context = base_context(
+            request,
+            auth,
+            "Appraisal Templates",
+            self._templates_active_module(request),
+            db=db,
+        )
         context["request"] = request
         success = request.query_params.get("success")
         context.update(
@@ -771,6 +839,7 @@ class CycleWebService:
                 "is_active": is_active,
                 "department_id": department_id,
                 "departments": departments,
+                "templates_base_url": templates_base_url,
                 "success": success,
                 "page": result.page,
                 "total_pages": result.total_pages,
@@ -803,15 +872,28 @@ class CycleWebService:
             org_id, is_active=True, pagination=PaginationParams(limit=100)
         ).items
 
-        context = base_context(request, auth, "New Template", "perf", db=db)
+        templates_base_url = self._templates_base_url(request)
+        context = base_context(
+            request,
+            auth,
+            "New Template",
+            self._templates_active_module(request),
+            db=db,
+        )
         context["request"] = request
         context.update(
             {
                 "template": None,
                 "departments": departments,
+                "designations": org_svc.list_designations(
+                    DesignationFilters(is_active=True),
+                    PaginationParams(limit=100),
+                ).items,
                 "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                 "kras": kras,
+                "templates_base_url": templates_base_url,
                 "form_data": {},
+                "default_pms_config": self._default_pms_template_config(),
                 "error": None,
             }
         )
@@ -838,6 +920,7 @@ class CycleWebService:
                 description=self._form_text(form_data.get("description")) or None,
                 template_profile=self._form_text(form_data.get("template_profile"))
                 or AppraisalTemplateProfile.BOTH.value,
+                pms_config=self._extract_pms_template_config(form_data),
                 department_id=coerce_uuid(form_data["department_id"])
                 if self._form_text(form_data.get("department_id"))
                 else None,
@@ -848,13 +931,20 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/templates/{template.template_id}?saved=1",
+                url=f"{self._templates_base_url(request)}/{template.template_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
-            context = base_context(request, auth, "New Template", "perf", db=db)
+            templates_base_url = self._templates_base_url(request)
+            context = base_context(
+                request,
+                auth,
+                "New Template",
+                self._templates_active_module(request),
+                db=db,
+            )
             context["request"] = request
             context.update(
                 {
@@ -862,11 +952,17 @@ class CycleWebService:
                     "departments": org_svc.list_departments(
                         DepartmentFilters(is_active=True), PaginationParams(limit=100)
                     ).items,
+                    "designations": org_svc.list_designations(
+                        DesignationFilters(is_active=True),
+                        PaginationParams(limit=100),
+                    ).items,
                     "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                     "kras": svc.list_kras(
                         org_id, is_active=True, pagination=PaginationParams(limit=100)
                     ).items,
+                    "templates_base_url": templates_base_url,
                     "form_data": dict(form_data),
+                    "default_pms_config": self._default_pms_template_config(),
                     "error": str(e),
                 }
             )
@@ -889,15 +985,23 @@ class CycleWebService:
         try:
             template = svc.get_template(org_id, coerce_uuid(template_id))
         except Exception:
-            return RedirectResponse(url="/people/perf/templates", status_code=303)
+            return RedirectResponse(url=self._templates_base_url(request), status_code=303)
 
-        context = base_context(request, auth, template.template_name, "perf", db=db)
+        templates_base_url = self._templates_base_url(request)
+        context = base_context(
+            request,
+            auth,
+            template.template_name,
+            self._templates_active_module(request),
+            db=db,
+        )
         context["request"] = request
         context.update(
             {
                 "template": template,
                 "success": success,
                 "error": None,
+                "templates_base_url": templates_base_url,
             }
         )
         return templates.TemplateResponse(
@@ -919,10 +1023,15 @@ class CycleWebService:
         try:
             template = svc.get_template(org_id, coerce_uuid(template_id))
         except Exception:
-            return RedirectResponse(url="/people/perf/templates", status_code=303)
+            return RedirectResponse(url=self._templates_base_url(request), status_code=303)
 
+        templates_base_url = self._templates_base_url(request)
         context = base_context(
-            request, auth, f"Edit {template.template_name}", "perf", db=db
+            request,
+            auth,
+            f"Edit {template.template_name}",
+            self._templates_active_module(request),
+            db=db,
         )
         context["request"] = request
         context.update(
@@ -931,11 +1040,17 @@ class CycleWebService:
                 "departments": org_svc.list_departments(
                     DepartmentFilters(is_active=True), PaginationParams(limit=100)
                 ).items,
+                "designations": org_svc.list_designations(
+                    DesignationFilters(is_active=True),
+                    PaginationParams(limit=100),
+                ).items,
                 "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                 "kras": svc.list_kras(
                     org_id, is_active=True, pagination=PaginationParams(limit=100)
                 ).items,
+                "templates_base_url": templates_base_url,
                 "form_data": {},
+                "default_pms_config": self._default_pms_template_config(),
                 "error": None,
             }
         )
@@ -963,6 +1078,7 @@ class CycleWebService:
                 description=self._form_text(form_data.get("description")) or None,
                 template_profile=self._form_text(form_data.get("template_profile"))
                 or AppraisalTemplateProfile.BOTH.value,
+                pms_config=self._extract_pms_template_config(form_data),
                 department_id=coerce_uuid(form_data["department_id"])
                 if self._form_text(form_data.get("department_id"))
                 else None,
@@ -973,15 +1089,20 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/templates/{template_id}?saved=1",
+                url=f"{self._templates_base_url(request)}/{template_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
             template = svc.get_template(org_id, coerce_uuid(template_id))
+            templates_base_url = self._templates_base_url(request)
             context = base_context(
-                request, auth, f"Edit {template.template_name}", "perf", db=db
+                request,
+                auth,
+                f"Edit {template.template_name}",
+                self._templates_active_module(request),
+                db=db,
             )
             context["request"] = request
             context.update(
@@ -990,11 +1111,17 @@ class CycleWebService:
                     "departments": org_svc.list_departments(
                         DepartmentFilters(is_active=True), PaginationParams(limit=100)
                     ).items,
+                    "designations": org_svc.list_designations(
+                        DesignationFilters(is_active=True),
+                        PaginationParams(limit=100),
+                    ).items,
                     "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                     "kras": svc.list_kras(
                         org_id, is_active=True, pagination=PaginationParams(limit=100)
                     ).items,
-                    "form_data": {},
+                    "templates_base_url": templates_base_url,
+                    "form_data": dict(form_data),
+                    "default_pms_config": self._default_pms_template_config(),
                     "error": str(e),
                 }
             )

@@ -525,10 +525,22 @@ class AppraisalTemplateBase(BaseModel):
     is_active: bool = True
 
 
+class AppraisalTemplatePMSConfig(BaseModel):
+    """PMS-specific template settings."""
+
+    objective_weight_pct: int = Field(default=70, ge=0, le=100)
+    process_weight_pct: int = Field(default=10, ge=0, le=100)
+    competency_weight_pct: int = Field(default=20, ge=0, le=100)
+    required_competency_count: int = Field(default=5, ge=0, le=20)
+    required_development_focus_count: int = Field(default=3, ge=0, le=20)
+    evidence_required: bool = True
+
+
 class AppraisalTemplateCreate(AppraisalTemplateBase):
     """Create appraisal template request."""
 
     kras: list[AppraisalTemplateKRACreate] = []
+    pms_config: AppraisalTemplatePMSConfig | None = None
 
 
 class AppraisalTemplateUpdate(BaseModel):
@@ -542,6 +554,7 @@ class AppraisalTemplateUpdate(BaseModel):
     rating_scale_max: int | None = None
     is_active: bool | None = None
     kras: list[AppraisalTemplateKRACreate] | None = None
+    pms_config: AppraisalTemplatePMSConfig | None = None
 
 
 class AppraisalTemplateRead(AppraisalTemplateBase):
@@ -554,6 +567,7 @@ class AppraisalTemplateRead(AppraisalTemplateBase):
     created_at: datetime
     updated_at: datetime | None = None
     kras: list[AppraisalTemplateKRARead] = []
+    pms_config: AppraisalTemplatePMSConfig | None = None
 
     department: DepartmentBrief | None = None
     designation: DesignationBrief | None = None

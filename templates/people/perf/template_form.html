@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
+{% set templates_base = templates_base_url | default("/people/perf/templates") %}
 
 {% block page_title %}{% if template %}Edit {{ template.template_name }}{% else %}New Appraisal Template{% endif %}{% endblock %}
 
@@ -8,7 +9,7 @@
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/templates" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Templates</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="{{ templates_base }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Templates</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{% if template %}Edit{% else %}New{% endif %}</span></li>
     </ol>
 </nav>
@@ -25,7 +26,7 @@
     </div>
     {% endif %}
 
-    <form method="post" action="{% if template %}/people/perf/templates/{{ template.template_id }}/edit{% else %}/people/perf/templates/new{% endif %}" class="space-y-6">
+    <form method="post" action="{% if template %}{{ templates_base }}/{{ template.template_id }}/edit{% else %}{{ templates_base }}/new{% endif %}" class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <div class="card">
@@ -36,7 +37,7 @@
             <div class="card-body">
                 <div>
                     <label for="template_profile" class="form-label required">Template Profile</label>
-                    <select id="template_profile" name="template_profile" class="form-select w-full">
+                    <select id="template_profile" name="template_profile" x-model="templateProfile" class="form-select w-full">
                         {% for option in template_profile_options %}
                         {% set selected_profile = form_data.template_profile or (template.template_profile.value if template and template.template_profile else 'BOTH') %}
                         <option value="{{ option.value }}" {{ 'selected' if selected_profile == option.value else '' }}>
@@ -46,6 +47,83 @@
                     </select>
                 </div>
                 <p class="text-xs text-slate-500 mt-1">Private: private/hybrid. PMS: government/hybrid. Both: all modes.</p>
+            </div>
+        </div>
+
+        {% set _pms_cfg = template.pms_config if template and template.pms_config else default_pms_config %}
+        {% set _pms_enabled = (
+            form_data.pms_config_enabled == 'true'
+            or form_data.pms_config_enabled == 'on'
+            or (not form_data and _pms_cfg)
+        ) %}
+        <div class="card"
+             x-show="performanceGovernmentEnabled && ['PMS','BOTH'].includes(templateProfile)"
+             x-cloak>
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">PMS-Specific Settings</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Used when this template runs in government PMS flows.</p>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="pms_config_enabled" x-model="pmsConfigEnabled"
+                           class="rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <input type="hidden" name="pms_config_enabled" :value="pmsConfigEnabled ? 'true' : 'false'">
+                    <label for="pms_config_enabled" class="text-sm text-slate-700 dark:text-slate-300">
+                        Enable PMS-specific template details
+                    </label>
+                </div>
+
+                <div x-show="pmsConfigEnabled" x-cloak class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label for="objective_weight_pct" class="form-label required">Objectives %</label>
+                            <input type="number" min="0" max="100" name="objective_weight_pct" id="objective_weight_pct"
+                                   class="form-input w-full"
+                                   value="{{ form_data.objective_weight_pct or (_pms_cfg.objective_weight_pct if _pms_cfg else 70) }}">
+                        </div>
+                        <div>
+                            <label for="process_weight_pct" class="form-label required">Process %</label>
+                            <input type="number" min="0" max="100" name="process_weight_pct" id="process_weight_pct"
+                                   class="form-input w-full"
+                                   value="{{ form_data.process_weight_pct or (_pms_cfg.process_weight_pct if _pms_cfg else 10) }}">
+                        </div>
+                        <div>
+                            <label for="competency_weight_pct" class="form-label required">Competencies %</label>
+                            <input type="number" min="0" max="100" name="competency_weight_pct" id="competency_weight_pct"
+                                   class="form-input w-full"
+                                   value="{{ form_data.competency_weight_pct or (_pms_cfg.competency_weight_pct if _pms_cfg else 20) }}">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="required_competency_count" class="form-label required">Required Competency Count</label>
+                            <input type="number" min="0" max="20" name="required_competency_count" id="required_competency_count"
+                                   class="form-input w-full"
+                                   value="{{ form_data.required_competency_count or (_pms_cfg.required_competency_count if _pms_cfg else 5) }}">
+                        </div>
+                        <div>
+                            <label for="required_development_focus_count" class="form-label required">Development-Focus Count</label>
+                            <input type="number" min="0" max="20" name="required_development_focus_count" id="required_development_focus_count"
+                                   class="form-input w-full"
+                                   value="{{ form_data.required_development_focus_count or (_pms_cfg.required_development_focus_count if _pms_cfg else 3) }}">
+                        </div>
+                    </div>
+
+                    {% set _evidence_required = (
+                        form_data.evidence_required == 'true'
+                        or form_data.evidence_required == 'on'
+                        or (form_data.evidence_required is none and _pms_cfg and _pms_cfg.evidence_required)
+                    ) %}
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="evidence_required" name="evidence_required" value="true"
+                               class="rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                               {{ 'checked' if _evidence_required else '' }}>
+                        <label for="evidence_required" class="text-sm text-slate-700 dark:text-slate-300">
+                            Require evidence on competency ratings
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -184,7 +262,7 @@
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
-            <a href="/people/perf/templates{% if template %}/{{ template.template_id }}{% endif %}" class="btn btn-secondary">Cancel</a>
+            <a href="{{ templates_base }}{% if template %}/{{ template.template_id }}{% endif %}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {% if template %}Save Changes{% else %}Create Template{% endif %}
             </button>
@@ -195,6 +273,9 @@
 <script>
 function templateForm() {
     return {
+        templateProfile: '{{ form_data.template_profile or (template.template_profile.value if template and template.template_profile else "BOTH") }}',
+        performanceGovernmentEnabled: {{ 'true' if performance_government_enabled else 'false' }},
+        pmsConfigEnabled: {{ 'true' if _pms_enabled else 'false' }},
         selectedKras: [
             {% if template and template.kras %}
             {% for tk in template.kras %}

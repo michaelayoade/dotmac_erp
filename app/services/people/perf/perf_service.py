@@ -181,6 +181,62 @@ class PerformanceService:
     ) -> set[AppraisalTemplateProfile]:
         return self._allowed_template_profiles_for_mode(self._resolve_org_mode(org_id))
 
+    def _validate_template_pms_config(
+        self,
+        *,
+        org_id: UUID,
+        template_profile: AppraisalTemplateProfile,
+        pms_config: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not pms_config:
+            return None
+
+        mode = self._resolve_org_mode(org_id)
+        if mode == PerformanceMode.PRIVATE:
+            raise PerformanceServiceError(
+                "PMS template configuration is not allowed in PRIVATE mode"
+            )
+        if template_profile == AppraisalTemplateProfile.PRIVATE:
+            raise PerformanceServiceError(
+                "PMS template configuration requires template_profile PMS or BOTH"
+            )
+
+        objective = int(pms_config.get("objective_weight_pct", 0))
+        process = int(pms_config.get("process_weight_pct", 0))
+        competency = int(pms_config.get("competency_weight_pct", 0))
+        if objective + process + competency != 100:
+            raise PerformanceServiceError(
+                "PMS template weights must total 100 "
+                f"(got {objective + process + competency})"
+            )
+
+        required_competency_count = int(pms_config.get("required_competency_count", 0))
+        required_focus_count = int(
+            pms_config.get("required_development_focus_count", 0)
+        )
+        if required_competency_count < 0:
+            raise PerformanceServiceError(
+                "required_competency_count must be greater than or equal to 0"
+            )
+        if required_focus_count < 0:
+            raise PerformanceServiceError(
+                "required_development_focus_count must be greater than or equal to 0"
+            )
+        if required_focus_count > required_competency_count:
+            raise PerformanceServiceError(
+                "required_development_focus_count cannot exceed "
+                "required_competency_count"
+            )
+
+        return {
+            "objective_weight_pct": objective,
+            "process_weight_pct": process,
+            "competency_weight_pct": competency,
+            "required_competency_count": required_competency_count,
+            "required_development_focus_count": required_focus_count,
+            "evidence_required": bool(pms_config.get("evidence_required", True)),
+        }
+
     def _ensure_underperformance_pip_resolution(self, org_id: UUID, appraisal: Appraisal) -> None:
         """Block appraisal completion until underperformance PIP is resolved."""
         if appraisal.final_score is None:
@@ -706,15 +762,22 @@ class PerformanceService:
         template_profile: AppraisalTemplateProfile | str = AppraisalTemplateProfile.BOTH,
         is_active: bool = True,
         kras: list[dict] | None = None,
+        pms_config: dict[str, Any] | None = None,
     ) -> AppraisalTemplate:
         """Create a new appraisal template."""
         if isinstance(template_profile, str):
             template_profile = AppraisalTemplateProfile(template_profile.strip().upper())
+        normalized_pms_config = self._validate_template_pms_config(
+            org_id=org_id,
+            template_profile=template_profile,
+            pms_config=pms_config,
+        )
         template = AppraisalTemplate(
             organization_id=org_id,
             template_code=template_code,
             template_name=template_name,
             description=description,
+            pms_config=normalized_pms_config,
             template_profile=template_profile,
             department_id=department_id,
             designation_id=designation_id,
@@ -752,9 +815,21 @@ class PerformanceService:
                 template_profile.strip().upper()
             )
         template = self.get_template(org_id, template_id)
+        effective_profile = cast(
+            AppraisalTemplateProfile,
+            kwargs.get("template_profile", template.template_profile),
+        )
+        if "pms_config" in kwargs:
+            kwargs["pms_config"] = self._validate_template_pms_config(
+                org_id=org_id,
+                template_profile=effective_profile,
+                pms_config=cast(dict[str, Any] | None, kwargs.get("pms_config")),
+            )
+        elif effective_profile == AppraisalTemplateProfile.PRIVATE:
+            kwargs["pms_config"] = None
 
         for key, value in kwargs.items():
-            if value is not None and hasattr(template, key):
+            if (value is not None or key == "pms_config") and hasattr(template, key):
                 setattr(template, key, value)
 
         if kras is not None:
