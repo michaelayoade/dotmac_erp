@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.people.perf.strategic_objective import StrategicObjective
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,12 @@ class StrategicObjectiveService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise StrategicObjectiveServiceError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -171,6 +178,7 @@ class StrategicObjectiveService:
         Returns:
             Newly created StrategicObjective (flushed, not committed).
         """
+        self._ensure_pms_write_mode(org_id)
         record = StrategicObjective(
             organization_id=org_id,
             cycle_id=cycle_id,
@@ -215,6 +223,7 @@ class StrategicObjectiveService:
         Raises:
             StrategicObjectiveNotFoundError: if not found.
         """
+        self._ensure_pms_write_mode(org_id)
         record = self._get_or_404(org_id, objective_id)
 
         for field, value in kwargs.items():
@@ -240,6 +249,7 @@ class StrategicObjectiveService:
             StrategicObjectiveNotFoundError: if not found.
             StrategicObjectiveServiceError: if children or linked KPIs exist.
         """
+        self._ensure_pms_write_mode(org_id)
         record = self._get_or_404(org_id, objective_id)
 
         # Guard: child objectives

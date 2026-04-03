@@ -137,6 +137,14 @@ class PerfWebService:
             EmployeeFilters(is_active=True),
             PaginationParams(limit=500),
         ).items
+        managers = employees
+        allowed_profiles = svc.allowed_template_profiles_for_org(org_id)
+        template_options = svc.list_templates(
+            org_id,
+            is_active=True,
+            template_profiles=allowed_profiles,
+            pagination=PaginationParams(limit=300),
+        ).items
 
         context = base_context(request, auth, "New Appraisal", "perf", db=db)
         context["request"] = request
@@ -145,6 +153,8 @@ class PerfWebService:
                 "appraisal": None,
                 "cycles": cycles,
                 "employees": employees,
+                "managers": managers,
+                "templates": template_options,
                 "form_data": {},
                 "error": None,
             }
@@ -206,6 +216,15 @@ class PerfWebService:
                     ).items,
                     "employees": org_svc.list_employees(
                         EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "managers": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "templates": svc.list_templates(
+                        org_id,
+                        is_active=True,
+                        template_profiles=svc.allowed_template_profiles_for_org(org_id),
+                        pagination=PaginationParams(limit=300),
                     ).items,
                     "form_data": dict(form_data),
                     "error": str(e),
@@ -322,6 +341,15 @@ class PerfWebService:
                 "employees": org_svc.list_employees(
                     EmployeeFilters(is_active=True), PaginationParams(limit=500)
                 ).items,
+                "managers": org_svc.list_employees(
+                    EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                ).items,
+                "templates": svc.list_templates(
+                    org_id,
+                    is_active=True,
+                    template_profiles=svc.allowed_template_profiles_for_org(org_id),
+                    pagination=PaginationParams(limit=300),
+                ).items,
                 "form_data": {},
                 "error": None,
             }
@@ -372,6 +400,15 @@ class PerfWebService:
                     ).items,
                     "employees": org_svc.list_employees(
                         EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "managers": org_svc.list_employees(
+                        EmployeeFilters(is_active=True), PaginationParams(limit=500)
+                    ).items,
+                    "templates": svc.list_templates(
+                        org_id,
+                        is_active=True,
+                        template_profiles=svc.allowed_template_profiles_for_org(org_id),
+                        pagination=PaginationParams(limit=300),
                     ).items,
                     "form_data": {},
                     "error": str(e),

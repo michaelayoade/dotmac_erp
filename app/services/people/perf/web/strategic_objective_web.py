@@ -80,7 +80,7 @@ class StrategicObjectiveWebService:
                 key = str(obj.parent_objective_id)
                 child_map.setdefault(key, []).append(obj)
 
-        context = base_context(request, auth, "Strategic Objectives", "perf", db=db)
+        context = base_context(request, auth, "Strategic Objectives", "pms-objectives", db=db)
         context["request"] = request
         context.update(
             {
@@ -141,7 +141,7 @@ class StrategicObjectiveWebService:
             PaginationParams(limit=200),
         ).items
 
-        context = base_context(request, auth, "New Strategic Objective", "perf", db=db)
+        context = base_context(request, auth, "New Strategic Objective", "pms-objectives", db=db)
         context["request"] = request
         context.update(
             {
@@ -234,7 +234,7 @@ class StrategicObjectiveWebService:
             ).items
 
             context = base_context(
-                request, auth, "New Strategic Objective", "perf", db=db
+                request, auth, "New Strategic Objective", "pms-objectives", db=db
             )
             context["request"] = request
             context.update(

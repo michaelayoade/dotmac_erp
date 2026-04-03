@@ -842,17 +842,19 @@ def _admin_base_context(
 ) -> dict:
     """Build base context for admin settings pages."""
     organization = None
-    if auth and auth.organization_id:
+    if auth and auth.is_authenticated and auth.organization_id:
         from app.models.finance.core_org.organization import Organization
 
         organization = db.get(Organization, auth.organization_id)
     context = {
         "request": request,
-        "user": {"name": "Admin", "initials": "AD"} if auth else {},
+        "user": auth.user if auth and auth.is_authenticated else {},
         "page_title": page_title,
         "active_page": "settings",
         "brand": resolve_brand_context(
-            db, organization, auth.organization_id if auth else None
+            db,
+            organization,
+            auth.organization_id if auth and auth.is_authenticated else None,
         ),
     }
     return context
@@ -881,13 +883,15 @@ def admin_settings_organization(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Organization profile settings page."""
+    if not auth.is_authenticated or not auth.organization_id:
+        return RedirectResponse(url="/login?next=/admin/settings/organization", status_code=303)
+
     context = _admin_base_context(request, auth, "Organization Profile", db)
-    if auth and auth.organization_id:
-        context.update(
-            admin_settings_web_service.get_organization_context(
-                db, auth.organization_id
-            )
+    context.update(
+        admin_settings_web_service.get_organization_context(
+            db, auth.organization_id
         )
+    )
     return templates.TemplateResponse(
         request, "admin/settings/organization.html", context
     )
@@ -900,26 +904,28 @@ async def admin_settings_organization_update(
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """Update organization profile."""
+    if not auth.is_authenticated or not auth.organization_id:
+        return RedirectResponse(url="/login?next=/admin/settings/organization", status_code=303)
+
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
     data = _normalize_form(form)
 
-    if auth and auth.organization_id:
-        success, error = admin_settings_web_service.update_organization(
-            db, auth.organization_id, data
+    success, error = admin_settings_web_service.update_organization(
+        db, auth.organization_id, data
+    )
+    if not success:
+        context = _admin_base_context(request, auth, "Organization Profile", db)
+        context.update(
+            admin_settings_web_service.get_organization_context(
+                db, auth.organization_id
+            )
         )
-        if not success:
-            context = _admin_base_context(request, auth, "Organization Profile", db)
-            context.update(
-                admin_settings_web_service.get_organization_context(
-                    db, auth.organization_id
-                )
-            )
-            context["error"] = error
-            return templates.TemplateResponse(
-                request, "admin/settings/organization.html", context
-            )
+        context["error"] = error
+        return templates.TemplateResponse(
+            request, "admin/settings/organization.html", context
+        )
 
     return RedirectResponse(url="/admin/settings/organization?saved=1", status_code=303)
 

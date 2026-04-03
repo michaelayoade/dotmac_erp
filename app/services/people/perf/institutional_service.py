@@ -24,6 +24,7 @@ from app.models.people.perf.institutional_performance import (
 )
 from app.models.people.perf.pms_enums import InstitutionalPerfStatus, InstitutionType
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 from app.services.people.perf.scoring_engine import OHCSFScoringEngine
 
 if TYPE_CHECKING:
@@ -75,6 +76,12 @@ class InstitutionalPerformanceService:
         self.db = db
         self.ctx = ctx
         self._scoring_engine = OHCSFScoringEngine()
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise InstitutionalValidationError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -220,6 +227,7 @@ class InstitutionalPerformanceService:
         Returns:
             Newly created InstitutionalPerformance (flushed, not committed).
         """
+        self._ensure_pms_write_mode(org_id)
         tmpl_stmt = (
             select(InstitutionalCriteriaTemplate)
             .where(
@@ -289,6 +297,7 @@ class InstitutionalPerformanceService:
         Raises:
             InstitutionalPerfNotFoundError: if the record does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         record = self._get_or_404(org_id, inst_perf_id)
 
         scored = [self._score_criterion(entry) for entry in criteria_scores]
@@ -351,6 +360,7 @@ class InstitutionalPerformanceService:
         Raises:
             InstitutionalPerfNotFoundError: if the record does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         record = self._get_or_404(org_id, inst_perf_id)
 
         # Snapshot current composite before any adjustment

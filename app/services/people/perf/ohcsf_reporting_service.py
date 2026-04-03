@@ -17,10 +17,19 @@ from uuid import UUID
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.services.people.perf.performance_policy import GOVERNMENT_PMS_POLICY
+
 logger = logging.getLogger(__name__)
 
 # Canonical rating label order (highest → lowest)
-_RATING_LABELS = ["Outstanding", "Excellent", "Good", "Fair", "Poor"]
+_RATING_LABELS = [
+    band.label
+    for band in sorted(
+        GOVERNMENT_PMS_POLICY.rating_scale,
+        key=lambda band: band.rating,
+        reverse=True,
+    )
+]
 
 
 def _pct(count: int, total: int) -> Decimal:

@@ -79,7 +79,7 @@ class MonthlyReviewWebService:
             pagination=pagination,
         )
 
-        context = base_context(request, auth, "Monthly Reviews", "perf", db=db)
+        context = base_context(request, auth, "Monthly Reviews", "pms-reviews", db=db)
         context["request"] = request
         context.update(
             {
@@ -130,7 +130,7 @@ class MonthlyReviewWebService:
             request,
             auth,
             f"Monthly Review — {review.review_month.strftime('%b %Y') if review.review_month else ''}",
-            "perf",
+            "pms-reviews",
             db=db,
         )
         context["request"] = request
@@ -192,7 +192,7 @@ class MonthlyReviewWebService:
             pagination=PaginationParams(limit=200),
         ).items
 
-        context = base_context(request, auth, "New Monthly Review", "perf", db=db)
+        context = base_context(request, auth, "New Monthly Review", "pms-reviews", db=db)
         context["request"] = request
         context.update(
             {

@@ -14,108 +14,32 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services.people.perf.performance_policy import GOVERNMENT_PMS_POLICY
+from app.services.people.perf.performance_policy import get_policy_profile
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Seed data constants
 # ---------------------------------------------------------------------------
 
-# Maps cluster name -> list of (competency_code, competency_name)
+# Backward-compatible exports now sourced from policy profile.
 OHCSF_COMPETENCIES: dict[str, list[tuple[str, str]]] = {
-    "ETHICS_AND_VALUES": [
-        ("OHCSF-COMMITMENT", "Commitment"),
-        ("OHCSF-INTEGRITY", "Integrity"),
-        ("OHCSF-INCLUSIVENESS", "Inclusiveness"),
-        ("OHCSF-COURAGE", "Courage"),
-    ],
-    "PEOPLE": [
-        ("OHCSF-COLLABORATING", "Collaborating & Partnering"),
-        ("OHCSF-COMMUNICATION", "Effective Communication"),
-        ("OHCSF-MNG-PEOPLE", "Managing & Developing People"),
-    ],
-    "EXECUTION": [
-        ("OHCSF-DRIVE-RESULTS", "Drive for Results"),
-        ("OHCSF-TRANSPARENCY", "Transparency and Accountability"),
-        ("OHCSF-VALUE-MONEY", "Value for Money"),
-    ],
-    "VISION": [
-        ("OHCSF-DECISION", "Effective Decision Making"),
-        ("OHCSF-STRAT-THINK", "Strategic Thinking"),
-        ("OHCSF-CHANGE-MGMT", "Embracing and Managing Change"),
-    ],
-    "EXPERTISE": [
-        ("OHCSF-POLICY-MGMT", "Policy Management"),
-        ("OHCSF-CITIZEN-FOCUS", "Citizen Focus"),
-        ("OHCSF-INFO-RECORDS", "Information and Records Management"),
-        ("OHCSF-TECHNOLOGY", "Adoption and Use of Technology"),
-        ("OHCSF-SPECIALIST", "Specialist Competencies"),
-    ],
+    cluster: list(entries)
+    for cluster, entries in GOVERNMENT_PMS_POLICY.ohcsf_seed_competencies.items()
 }
 
 # Maps institution type -> list of (criteria_name, default_weight)
 # Each list sums to exactly 100.
 OHCSF_INSTITUTIONAL_WEIGHTS: dict[str, list[tuple[str, int]]] = {
-    "MINISTRY": [
-        ("Government prioritized objectives", 25),
-        ("MDA Operational Objectives", 25),
-        ("Stakeholder Engagement", 10),
-        ("Service Innovation and Improvement", 10),
-        ("Automated Service Delivery", 10),
-        ("Capacity Building & Talent Management", 5),
-        ("Support for Service Delivery", 10),
-        ("Staff Welfare", 5),
-    ],
-    "REGULATORY": [
-        ("Government prioritized objectives", 25),
-        ("MDA Operational Objectives", 25),
-        ("Stakeholder Engagement", 10),
-        ("Service Innovation and Improvement", 10),
-        ("Automated Service Delivery", 10),
-        ("Capacity Building & Talent Management", 5),
-        ("Support for Service Delivery", 10),
-        ("Staff Welfare", 5),
-    ],
-    "GENERAL_SERVICES": [
-        ("Government prioritized objectives", 20),
-        ("MDA Operational Objectives", 20),
-        ("Stakeholder Engagement", 5),
-        ("Service Innovation and Improvement", 20),
-        ("Automated Service Delivery", 15),
-        ("Capacity Building & Talent Management", 5),
-        ("Support for Service Delivery", 10),
-        ("Staff Welfare", 5),
-    ],
-    "INFRASTRUCTURE": [
-        ("Government prioritized objectives", 25),
-        ("MDA Operational Objectives", 20),
-        ("Stakeholder Engagement", 5),
-        ("Service Innovation and Improvement", 15),
-        ("Automated Service Delivery", 15),
-        ("Capacity Building & Talent Management", 5),
-        ("Support for Service Delivery", 10),
-        ("Staff Welfare", 5),
-    ],
-    "SECURITY": [
-        ("Government prioritized objectives", 20),
-        ("MDA Operational Objectives", 25),
-        ("Stakeholder Engagement", 5),
-        ("Service Innovation and Improvement", 10),
-        ("Automated Service Delivery", 5),
-        ("Capacity Building & Talent Management", 10),
-        ("Support for Service Delivery", 20),
-        ("Staff Welfare", 5),
-    ],
-    "GOVT_COMPANY": [
-        ("Government prioritized objectives", 25),
-        ("MDA Operational Objectives", 25),
-        ("Stakeholder Engagement", 5),
-        ("Service Innovation and Improvement", 10),
-        ("Automated Service Delivery", 15),
-        ("Capacity Building & Talent Management", 5),
-        ("Support for Service Delivery", 10),
-        ("Staff Welfare", 5),
-    ],
+    inst_type: list(entries)
+    for inst_type, entries in GOVERNMENT_PMS_POLICY.ohcsf_institutional_weights.items()
 }
+
+
+class PMSConfigServiceError(ValueError):
+    """Raised when PMS configuration activation is not allowed."""
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +52,7 @@ class PMSConfigService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+        self._policy = get_policy_profile("GOVERNMENT_PMS")
 
     # ------------------------------------------------------------------
     # Public API
@@ -144,6 +69,11 @@ class PMSConfigService:
         Returns:
             dict with keys ``competencies_created`` and ``templates_created``.
         """
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise PMSConfigServiceError(str(exc)) from exc
+
         competencies_created = self._seed_competencies(org_id)
         templates_created = self._seed_criteria_templates(org_id)
 
@@ -180,7 +110,7 @@ class PMSConfigService:
         existing_codes: set[str] = set(self.db.scalars(existing_stmt).all())
 
         created = 0
-        for _cluster_name, competencies in OHCSF_COMPETENCIES.items():
+        for _cluster_name, competencies in self._policy.ohcsf_seed_competencies.items():
             for code, name in competencies:
                 if code in existing_codes:
                     continue
@@ -223,7 +153,7 @@ class PMSConfigService:
         }
 
         created = 0
-        for inst_type_str, criteria in OHCSF_INSTITUTIONAL_WEIGHTS.items():
+        for inst_type_str, criteria in self._policy.ohcsf_institutional_weights.items():
             if inst_type_str in existing_types:
                 continue
 

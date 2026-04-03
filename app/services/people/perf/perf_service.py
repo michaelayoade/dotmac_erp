@@ -25,14 +25,20 @@ from app.models.people.perf import (
     AppraisalKRAScore,
     AppraisalStatus,
     AppraisalTemplate,
+    AppraisalTemplateProfile,
     AppraisalTemplateKRA,
     KPIStatus,
     Scorecard,
     ScorecardItem,
 )
+from app.models.finance.core_org import Organization, PerformanceMode
 from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import PIPStatus
 from app.services.common import PaginatedResult, PaginationParams
+from app.services.people.perf.performance_mode_policy import (
+    enforce_private_write_mode,
+    resolve_performance_mode,
+)
 
 logger = logging.getLogger(__name__)
 UNDERPERFORMANCE_SCORE_THRESHOLD = Decimal("50.00")
@@ -145,6 +151,35 @@ class PerformanceService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _resolve_org_mode(self, org_id: UUID) -> PerformanceMode:
+        organization = self.db.get(Organization, org_id)
+        return resolve_performance_mode(organization)
+
+    def _ensure_private_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_private_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise PerformanceServiceError(str(exc)) from exc
+
+    @staticmethod
+    def _allowed_template_profiles_for_mode(
+        mode: PerformanceMode,
+    ) -> set[AppraisalTemplateProfile]:
+        if mode == PerformanceMode.PRIVATE:
+            return {AppraisalTemplateProfile.PRIVATE, AppraisalTemplateProfile.BOTH}
+        if mode == PerformanceMode.GOVERNMENT_PMS:
+            return {AppraisalTemplateProfile.PMS, AppraisalTemplateProfile.BOTH}
+        return {
+            AppraisalTemplateProfile.PRIVATE,
+            AppraisalTemplateProfile.PMS,
+            AppraisalTemplateProfile.BOTH,
+        }
+
+    def allowed_template_profiles_for_org(
+        self, org_id: UUID
+    ) -> set[AppraisalTemplateProfile]:
+        return self._allowed_template_profiles_for_mode(self._resolve_org_mode(org_id))
 
     def _ensure_underperformance_pip_resolution(self, org_id: UUID, appraisal: Appraisal) -> None:
         """Block appraisal completion until underperformance PIP is resolved."""
@@ -591,6 +626,7 @@ class PerformanceService:
         *,
         department_id: UUID | None = None,
         designation_id: UUID | None = None,
+        template_profiles: set[AppraisalTemplateProfile] | None = None,
         is_active: bool | None = None,
         search: str | None = None,
         pagination: PaginationParams | None = None,
@@ -605,6 +641,9 @@ class PerformanceService:
 
         if designation_id:
             query = query.where(AppraisalTemplate.designation_id == designation_id)
+
+        if template_profiles:
+            query = query.where(AppraisalTemplate.template_profile.in_(template_profiles))
 
         if is_active is not None:
             query = query.where(AppraisalTemplate.is_active == is_active)
@@ -664,15 +703,19 @@ class PerformanceService:
         department_id: UUID | None = None,
         designation_id: UUID | None = None,
         rating_scale_max: int = 5,
+        template_profile: AppraisalTemplateProfile | str = AppraisalTemplateProfile.BOTH,
         is_active: bool = True,
         kras: list[dict] | None = None,
     ) -> AppraisalTemplate:
         """Create a new appraisal template."""
+        if isinstance(template_profile, str):
+            template_profile = AppraisalTemplateProfile(template_profile.strip().upper())
         template = AppraisalTemplate(
             organization_id=org_id,
             template_code=template_code,
             template_name=template_name,
             description=description,
+            template_profile=template_profile,
             department_id=department_id,
             designation_id=designation_id,
             rating_scale_max=rating_scale_max,
@@ -703,6 +746,11 @@ class PerformanceService:
     ) -> AppraisalTemplate:
         """Update an appraisal template."""
         kras = kwargs.pop("kras", None)
+        template_profile = kwargs.get("template_profile")
+        if isinstance(template_profile, str):
+            kwargs["template_profile"] = AppraisalTemplateProfile(
+                template_profile.strip().upper()
+            )
         template = self.get_template(org_id, template_id)
 
         for key, value in kwargs.items():
@@ -992,8 +1040,16 @@ class PerformanceService:
         approved_absence_evidence: dict[str, Any] | None = None,
     ) -> Appraisal:
         """Create a new appraisal."""
+        self._ensure_private_write_mode(org_id)
         # Verify cycle exists
         self.get_cycle(org_id, cycle_id)
+        if template_id is not None:
+            template = self.get_template(org_id, template_id)
+            allowed_profiles = self.allowed_template_profiles_for_org(org_id)
+            if template.template_profile not in allowed_profiles:
+                raise PerformanceServiceError(
+                    "Selected template profile is not allowed for this organization mode"
+                )
         if absence_months is not None and absence_months < 0:
             raise PerformanceServiceError("Absence months cannot be negative")
         normalized_absence_evidence = self._normalize_absence_evidence(
@@ -1075,8 +1131,18 @@ class PerformanceService:
         **kwargs,
     ) -> Appraisal:
         """Update an appraisal."""
+        self._ensure_private_write_mode(org_id)
         appraisal = self.get_appraisal(org_id, appraisal_id)
         self._ensure_not_prior_year_carryover(appraisal, action="update")
+
+        template_id = kwargs.get("template_id")
+        if template_id is not None:
+            template = self.get_template(org_id, template_id)
+            allowed_profiles = self.allowed_template_profiles_for_org(org_id)
+            if template.template_profile not in allowed_profiles:
+                raise PerformanceServiceError(
+                    "Selected template profile is not allowed for this organization mode"
+                )
 
         requested_status = kwargs.get("status")
         if requested_status is not None and requested_status != appraisal.status:
@@ -1142,6 +1208,7 @@ class PerformanceService:
         kra_ratings: list[dict] | None = None,
     ) -> Appraisal:
         """Submit employee self-assessment."""
+        self._ensure_private_write_mode(org_id)
         appraisal = self.get_appraisal(org_id, appraisal_id)
         self._ensure_not_prior_year_carryover(appraisal, action="submit self-assessment")
 
@@ -1188,6 +1255,7 @@ class PerformanceService:
         kra_ratings: list[dict] | None = None,
     ) -> Appraisal:
         """Submit manager review."""
+        self._ensure_private_write_mode(org_id)
         appraisal = self.get_appraisal(org_id, appraisal_id)
         self._ensure_not_prior_year_carryover(appraisal, action="submit manager review")
 
@@ -1228,6 +1296,7 @@ class PerformanceService:
         rating_label: str | None = None,
     ) -> Appraisal:
         """Submit HR calibration."""
+        self._ensure_private_write_mode(org_id)
         appraisal = self.get_appraisal(org_id, appraisal_id)
         self._ensure_not_prior_year_carryover(appraisal, action="submit calibration")
 
@@ -1470,6 +1539,7 @@ class PerformanceService:
         items: list[dict] | None = None,
     ) -> Scorecard:
         """Create a new scorecard."""
+        self._ensure_private_write_mode(org_id)
         scorecard = Scorecard(
             organization_id=org_id,
             employee_id=employee_id,
@@ -1510,6 +1580,7 @@ class PerformanceService:
         actual_value: Decimal,
     ) -> ScorecardItem:
         """Update a scorecard item's actual value."""
+        self._ensure_private_write_mode(org_id)
         scorecard = self.get_scorecard(org_id, scorecard_id)
 
         if scorecard.is_finalized:

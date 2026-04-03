@@ -35,6 +35,11 @@ from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import ContractStatus
 from app.models.people.perf.pms_enums import CommitteeDecision
 from app.models.people.perf.pms_enums import PIPStatus
+from app.services.people.perf.performance_policy import (
+    GOVERNMENT_PMS_POLICY,
+    get_policy_profile,
+)
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 from app.services.people.perf.scoring_engine import OHCSFScoringEngine
 
 if TYPE_CHECKING:
@@ -50,21 +55,8 @@ UNDERPERFORMANCE_SCORE_THRESHOLD = Decimal("50.00")
 # ---------------------------------------------------------------------------
 
 OHCSF_STATUS_TRANSITIONS: dict[AppraisalStatus, set[AppraisalStatus]] = {
-    AppraisalStatus.DRAFT: {AppraisalStatus.SELF_ASSESSMENT, AppraisalStatus.CANCELLED},
-    AppraisalStatus.SELF_ASSESSMENT: {
-        AppraisalStatus.PENDING_REVIEW,
-        AppraisalStatus.DRAFT,
-    },
-    AppraisalStatus.PENDING_REVIEW: {AppraisalStatus.UNDER_REVIEW},
-    AppraisalStatus.UNDER_REVIEW: {
-        AppraisalStatus.PENDING_COUNTERSIGN,
-        AppraisalStatus.SELF_ASSESSMENT,
-    },
-    AppraisalStatus.PENDING_COUNTERSIGN: {AppraisalStatus.COUNTERSIGNED},
-    AppraisalStatus.COUNTERSIGNED: {AppraisalStatus.PENDING_COMMITTEE},
-    AppraisalStatus.PENDING_COMMITTEE: {AppraisalStatus.COMPLETED},
-    AppraisalStatus.COMPLETED: set(),
-    AppraisalStatus.CANCELLED: set(),
+    status: set(next_states)
+    for status, next_states in GOVERNMENT_PMS_POLICY.ohcsf_status_transitions.items()
 }
 
 # ---------------------------------------------------------------------------
@@ -114,9 +106,23 @@ class CascadeUpViolation(OHCSFAppraisalError):
 class OHCSFAppraisalService:
     """Service for managing OHCSF appraisal workflow operations."""
 
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, policy_profile_name: str = "GOVERNMENT_PMS") -> None:
         self.db = db
-        self._scoring = OHCSFScoringEngine()
+        self._policy = get_policy_profile(policy_profile_name)
+        self._scoring = OHCSFScoringEngine(policy_profile_name=policy_profile_name)
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise OHCSFAppraisalError(str(exc)) from exc
+
+    def _progress_error_message(self, detail: str) -> str:
+        prefix = self._policy.ui_messages.get(
+            "appraisal_progress_prefix",
+            "Cannot progress appraisal",
+        )
+        return f"{prefix}: {detail}"
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -343,14 +349,20 @@ class OHCSFAppraisalService:
         selected_map = {cid: is_focus for cid, is_focus in selected_map.items() if cid}
 
         if competency_ratings is None:
+            required_count = self._policy.competency.required_count
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: manager review must include ratings for all 5 "
-                "selected competencies with evidence"
+                self._progress_error_message(
+                    "manager review must include ratings for all "
+                    f"{required_count} selected competencies with evidence"
+                )
             )
         if len(competency_ratings) != len(selected_map):
+            required_count = self._policy.competency.required_count
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: competency ratings must cover exactly the 5 "
-                "selected contract competencies"
+                self._progress_error_message(
+                    "competency ratings must cover exactly the "
+                    f"{required_count} selected contract competencies"
+                )
             )
 
         seen: set[str] = set()
@@ -358,47 +370,68 @@ class OHCSFAppraisalService:
             comp_id = str(entry.get("competency_id") or "").strip()
             if not comp_id:
                 raise OHCSFAppraisalError(
-                    f"Cannot progress appraisal: competency rating {idx} is missing competency_id"
+                    self._progress_error_message(
+                        f"competency rating {idx} is missing competency_id"
+                    )
                 )
             if comp_id not in selected_map:
                 raise OHCSFAppraisalError(
-                    "Cannot progress appraisal: competency ratings must match selected "
-                    "contract competencies"
+                    self._progress_error_message(
+                        "competency ratings must match selected contract competencies"
+                    )
                 )
             if comp_id in seen:
                 raise OHCSFAppraisalError(
-                    "Cannot progress appraisal: duplicate competency rating entries are not allowed"
+                    self._progress_error_message(
+                        "duplicate competency rating entries are not allowed"
+                    )
                 )
             seen.add(comp_id)
 
             manager_rating_raw = entry.get("manager_rating", entry.get("final_rating"))
             if manager_rating_raw is None:
                 raise OHCSFAppraisalError(
-                    f"Cannot progress appraisal: competency {idx} manager_rating is required"
+                    self._progress_error_message(
+                        f"competency {idx} manager_rating is required"
+                    )
                 )
             manager_rating = int(manager_rating_raw)
-            if manager_rating < 1 or manager_rating > 5:
+            rating_min = self._policy.competency.rating_min
+            rating_max = self._policy.competency.rating_max
+            if manager_rating < rating_min or manager_rating > rating_max:
                 raise OHCSFAppraisalError(
-                    "Cannot progress appraisal: competency manager_rating must be between 1 and 5"
+                    self._progress_error_message(
+                        "competency manager_rating must be "
+                        f"between {rating_min} and {rating_max}"
+                    )
                 )
 
             final_rating_raw = entry.get("final_rating")
             if final_rating_raw is not None:
                 final_rating = int(final_rating_raw)
-                if final_rating < 1 or final_rating > 5:
+                rating_min = self._policy.competency.rating_min
+                rating_max = self._policy.competency.rating_max
+                if final_rating < rating_min or final_rating > rating_max:
                     raise OHCSFAppraisalError(
-                        "Cannot progress appraisal: competency final_rating must be between 1 and 5"
+                        self._progress_error_message(
+                            "competency final_rating must be "
+                            f"between {rating_min} and {rating_max}"
+                        )
                     )
 
             evidence = str(entry.get("evidence") or "").strip()
-            if not evidence:
+            if self._policy.competency.evidence_required and not evidence:
                 raise OHCSFAppraisalError(
-                    "Cannot progress appraisal: competency evidence is required for each rating"
+                    self._progress_error_message(
+                        "competency evidence is required for each rating"
+                    )
                 )
 
         if seen != set(selected_map.keys()):
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: missing ratings for one or more selected competencies"
+                self._progress_error_message(
+                    "missing ratings for one or more selected competencies"
+                )
             )
         return selected_map
 
@@ -422,13 +455,19 @@ class OHCSFAppraisalService:
         )
         if contract is None:
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: no planning contract found for employee in cycle"
+                self._progress_error_message(
+                    "no planning contract found for employee in cycle"
+                )
             )
 
         objectives = contract.objectives or []
-        if len(objectives) < 3 or len(objectives) > 7:
+        min_count = self._policy.objective.min_count
+        max_count = self._policy.objective.max_count
+        if len(objectives) < min_count or len(objectives) > max_count:
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: contract must have 3-7 objectives"
+                self._progress_error_message(
+                    f"contract must have {min_count}-{max_count} objectives"
+                )
             )
 
         total_weight = 0
@@ -441,47 +480,67 @@ class OHCSFAppraisalService:
             ).strip()
             if not objective_text:
                 raise OHCSFAppraisalError(
-                    f"Cannot progress appraisal: objective {idx} description is missing"
+                    self._progress_error_message(
+                        f"objective {idx} description is missing"
+                    )
                 )
             if not str(objective.get("kpi") or "").strip():
                 raise OHCSFAppraisalError(
-                    f"Cannot progress appraisal: objective {idx} KPI is missing"
+                    self._progress_error_message(f"objective {idx} KPI is missing")
                 )
             if not str(objective.get("target") or "").strip():
                 raise OHCSFAppraisalError(
-                    f"Cannot progress appraisal: objective {idx} target is missing"
+                    self._progress_error_message(
+                        f"objective {idx} target is missing"
+                    )
                 )
             total_weight += int(objective.get("weight", 0))
 
-        if total_weight != 70:
+        required_total_weight = self._policy.objective.required_total_weight
+        if total_weight != required_total_weight:
             raise OHCSFAppraisalError(
-                f"Cannot progress appraisal: objective weights must sum to 70 (got {total_weight})"
+                self._progress_error_message(
+                    "objective weights must sum to "
+                    f"{required_total_weight} (got {total_weight})"
+                )
             )
 
         competencies = contract.competency_ids or []
-        if len(competencies) != 5:
+        required_count = self._policy.competency.required_count
+        if len(competencies) != required_count:
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: exactly 5 competencies are required"
+                self._progress_error_message(
+                    f"exactly {required_count} competencies are required"
+                )
             )
         if not isinstance(competencies[0], dict):
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: competencies must include development focus flags"
+                self._progress_error_message(
+                    "competencies must include development focus flags"
+                )
             )
 
         competency_ids = [str(c.get("competency_id") or "").strip() for c in competencies]
         if any(not cid for cid in competency_ids):
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: competency_id missing in competency selection"
+                self._progress_error_message(
+                    "competency_id missing in competency selection"
+                )
             )
-        if len(set(competency_ids)) != 5:
+        if len(set(competency_ids)) != required_count:
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: selected competencies must be unique"
+                self._progress_error_message(
+                    "selected competencies must be unique"
+                )
             )
 
         dev_focus = [c for c in competencies if c.get("is_development_focus")]
-        if len(dev_focus) != 3:
+        required_focus = self._policy.competency.required_development_focus_count
+        if len(dev_focus) != required_focus:
             raise OHCSFAppraisalError(
-                "Cannot progress appraisal: exactly 3 competencies must be development focus"
+                self._progress_error_message(
+                    f"exactly {required_focus} competencies must be development focus"
+                )
             )
         return contract
 
@@ -581,6 +640,7 @@ class OHCSFAppraisalService:
         Valid starting statuses: DRAFT or SELF_ASSESSMENT.
         Enforces cascade-up rule: all direct-report appraisals must be complete.
         """
+        self._ensure_pms_write_mode(org_id)
         appraisal = self._get_or_404(org_id, appraisal_id)
 
         # Both DRAFT and SELF_ASSESSMENT can move to PENDING_REVIEW
@@ -640,6 +700,7 @@ class OHCSFAppraisalService:
         process_rating: int | None = None,
     ) -> Appraisal:
         """Manager submits review; calculates composite scores; transitions to PENDING_COUNTERSIGN."""
+        self._ensure_pms_write_mode(org_id)
         appraisal = self._get_or_404(org_id, appraisal_id)
         self._validate_transition(appraisal.status, AppraisalStatus.PENDING_COUNTERSIGN)
         self._enforce_phase_deadline(
@@ -728,6 +789,7 @@ class OHCSFAppraisalService:
         comments: str | None = None,
     ) -> Appraisal:
         """Countersigner endorses the appraisal; transitions to COUNTERSIGNED."""
+        self._ensure_pms_write_mode(org_id)
         appraisal = self._get_or_404(org_id, appraisal_id)
         self._validate_transition(appraisal.status, AppraisalStatus.COUNTERSIGNED)
 
@@ -755,6 +817,7 @@ class OHCSFAppraisalService:
         adjusted_rating: int | None = None,
     ) -> Appraisal:
         """Committee reviews countersigned appraisal; transitions to COMPLETED."""
+        self._ensure_pms_write_mode(org_id)
         appraisal = self._get_or_404(org_id, appraisal_id)
         self._enforce_phase_deadline(
             appraisal,
@@ -780,7 +843,15 @@ class OHCSFAppraisalService:
         if notes is not None:
             appraisal.committee_notes = notes
 
-        if decision == CommitteeDecision.ADJUSTED and adjusted_rating is not None:
+        adjusted_required = (
+            decision.value in self._policy.committee_decisions_requiring_adjusted_rating
+        )
+        if adjusted_required and adjusted_rating is None:
+            raise OHCSFAppraisalError(
+                "Adjusted rating is required when committee decision is ADJUSTED"
+            )
+
+        if adjusted_required and adjusted_rating is not None:
             appraisal.final_rating = adjusted_rating
             _, label = self._scoring.score_to_rating(
                 Decimal(str(adjusted_rating)) / Decimal("5") * Decimal("100")
@@ -814,6 +885,7 @@ class OHCSFAppraisalService:
         Returns:
             List of newly created Appraisal records.
         """
+        self._ensure_pms_write_mode(org_id)
         from app.models.people.perf.performance_contract import PerformanceContract
         from app.models.people.perf.pms_enums import ContractStatus
 

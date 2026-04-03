@@ -78,6 +78,17 @@
                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">VAT/GST/TIN number</p>
                 </div>
+                <div>
+                    <label for="performance_mode" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Performance Mode</label>
+                    <select id="performance_mode" name="performance_mode" class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        {% for mode in performance_modes %}
+                        <option value="{{ mode.value }}" {{ 'selected' if organization.performance_mode and organization.performance_mode.value == mode.value else ('selected' if not organization.performance_mode and mode.value == 'PRIVATE' else '') }}>
+                            {{ mode.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Controls private vs government PMS behavior during split rollout.</p>
+                </div>
             </div>
         </div>
 

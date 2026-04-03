@@ -82,6 +82,14 @@
                         <p class="text-sm text-slate-500 dark:text-slate-400 font-mono">{{ template.template_code }}</p>
                     </div>
                     <div class="flex items-center gap-2">
+                        {% set profile = template.template_profile.value if template.template_profile else 'BOTH' %}
+                        {% if profile == 'PRIVATE' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">Private</span>
+                        {% elif profile == 'PMS' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300">PMS</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300">Both</span>
+                        {% endif %}
                         {% if template.is_active %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">Active</span>
                         {% else %}
@@ -94,7 +102,7 @@
                     <p class="text-slate-600 dark:text-slate-300 mb-4">{{ template.description }}</p>
                     {% endif %}
 
-                    <dl class="grid grid-cols-3 gap-4 text-sm">
+                    <dl class="grid grid-cols-4 gap-4 text-sm">
                         <div>
                             <dt class="text-slate-500 dark:text-slate-400">Rating Scale</dt>
                             <dd class="font-medium text-slate-900 dark:text-white">1 to {{ template.rating_scale_max }}</dd>
@@ -109,6 +117,12 @@
                                 {% else %}
                                 Organization-wide
                                 {% endif %}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500 dark:text-slate-400">Profile</dt>
+                            <dd class="font-medium text-slate-900 dark:text-white">
+                                {{ profile }}
                             </dd>
                         </div>
                         <div>

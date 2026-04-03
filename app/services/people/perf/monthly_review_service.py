@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.people.perf.monthly_review import MonthlyReview
 from app.models.people.perf.pms_enums import MonthlyReviewStatus
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -67,6 +68,12 @@ class MonthlyReviewService:
     def __init__(self, db: Session, ctx: WebAuthContext | None = None) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise MonthlyReviewValidationError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Query methods
@@ -149,6 +156,7 @@ class MonthlyReviewService:
             MonthlyReviewValidationError: if review_month is not the first of
                 the month (non-critical normalisation check).
         """
+        self._ensure_pms_write_mode(org_id)
         # Normalise review_month to the first of the month
         if review_month.day != 1:
             raise MonthlyReviewValidationError(
@@ -209,6 +217,7 @@ class MonthlyReviewService:
         Raises:
             MonthlyReviewNotFoundError: if review does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         review = self.get_review(org_id, review_id)
 
         if review.status != MonthlyReviewStatus.DRAFT:
@@ -246,6 +255,7 @@ class MonthlyReviewService:
         Raises:
             MonthlyReviewNotFoundError: if review does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         review = self.get_review(org_id, review_id)
 
         if review.status != MonthlyReviewStatus.SUBMITTED:

@@ -8,7 +8,7 @@
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Performance</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ performance_nav_label }}</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Templates</span></li>
     </ol>
 </nav>
@@ -57,6 +57,7 @@
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Code</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Name</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Scope</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Profile</th>
                         <th scope="col" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">KRAs</th>
                         <th scope="col" class="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Rating Scale</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
@@ -84,6 +85,16 @@
                             Role specific
                             {% else %}
                             Organization
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {% set profile = template.template_profile.value if template.template_profile else 'BOTH' %}
+                            {% if profile == 'PRIVATE' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">Private</span>
+                            {% elif profile == 'PMS' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300">PMS</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300">Both</span>
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 text-sm text-center text-slate-600 dark:text-slate-300">

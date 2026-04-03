@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.people.perf import (
     AppraisalCycleStatus,
     AppraisalStatus,
+    AppraisalTemplateProfile,
     KPIStatus,
 )
 
@@ -517,6 +518,7 @@ class AppraisalTemplateBase(BaseModel):
     template_code: str = Field(max_length=30)
     template_name: str = Field(max_length=200)
     description: str | None = None
+    template_profile: AppraisalTemplateProfile = AppraisalTemplateProfile.BOTH
     department_id: UUID | None = None
     designation_id: UUID | None = None
     rating_scale_max: int = 5

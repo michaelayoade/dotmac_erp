@@ -1,0 +1,59 @@
+{# Shared PMS “merged module” navigation: groups OHCSF PMS screens into fewer sections. #}
+{% from "components/macros.html" import icon_svg %}
+
+{% set active = active_module | default("") %}
+
+{% macro _nav_link(href, label, icon_name, active_values) %}
+  {% set is_active = active in active_values %}
+  <a href="{{ href }}"
+     {% if is_active %}aria-current="page"{% endif %}
+     class="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors
+            {% if is_active %}
+              bg-violet-50 text-violet-800 border-violet-200 dark:bg-violet-900/30 dark:text-violet-200 dark:border-violet-800
+            {% else %}
+              bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800/50
+            {% endif %}">
+    {{ icon_svg(icon_name, "h-4 w-4") }}
+    <span class="truncate">{{ label }}</span>
+  </a>
+{% endmacro %}
+
+<div class="card p-4">
+  <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Execution</div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {{ _nav_link("/people/perf/pms/contracts", "Contracts", "document", ["pms-contracts"]) }}
+        {{ _nav_link("/people/perf/pms/reviews", "Monthly Reviews", "calendar", ["pms-reviews"]) }}
+        {{ _nav_link("/people/perf/pms/pips", "Improvement Plans", "trending-up", ["pms-pips"]) }}
+      </div>
+    </div>
+
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Governance & Disputes</div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {{ _nav_link("/people/perf/pms/governance", "Governance", "shield-check", ["pms-governance"]) }}
+        {{ _nav_link("/people/perf/pms/grievances", "Grievances", "warning", ["pms-grievances"]) }}
+        {{ _nav_link("/people/perf/pms/stakeholder-feedback", "Stakeholder Feedback", "users", ["pms-stakeholder-feedback"]) }}
+        {{ _nav_link("/people/perf/pms/appeals", "Appeals", "scale", ["pms-appeals"]) }}
+      </div>
+    </div>
+
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Institutional</div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {{ _nav_link("/people/perf/pms/institutional", "Institutional Performance", "building", ["pms-institutional"]) }}
+        {{ _nav_link("/people/perf/pms/objectives", "Objectives", "chart", ["pms-objectives"]) }}
+      </div>
+    </div>
+
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Insights & Outcomes</div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {{ _nav_link("/people/perf/pms/reports", "Reports", "clipboard", ["pms-reports"]) }}
+        {{ _nav_link("/people/perf/pms/rewards", "Rewards", "sparkles", ["pms-rewards"]) }}
+        {{ _nav_link("/people/perf/pms/dashboard", "Overview", "view-boards", ["pms-dashboard"]) }}
+      </div>
+    </div>
+  </div>
+</div>

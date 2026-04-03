@@ -19,6 +19,8 @@ import logging
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from app.services.people.perf.performance_policy import get_policy_profile
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -55,6 +57,14 @@ TWO_DP = Decimal("0.01")
 
 class OHCSFScoringEngine:
     """Implements the OHCSF 3-step composite scoring formula."""
+
+    def __init__(self, policy_profile_name: str = "GOVERNMENT_PMS") -> None:
+        self._policy = get_policy_profile(policy_profile_name)
+        self._rating_scale = {
+            band.rating: {"label": band.label, "min_pct": band.min_pct}
+            for band in self._policy.rating_scale
+        }
+        self._band_pct = dict(self._policy.kpi_band_percentages)
 
     # ------------------------------------------------------------------
     # Step 1 — Raw achievement score
@@ -122,8 +132,8 @@ class OHCSFScoringEngine:
 
             upper_thr = thresholds[upper_name]
             lower_thr = thresholds[lower_name]
-            upper_pct = _BAND_PCT[upper_name]
-            lower_pct = _BAND_PCT[lower_name]
+            upper_pct = self._band_pct[upper_name]
+            lower_pct = self._band_pct[lower_name]
 
             if lower_thr <= actual < upper_thr:
                 span_thr = upper_thr - lower_thr
@@ -162,8 +172,8 @@ class OHCSFScoringEngine:
 
             better_thr = thresholds[better_name]
             worse_thr = thresholds[worse_name]
-            better_pct = _BAND_PCT[better_name]
-            worse_pct = _BAND_PCT[worse_name]
+            better_pct = self._band_pct[better_name]
+            worse_pct = self._band_pct[worse_name]
 
             if better_thr < actual <= worse_thr:
                 span_thr = worse_thr - better_thr
@@ -241,9 +251,13 @@ class OHCSFScoringEngine:
         Returns:
             Final appraisal score as Decimal, quantized to 2 d.p.
         """
-        weighted_objectives = objective_composite * Decimal("0.70")
-        weighted_competency = competency_score * Decimal("0.20")
-        weighted_process = process_score * Decimal("0.10")
+        weighted_objectives = (
+            objective_composite * self._policy.appraisal_weights.objectives_pct
+        )
+        weighted_competency = (
+            competency_score * self._policy.appraisal_weights.competencies_pct
+        )
+        weighted_process = process_score * self._policy.appraisal_weights.process_pct
         total = weighted_objectives + weighted_competency + weighted_process
         return total.quantize(TWO_DP, rounding=ROUND_HALF_UP)
 
@@ -260,9 +274,9 @@ class OHCSFScoringEngine:
         Returns:
             Tuple of (rating_int, label_string) where rating_int is 1–5.
         """
-        for rating in sorted(OHCSF_RATING_SCALE.keys(), reverse=True):
-            entry = OHCSF_RATING_SCALE[rating]
+        for rating in sorted(self._rating_scale.keys(), reverse=True):
+            entry = self._rating_scale[rating]
             if composite_pct >= entry["min_pct"]:
                 return rating, entry["label"]
         # Fallback to Poor (should not be reached for valid input)
-        return 1, OHCSF_RATING_SCALE[1]["label"]
+        return 1, self._rating_scale[1]["label"]

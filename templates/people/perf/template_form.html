@@ -28,6 +28,27 @@
     <form method="post" action="{% if template %}/people/perf/templates/{{ template.template_id }}/edit{% else %}/people/perf/templates/new{% endif %}" class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Template Profile</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Controls which org mode can use this template.</p>
+            </div>
+            <div class="card-body">
+                <div>
+                    <label for="template_profile" class="form-label required">Template Profile</label>
+                    <select id="template_profile" name="template_profile" class="form-select w-full">
+                        {% for option in template_profile_options %}
+                        {% set selected_profile = form_data.template_profile or (template.template_profile.value if template and template.template_profile else 'BOTH') %}
+                        <option value="{{ option.value }}" {{ 'selected' if selected_profile == option.value else '' }}>
+                            {{ option.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">Private: private/hybrid. PMS: government/hybrid. Both: all modes.</p>
+            </div>
+        </div>
+
         <!-- Basic Information -->
         <div class="card">
             <div class="card-header">

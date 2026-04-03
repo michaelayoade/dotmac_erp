@@ -21,6 +21,7 @@ from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import AppealStatus, PIPStatus
 from app.models.people.perf.pms_enums import OutcomeActionStatus, OutcomeActionType
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,12 @@ class PMSRewardService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise RewardValidationError(str(exc)) from exc
 
     def _get_action_or_raise(self, org_id: UUID, action_id: UUID) -> AppraisalOutcomeAction:
         action = self.db.scalar(
@@ -274,6 +281,7 @@ class PMSRewardService:
         nominated_by_person_id: UUID | None = None,
     ) -> AppraisalOutcomeAction:
         """Create a pending reward action for a completed appraisal."""
+        self._ensure_pms_write_mode(org_id)
         appraisal = self.db.scalar(
             select(Appraisal).where(
                 Appraisal.organization_id == org_id,
@@ -338,6 +346,7 @@ class PMSRewardService:
         approval_notes: str | None = None,
     ) -> AppraisalOutcomeAction:
         """Approve a pending reward action."""
+        self._ensure_pms_write_mode(org_id)
         action = self._get_action_or_raise(org_id, action_id)
         if action.status != OutcomeActionStatus.PENDING:
             raise RewardValidationError(
@@ -370,6 +379,7 @@ class PMSRewardService:
         cancellation_notes: str | None = None,
     ) -> AppraisalOutcomeAction:
         """Cancel a pending reward action and clear nomination flag on appraisal."""
+        self._ensure_pms_write_mode(org_id)
         action = self._get_action_or_raise(org_id, action_id)
         if action.status != OutcomeActionStatus.PENDING:
             raise RewardValidationError(

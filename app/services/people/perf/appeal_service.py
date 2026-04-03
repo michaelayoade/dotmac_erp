@@ -28,6 +28,9 @@ from app.models.people.perf.appraisal_appeal import AppraisalAppeal
 from app.models.people.perf.pms_enums import AppealDecision, AppealStatus
 from app.services.common import PaginatedResult, PaginationParams, paginate
 from app.services.people.common import calculate_workdays
+from app.services.people.perf.performance_policy import get_policy_profile
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
+from app.services.people.perf.scoring_engine import OHCSFScoringEngine
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -74,16 +77,22 @@ class AppealValidationError(AppealServiceError):
 class AppraisalAppealService:
     """Service for managing OHCSF appraisal appeals."""
 
-    # Number of working days an employee has to file after appraisal completion
-    FILING_WINDOW_WORKING_DAYS = 5
-
-    # All appeals must be resolved by this month/day in the cycle year
-    RESOLUTION_DEADLINE_MONTH = 2
-    RESOLUTION_DEADLINE_DAY = 28
-
-    def __init__(self, db: Session, ctx: WebAuthContext | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        ctx: WebAuthContext | None = None,
+        policy_profile_name: str = "GOVERNMENT_PMS",
+    ) -> None:
         self.db = db
         self.ctx = ctx
+        self._policy = get_policy_profile(policy_profile_name)
+        self._scoring = OHCSFScoringEngine(policy_profile_name=policy_profile_name)
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise AppealValidationError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -103,7 +112,9 @@ class AppraisalAppealService:
     def _resolution_deadline(self, cycle_year: int) -> date:
         """Return the Feb-28 deadline for a given cycle year."""
         return date(
-            cycle_year, self.RESOLUTION_DEADLINE_MONTH, self.RESOLUTION_DEADLINE_DAY
+            cycle_year,
+            self._policy.resolution_deadline_month,
+            self._policy.resolution_deadline_day,
         )
 
     # ------------------------------------------------------------------
@@ -218,6 +229,7 @@ class AppraisalAppealService:
             AppealValidationError: if a duplicate appeal exists or the
                 filing window has expired.
         """
+        self._ensure_pms_write_mode(org_id)
         filed_date = filed_date or date.today()
 
         # Check for existing open appeal on this appraisal
@@ -246,9 +258,10 @@ class AppraisalAppealService:
             working_days_elapsed = calculate_workdays(
                 appraisal.completed_on, filed_date
             )
-            if working_days_elapsed > self.FILING_WINDOW_WORKING_DAYS:
+            if working_days_elapsed > self._policy.appeal_filing_window_workdays:
                 raise AppealValidationError(
-                    f"Appeal must be filed within {self.FILING_WINDOW_WORKING_DAYS} "
+                    "Appeal must be filed within "
+                    f"{self._policy.appeal_filing_window_workdays} "
                     f"working days of appraisal completion "
                     f"(completed {appraisal.completed_on}, filed {filed_date}, "
                     f"{working_days_elapsed} working days elapsed)"
@@ -293,6 +306,7 @@ class AppraisalAppealService:
         Raises:
             AppealNotFoundError: if the appeal does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         appeal = self._get_or_raise(org_id, appeal_id)
         appeal.mediator_id = mediator_id
         appeal.status = AppealStatus.UNDER_MEDIATION
@@ -329,6 +343,7 @@ class AppraisalAppealService:
         Raises:
             AppealNotFoundError: if the appeal does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         today = date.today()
         appeal = self._get_or_raise(org_id, appeal_id)
         appeal.mediation_date = today
@@ -380,7 +395,11 @@ class AppraisalAppealService:
             AppealValidationError: if adjusted_rating is missing when decision
                 requires it.
         """
-        if decision in (AppealDecision.UPHELD, AppealDecision.PARTIALLY_UPHELD):
+        self._ensure_pms_write_mode(org_id)
+        decisions_requiring_adjusted_rating = (
+            self._policy.appeal_decisions_requiring_adjusted_rating
+        )
+        if decision.value in decisions_requiring_adjusted_rating:
             if adjusted_rating is None:
                 raise AppealValidationError(
                     f"adjusted_rating is required when decision is {decision.value}"
@@ -394,13 +413,12 @@ class AppraisalAppealService:
         appeal.status = AppealStatus.RESOLVED
         appeal.resolution_date = today
 
-        if decision in (AppealDecision.UPHELD, AppealDecision.PARTIALLY_UPHELD):
+        if decision.value in decisions_requiring_adjusted_rating:
             appeal.adjusted_rating = adjusted_rating
 
         # Update the original appraisal if rating was adjusted
         if adjusted_rating is not None:
             from app.models.people.perf.appraisal import Appraisal
-            from app.services.people.perf.scoring_engine import OHCSFScoringEngine
 
             appraisal = self.db.scalar(
                 select(Appraisal).where(
@@ -409,8 +427,7 @@ class AppraisalAppealService:
                 )
             )
             if appraisal:
-                engine = OHCSFScoringEngine()
-                _, label = engine.score_to_rating(
+                _, label = self._scoring.score_to_rating(
                     Decimal(str(adjusted_rating)) / Decimal("5") * Decimal("100")
                 )
                 appraisal.final_rating = adjusted_rating
@@ -443,6 +460,7 @@ class AppraisalAppealService:
         Raises:
             AppealNotFoundError: if the appeal does not exist.
         """
+        self._ensure_pms_write_mode(org_id)
         appeal = self._get_or_raise(org_id, appeal_id)
         appeal.communicated_date = date.today()
         self.db.flush()

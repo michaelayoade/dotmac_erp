@@ -177,102 +177,28 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Scheduling</span>
             </a>
 
+            {% if performance_private_enabled %}
             <a href="/people/perf"
-               :aria-current="['perf','perf-cycles','perf-templates','perf-scorecards','pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'page' : false"
-               :class="['perf','perf-cycles','perf-templates','perf-scorecards','pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               :aria-current="['perf','perf-cycles','perf-templates','perf-scorecards'].includes(activeModule) ? 'page' : false"
+               :class="['perf','perf-cycles','perf-templates','perf-scorecards'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a1 1 0 012 0v16a1 1 0 01-2 0V4zM4 10a1 1 0 011-1h3a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V10zm14-4a1 1 0 011-1h3a1 1 0 011 1v14a1 1 0 01-1 1h-3a1 1 0 01-1-1V6z"/>
                 </svg>
-                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Performance</span>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>{{ performance_nav_label }}</span>
             </a>
+            {% endif %}
 
-            {% if pms_ohcsf_enabled %}
-            <!-- PMS (OHCSF) Section -->
-            <div x-data="{
-                    pmsOpen: false,
-                    init() {
-                        const activePmsModules = ['pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'];
-                        const stored = localStorage.getItem('peopleSidebarPmsOpen');
-                        this.pmsOpen = stored === null
-                            ? activePmsModules.includes('{{ active_module | default('') }}')
-                            : stored === 'true';
-                    }
-                 }"
-                 x-show="!sidebarCollapsed" x-cloak>
-                <button @click="pmsOpen = !pmsOpen; localStorage.setItem('peopleSidebarPmsOpen', String(pmsOpen))"
-                        type="button"
-                        class="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 font-medium text-slate-600 transition-all hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50"
-                        :class="pmsOpen ? 'text-violet-700 dark:text-violet-300' : ''"
-                        :aria-expanded="pmsOpen">
-                    <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                    </svg>
-                    <span class="flex-1 truncate text-left">PMS (OHCSF)</span>
-                    <svg class="h-4 w-4 flex-shrink-0 transition-transform duration-200"
-                         :class="pmsOpen ? 'rotate-180' : ''"
-                         fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                <div x-show="pmsOpen"
-                     x-transition:enter="transition-all duration-200 ease-out"
-                     x-transition:enter-start="opacity-0 -translate-y-1"
-                     x-transition:enter-end="opacity-100 translate-y-0"
-                     x-transition:leave="transition-all duration-150 ease-in"
-                     x-transition:leave-start="opacity-100 translate-y-0"
-                     x-transition:leave-end="opacity-0 -translate-y-1"
-                     class="ml-8 mt-0.5 space-y-0.5">
-                    <a href="/people/perf/pms/dashboard"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Dashboard
-                    </a>
-                    <a href="/people/perf/pms/governance"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Governance
-                    </a>
-                    <a href="/people/perf/pms/contracts"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Contracts
-                    </a>
-                    <a href="/people/perf/pms/reviews"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Monthly Reviews
-                    </a>
-                    <a href="/people/perf/pms/institutional"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Institutional
-                    </a>
-                    <a href="/people/perf/pms/objectives"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Objectives
-                    </a>
-                    <a href="/people/perf/pms/pips"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        PIPs
-                    </a>
-                    <a href="/people/perf/pms/appeals"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Appeals
-                    </a>
-                    <a href="/people/perf/pms/reports"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Reports
-                    </a>
-                    <a href="/people/perf/pms/grievances"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Grievances
-                    </a>
-                    <a href="/people/perf/pms/stakeholder-feedback"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Stakeholder Feedback
-                    </a>
-                    <a href="/people/perf/pms/rewards"
-                       class="flex items-center rounded-md px-3 py-2 text-sm transition-all text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50">
-                        Rewards
-                    </a>
-                </div>
-            </div>
+            {% if performance_government_enabled %}
+            <a href="/people/perf/pms/dashboard"
+               :aria-current="['pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'page' : false"
+               :class="['pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
+                <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>{{ pms_nav_label }}</span>
+            </a>
             {% endif %}
 
             <a href="/people/hr/discipline"
@@ -340,7 +266,23 @@
         <main id="main-content" class="min-h-[calc(100vh-4rem)] bg-dashboard">
             <div class="app-page">
                 {% include "partials/_license_banner.html" %}
+                {% if mode_banner_message %}
+                <div class="mb-4 rounded-lg border px-4 py-3 text-sm
+                    {% if mode_banner_variant == 'pms' %}
+                        border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-200
+                    {% else %}
+                        border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200
+                    {% endif %}">
+                    <div class="font-semibold">Performance Mode Notice</div>
+                    <div class="mt-1">{{ mode_banner_message }}</div>
+                </div>
+                {% endif %}
                 {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
+                {% if (active_module | default(""))[:4] == "pms-" %}
+                <div class="mb-4">
+                    {% include "people/perf/pms/_pms_section_nav.html" ignore missing %}
+                </div>
+                {% endif %}
                 {% block content %}{% endblock %}
             </div>
         </main>

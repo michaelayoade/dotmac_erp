@@ -16,6 +16,7 @@ from app.models.people.perf.appraisal_outcome_action import AppraisalOutcomeActi
 from app.models.people.perf.appraisal_template import (
     AppraisalTemplate,
     AppraisalTemplateKRA,
+    AppraisalTemplateProfile,
 )
 from app.models.people.perf.competency_assessment import CompetencyAssessment
 from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
@@ -58,6 +59,7 @@ __all__ = [
     "AppraisalCycleStatus",
     "AppraisalTemplate",
     "AppraisalTemplateKRA",
+    "AppraisalTemplateProfile",
     "KRA",
     "KPI",
     "KPIStatus",

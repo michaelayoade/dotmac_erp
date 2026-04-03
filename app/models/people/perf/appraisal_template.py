@@ -8,8 +8,10 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
+import enum
 
 from sqlalchemy import (
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -30,6 +32,14 @@ if TYPE_CHECKING:
     from app.models.people.perf.kra import KRA
 
 
+class AppraisalTemplateProfile(str, enum.Enum):
+    """Template visibility profile by org performance mode."""
+
+    PRIVATE = "PRIVATE"
+    PMS = "PMS"
+    BOTH = "BOTH"
+
+
 class AppraisalTemplate(Base, AuditMixin, ERPNextSyncMixin):
     """
     Appraisal Template - defines structure for appraisals.
@@ -44,6 +54,7 @@ class AppraisalTemplate(Base, AuditMixin, ERPNextSyncMixin):
         ),
         Index("idx_appraisal_template_dept", "organization_id", "department_id"),
         Index("idx_appraisal_template_desig", "organization_id", "designation_id"),
+        Index("idx_appraisal_template_profile", "organization_id", "template_profile"),
         {"schema": "perf"},
     )
 
@@ -72,6 +83,13 @@ class AppraisalTemplate(Base, AuditMixin, ERPNextSyncMixin):
     description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+    template_profile: Mapped[AppraisalTemplateProfile] = mapped_column(
+        Enum(AppraisalTemplateProfile, name="appraisal_template_profile"),
+        nullable=False,
+        default=AppraisalTemplateProfile.BOTH,
+        server_default=AppraisalTemplateProfile.BOTH.value,
+        comment="Template profile: PRIVATE, PMS, or BOTH",
     )
 
     # Scope

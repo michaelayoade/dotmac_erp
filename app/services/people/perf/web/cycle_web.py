@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.people.hr import EmployeeStatus
+from app.models.people.perf import AppraisalTemplateProfile
 from app.models.people.perf.appraisal_cycle import AppraisalCycleStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import (
@@ -34,6 +35,12 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+TEMPLATE_PROFILE_OPTIONS = [
+    {"value": AppraisalTemplateProfile.PRIVATE.value, "label": "Private"},
+    {"value": AppraisalTemplateProfile.PMS.value, "label": "PMS (Government)"},
+    {"value": AppraisalTemplateProfile.BOTH.value, "label": "Both"},
+]
 
 
 class CycleWebService:
@@ -802,6 +809,7 @@ class CycleWebService:
             {
                 "template": None,
                 "departments": departments,
+                "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                 "kras": kras,
                 "form_data": {},
                 "error": None,
@@ -828,6 +836,8 @@ class CycleWebService:
                 template_code=self._form_text(form_data.get("template_code")),
                 template_name=self._form_text(form_data.get("template_name")),
                 description=self._form_text(form_data.get("description")) or None,
+                template_profile=self._form_text(form_data.get("template_profile"))
+                or AppraisalTemplateProfile.BOTH.value,
                 department_id=coerce_uuid(form_data["department_id"])
                 if self._form_text(form_data.get("department_id"))
                 else None,
@@ -852,6 +862,7 @@ class CycleWebService:
                     "departments": org_svc.list_departments(
                         DepartmentFilters(is_active=True), PaginationParams(limit=100)
                     ).items,
+                    "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                     "kras": svc.list_kras(
                         org_id, is_active=True, pagination=PaginationParams(limit=100)
                     ).items,
@@ -920,6 +931,7 @@ class CycleWebService:
                 "departments": org_svc.list_departments(
                     DepartmentFilters(is_active=True), PaginationParams(limit=100)
                 ).items,
+                "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                 "kras": svc.list_kras(
                     org_id, is_active=True, pagination=PaginationParams(limit=100)
                 ).items,
@@ -949,6 +961,8 @@ class CycleWebService:
                 coerce_uuid(template_id),
                 template_name=self._form_text(form_data.get("template_name")),
                 description=self._form_text(form_data.get("description")) or None,
+                template_profile=self._form_text(form_data.get("template_profile"))
+                or AppraisalTemplateProfile.BOTH.value,
                 department_id=coerce_uuid(form_data["department_id"])
                 if self._form_text(form_data.get("department_id"))
                 else None,
@@ -976,6 +990,7 @@ class CycleWebService:
                     "departments": org_svc.list_departments(
                         DepartmentFilters(is_active=True), PaginationParams(limit=100)
                     ).items,
+                    "template_profile_options": TEMPLATE_PROFILE_OPTIONS,
                     "kras": svc.list_kras(
                         org_id, is_active=True, pagination=PaginationParams(limit=100)
                     ).items,

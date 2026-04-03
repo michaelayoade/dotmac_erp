@@ -71,7 +71,7 @@ class PIPWebService:
         )
 
         context = base_context(
-            request, auth, "Performance Improvement Plans", "perf", db=db
+            request, auth, "Performance Improvement Plans", "pms-pips", db=db
         )
         context["request"] = request
         context.update(
@@ -102,7 +102,7 @@ class PIPWebService:
 
         pip_uuid = parse_uuid(pip_id)
         if pip_uuid is None:
-            context = base_context(request, auth, "PIP Not Found", "perf", db=db)
+            context = base_context(request, auth, "PIP Not Found", "pms-pips", db=db)
             context["request"] = request
             context.update({"pip": None, "error": "Invalid PIP ID"})
             return templates.TemplateResponse(
@@ -112,14 +112,14 @@ class PIPWebService:
         try:
             pip = svc.get_pip(org_id, pip_uuid)
         except Exception as e:
-            context = base_context(request, auth, "PIP Not Found", "perf", db=db)
+            context = base_context(request, auth, "PIP Not Found", "pms-pips", db=db)
             context["request"] = request
             context.update({"pip": None, "error": str(e)})
             return templates.TemplateResponse(
                 request, "people/perf/pms/pip_detail.html", context, status_code=404
             )
 
-        context = base_context(request, auth, f"PIP {pip.pip_code}", "perf", db=db)
+        context = base_context(request, auth, f"PIP {pip.pip_code}", "pms-pips", db=db)
         context["request"] = request
         success = request.query_params.get("saved")
         context.update(
@@ -153,7 +153,7 @@ class PIPWebService:
         ).items
 
         context = base_context(
-            request, auth, "New Performance Improvement Plan", "perf", db=db
+            request, auth, "New Performance Improvement Plan", "pms-pips", db=db
         )
         context["request"] = request
         context.update(

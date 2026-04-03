@@ -15,7 +15,12 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_org.organization import Organization
 from app.services.common import coerce_uuid
+from app.services.people.perf.performance_mode_policy import (
+    get_policy_profile_for_mode,
+    resolve_performance_mode,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -30,7 +35,9 @@ class OHCSFDashboardWebService:
     ) -> HTMLResponse:
         """Render the PMS compliance dashboard."""
         org_id: UUID = coerce_uuid(auth.organization_id)
-        context = base_context(request, auth, "PMS Dashboard", "perf", db=db)
+        context = base_context(request, auth, "PMS Dashboard", "pms-dashboard", db=db)
+        org = db.get(Organization, org_id)
+        policy = get_policy_profile_for_mode(resolve_performance_mode(org).value)
 
         from sqlalchemy import select
 
@@ -47,8 +54,9 @@ class OHCSFDashboardWebService:
             select(AppraisalCycle)
             .where(
                 AppraisalCycle.organization_id == org_id,
-                AppraisalCycle.status == AppraisalCycleStatus.ACTIVE,
-                AppraisalCycle.cycle_type == "ANNUAL",
+                AppraisalCycle.status
+                == AppraisalCycleStatus(policy.active_cycle_status),
+                AppraisalCycle.cycle_type == policy.active_cycle_type,
             )
             .order_by(AppraisalCycle.start_date.desc())
         )

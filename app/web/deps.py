@@ -39,6 +39,11 @@ from app.services.auth_flow import (
 )
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
+from app.services.people.perf.performance_mode_policy import (
+    get_policy_profile_for_mode,
+    is_pms_enabled_for_org,
+    resolve_performance_mode,
+)
 from app.templates import templates  # noqa: F401 - re-exported for web routes
 
 logger = logging.getLogger(__name__)
@@ -527,6 +532,36 @@ def _is_license_grace() -> bool:
         return False
 
 
+def _resolve_mode_policy_banner(
+    raw_error: str | None,
+    *,
+    ui_messages: dict[str, str] | None = None,
+) -> tuple[str | None, str | None]:
+    """Translate mode-policy error codes into user-facing banner messages."""
+    if not raw_error:
+        return None, None
+
+    normalized = raw_error.strip()
+    resolved_messages = ui_messages or {}
+    if "MODE_POLICY_BLOCKED:pms_write_requires_government_or_hybrid" in normalized:
+        return (
+            "pms",
+            resolved_messages.get(
+                "mode_blocked_pms_write",
+                "PMS actions are blocked in the current performance mode.",
+            ),
+        )
+    if "MODE_POLICY_BLOCKED:private_write_requires_private_or_hybrid" in normalized:
+        return (
+            "private",
+            resolved_messages.get(
+                "mode_blocked_private_write",
+                "Private performance actions are blocked in the current mode.",
+            ),
+        )
+    return None, None
+
+
 def base_context(
     request: Request,
     auth: "WebAuthContext",
@@ -564,10 +599,23 @@ def base_context(
     try:
         # Load organization object for template conditionals (e.g. IPSAS sidebar toggle)
         organization = None
+        performance_mode = None
+        policy_profile = get_policy_profile_for_mode(None)
         if effective_db and auth.organization_id:
             from app.models.finance.core_org.organization import Organization
 
             organization = effective_db.get(Organization, auth.organization_id)
+            if organization is not None:
+                performance_mode = resolve_performance_mode(organization).value
+                policy_profile = get_policy_profile_for_mode(performance_mode)
+                pms_ohcsf_enabled = is_pms_enabled_for_org(organization)
+            else:
+                # Avoid 500s when a stale session references a missing org row.
+                performance_mode = None
+                policy_profile = get_policy_profile_for_mode(None)
+                pms_ohcsf_enabled = False
+        else:
+            pms_ohcsf_enabled = False
 
         # Set per-request formatting preferences from organisation settings
         if organization is not None:
@@ -714,6 +762,11 @@ def base_context(
 
         # Extract feedback param from query string for success banner
         _saved = bool(request.query_params.get("saved"))
+        _raw_error = request.query_params.get("error")
+        mode_banner_variant, mode_banner_message = _resolve_mode_policy_banner(
+            _raw_error,
+            ui_messages=dict(policy_profile.ui_messages),
+        )
 
         help_module_map = {
             "dashboard": "settings"
@@ -821,8 +874,18 @@ def base_context(
             "auth": auth,
             "user": auth.user,
             "organization": organization,
-            "pms_ohcsf_enabled": bool(
-                getattr(organization, "pms_ohcsf_enabled", False)
+            "performance_mode": performance_mode,
+            "pms_ohcsf_enabled": pms_ohcsf_enabled,
+            "performance_private_enabled": performance_mode in {"PRIVATE", "HYBRID"},
+            "performance_government_enabled": performance_mode
+            in {"GOVERNMENT_PMS", "HYBRID"},
+            "performance_nav_label": policy_profile.ui_labels.get(
+                "performance_nav_label",
+                "Performance (Private)",
+            ),
+            "pms_nav_label": policy_profile.ui_labels.get(
+                "pms_nav_label",
+                "PMS (Government)",
             ),
             "accessible_modules": auth.accessible_modules,
             "can_team_leave": can_team_leave,
@@ -830,6 +893,8 @@ def base_context(
             "csrf_token": csrf_token,
             "notifications": notifications or [],
             "saved": _saved,
+            "mode_banner_message": mode_banner_message,
+            "mode_banner_variant": mode_banner_variant,
             # Org formatting settings for JS / template use
             "org_date_format": getattr(organization, "date_format", None)
             if organization
@@ -1591,6 +1656,57 @@ def require_hr_access(
         raise HTTPException(
             status_code=403,
             detail="HR module access required",
+        )
+    return auth
+
+
+def require_private_performance_mode(
+    request: Request,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+) -> WebAuthContext:
+    """Require org performance mode that can access private performance routes."""
+    # PMS endpoints under /people/perf/pms are guarded separately.
+    if request.url.path.startswith("/people/perf/pms"):
+        return auth
+
+    if not auth.organization_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
+    from app.models.finance.core_org.organization import Organization, PerformanceMode
+    from app.services.people.perf.performance_mode_policy import resolve_performance_mode
+
+    organization = db.get(Organization, auth.organization_id)
+    if organization is None:
+        raise HTTPException(status_code=403, detail="Organization not found")
+    mode = resolve_performance_mode(organization)
+    if mode not in {PerformanceMode.PRIVATE, PerformanceMode.HYBRID}:
+        raise HTTPException(
+            status_code=403,
+            detail="Private performance mode required",
+        )
+    return auth
+
+
+def require_government_pms_mode(
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+) -> WebAuthContext:
+    """Require org performance mode that can access government PMS routes."""
+    if not auth.organization_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
+    from app.models.finance.core_org.organization import Organization, PerformanceMode
+    from app.services.people.perf.performance_mode_policy import resolve_performance_mode
+
+    organization = db.get(Organization, auth.organization_id)
+    if organization is None:
+        raise HTTPException(status_code=403, detail="Organization not found")
+    mode = resolve_performance_mode(organization)
+    if mode not in {PerformanceMode.GOVERNMENT_PMS, PerformanceMode.HYBRID}:
+        raise HTTPException(
+            status_code=403,
+            detail="Government PMS mode required",
         )
     return auth
 

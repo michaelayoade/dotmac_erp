@@ -65,7 +65,7 @@ class AppealWebService:
             pagination=pagination,
         )
 
-        context = base_context(request, auth, "Appraisal Appeals", "perf", db=db)
+        context = base_context(request, auth, "Appraisal Appeals", "pms-appeals", db=db)
         context["request"] = request
         context.update(
             {
@@ -97,7 +97,7 @@ class AppealWebService:
 
         appeal_uuid = parse_uuid(appeal_id)
         if appeal_uuid is None:
-            context = base_context(request, auth, "Appeal Not Found", "perf", db=db)
+            context = base_context(request, auth, "Appeal Not Found", "pms-appeals", db=db)
             context["request"] = request
             context.update({"appeal": None, "error": "Invalid appeal ID"})
             return templates.TemplateResponse(
@@ -107,7 +107,7 @@ class AppealWebService:
         try:
             appeal = svc.get_appeal(org_id, appeal_uuid)
         except Exception as e:
-            context = base_context(request, auth, "Appeal Not Found", "perf", db=db)
+            context = base_context(request, auth, "Appeal Not Found", "pms-appeals", db=db)
             context["request"] = request
             context.update({"appeal": None, "error": str(e)})
             return templates.TemplateResponse(
@@ -115,7 +115,7 @@ class AppealWebService:
             )
 
         context = base_context(
-            request, auth, f"Appeal — {appeal.appeal_id}", "perf", db=db
+            request, auth, f"Appeal — {appeal.appeal_id}", "pms-appeals", db=db
         )
         context["request"] = request
         success = request.query_params.get("saved")
@@ -164,7 +164,7 @@ class AppealWebService:
             EmployeeFilters(is_active=True), PaginationParams(limit=500)
         ).items
 
-        context = base_context(request, auth, "File an Appeal", "perf", db=db)
+        context = base_context(request, auth, "File an Appeal", "pms-appeals", db=db)
         context["request"] = request
         context.update(
             {
@@ -241,7 +241,7 @@ class AppealWebService:
                 EmployeeFilters(), PaginationParams(limit=500)
             ).items
 
-            context = base_context(request, auth, "File an Appeal", "perf", db=db)
+            context = base_context(request, auth, "File an Appeal", "pms-appeals", db=db)
             context["request"] = request
             context.update(
                 {

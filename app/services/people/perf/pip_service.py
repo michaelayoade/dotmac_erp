@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import PIPCauseCategory, PIPOutcome, PIPStatus
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -82,6 +83,12 @@ class PIPService:
     def __init__(self, db: Session, ctx: WebAuthContext | None = None) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise PIPValidationError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Private validation helpers
@@ -202,6 +209,7 @@ class PIPService:
         Raises:
             PIPValidationError: if duration validation fails.
         """
+        self._ensure_pms_write_mode(org_id)
         self._validate_duration(start_date, end_date)
 
         pip = PerformanceImprovementPlan(
@@ -235,6 +243,7 @@ class PIPService:
             PIPNotFoundError: if PIP not found.
             PIPStatusError: if current status is not DRAFT.
         """
+        self._ensure_pms_write_mode(org_id)
         pip = self._get_or_404(org_id, pip_id)
         if pip.status != PIPStatus.DRAFT:
             raise PIPStatusError(pip.status.value, PIPStatus.ACTIVE.value)
@@ -260,6 +269,7 @@ class PIPService:
             PIPNotFoundError: if PIP not found.
             PIPValidationError: if already extended or extension exceeds 92 days.
         """
+        self._ensure_pms_write_mode(org_id)
         pip = self._get_or_404(org_id, pip_id)
 
         if pip.extension_granted:
@@ -298,6 +308,7 @@ class PIPService:
         Raises:
             PIPNotFoundError: if PIP not found.
         """
+        self._ensure_pms_write_mode(org_id)
         pip = self._get_or_404(org_id, pip_id)
 
         entry = {
@@ -333,6 +344,7 @@ class PIPService:
         Raises:
             PIPNotFoundError: if PIP not found.
         """
+        self._ensure_pms_write_mode(org_id)
         pip = self._get_or_404(org_id, pip_id)
 
         if pip.status not in (PIPStatus.ACTIVE, PIPStatus.EXTENDED):
@@ -390,6 +402,7 @@ class PIPService:
             PIPNotFoundError: if PIP not found.
             PIPValidationError: if outcome is not SATISFACTORY or not yet set.
         """
+        self._ensure_pms_write_mode(org_id)
         pip = self._get_or_404(org_id, pip_id)
 
         if pip.outcome != PIPOutcome.SATISFACTORY:

@@ -676,6 +676,15 @@ class TestSubmitCommitteeReview:
         )
         assert ap.final_rating == 3
 
+    def test_adjusted_decision_requires_adjusted_rating(self) -> None:
+        svc, ap = self._setup()
+        with pytest.raises(OHCSFAppraisalError, match="Adjusted rating is required"):
+            svc.submit_committee_review(
+                ORG_ID,
+                ap.appraisal_id,
+                decision=CommitteeDecision.ADJUSTED,
+            )
+
     def test_endorsed_does_not_override_rating(self) -> None:
         svc, ap = self._setup()
         original_rating = ap.final_rating

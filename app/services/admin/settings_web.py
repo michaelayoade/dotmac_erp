@@ -13,11 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain, SettingValueType
-from app.models.finance.core_org import Organization
+from app.models.finance.core_org import Organization, PerformanceMode
 from app.schemas.settings import DomainSettingUpdate
 from app.services.domain_settings import DomainSettings
 from app.services.formatting_context import (
     COMMON_TIMEZONES,
+)
+from app.services.people.perf.performance_mode_policy import (
+    is_pms_enabled_for_org,
+    resolve_performance_mode,
 )
 from app.services.formatting_context import (
     DATE_FORMAT_CHOICES as DATE_FORMATS,
@@ -141,6 +145,14 @@ class AdminSettingsWebService:
             "timezones": COMMON_TIMEZONES,
             "date_formats": DATE_FORMATS,
             "number_formats": NUMBER_FORMATS,
+            "performance_modes": [
+                {"value": PerformanceMode.PRIVATE.value, "label": "Private"},
+                {
+                    "value": PerformanceMode.GOVERNMENT_PMS.value,
+                    "label": "Government PMS",
+                },
+                {"value": PerformanceMode.HYBRID.value, "label": "Hybrid"},
+            ],
         }
 
     def update_organization(
@@ -155,6 +167,7 @@ class AdminSettingsWebService:
             return False, "Organization not found"
 
         pms_enabled_before = bool(org.pms_ohcsf_enabled)
+        mode_updated = False
 
         # Update allowed fields
         allowed_fields = [
@@ -179,6 +192,7 @@ class AdminSettingsWebService:
             "country",
             "logo_url",
             "website_url",
+            "performance_mode",
         ]
 
         for field in allowed_fields:
@@ -193,8 +207,29 @@ class AdminSettingsWebService:
                     value = None
                 setattr(org, field, value)
 
-        if "pms_ohcsf_enabled" in data:
+        if "performance_mode" in data:
+            raw_mode = (data.get("performance_mode") or "").strip().upper()
+            if raw_mode:
+                try:
+                    org.performance_mode = PerformanceMode(raw_mode)
+                    mode_updated = True
+                except ValueError:
+                    return False, "Invalid performance mode"
+
+        # Transition policy: when explicit mode is set, derive legacy flag from mode.
+        if mode_updated:
+            org.pms_ohcsf_enabled = is_pms_enabled_for_org(org)
+        elif "pms_ohcsf_enabled" in data:
             org.pms_ohcsf_enabled = str(data["pms_ohcsf_enabled"]).lower() == "true"
+            current_mode = resolve_performance_mode(org)
+            # Transition compatibility: keep mode aligned when using legacy toggle.
+            if org.pms_ohcsf_enabled and current_mode == PerformanceMode.PRIVATE:
+                org.performance_mode = PerformanceMode.GOVERNMENT_PMS
+            elif (
+                not org.pms_ohcsf_enabled
+                and current_mode == PerformanceMode.GOVERNMENT_PMS
+            ):
+                org.performance_mode = PerformanceMode.PRIVATE
 
         if org.pms_ohcsf_enabled and not pms_enabled_before:
             from app.services.people.perf.pms_config_service import PMSConfigService
@@ -465,7 +500,7 @@ class AdminSettingsWebService:
                         "Enable the OHCSF Performance Management System for "
                         "this organization and show PMS in the People sidebar."
                     ),
-                    "enabled": bool(org.pms_ohcsf_enabled),
+                    "enabled": is_pms_enabled_for_org(org),
                     "default_enabled": False,
                     "is_org_override": True,
                     "status": "ACTIVE",
@@ -502,6 +537,11 @@ class AdminSettingsWebService:
 
             pms_enabled_before = bool(org.pms_ohcsf_enabled)
             org.pms_ohcsf_enabled = enabled
+            current_mode = resolve_performance_mode(org)
+            if enabled and current_mode == PerformanceMode.PRIVATE:
+                org.performance_mode = PerformanceMode.GOVERNMENT_PMS
+            elif not enabled and current_mode == PerformanceMode.GOVERNMENT_PMS:
+                org.performance_mode = PerformanceMode.PRIVATE
 
             if enabled and not pms_enabled_before:
                 from app.services.people.perf.pms_config_service import PMSConfigService

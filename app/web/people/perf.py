@@ -11,10 +11,20 @@ from sqlalchemy.orm import Session
 
 from app.services.people.perf.web import perf_web_service
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
+from app.web.deps import (
+    WebAuthContext,
+    base_context,
+    get_db,
+    require_hr_access,
+    require_private_performance_mode,
+)
 from app.web.people.pms import router as pms_router
 
-router = APIRouter(prefix="/perf", tags=["people-perf-web"])
+router = APIRouter(
+    prefix="/perf",
+    tags=["people-perf-web"],
+    dependencies=[Depends(require_private_performance_mode)],
+)
 
 # PMS (OHCSF) sub-routes at /people/perf/pms/*
 router.include_router(pms_router)
@@ -883,3 +893,4 @@ def report_trends(
 ):
     """Performance trends report."""
     return perf_web_service.trends_report_response(request, auth, db, employee_id)
+

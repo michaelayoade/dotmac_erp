@@ -93,11 +93,16 @@
                         {% for template in templates %}
                         <option value="{{ template.template_id }}"
                             {{ 'selected' if (appraisal and appraisal.template_id == template.template_id) or (form_data and form_data.template_id == template.template_id | string) }}>
-                            {{ template.template_name }}
+                            {{ template.template_name }} [{{ template.template_profile.value if template.template_profile else 'BOTH' }}]
                         </option>
                         {% endfor %}
                     </select>
-                    <p class="text-xs text-slate-500 mt-1">Select a template to pre-populate KRAs, or leave blank to add manually.</p>
+                    <p class="text-xs text-slate-500 mt-1">Template options are filtered by org performance mode and template profile.</p>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300">PRIVATE</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300">PMS</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300">BOTH</span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

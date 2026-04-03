@@ -42,6 +42,14 @@ class AccountingFramework(str, enum.Enum):
     BOTH = "BOTH"
 
 
+class PerformanceMode(str, enum.Enum):
+    """Performance module mode for org-level routing and UX behavior."""
+
+    PRIVATE = "PRIVATE"
+    GOVERNMENT_PMS = "GOVERNMENT_PMS"
+    HYBRID = "HYBRID"
+
+
 class ConsolidationMethod(str, enum.Enum):
     FULL = "FULL"
     PROPORTIONAL = "PROPORTIONAL"
@@ -151,6 +159,13 @@ class Organization(Base):
         default=False,
         server_default=text("false"),
         comment="Enable OHCSF Performance Management System (public sector)",
+    )
+    performance_mode: Mapped[PerformanceMode] = mapped_column(
+        Enum(PerformanceMode, name="performance_mode", schema="core_org"),
+        nullable=False,
+        default=PerformanceMode.PRIVATE,
+        server_default="PRIVATE",
+        comment="Org performance mode: PRIVATE, GOVERNMENT_PMS, or HYBRID",
     )
 
     # Regional settings

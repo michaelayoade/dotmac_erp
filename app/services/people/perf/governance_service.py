@@ -25,54 +25,27 @@ from app.models.people.perf.pms_governance import (
 )
 from app.services.common import PaginatedResult, PaginationParams, paginate
 from app.services.people.common import calculate_workdays
+from app.services.people.perf.performance_policy import GOVERNMENT_PMS_POLICY
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 
 logger = logging.getLogger(__name__)
 
-WORKFLOW_STAGES = (
-    "DRAFT",
-    "INTERNAL_REVIEW",
-    "CENTRAL_REVIEW",
-    "APPROVED",
-    "RETURNED",
-    "FINAL_SIGNOFF",
-)
+WORKFLOW_STAGES = tuple(GOVERNMENT_PMS_POLICY.governance_stages)
 
-ROLE_MDA_PRS = "MDA_PRS"
-ROLE_MDA_HRM = "MDA_HRM"
-ROLE_FMFBNP = "FMFBNP"
-ROLE_OHCSF_PMD = "OHCSF_PMD"
-ROLE_CDCU_OSGF = "CDCU_OSGF"
-ROLE_FCSC_OMBUDSMAN = "FCSC_OMBUDSMAN"
-ROLE_SERVICOM_NODAL = "SERVICOM_NODAL"
-
-_ROLE_ALIASES: dict[str, str] = {
-    "HRM": ROLE_MDA_HRM,
-    "OHCSF_PMS": ROLE_OHCSF_PMD,
-}
+_ROLE_ALIASES: dict[str, str] = dict(GOVERNMENT_PMS_POLICY.governance_role_aliases)
 
 _STAGE_ROLE_OWNERS: dict[str, set[str]] = {
-    "INTERNAL_REVIEW": {ROLE_MDA_PRS, ROLE_MDA_HRM},
-    "CENTRAL_REVIEW": {ROLE_FMFBNP},
-    "APPROVED": {ROLE_OHCSF_PMD},
-    "FINAL_SIGNOFF": {ROLE_CDCU_OSGF},
-    "RETURNED": {ROLE_FMFBNP, ROLE_OHCSF_PMD, ROLE_CDCU_OSGF},
+    stage: set(roles)
+    for stage, roles in GOVERNMENT_PMS_POLICY.governance_stage_role_owners.items()
 }
 
-_STAGE_ACTION_TYPES: dict[str, str] = {
-    "INTERNAL_REVIEW": "MDA_INTERNAL_SUBMISSION",
-    "CENTRAL_REVIEW": "FMFBNP_CENTRAL_REVIEW",
-    "APPROVED": "OHCSF_POLICY_APPROVAL",
-    "FINAL_SIGNOFF": "CDCU_OSGF_FINAL_SIGNOFF",
-    "RETURNED": "CENTRAL_RETURN_FOR_REWORK",
-}
+_STAGE_ACTION_TYPES: dict[str, str] = dict(
+    GOVERNMENT_PMS_POLICY.governance_stage_action_types
+)
 
 _ALLOWED_STAGE_TRANSITIONS: dict[str, set[str]] = {
-    "DRAFT": {"INTERNAL_REVIEW"},
-    "INTERNAL_REVIEW": {"CENTRAL_REVIEW", "RETURNED"},
-    "CENTRAL_REVIEW": {"APPROVED", "RETURNED"},
-    "APPROVED": {"FINAL_SIGNOFF", "RETURNED"},
-    "RETURNED": {"INTERNAL_REVIEW"},
-    "FINAL_SIGNOFF": set(),
+    stage: set(next_stages)
+    for stage, next_stages in GOVERNMENT_PMS_POLICY.governance_stage_transitions.items()
 }
 
 
@@ -93,6 +66,13 @@ class PMSGovernanceService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+        self._policy = GOVERNMENT_PMS_POLICY
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise GovernanceValidationError(str(exc)) from exc
 
     def _get_inst_or_404(
         self, org_id: UUID, inst_perf_id: UUID
@@ -175,8 +155,9 @@ class PMSGovernanceService:
         approver_id: UUID | None,
         note: str | None = None,
     ) -> InstitutionalPerformance:
+        self._ensure_pms_write_mode(org_id)
         normalized_role = self._normalize_actor_role(actor_role)
-        if normalized_role not in {ROLE_MDA_HRM, ROLE_OHCSF_PMD}:
+        if normalized_role not in self._policy.governance_assign_roles_allowed:
             raise GovernanceValidationError(
                 "Only MDA_HRM or OHCSF_PMD can assign institutional governance roles"
             )
@@ -192,7 +173,9 @@ class PMSGovernanceService:
             inst_perf_id=record.inst_perf_id,
             actor_employee_id=actor_employee_id,
             actor_role=normalized_role,
-            action_type="OHCSF_GOVERNANCE_ROLE_ASSIGNMENT",
+            action_type=self._policy.governance_action_types.get(
+                "role_assignment", "OHCSF_GOVERNANCE_ROLE_ASSIGNMENT"
+            ),
             from_stage=record.workflow_stage,
             to_stage=record.workflow_stage,
             comment=note,
@@ -212,6 +195,7 @@ class PMSGovernanceService:
         actor_role: str,
         note: str | None = None,
     ) -> InstitutionalPerformance:
+        self._ensure_pms_write_mode(org_id)
         if target_stage not in WORKFLOW_STAGES:
             raise GovernanceValidationError(f"Invalid target stage: {target_stage}")
 
@@ -323,9 +307,10 @@ class PMSGovernanceService:
         appraisal_id: UUID | None = None,
         inst_perf_id: UUID | None = None,
     ) -> PMSGovernanceGrievance:
+        self._ensure_pms_write_mode(org_id)
         raised_on = date.today()
         due_date: date | None = None
-        committee_level = "HR"
+        committee_level = self._policy.grievance_default_committee_level
 
         if appraisal_id is not None:
             appraisal = self.db.scalar(
@@ -342,9 +327,10 @@ class PMSGovernanceService:
                 )
 
             filing_days_elapsed = calculate_workdays(appraisal.completed_on, raised_on)
-            if filing_days_elapsed > 5:
+            if filing_days_elapsed > self._policy.grievance_filing_window_workdays:
                 raise GovernanceValidationError(
-                    "Appraisal grievance must be filed within 5 working days "
+                    "Appraisal grievance must be filed within "
+                    f"{self._policy.grievance_filing_window_workdays} working days "
                     f"of completion (elapsed: {filing_days_elapsed})"
                 )
 
@@ -355,9 +341,17 @@ class PMSGovernanceService:
                 )
             )
             if cycle is not None and cycle.end_date is not None:
-                due_date = date(cycle.end_date.year + 1, 2, 28)
+                due_date = date(
+                    cycle.end_date.year + 1,
+                    self._policy.resolution_deadline_month,
+                    self._policy.resolution_deadline_day,
+                )
             else:
-                due_date = date(raised_on.year + 1, 2, 28)
+                due_date = date(
+                    raised_on.year + 1,
+                    self._policy.resolution_deadline_month,
+                    self._policy.resolution_deadline_day,
+                )
 
         grievance = PMSGovernanceGrievance(
             organization_id=org_id,
@@ -385,6 +379,7 @@ class PMSGovernanceService:
         assigned_to_employee_id: UUID,
         due_date: date | None = None,
     ) -> PMSGovernanceGrievance:
+        self._ensure_pms_write_mode(org_id)
         grievance = self.get_grievance(org_id, grievance_id)
         grievance.assigned_to_employee_id = assigned_to_employee_id
         if due_date is not None:
@@ -406,6 +401,7 @@ class PMSGovernanceService:
         grievance_id: UUID,
         resolution_notes: str,
     ) -> PMSGovernanceGrievance:
+        self._ensure_pms_write_mode(org_id)
         grievance = self.get_grievance(org_id, grievance_id)
         if not resolution_notes.strip():
             raise GovernanceValidationError("Resolution notes are required")
@@ -423,11 +419,12 @@ class PMSGovernanceService:
         grievance_id: UUID,
         escalation_notes: str | None = None,
     ) -> PMSGovernanceGrievance:
+        self._ensure_pms_write_mode(org_id)
         grievance = self.get_grievance(org_id, grievance_id)
         grievance.escalated_to_fcsc = True
         grievance.escalated_date = date.today()
         grievance.status = "ESCALATED"
-        grievance.committee_level = "FCSC"
+        grievance.committee_level = self._policy.grievance_escalation_committee_level
         if escalation_notes:
             grievance.resolution_notes = escalation_notes.strip()
         if grievance.inst_perf_id is not None:
@@ -435,8 +432,10 @@ class PMSGovernanceService:
                 org_id,
                 inst_perf_id=grievance.inst_perf_id,
                 actor_employee_id=None,
-                actor_role=ROLE_FCSC_OMBUDSMAN,
-                action_type="FCSC_GRIEVANCE_ESCALATION",
+                actor_role=self._policy.governance_fcsc_actor_role,
+                action_type=self._policy.governance_action_types.get(
+                    "grievance_escalation_fcsc", "FCSC_GRIEVANCE_ESCALATION"
+                ),
                 comment=escalation_notes,
             )
         self.db.flush()
@@ -488,7 +487,11 @@ class PMSGovernanceService:
                     cycle_year = cycle.end_date.year
 
         base_year = cycle_year if cycle_year is not None else grievance.raised_date.year
-        return date(base_year + 1, 2, 28)
+        return date(
+            base_year + 1,
+            self._policy.resolution_deadline_month,
+            self._policy.resolution_deadline_day,
+        )
 
     def list_stakeholder_feedback(
         self,
@@ -523,8 +526,9 @@ class PMSGovernanceService:
         submitted_by_contact: str | None = None,
         inst_perf_id: UUID | None = None,
     ) -> PMSStakeholderFeedback:
+        self._ensure_pms_write_mode(org_id)
         normalized_source = source_type.strip().upper()
-        if normalized_source not in {"SERVICOM", "CITIZEN", "STAKEHOLDER"}:
+        if normalized_source not in set(self._policy.stakeholder_allowed_sources):
             raise GovernanceValidationError(
                 "source_type must be one of SERVICOM, CITIZEN, or STAKEHOLDER"
             )
@@ -547,8 +551,11 @@ class PMSGovernanceService:
                 org_id,
                 inst_perf_id=inst_perf_id,
                 actor_employee_id=None,
-                actor_role=ROLE_SERVICOM_NODAL,
-                action_type="SERVICOM_STAKEHOLDER_FEEDBACK_CAPTURED",
+                actor_role=self._policy.governance_servicom_actor_role,
+                action_type=self._policy.governance_action_types.get(
+                    "stakeholder_feedback_captured",
+                    "SERVICOM_STAKEHOLDER_FEEDBACK_CAPTURED",
+                ),
                 comment=title,
             )
         logger.info("Created stakeholder feedback %s", feedback.feedback_id)

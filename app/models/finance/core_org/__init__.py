@@ -6,7 +6,11 @@ Organizations, business units, segments, cost centers, projects, locations, bran
 from app.models.finance.core_org.business_unit import BusinessUnit, BusinessUnitType
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.location import Location, LocationType
-from app.models.finance.core_org.organization import ConsolidationMethod, Organization
+from app.models.finance.core_org.organization import (
+    ConsolidationMethod,
+    Organization,
+    PerformanceMode,
+)
 from app.models.finance.core_org.organization_branding import (
     BorderRadiusStyle,
     ButtonStyle,
@@ -19,6 +23,7 @@ from app.models.finance.core_org.reporting_segment import ReportingSegment, Segm
 __all__ = [
     "Organization",
     "ConsolidationMethod",
+    "PerformanceMode",
     "BusinessUnit",
     "BusinessUnitType",
     "ReportingSegment",

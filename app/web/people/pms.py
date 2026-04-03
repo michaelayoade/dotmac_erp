@@ -12,9 +12,18 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
-from app.web.deps import WebAuthContext, get_db, require_hr_access
+from app.web.deps import (
+    WebAuthContext,
+    get_db,
+    require_government_pms_mode,
+    require_hr_access,
+)
 
-router = APIRouter(prefix="/pms", tags=["people-pms-web"])
+router = APIRouter(
+    prefix="/pms",
+    tags=["people-pms-web"],
+    dependencies=[Depends(require_government_pms_mode)],
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

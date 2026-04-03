@@ -19,6 +19,8 @@ from app.models.people.perf.performance_contract import PerformanceContract
 from app.models.people.perf.contract_amendment import ContractAmendmentWorkflow
 from app.models.people.perf.pms_enums import ContractStatus, ContractType
 from app.services.common import PaginatedResult, PaginationParams, paginate
+from app.services.people.perf.performance_policy import get_policy_profile
+from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
@@ -84,9 +86,21 @@ class ContractAuthorizationError(ContractServiceError):
 class PerformanceContractService:
     """Service for managing OHCSF performance contracts."""
 
-    def __init__(self, db: Session, ctx: WebAuthContext | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        ctx: WebAuthContext | None = None,
+        policy_profile_name: str = "GOVERNMENT_PMS",
+    ) -> None:
         self.db = db
         self.ctx = ctx
+        self._policy = get_policy_profile(policy_profile_name)
+
+    def _ensure_pms_write_mode(self, org_id: UUID) -> None:
+        try:
+            enforce_pms_write_mode(self.db, org_id)
+        except ValueError as exc:
+            raise ContractValidationError(str(exc)) from exc
 
     # ------------------------------------------------------------------
     # Private validation helpers
@@ -104,9 +118,11 @@ class PerformanceContractService:
             ContractValidationError: if either rule is violated.
         """
         count = len(objectives)
-        if count < 3 or count > 7:
+        min_count = self._policy.objective.min_count
+        max_count = self._policy.objective.max_count
+        if count < min_count or count > max_count:
             raise ContractValidationError(
-                f"Objectives must be between 3 and 7 (got {count})"
+                f"Objectives must be between {min_count} and {max_count} (got {count})"
             )
         total_weight = 0
         for idx, obj in enumerate(objectives, start=1):
@@ -132,9 +148,11 @@ class PerformanceContractService:
                     f"Objective {idx} weight must be greater than zero"
                 )
             total_weight += weight
-        if total_weight != 70:
+        required_total_weight = self._policy.objective.required_total_weight
+        if total_weight != required_total_weight:
             raise ContractValidationError(
-                f"Objective weights must sum to 70 (got {total_weight})"
+                "Objective weights must sum to "
+                f"{required_total_weight} (got {total_weight})"
             )
 
     def _validate_competency_selections(self, competencies: list[dict]) -> None:
@@ -148,34 +166,38 @@ class PerformanceContractService:
         Raises:
             ContractValidationError: if the rule is violated.
         """
-        if len(competencies) != 5:
+        required_count = self._policy.competency.required_count
+        if len(competencies) != required_count:
             raise ContractValidationError(
-                f"Exactly 5 competencies must be selected (got {len(competencies)})"
+                f"Exactly {required_count} competencies must be selected "
+                f"(got {len(competencies)})"
             )
         competency_ids = [str(c.get("competency_id") or "").strip() for c in competencies]
         if any(not cid for cid in competency_ids):
             raise ContractValidationError("Each competency entry must include competency_id")
-        if len(set(competency_ids)) != 5:
+        if len(set(competency_ids)) != required_count:
             raise ContractValidationError("Selected competencies must be unique")
 
         dev_focus = [c for c in competencies if c.get("is_development_focus")]
-        if len(dev_focus) != 3:
+        required_focus = self._policy.competency.required_development_focus_count
+        if len(dev_focus) != required_focus:
             raise ContractValidationError(
-                f"Exactly 3 competencies must be marked as development focus "
-                f"(got {len(dev_focus)})"
+                f"Exactly {required_focus} competencies must be marked as development "
+                f"focus (got {len(dev_focus)})"
             )
 
     def _validate_competencies_payload(self, competency_ids: list | None) -> None:
         """Validate competency payload shape and policy rules."""
+        required_count = self._policy.competency.required_count
         if competency_ids is None:
             raise ContractValidationError(
-                "Exactly 5 competencies are required for EPMS planning"
+                f"Exactly {required_count} competencies are required for EPMS planning"
             )
         if not isinstance(competency_ids, list):
             raise ContractValidationError("competency_ids must be a list")
         if not competency_ids:
             raise ContractValidationError(
-                "Exactly 5 competencies are required for EPMS planning"
+                f"Exactly {required_count} competencies are required for EPMS planning"
             )
         if not isinstance(competency_ids[0], dict):
             raise ContractValidationError(
@@ -270,6 +292,7 @@ class PerformanceContractService:
         Raises:
             ContractValidationError: if validation fails.
         """
+        self._ensure_pms_write_mode(org_id)
         # Sequencing gate: institutional goals must exist for this cycle/department
         from app.models.people.hr.employee import Employee
         from app.models.people.perf.institutional_performance import (
@@ -341,6 +364,7 @@ class PerformanceContractService:
         If the supervisor has already signed, transitions the contract to ACTIVE.
         Otherwise sets status to PENDING_SIGNATURE.
         """
+        self._ensure_pms_write_mode(org_id)
         contract = self.get_contract(org_id, contract_id)
         actor_employee_id = self._get_employee_for_person(org_id, actor_person_id)
         if actor_employee_id != contract.employee_id:
@@ -371,6 +395,7 @@ class PerformanceContractService:
         If the employee has already signed, transitions the contract to ACTIVE.
         Otherwise sets status to PENDING_SIGNATURE.
         """
+        self._ensure_pms_write_mode(org_id)
         contract = self.get_contract(org_id, contract_id)
         actor_employee_id = self._get_employee_for_person(org_id, actor_person_id)
         if actor_employee_id != contract.supervisor_id:
@@ -404,6 +429,7 @@ class PerformanceContractService:
         Counter-signing makes the contract valid regardless of employee
         signature status.
         """
+        self._ensure_pms_write_mode(org_id)
         contract = self.get_contract(org_id, contract_id)
 
         if contract.status not in (
@@ -486,6 +512,7 @@ class PerformanceContractService:
             ContractValidationError: if new_objectives fail validation.
             ContractNotFoundError: if the original contract is not found.
         """
+        self._ensure_pms_write_mode(org_id)
         self._validate_objectives(new_objectives)
         self._validate_competencies_payload(competency_ids)
 
@@ -527,6 +554,7 @@ class PerformanceContractService:
         signoff_note: str | None = None,
     ) -> ContractAmendmentWorkflow:
         """Create a staged signoff workflow for a proposed amendment."""
+        self._ensure_pms_write_mode(org_id)
         original = self.get_contract(org_id, original_contract_id)
 
         workflow = ContractAmendmentWorkflow(
@@ -570,6 +598,7 @@ class PerformanceContractService:
         APPRAISEE -> APPRAISER -> HOD -> HR_HEAD.
         Final stage activates amended contract and marks original as AMENDED.
         """
+        self._ensure_pms_write_mode(org_id)
         workflow = self.get_active_amendment_workflow(org_id, contract_id)
         if workflow is None:
             raise ContractValidationError("No pending amendment workflow for this contract")
@@ -631,6 +660,7 @@ class PerformanceContractService:
         reason: str,
     ) -> ContractAmendmentWorkflow:
         """Reject a pending amendment and cancel proposed amended contract."""
+        self._ensure_pms_write_mode(org_id)
         workflow = self.get_active_amendment_workflow(org_id, contract_id)
         if workflow is None:
             raise ContractValidationError("No pending amendment workflow for this contract")
