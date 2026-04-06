@@ -17,11 +17,16 @@ Final employee score:
 
 import logging
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import TypedDict
 
 from app.services.people.perf.performance_policy import get_policy_profile
 
 logger = logging.getLogger(__name__)
+
+
+class RatingScaleEntry(TypedDict):
+    label: str
+    min_pct: Decimal
 
 # ---------------------------------------------------------------------------
 # Rating Scale
@@ -29,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 #: OHCSF rating scale mapping rating integer → label and minimum percentage.
 #: Rating 5 = Outstanding (≥90%), 1 = Poor (<60%).
-OHCSF_RATING_SCALE: dict[int, dict[str, Any]] = {
+OHCSF_RATING_SCALE: dict[int, RatingScaleEntry] = {
     5: {"label": "Outstanding", "min_pct": Decimal("90")},
     4: {"label": "Excellent", "min_pct": Decimal("80")},
     3: {"label": "Good", "min_pct": Decimal("70")},
@@ -60,7 +65,7 @@ class OHCSFScoringEngine:
 
     def __init__(self, policy_profile_name: str = "GOVERNMENT_PMS") -> None:
         self._policy = get_policy_profile(policy_profile_name)
-        self._rating_scale = {
+        self._rating_scale: dict[int, RatingScaleEntry] = {
             band.rating: {"label": band.label, "min_pct": band.min_pct}
             for band in self._policy.rating_scale
         }

@@ -5,9 +5,10 @@ Server-rendered HTML routes for fleet management.
 """
 
 from pathlib import Path
+from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
@@ -68,39 +69,135 @@ def fleet_reports_index(
 @router.get("/reports/expenses", response_class=HTMLResponse)
 def fleet_reports_expenses(
     request: Request,
-    vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Fleet expense reports (expense claims linked to vehicles)."""
     context = base_context(request, auth, "Fleet Expense Reports", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(
-        web_service.reports_expenses_context(
-            auth.organization_id,
-            vehicle_id=vehicle_id,
-        )
-    )
+    context.update(web_service.reports_expenses_context(auth.organization_id))
     return templates.TemplateResponse(request, "fleet/reports/expenses.html", context)
+
+
+@router.get("/reports/expenses/{vehicle_id}", response_class=HTMLResponse)
+def fleet_reports_expense_vehicle_detail(
+    request: Request,
+    vehicle_id: UUID,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: str | None = None,
+    month: str | None = None,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Fleet expense report detail for a single vehicle."""
+    context = base_context(
+        request,
+        auth,
+        "Vehicle Expense Report",
+        "fleet",
+        db=db,
+    )
+    web_service = FleetWebService(db)
+    try:
+        parsed_start_date = date.fromisoformat(start_date) if start_date else None
+        parsed_end_date = date.fromisoformat(end_date) if end_date else None
+        parsed_year = int(year) if year else None
+        parsed_month = int(month) if month else None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date filter value") from exc
+    if parsed_year is not None and not 1900 <= parsed_year <= 2100:
+        raise HTTPException(status_code=400, detail="Year must be between 1900 and 2100")
+    if parsed_month is not None and not 1 <= parsed_month <= 12:
+        raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+    try:
+        context.update(
+            web_service.reports_expense_vehicle_context(
+                auth.organization_id,
+                vehicle_id,
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+                year=parsed_year,
+                month=parsed_month,
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "fleet/reports/expense_vehicle_detail.html",
+            context,
+        )
+    except NotFoundError:
+        return RedirectResponse(
+            url="/fleet/reports/expenses?error=not_found",
+            status_code=303,
+        )
 
 
 @router.get("/reports/invoices", response_class=HTMLResponse)
 def fleet_reports_invoices(
     request: Request,
-    vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Fleet invoice reports (AP invoices linked to vehicles)."""
     context = base_context(request, auth, "Fleet Invoice Reports", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(
-        web_service.reports_invoices_context(
-            auth.organization_id,
-            vehicle_id=vehicle_id,
-        )
-    )
+    context.update(web_service.reports_invoices_context(auth.organization_id))
     return templates.TemplateResponse(request, "fleet/reports/invoices.html", context)
+
+
+@router.get("/reports/invoices/{vehicle_id}", response_class=HTMLResponse)
+def fleet_reports_invoice_vehicle_detail(
+    request: Request,
+    vehicle_id: UUID,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: str | None = None,
+    month: str | None = None,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Fleet invoice report detail for a single vehicle."""
+    context = base_context(
+        request,
+        auth,
+        "Vehicle Invoice Report",
+        "fleet",
+        db=db,
+    )
+    web_service = FleetWebService(db)
+    try:
+        parsed_start_date = date.fromisoformat(start_date) if start_date else None
+        parsed_end_date = date.fromisoformat(end_date) if end_date else None
+        parsed_year = int(year) if year else None
+        parsed_month = int(month) if month else None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date filter value") from exc
+    if parsed_year is not None and not 1900 <= parsed_year <= 2100:
+        raise HTTPException(status_code=400, detail="Year must be between 1900 and 2100")
+    if parsed_month is not None and not 1 <= parsed_month <= 12:
+        raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+    try:
+        context.update(
+            web_service.reports_invoice_vehicle_context(
+                auth.organization_id,
+                vehicle_id,
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+                year=parsed_year,
+                month=parsed_month,
+            )
+        )
+        return templates.TemplateResponse(
+            request,
+            "fleet/reports/invoice_vehicle_detail.html",
+            context,
+        )
+    except NotFoundError:
+        return RedirectResponse(
+            url="/fleet/reports/invoices?error=not_found",
+            status_code=303,
+        )
 
 
 # =============================================================================

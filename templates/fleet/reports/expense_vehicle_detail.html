@@ -1,0 +1,135 @@
+{% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import icon_svg, currency, data_table, filter_date_field, filter_select_field %}
+
+{% block page_title %}Vehicle Expense Report{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
+        <li class="flex items-center gap-2">
+            {{ icon_svg("chevron-right", "h-4 w-4") }}
+            <a href="/fleet/reports" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Reports</a>
+        </li>
+        <li class="flex items-center gap-2">
+            {{ icon_svg("chevron-right", "h-4 w-4") }}
+            <a href="/fleet/reports/expenses" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Expenses</a>
+        </li>
+        <li class="flex items-center gap-2">
+            {{ icon_svg("chevron-right", "h-4 w-4") }}
+            <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ vehicle.registration_number }}</span>
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 page-enter">
+    <div class="card p-6">
+        <div class="space-y-3">
+            <div>
+                <p class="text-sm font-medium uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Vehicle Expense Report</p>
+                <h2 class="mt-2 text-2xl font-bold font-display text-slate-900 dark:text-white">
+                    {{ vehicle.registration_number }}
+                </h2>
+            </div>
+            <dl class="grid gap-3 sm:grid-cols-3">
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Assigned To</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ assigned_to }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Vehicle Plate Number</dt>
+                    <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ vehicle.registration_number }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Vehicle Name</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ vehicle_name if vehicle_name else "-" }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white">Filter Claims</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Filter totals, category breakdown, and recent claims by date range, year, or month.</p>
+            </div>
+            <a href="/fleet/reports/expenses/{{ vehicle.vehicle_id }}" class="btn btn-secondary">Clear</a>
+        </div>
+        <form method="get" action="/fleet/reports/expenses/{{ vehicle.vehicle_id }}" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {{ filter_date_field("start_date", "Start date", filter_start_date or "") }}
+            {{ filter_date_field("end_date", "End date", filter_end_date or "") }}
+            {{ filter_select_field("year", "Year", filter_year, year_options, "", "All Years") }}
+            {{ filter_select_field("month", "Month", filter_month, month_options, "", "All Months") }}
+            <div class="flex items-end">
+                <button type="submit" class="btn btn-primary w-full">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2">
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Claims</p>
+            <p class="mt-2 text-3xl font-bold font-mono text-slate-900 dark:text-white">{{ claim_count }}</p>
+        </div>
+        <div class="card p-5">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Total Expense Amount</p>
+            <p class="mt-2 text-3xl font-bold font-mono text-slate-900 dark:text-white">{{ currency(total_amount) }}</p>
+        </div>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+        <div class="card p-6">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Category Breakdown</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Expense item categories linked to this vehicle.</p>
+            <div class="mt-4">
+                {% call data_table(
+                    headers=[
+                        {"label": "Category", "class": "text-left"},
+                        {"label": "Total", "class": "text-right"}
+                    ],
+                    empty_title="No categories yet",
+                    empty_description="This vehicle has no linked expense items."
+                ) %}
+                    {% for row in category_rows %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{{ row.category_name }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-medium tabular-nums text-slate-900 dark:text-white">{{ currency(row.total_amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endcall %}
+            </div>
+        </div>
+
+        <div class="card p-6">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Recent Claims</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Up to the latest 200 claims linked to this vehicle.</p>
+            <div class="mt-4">
+                {% call data_table(
+                    headers=[
+                        {"label": "Claim", "class": "text-left"},
+                        {"label": "Date", "class": "text-left"},
+                        {"label": "Status", "class": "text-left"},
+                        {"label": "Total", "class": "text-right"}
+                    ],
+                    empty_title="No linked claims",
+                    empty_description="No expense claims are linked to this vehicle yet."
+                ) %}
+                    {% for row in claim_rows %}
+                    <tr>
+                        <td class="px-4 py-3">
+                            <a class="font-medium text-slate-900 dark:text-white hover:text-amber-700 dark:hover:text-amber-300" href="/expense/claims/{{ row.claim_id }}">{{ row.claim_number }}</a>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{{ row.claim_date }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{{ row.status }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-medium tabular-nums text-slate-900 dark:text-white">{{ currency(row.total_amount) }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endcall %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

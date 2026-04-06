@@ -50,7 +50,7 @@
         {% for row in vehicle_rows %}
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
             <td class="px-4 py-3">
-                <a href="/fleet/reports/expenses?vehicle_id={{ row.vehicle_id }}" class="font-medium text-slate-900 dark:text-white hover:text-amber-700 dark:hover:text-amber-300">
+                <a href="/fleet/reports/expenses/{{ row.vehicle_id }}" class="font-medium text-slate-900 dark:text-white hover:text-amber-700 dark:hover:text-amber-300">
                     {{ row.registration_number }}
                 </a>
                 {% if row.vehicle_label %}
@@ -62,61 +62,5 @@
         </tr>
         {% endfor %}
     {% endcall %}
-
-    {% if selected_vehicle %}
-    <div class="grid gap-4 lg:grid-cols-2">
-        <div class="card p-6">
-            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Category Breakdown</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {{ selected_vehicle.registration_number }} {% if selected_vehicle.make or selected_vehicle.model %}({{ (selected_vehicle.make ~ " " ~ selected_vehicle.model)|trim }}){% endif %}
-            </p>
-            <div class="mt-4">
-                {% call data_table(
-                    headers=[
-                        {"label": "Category", "class": "text-left"},
-                        {"label": "Total", "class": "text-right"}
-                    ],
-                    empty_title="No categories yet",
-                    empty_description="This vehicle has no linked expense items."
-                ) %}
-                    {% for row in category_rows %}
-                    <tr>
-                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{{ row.category_name }}</td>
-                        <td class="px-4 py-3 text-right text-sm text-slate-900 dark:text-white font-medium tabular-nums">{{ currency(row.total_amount) }}</td>
-                    </tr>
-                    {% endfor %}
-                {% endcall %}
-            </div>
-        </div>
-
-        <div class="card p-6">
-            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Recent Claims</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Up to the latest 200 claims linked to this vehicle.</p>
-            <div class="mt-4">
-                {% call data_table(
-                    headers=[
-                        {"label": "Claim", "class": "text-left"},
-                        {"label": "Date", "class": "text-left"},
-                        {"label": "Status", "class": "text-left"},
-                        {"label": "Total", "class": "text-right"}
-                    ],
-                    empty_title="No linked claims",
-                    empty_description="No expense claims are linked to this vehicle yet."
-                ) %}
-                    {% for row in claim_rows %}
-                    <tr>
-                        <td class="px-4 py-3">
-                            <a class="text-slate-900 dark:text-white hover:text-amber-700 dark:hover:text-amber-300 font-medium" href="/expense/claims/{{ row.claim_id }}">{{ row.claim_number }}</a>
-                        </td>
-                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{{ row.claim_date }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{{ row.status }}</td>
-                        <td class="px-4 py-3 text-right text-sm text-slate-900 dark:text-white font-medium tabular-nums">{{ currency(row.total_amount) }}</td>
-                    </tr>
-                    {% endfor %}
-                {% endcall %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 {% endblock %}

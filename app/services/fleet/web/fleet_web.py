@@ -5,6 +5,7 @@ Provides methods to build template context for fleet management pages.
 """
 
 import logging
+from calendar import month_name
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -103,6 +104,57 @@ class FleetWebService:
             "has_next": False,
             "has_prev": False,
         }
+
+    @staticmethod
+    def _vehicle_assignee_label(vehicle: Any) -> str:
+        assigned_employee = getattr(vehicle, "assigned_employee", None)
+        if assigned_employee:
+            return (
+                getattr(assigned_employee, "display_name", None)
+                or getattr(assigned_employee, "full_name", None)
+                or getattr(assigned_employee, "employee_code", None)
+                or "Assigned Employee"
+            )
+        assigned_department_name = getattr(vehicle, "assigned_department_name", None)
+        if assigned_department_name:
+            return str(assigned_department_name)
+        return "Not currently assigned"
+
+    def _vehicle_report_header(self, organization_id: UUID, vehicle_id: UUID) -> dict[str, Any]:
+        org_id = coerce_uuid(organization_id)
+        vid = coerce_uuid(vehicle_id)
+        vehicle = VehicleService(self.db, org_id).get_or_raise(vid)
+        return {
+            "vehicle": vehicle,
+            "vehicle_name": f"{getattr(vehicle, 'make', '')} {getattr(vehicle, 'model', '')}".strip(),
+            "assigned_to": self._vehicle_assignee_label(vehicle),
+        }
+
+    @staticmethod
+    def _report_date_conditions(
+        date_column: Any,
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> list[Any]:
+        from sqlalchemy import func
+
+        conditions: list[Any] = []
+        if start_date:
+            conditions.append(date_column >= start_date)
+        if end_date:
+            conditions.append(date_column <= end_date)
+        if year:
+            conditions.append(func.extract("year", date_column) == year)
+        if month:
+            conditions.append(func.extract("month", date_column) == month)
+        return conditions
+
+    @staticmethod
+    def _month_options() -> list[dict[str, str]]:
+        return [{"value": str(i), "label": month_name[i]} for i in range(1, 13)]
 
     @staticmethod
     def expense_claim_typeahead(
@@ -270,17 +322,12 @@ class FleetWebService:
     def reports_expenses_context(
         self,
         organization_id: UUID,
-        *,
-        vehicle_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Context for Fleet → Reports → Expenses."""
         if not self._fleet_tables_ready():
             return {
                 "tables_ready": False,
                 "vehicle_rows": [],
-                "selected_vehicle": None,
-                "category_rows": [],
-                "claim_rows": [],
             }
 
         org_id = coerce_uuid(organization_id)
@@ -291,7 +338,6 @@ class FleetWebService:
             .list_vehicles(params=PaginationParams(offset=0, limit=500))
             .items
         )
-        vehicles_by_id = {getattr(v, "vehicle_id", None): v for v in vehicles}
 
         vehicle_totals: dict[UUID, dict[str, Any]] = {}
         if inspector.has_table("expense_claim", schema="expense"):
@@ -340,15 +386,76 @@ class FleetWebService:
             )
         vehicle_rows.sort(key=lambda r: r["total_amount"] or Decimal("0"), reverse=True)
 
-        selected_vehicle = vehicles_by_id.get(vehicle_id) if vehicle_id else None
+        return {
+            "tables_ready": True,
+            "vehicle_rows": vehicle_rows,
+        }
+
+    def reports_expense_vehicle_context(
+        self,
+        organization_id: UUID,
+        vehicle_id: UUID,
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> dict[str, Any]:
+        """Context for Fleet → Reports → Expenses for a single vehicle."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
+
+        org_id = coerce_uuid(organization_id)
+        vid = coerce_uuid(vehicle_id)
+        inspector = inspect(self.db.get_bind())
+        header_context = self._vehicle_report_header(org_id, vid)
         category_rows: list[dict[str, Any]] = []
         claim_rows: list[dict[str, Any]] = []
+        claim_count = 0
+        total_amount = Decimal("0")
+        claim_filters = [
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.vehicle_id == vid,
+            ExpenseClaim.status != ExpenseClaimStatus.CANCELLED,
+            *self._report_date_conditions(
+                ExpenseClaim.claim_date,
+                start_date=start_date,
+                end_date=end_date,
+                year=year,
+                month=month,
+            ),
+        ]
+        available_years: list[int] = []
 
-        if vehicle_id and inspector.has_table("expense_claim_item", schema="expense"):
-            from app.models.expense.expense_claim import (
-                ExpenseClaim,
-                ExpenseClaimStatus,
-            )
+        if inspector.has_table("expense_claim", schema="expense"):
+            from sqlalchemy import func
+
+            available_years = [
+                int(year_value)
+                for year_value in self.db.scalars(
+                    sa_select(func.extract("year", ExpenseClaim.claim_date))
+                    .where(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.vehicle_id == vid,
+                        ExpenseClaim.status != ExpenseClaimStatus.CANCELLED,
+                    )
+                    .distinct()
+                    .order_by(func.extract("year", ExpenseClaim.claim_date).desc())
+                ).all()
+                if year_value
+            ]
+            row = self.db.execute(
+                sa_select(
+                    func.count(ExpenseClaim.claim_id).label("claim_count"),
+                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0).label(
+                        "total_amount"
+                    ),
+                ).where(*claim_filters)
+            ).one()
+            claim_count = int(row.claim_count or 0)
+            total_amount = row.total_amount or Decimal("0")
+
+        if inspector.has_table("expense_claim_item", schema="expense"):
             from app.models.expense.expense_claim import ExpenseCategory
             from app.models.expense.expense_claim import ExpenseClaimItem
             from sqlalchemy import func
@@ -376,9 +483,7 @@ class FleetWebService:
                         ExpenseCategory.category_id == ExpenseClaimItem.category_id,
                     )
                     .where(
-                        ExpenseClaim.organization_id == org_id,
-                        ExpenseClaim.vehicle_id == vehicle_id,
-                        ExpenseClaim.status != ExpenseClaimStatus.CANCELLED,
+                        *claim_filters,
                     )
                     .group_by(ExpenseCategory.category_name)
                     .order_by(total_amount_expr.desc())
@@ -395,11 +500,7 @@ class FleetWebService:
                 }
                 for claim in self.db.scalars(
                     sa_select(ExpenseClaim)
-                    .where(
-                        ExpenseClaim.organization_id == org_id,
-                        ExpenseClaim.vehicle_id == vehicle_id,
-                        ExpenseClaim.status != ExpenseClaimStatus.CANCELLED,
-                    )
+                    .where(*claim_filters)
                     .order_by(
                         ExpenseClaim.claim_date.desc(), ExpenseClaim.claim_number.desc()
                     )
@@ -409,26 +510,28 @@ class FleetWebService:
 
         return {
             "tables_ready": True,
-            "vehicle_rows": vehicle_rows,
-            "selected_vehicle": selected_vehicle,
+            **header_context,
+            "claim_count": claim_count,
+            "total_amount": total_amount,
             "category_rows": category_rows,
             "claim_rows": claim_rows,
+            "filter_start_date": start_date.isoformat() if start_date else "",
+            "filter_end_date": end_date.isoformat() if end_date else "",
+            "filter_year": str(year) if year else "",
+            "filter_month": str(month) if month else "",
+            "year_options": available_years,
+            "month_options": self._month_options(),
         }
 
     def reports_invoices_context(
         self,
         organization_id: UUID,
-        *,
-        vehicle_id: UUID | None = None,
     ) -> dict[str, Any]:
         """Context for Fleet → Reports → Invoices."""
         if not self._fleet_tables_ready():
             return {
                 "tables_ready": False,
                 "vehicle_rows": [],
-                "selected_vehicle": None,
-                "category_rows": [],
-                "invoice_rows": [],
             }
 
         org_id = coerce_uuid(organization_id)
@@ -439,7 +542,6 @@ class FleetWebService:
             .list_vehicles(params=PaginationParams(offset=0, limit=500))
             .items
         )
-        vehicles_by_id = {getattr(v, "vehicle_id", None): v for v in vehicles}
 
         vehicle_totals: dict[UUID, dict[str, Any]] = {}
         if inspector.has_table("supplier_invoice", schema="ap"):
@@ -485,13 +587,77 @@ class FleetWebService:
             )
         vehicle_rows.sort(key=lambda r: r["total_amount"] or Decimal("0"), reverse=True)
 
-        selected_vehicle = vehicles_by_id.get(vehicle_id) if vehicle_id else None
+        return {
+            "tables_ready": True,
+            "vehicle_rows": vehicle_rows,
+        }
+
+    def reports_invoice_vehicle_context(
+        self,
+        organization_id: UUID,
+        vehicle_id: UUID,
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> dict[str, Any]:
+        """Context for Fleet → Reports → Invoices for a single vehicle."""
+        if not self._fleet_tables_ready():
+            raise NotFoundError("Fleet module not initialized.")
+
+        org_id = coerce_uuid(organization_id)
+        vid = coerce_uuid(vehicle_id)
+        inspector = inspect(self.db.get_bind())
+        header_context = self._vehicle_report_header(org_id, vid)
         category_rows: list[dict[str, Any]] = []
         invoice_rows: list[dict[str, Any]] = []
+        invoice_count = 0
+        total_amount = Decimal("0")
+        invoice_filters = [
+            SupplierInvoice.organization_id == org_id,
+            SupplierInvoice.vehicle_id == vid,
+            SupplierInvoice.status != SupplierInvoiceStatus.VOID,
+            *self._report_date_conditions(
+                SupplierInvoice.invoice_date,
+                start_date=start_date,
+                end_date=end_date,
+                year=year,
+                month=month,
+            ),
+        ]
+        available_years: list[int] = []
+
+        if inspector.has_table("supplier_invoice", schema="ap"):
+            from sqlalchemy import func
+
+            available_years = [
+                int(year_value)
+                for year_value in self.db.scalars(
+                    sa_select(func.extract("year", SupplierInvoice.invoice_date))
+                    .where(
+                        SupplierInvoice.organization_id == org_id,
+                        SupplierInvoice.vehicle_id == vid,
+                        SupplierInvoice.status != SupplierInvoiceStatus.VOID,
+                    )
+                    .distinct()
+                    .order_by(func.extract("year", SupplierInvoice.invoice_date).desc())
+                ).all()
+                if year_value
+            ]
+            row = self.db.execute(
+                sa_select(
+                    func.count(SupplierInvoice.invoice_id).label("invoice_count"),
+                    func.coalesce(func.sum(SupplierInvoice.total_amount), 0).label(
+                        "total_amount"
+                    ),
+                ).where(*invoice_filters)
+            ).one()
+            invoice_count = int(row.invoice_count or 0)
+            total_amount = row.total_amount or Decimal("0")
 
         if (
-            vehicle_id
-            and inspector.has_table("supplier_invoice_line", schema="ap")
+            inspector.has_table("supplier_invoice_line", schema="ap")
             and inspector.has_table("account", schema="gl")
         ):
             from sqlalchemy import func
@@ -528,9 +694,7 @@ class FleetWebService:
                         isouter=True,
                     )
                     .where(
-                        SupplierInvoice.organization_id == org_id,
-                        SupplierInvoice.vehicle_id == vehicle_id,
-                        SupplierInvoice.status != SupplierInvoiceStatus.VOID,
+                        *invoice_filters,
                     )
                     .group_by(category_name_expr)
                     .order_by(total_amount_expr.desc())
@@ -547,11 +711,7 @@ class FleetWebService:
                 }
                 for inv in self.db.scalars(
                     sa_select(SupplierInvoice)
-                    .where(
-                        SupplierInvoice.organization_id == org_id,
-                        SupplierInvoice.vehicle_id == vehicle_id,
-                        SupplierInvoice.status != SupplierInvoiceStatus.VOID,
-                    )
+                    .where(*invoice_filters)
                     .order_by(
                         SupplierInvoice.invoice_date.desc(),
                         SupplierInvoice.invoice_number.desc(),
@@ -562,10 +722,17 @@ class FleetWebService:
 
         return {
             "tables_ready": True,
-            "vehicle_rows": vehicle_rows,
-            "selected_vehicle": selected_vehicle,
+            **header_context,
+            "invoice_count": invoice_count,
+            "total_amount": total_amount,
             "category_rows": category_rows,
             "invoice_rows": invoice_rows,
+            "filter_start_date": start_date.isoformat() if start_date else "",
+            "filter_end_date": end_date.isoformat() if end_date else "",
+            "filter_year": str(year) if year else "",
+            "filter_month": str(month) if month else "",
+            "year_options": available_years,
+            "month_options": self._month_options(),
         }
 
     # ─────────────────────────────────────────────────────────────
