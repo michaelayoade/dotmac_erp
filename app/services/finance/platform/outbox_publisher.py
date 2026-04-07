@@ -15,7 +15,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
@@ -126,11 +126,30 @@ class OutboxPublisher(ListResponseMixin):
             (EventOutbox.next_retry_at.is_(None)) | (EventOutbox.next_retry_at <= now)
         )
 
-        return list(
-            db.scalars(
-                stmt.order_by(EventOutbox.occurred_at.asc()).limit(batch_size)
-            ).all()
-        )
+        ordered = stmt.order_by(EventOutbox.occurred_at.asc()).limit(batch_size)
+
+        # In some environments, SQLAlchemy can raise NotImplementedError while
+        # materializing scalar ORM results (for example with certain driver /
+        # metadata edge cases). Fall back to the classic Query API so we can still
+        # continue processing outbox events.
+        try:
+            return list(db.scalars(ordered).all())
+        except NotImplementedError:
+            logger.warning(
+                "Fallback to ORM query API for pending outbox events due scalar"
+                " result materialization issue"
+            )
+            return list(
+                db.query(EventOutbox)
+                .filter(
+                    EventOutbox.status.in_([EventStatus.PENDING, EventStatus.FAILED]),
+                    EventOutbox.retry_count < max_retries,
+                    or_(EventOutbox.next_retry_at.is_(None), EventOutbox.next_retry_at <= now),
+                )
+                .order_by(EventOutbox.occurred_at.asc())
+                .limit(batch_size)
+                .all()
+            )
 
     @staticmethod
     def mark_published(

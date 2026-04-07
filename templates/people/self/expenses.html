@@ -319,7 +319,7 @@
 	                        <p class="mt-1 text-xs text-slate-400">Link expense to a specific project task</p>
 	                    </div>
 		                    <div>
-		                        <label for="vehicle_id" class="form-label">Fleet (Optional)</label>
+		                        <label for="vehicle_id" id="vehicle_id_label" class="form-label">Fleet (Optional)</label>
 		                        <select name="vehicle_id" id="vehicle_id" class="form-select w-full dark:text-white">
 		                            <option value="">No fleet vehicle</option>
 		                            {% for v in vehicles %}
@@ -328,7 +328,7 @@
 	                            </option>
 	                            {% endfor %}
 	                        </select>
-	                        <p class="mt-1 text-xs text-slate-400">Assign this claim to a fleet vehicle for reporting</p>
+	                        <p id="vehicle_hint" class="mt-1 text-xs text-slate-400">Assign this claim to a fleet vehicle for reporting</p>
 	                    </div>
                     <div class="sm:col-span-2 flex items-center justify-between">
                         <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
@@ -394,11 +394,24 @@ function categoryRequiresReceipt(option) {
     return option.dataset.requiresReceipt === 'true' && !isFuelMileageCategory(option);
 }
 
+function requiresFleetVehicle(option) {
+    const normalizedName = normalizeCategoryToken(option && option.textContent);
+    const normalizedCode = normalizeCategoryToken(option && option.dataset && option.dataset.categoryCode);
+    const fleetCategories = [
+        'vehiclefuelexpense',
+        'carrepairsandmaintenance',
+    ];
+    return fleetCategories.includes(normalizedName) || fleetCategories.includes(normalizedCode);
+}
+
 const claimForm = document.getElementById('expense-claim-form');
 const itemContainer = document.getElementById('expense-items');
 const itemTemplate = document.getElementById('expense-item-template');
 const addItemButton = document.getElementById('add-expense-item');
 const receiptHint = document.getElementById('receipt-hint');
+const vehicleSelect = document.getElementById('vehicle_id');
+const vehicleLabel = document.getElementById('vehicle_id_label');
+const vehicleHint = document.getElementById('vehicle_hint');
 
 function updateItemNumbers() {
     const itemRows = itemContainer ? Array.from(itemContainer.querySelectorAll('[data-expense-item]')) : [];
@@ -427,6 +440,27 @@ function updateReceiptHint() {
     receiptHint.classList.toggle('hidden', !requiresReceipt);
 }
 
+function updateFleetRequirement() {
+    if (!itemContainer || !vehicleSelect || !vehicleLabel || !vehicleHint) {
+        return false;
+    }
+    const fleetRequired = Array.from(itemContainer.querySelectorAll('[data-item-category]')).some(function(select) {
+        const option = select.options[select.selectedIndex];
+        return option && requiresFleetVehicle(option);
+    });
+
+    vehicleSelect.required = fleetRequired;
+    vehicleSelect.setCustomValidity('');
+    vehicleLabel.innerHTML = fleetRequired
+        ? 'Fleet <span class="text-rose-500">*</span>'
+        : 'Fleet (Optional)';
+    vehicleHint.textContent = fleetRequired
+        ? 'Required for Vehicle Fuel Expense and Car Repairs and Maintenance claims.'
+        : 'Assign this claim to a fleet vehicle for reporting';
+
+    return fleetRequired;
+}
+
 function addExpenseItem() {
     if (!itemContainer || !itemTemplate) {
         return;
@@ -452,6 +486,7 @@ function addExpenseItem() {
     }
     updateItemNumbers();
     updateReceiptHint();
+    updateFleetRequirement();
 }
 
 if (itemContainer) {
@@ -488,6 +523,7 @@ if (itemContainer) {
                 }
             }
             updateReceiptHint();
+            updateFleetRequirement();
         }
     });
 }
@@ -502,6 +538,15 @@ if (claimForm) {
     }
 
     claimForm.addEventListener('submit', function(e) {
+        const fleetRequired = updateFleetRequirement();
+        if (fleetRequired && vehicleSelect && !vehicleSelect.value) {
+            e.preventDefault();
+            vehicleSelect.setCustomValidity('Pick a vehicle before creating this claim.');
+            vehicleSelect.reportValidity();
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Pick a vehicle before creating this claim.', type: 'warning' } }));
+            return false;
+        }
+
         const itemRows = itemContainer ? Array.from(itemContainer.querySelectorAll('[data-expense-item]')) : [];
         if (!itemRows.length) {
             e.preventDefault();
@@ -526,6 +571,12 @@ if (claimForm) {
             }
         }
     });
+
+    if (vehicleSelect) {
+        vehicleSelect.addEventListener('change', function() {
+            vehicleSelect.setCustomValidity('');
+        });
+    }
 }
 
 const searchInput = document.getElementById('expense-search');

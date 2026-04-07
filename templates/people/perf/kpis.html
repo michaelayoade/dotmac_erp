@@ -1,5 +1,7 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination, icon_svg %}
+{% set goals_base = goals_base_url | default("/people/perf/goals") %}
+{% set perf_home = "/people/perf/pms/dashboard" if active_module and active_module.startswith("pms-") else "/people/perf/appraisals" %}
 
 {% block page_title %}Goals & KPIs{% endblock %}
 
@@ -8,22 +10,27 @@
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="{{ perf_home }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ performance_nav_label }}</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Goals & KPIs</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/people/perf/goals/new" class="btn btn-primary">
+{% if performance_private_enabled %}
+<a href="{{ goals_base }}/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
     New KPI
 </a>
+{% else %}
+<div class="text-xs text-slate-500">KPI tracking is available in Private/Hybrid mode.</div>
+{% endif %}
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
     {% call(filter_attrs) compact_filters(
-        base_url="/people/perf/kpis",
+        base_url=goals_base,
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
@@ -61,12 +68,12 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for kpi in kpis %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='/people/perf/goals/{{ kpi.kpi_id }}'">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='{{ goals_base }}/{{ kpi.kpi_id }}'">
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                             {{ kpi.employee.full_name if kpi.employee else kpi.employee_id }}
                         </td>
                         <td class="px-4 py-3">
-                            <a href="/people/perf/goals/{{ kpi.kpi_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">{{ kpi.kpi_name }}</a>
+                            <a href="{{ goals_base }}/{{ kpi.kpi_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">{{ kpi.kpi_name }}</a>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ kpi.unit_of_measure or '-' }}</div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
@@ -97,7 +104,7 @@
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <a href="/people/perf/goals/{{ kpi.kpi_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View" aria-label="View">
+                            <a href="{{ goals_base }}/{{ kpi.kpi_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View" aria-label="View">
                                 {{ icon_svg("eye", "h-4 w-4") }}
                             </a>
                         </td>
@@ -123,7 +130,7 @@
     {{ pagination(
         page=page,
         total_pages=total_pages,
-        total_count=total_count,
+        total_count=total | default(0),
         limit=limit,
         search=search
     ) }}

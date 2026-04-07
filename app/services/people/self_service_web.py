@@ -56,6 +56,7 @@ from app.services.people.hr.employees import EmployeeService
 from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.info_change_service import InfoChangeService
 from app.services.people.leave import LeaveService
+from app.services.people.leave.leave_service import LeaveServiceError
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.services.people.payroll.pfa_directory import PFADirectoryService
 from app.services.people.scheduling import SchedulingService, SwapService
@@ -1618,17 +1619,24 @@ class SelfServiceWebService:
         person_id = coerce_uuid(auth.person_id)
         employee_id = self._get_employee_id(db, org_id, person_id)
 
-        LeaveService(db, auth).create_application(
-            org_id,
-            employee_id=employee_id,
-            leave_type_id=coerce_uuid(leave_type_id),
-            from_date=from_date,
-            to_date=to_date,
-            half_day=half_day is not None,
-            half_day_date=from_date if half_day else None,
-            reason=reason,
-        )
-        db.commit()
+        try:
+            LeaveService(db, auth).create_application(
+                org_id,
+                employee_id=employee_id,
+                leave_type_id=coerce_uuid(leave_type_id),
+                from_date=from_date,
+                to_date=to_date,
+                half_day=half_day is not None,
+                half_day_date=from_date if half_day else None,
+                reason=reason,
+            )
+            db.commit()
+        except LeaveServiceError as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/self/leave?error={quote(str(exc))}",
+                status_code=303,
+            )
         return RedirectResponse(url="/people/self/leave", status_code=302)
 
     def expenses_response(

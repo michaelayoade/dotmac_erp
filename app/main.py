@@ -258,6 +258,81 @@ def _friendly_redirect_error_message(error_value: str, status_code: int) -> str:
     return error_value
 
 
+def _is_no_response_runtime_error(
+    exc: BaseException, _seen: set[int] | None = None
+) -> bool:
+    """Return True when Starlette surfaces a client-disconnect style response gap."""
+    if _seen is None:
+        _seen = set()
+    if id(exc) in _seen:
+        return False
+    _seen.add(id(exc))
+
+    if isinstance(exc, RuntimeError) and str(exc) == "No response returned.":
+        return True
+
+    try:
+        from anyio import EndOfStream
+
+        if isinstance(exc, EndOfStream):
+            return True
+    except Exception:
+        # Compatibility guard in case anyio isn't available or class resolution fails.
+        if exc.__class__.__name__ == "EndOfStream":
+            return True
+
+    children = getattr(exc, "exceptions", None)
+    if children:
+        for child in children:
+            if isinstance(child, BaseException) and _is_no_response_runtime_error(
+                child, _seen
+            ):
+                return True
+
+    cause = getattr(exc, "__cause__", None)
+    if isinstance(cause, BaseException):
+        if _is_no_response_runtime_error(cause, _seen):
+            return True
+
+    context = getattr(exc, "__context__", None)
+    if isinstance(context, BaseException):
+        if _is_no_response_runtime_error(context, _seen):
+            return True
+
+    return False
+
+
+@app.middleware("http")
+async def csp_middleware(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except BaseException as exc:
+        if _is_no_response_runtime_error(exc):
+            logger.info(
+                "Request ended before response was returned: %s %s",
+                request.method,
+                request.url.path,
+            )
+            return _client_disconnect_response()
+        raise
+
+    response.headers["Content-Security-Policy"] = add_unsafe_eval_to_csp(
+        response.headers.get("Content-Security-Policy")
+    )
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
+    return response
+
+
+def _client_disconnect_response() -> Response:
+    """Return a minimal response for requests that ended before a response was sent."""
+    return Response(status_code=204)
+
+
 @app.middleware("http")
 async def redirect_error_template_middleware(request: Request, call_next):
     """Convert redirect error query params into user-facing error templates."""
@@ -292,21 +367,6 @@ async def redirect_error_template_middleware(request: Request, call_next):
         )
     except Exception:
         return response
-
-
-@app.middleware("http")
-async def csp_middleware(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["Content-Security-Policy"] = add_unsafe_eval_to_csp(
-        response.headers.get("Content-Security-Policy")
-    )
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Strict-Transport-Security"] = (
-        "max-age=31536000; includeSubDomains"
-    )
-    return response
 
 
 # Sensitive parameter names to redact from audit logs
@@ -412,13 +472,13 @@ async def audit_middleware(request: Request, call_next):
 
     response: Response
     path = request.url.path
+    logger = logging.getLogger(__name__)
     db = SessionLocal()
     try:
         audit_settings = _load_audit_settings(db)
-    except Exception as exc:
+    except BaseException as exc:
         # Fail open for audit to preserve availability when DB is down.
         # Use conservative defaults (disabled).
-        logger = logging.getLogger(__name__)
         logger.warning("Audit settings unavailable, skipping audit: %s", exc)
         return await call_next(request)
     finally:
@@ -436,7 +496,14 @@ async def audit_middleware(request: Request, call_next):
         should_log = False
     try:
         response = await call_next(request)
-    except Exception:
+    except BaseException as exc:
+        if _is_no_response_runtime_error(exc):
+            logger.info(
+                "Skipping audit log for request without response: %s %s",
+                request.method,
+                request.url.path,
+            )
+            return _client_disconnect_response()
         if should_log:
             # Log error response asynchronously (or synchronously in tests)
             audit_response = Response(status_code=500)

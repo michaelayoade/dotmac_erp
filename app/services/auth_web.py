@@ -35,6 +35,14 @@ from app.web.deps import WebAuthContext, brand_context, org_brand_context
 logger = logging.getLogger(__name__)
 
 
+def _apply_no_cache_headers(response: HTMLResponse) -> HTMLResponse:
+    """Prevent auth pages from being cached across cookie-varying sessions."""
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Vary"] = "Cookie"
+    return response
+
+
 def _is_safe_redirect_url(url: str, request: Request) -> bool:
     """Check if a redirect URL is safe (prevents open redirect attacks).
 
@@ -191,7 +199,7 @@ class AuthWebService:
 
         brand = self._get_brand_for_login(db, org_slug)
 
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             request,
             "login.html",
             {
@@ -200,6 +208,7 @@ class AuthWebService:
                 "next": safe_next_url,
             },
         )
+        return _apply_no_cache_headers(response)
 
     def admin_login_response(
         self,
@@ -222,7 +231,7 @@ class AuthWebService:
 
         brand = self._get_brand_for_login(db)
 
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             request,
             "admin_login.html",
             {
@@ -235,6 +244,7 @@ class AuthWebService:
                 else False,
             },
         )
+        return _apply_no_cache_headers(response)
 
     def logout_response(self, request: Request, next_url: str) -> RedirectResponse:
         """Revoke session and clear auth cookies.

@@ -127,6 +127,30 @@ class TestOutboxPublisher:
         """get_pending_events should include FAILED events."""
         pass
 
+    def test_get_pending_events_falls_back_on_scalar_result_error(
+        self, service, mock_db_session, mock_event_status
+    ) -> None:
+        """Fallback to ORM Query API if scalar result materialization fails."""
+        expected_events = [MockEventOutbox(event_id=uuid.uuid4())]
+        mock_query = mock_db_session.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.all.return_value = expected_events
+        mock_db_session.scalars.side_effect = NotImplementedError("scalar failure")
+
+        with patch_outbox_publisher() as mock_event_model:
+            with patch(
+                "app.services.finance.platform.outbox_publisher.EventStatus",
+                mock_event_status,
+            ):
+                result = service.get_pending_events(
+                    mock_db_session, batch_size=25, max_retry_count=5
+                )
+
+        assert result == expected_events
+        mock_db_session.query.assert_called_once_with(mock_event_model)
+
     def test_mark_published_updates_status(
         self, service, mock_db_session, mock_event_status
     ):

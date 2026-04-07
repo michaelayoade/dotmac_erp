@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
@@ -24,6 +25,7 @@ except ImportError:  # pragma: no cover
 
 from celery import shared_task
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -32,6 +34,33 @@ from app.db import SessionLocal
 from app.services.finance.platform.outbox_publisher import OutboxPublisher
 
 logger = logging.getLogger(__name__)
+_DB_RETRYABLE_ERRORS = (OperationalError, ProgrammingError)
+
+
+@contextmanager
+def _task_db_session():
+    """Yield a task DB session and ensure it is rolled back/closed on any error."""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            logger.debug(
+                "Failed to rollback DB session after relay error",
+                exc_info=True,
+            )
+            try:
+                db.invalidate()
+            except Exception:
+                logger.debug("Failed to invalidate DB session", exc_info=True)
+        raise
+    finally:
+        try:
+            db.close()
+        except Exception:
+            logger.debug("Failed to close task DB session", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -135,8 +164,15 @@ register_handler("ledger.posting.completed", handle_ledger_posting_completed)
 # ---------------------------------------------------------------------------
 
 
-@shared_task
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_jitter=True,
+)
 def relay_outbox_events(
+    self,
     batch_size: int = 100,
     max_retry_count: int = 5,
 ) -> dict[str, Any]:
@@ -163,46 +199,53 @@ def relay_outbox_events(
     failed = 0
     errors: list[str] = []
 
-    with SessionLocal() as db:
-        events = OutboxPublisher.get_pending_events(
-            db, batch_size=batch_size, max_retry_count=max_retry_count
+    try:
+        with _task_db_session() as db:
+            events = OutboxPublisher.get_pending_events(
+                db, batch_size=batch_size, max_retry_count=max_retry_count
+            )
+
+            if not events:
+                logger.debug("Relay: no pending events")
+                return {"published": 0, "skipped": 0, "failed": 0, "errors": []}
+
+            logger.info("Relay: processing %d events", len(events))
+
+            for event in events:
+                handler = _get_handler(event.event_name)
+
+                if handler is None:
+                    # No handler registered — mark as published (no-op event)
+                    logger.debug(
+                        "No handler for event %s (%s) — marking published",
+                        event.event_id,
+                        event.event_name,
+                    )
+                    OutboxPublisher.mark_published(db, event.event_id)
+                    skipped += 1
+                    continue
+
+                try:
+                    handler(db, event)
+                    OutboxPublisher.mark_published(db, event.event_id)
+                    published += 1
+                except Exception as e:
+                    logger.exception(
+                        "Handler failed for event %s (%s): %s",
+                        event.event_id,
+                        event.event_name,
+                        e,
+                    )
+                    db.rollback()
+                    OutboxPublisher.handle_retry(db, event.event_id, str(e))
+                    failed += 1
+                    errors.append(f"{event.event_id}: {e}")
+    except _DB_RETRYABLE_ERRORS as exc:
+        logger.exception(
+            "Retrying outbox relay task after database error (attempt %d)",
+            self.request.retries + 1,
         )
-
-        if not events:
-            logger.debug("Relay: no pending events")
-            return {"published": 0, "skipped": 0, "failed": 0, "errors": []}
-
-        logger.info("Relay: processing %d events", len(events))
-
-        for event in events:
-            handler = _get_handler(event.event_name)
-
-            if handler is None:
-                # No handler registered — mark as published (no-op event)
-                logger.debug(
-                    "No handler for event %s (%s) — marking published",
-                    event.event_id,
-                    event.event_name,
-                )
-                OutboxPublisher.mark_published(db, event.event_id)
-                skipped += 1
-                continue
-
-            try:
-                handler(db, event)
-                OutboxPublisher.mark_published(db, event.event_id)
-                published += 1
-            except Exception as e:
-                logger.exception(
-                    "Handler failed for event %s (%s): %s",
-                    event.event_id,
-                    event.event_name,
-                    e,
-                )
-                db.rollback()
-                OutboxPublisher.handle_retry(db, event.event_id, str(e))
-                failed += 1
-                errors.append(f"{event.event_id}: {e}")
+        raise self.retry(exc=exc)
 
     logger.info(
         "Relay complete: %d published, %d skipped, %d failed",
@@ -239,7 +282,7 @@ def cleanup_published_outbox_events(
 
     deleted = 0
 
-    with SessionLocal() as db:
+    with _task_db_session() as db:
         from sqlalchemy import delete
 
         from app.models.finance.platform.event_outbox import EventOutbox, EventStatus

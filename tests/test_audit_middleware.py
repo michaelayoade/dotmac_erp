@@ -1,8 +1,14 @@
 """Tests for audit middleware - read-triggers, skip-paths, and exception logging."""
 
+try:
+    from builtins import ExceptionGroup  # py311+
+except ImportError:  # py310 support
+    from exceptiongroup import BaseExceptionGroup as ExceptionGroup
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import anyio
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -258,6 +264,118 @@ class TestAuditMiddlewareReadTriggers:
                     await audit_middleware(request, call_next)
                     # GET without trigger should not log
                     mock_audit.audit_events.log_request.assert_not_called()
+
+
+class TestAuditMiddlewareDisconnectHandling:
+    @pytest.mark.asyncio
+    async def test_no_response_runtime_error_returns_204_without_audit_logging(self):
+        request = MagicMock(spec=Request)
+        request.url.path = "/operations/dashboard"
+        request.method = "GET"
+        request.headers = MagicMock()
+        request.headers.get.return_value = None
+        request.query_params = {}
+
+        call_next = AsyncMock(side_effect=RuntimeError("No response returned."))
+
+        with patch("app.main._load_audit_settings") as mock_settings, patch(
+            "app.tasks.audit.log_audit_event"
+        ) as mock_task:
+            mock_settings.return_value = {
+                "enabled": True,
+                "methods": {"POST", "PUT", "PATCH", "DELETE"},
+                "skip_paths": [],
+                "read_trigger_header": "x-audit-read",
+                "read_trigger_query": "audit",
+            }
+            response = await audit_middleware(request, call_next)
+
+        assert mock_task.delay.call_count == 0
+        assert response.status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_no_response_exception_group_returns_204_without_audit_logging(self):
+        request = MagicMock(spec=Request)
+        request.url.path = "/operations/dashboard"
+        request.method = "GET"
+        request.headers = MagicMock()
+        request.headers.get.return_value = None
+        request.query_params = {}
+
+        call_next = AsyncMock(
+            side_effect=ExceptionGroup(
+                "group", [RuntimeError("No response returned.")]
+            )
+        )
+
+        with patch("app.main._load_audit_settings") as mock_settings, patch(
+            "app.tasks.audit.log_audit_event"
+        ) as mock_task:
+            mock_settings.return_value = {
+                "enabled": True,
+                "methods": {"POST", "PUT", "PATCH", "DELETE"},
+                "skip_paths": [],
+                "read_trigger_header": "x-audit-read",
+                "read_trigger_query": "audit",
+            }
+            response = await audit_middleware(request, call_next)
+
+        assert mock_task.delay.call_count == 0
+        assert response.status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_end_of_stream_returns_204_without_audit_logging(self):
+        request = MagicMock(spec=Request)
+        request.url.path = "/operations/dashboard"
+        request.method = "GET"
+        request.headers = MagicMock()
+        request.headers.get.return_value = None
+        request.query_params = {}
+
+        call_next = AsyncMock(side_effect=anyio.EndOfStream())
+
+        with patch("app.main._load_audit_settings") as mock_settings, patch(
+            "app.tasks.audit.log_audit_event"
+        ) as mock_task:
+            mock_settings.return_value = {
+                "enabled": True,
+                "methods": {"POST", "PUT", "PATCH", "DELETE"},
+                "skip_paths": [],
+                "read_trigger_header": "x-audit-read",
+                "read_trigger_query": "audit",
+            }
+            response = await audit_middleware(request, call_next)
+
+        assert mock_task.delay.call_count == 0
+        assert response.status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_end_of_stream_exception_group_returns_204_without_audit_logging(self):
+        request = MagicMock(spec=Request)
+        request.url.path = "/operations/dashboard"
+        request.method = "GET"
+        request.headers = MagicMock()
+        request.headers.get.return_value = None
+        request.query_params = {}
+
+        call_next = AsyncMock(
+            side_effect=ExceptionGroup("group", [anyio.EndOfStream()])
+        )
+
+        with patch("app.main._load_audit_settings") as mock_settings, patch(
+            "app.tasks.audit.log_audit_event"
+        ) as mock_task:
+            mock_settings.return_value = {
+                "enabled": True,
+                "methods": {"POST", "PUT", "PATCH", "DELETE"},
+                "skip_paths": [],
+                "read_trigger_header": "x-audit-read",
+                "read_trigger_query": "audit",
+            }
+            response = await audit_middleware(request, call_next)
+
+        assert mock_task.delay.call_count == 0
+        assert response.status_code == 204
 
     @pytest.mark.asyncio
     async def test_get_request_logged_with_header_trigger(self):

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+from urllib.parse import quote_plus
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -25,6 +26,7 @@ from app.services.people.hr import (
 )
 from app.services.people.perf import PerformanceService
 from app.services.people.perf.pip_service import PIPService
+from app.services.people.perf.performance_mode_policy import enforce_private_write_mode
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -66,6 +68,30 @@ def _extract_absence_evidence(form_data: Any) -> dict[str, str] | None:
 
 class PerfWebService:
     """Unified Performance Web Service."""
+
+    @staticmethod
+    def _feedback_base_url(request: Request) -> str:
+        if request.url.path.startswith("/people/perf/pms/"):
+            return "/people/perf/pms/feedback"
+        return "/people/perf/feedback"
+
+    @staticmethod
+    def _feedback_active_module(request: Request) -> str:
+        if request.url.path.startswith("/people/perf/pms/"):
+            return "pms-feedback"
+        return "perf"
+
+    @staticmethod
+    def _goals_base_url(request: Request) -> str:
+        if request.url.path.startswith("/people/perf/pms/"):
+            return "/people/perf/pms/goals"
+        return "/people/perf/goals"
+
+    @staticmethod
+    def _goals_active_module(request: Request) -> str:
+        if request.url.path.startswith("/people/perf/pms/"):
+            return "pms-goals"
+        return "perf"
 
     # ─────────────────────────────────────────────────────────────────────────
     # Appraisals
@@ -739,7 +765,10 @@ class PerfWebService:
             pagination=pagination,
         )
 
-        context = base_context(request, auth, "360° Feedback", "perf", db=db)
+        feedback_base_url = self._feedback_base_url(request)
+        context = base_context(
+            request, auth, "360° Feedback", self._feedback_active_module(request), db=db
+        )
         context["request"] = request
         success = request.query_params.get("success")
         context.update(
@@ -749,6 +778,7 @@ class PerfWebService:
                 "feedback_type": feedback_type,
                 "submitted": submitted,
                 "feedback_types": FEEDBACK_TYPES,
+                "feedback_base_url": feedback_base_url,
                 "success": success,
                 "page": result.page,
                 "total_pages": result.total_pages,
@@ -771,6 +801,15 @@ class PerfWebService:
         svc = PerformanceService(db)
         org_svc = OrganizationService(db, org_id)
 
+        if request.url.path.startswith("/people/perf/pms/"):
+            try:
+                enforce_private_write_mode(db, org_id)
+            except ValueError as exc:
+                return RedirectResponse(
+                    url=f"{self._feedback_base_url(request)}?error={quote_plus(str(exc))}",
+                    status_code=303,
+                )
+
         try:
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
         except Exception:
@@ -781,13 +820,17 @@ class PerfWebService:
             PaginationParams(limit=500),
         ).items
 
-        context = base_context(request, auth, "Request Feedback", "perf", db=db)
+        feedback_base_url = self._feedback_base_url(request)
+        context = base_context(
+            request, auth, "Request Feedback", self._feedback_active_module(request), db=db
+        )
         context["request"] = request
         context.update(
             {
                 "appraisal": appraisal,
                 "employees": employees,
                 "feedback_types": FEEDBACK_TYPES,
+                "feedback_base_url": feedback_base_url,
                 "form_data": {},
                 "errors": {},
             }
@@ -811,6 +854,8 @@ class PerfWebService:
         feedback_type = _get_form_str(form_data, "feedback_type")
 
         try:
+            if request.url.path.startswith("/people/perf/pms/"):
+                enforce_private_write_mode(db, org_id)
             if not appraisal_id:
                 raise ValueError("Appraisal is required")
             if not feedback_from_id:
@@ -825,6 +870,11 @@ class PerfWebService:
                 is_anonymous=_get_form_str(form_data, "is_anonymous") == "true",
             )
             db.commit()
+            if request.url.path.startswith("/people/perf/pms/"):
+                return RedirectResponse(
+                    url=f"{self._feedback_base_url(request)}?success=Feedback+requested",
+                    status_code=303,
+                )
             return RedirectResponse(
                 url=f"/people/perf/appraisals/{appraisal_id}?success=Feedback+requested",
                 status_code=303,
@@ -833,7 +883,10 @@ class PerfWebService:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
             appraisal = svc.get_appraisal(org_id, coerce_uuid(appraisal_id))
-            context = base_context(request, auth, "Request Feedback", "perf", db=db)
+            feedback_base_url = self._feedback_base_url(request)
+            context = base_context(
+                request, auth, "Request Feedback", self._feedback_active_module(request), db=db
+            )
             context["request"] = request
             context.update(
                 {
@@ -842,6 +895,7 @@ class PerfWebService:
                         EmployeeFilters(is_active=True), PaginationParams(limit=500)
                     ).items,
                     "feedback_types": FEEDBACK_TYPES,
+                    "feedback_base_url": feedback_base_url,
                     "form_data": dict(form_data),
                     "error": str(e),
                     "errors": {},
@@ -867,13 +921,24 @@ class PerfWebService:
         try:
             feedback = svc.get_feedback(org_id, coerce_uuid(feedback_id))
         except Exception:
-            return RedirectResponse(url="/people/perf/feedback", status_code=303)
+            return RedirectResponse(
+                url=self._feedback_base_url(request),
+                status_code=303,
+            )
 
-        context = base_context(request, auth, "Feedback Details", "perf", db=db)
+        feedback_base_url = self._feedback_base_url(request)
+        context = base_context(
+            request,
+            auth,
+            "Feedback Details",
+            self._feedback_active_module(request),
+            db=db,
+        )
         context["request"] = request
         context.update(
             {
                 "feedback": feedback,
+                "feedback_base_url": feedback_base_url,
                 "success": success,
                 "error": error,
             }
@@ -896,19 +961,23 @@ class PerfWebService:
         try:
             feedback = svc.get_feedback(org_id, coerce_uuid(feedback_id))
         except Exception:
-            return RedirectResponse(url="/people/perf/feedback", status_code=303)
+            return RedirectResponse(url=self._feedback_base_url(request), status_code=303)
 
         if feedback.submitted_on:
             return RedirectResponse(
-                url=f"/people/perf/feedback/{feedback_id}?error=Feedback+already+submitted",
+                url=f"{self._feedback_base_url(request)}/{feedback_id}?error=Feedback+already+submitted",
                 status_code=303,
             )
 
-        context = base_context(request, auth, "Submit Feedback", "perf", db=db)
+        feedback_base_url = self._feedback_base_url(request)
+        context = base_context(
+            request, auth, "Submit Feedback", self._feedback_active_module(request), db=db
+        )
         context["request"] = request
         context.update(
             {
                 "feedback": feedback,
+                "feedback_base_url": feedback_base_url,
                 "form_data": {},
                 "errors": {},
             }
@@ -943,18 +1012,22 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/feedback/{feedback_id}?success=Feedback+submitted+successfully",
+                url=f"{self._feedback_base_url(request)}/{feedback_id}?success=Feedback+submitted+successfully",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             feedback = svc.get_feedback(org_id, coerce_uuid(feedback_id))
-            context = base_context(request, auth, "Submit Feedback", "perf", db=db)
+            feedback_base_url = self._feedback_base_url(request)
+            context = base_context(
+                request, auth, "Submit Feedback", self._feedback_active_module(request), db=db
+            )
             context["request"] = request
             context.update(
                 {
                     "feedback": feedback,
                     "form_data": dict(form_data),
+                    "feedback_base_url": feedback_base_url,
                     "error": str(e),
                     "errors": {},
                 }
@@ -965,6 +1038,7 @@ class PerfWebService:
 
     def delete_feedback_response(
         self,
+        request: Request,
         auth: WebAuthContext,
         db: Session,
         feedback_id: str,
@@ -974,16 +1048,19 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            if request.url.path.startswith("/people/perf/pms/"):
+                enforce_private_write_mode(db, org_id)
             svc.delete_feedback(org_id, coerce_uuid(feedback_id))
             db.commit()
             return RedirectResponse(
-                url="/people/perf/feedback?success=Record+deleted+successfully",
+                url=f"{self._feedback_base_url(request)}?success=Record+deleted+successfully",
                 status_code=303,
             )
         except Exception:
             db.rollback()
             return RedirectResponse(
-                url=f"/people/perf/feedback/{feedback_id}", status_code=303
+                url=f"{self._feedback_base_url(request)}/{feedback_id}",
+                status_code=303,
             )
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1017,7 +1094,10 @@ class PerfWebService:
             pagination=pagination,
         )
 
-        context = base_context(request, auth, "Goals & KPIs", "perf", db=db)
+        goals_base_url = self._goals_base_url(request)
+        context = base_context(
+            request, auth, "Goals & KPIs", self._goals_active_module(request), db=db
+        )
         context["request"] = request
         context.update(
             {
@@ -1027,6 +1107,7 @@ class PerfWebService:
                 "employee_id": employee_id,
                 "start_date": start_date,
                 "end_date": end_date,
+                "goals_base_url": goals_base_url,
                 "statuses": [s.value for s in KPIStatus],
                 "page": result.page,
                 "total_pages": result.total_pages,
@@ -1043,9 +1124,17 @@ class PerfWebService:
         auth: WebAuthContext,
         db: Session,
         employee_id: str | None = None,
-    ) -> HTMLResponse:
+    ) -> HTMLResponse | RedirectResponse:
         """Render new KPI form."""
         org_id = coerce_uuid(auth.organization_id)
+        if request.url.path.startswith("/people/perf/pms/"):
+            try:
+                enforce_private_write_mode(db, org_id)
+            except ValueError as exc:
+                return RedirectResponse(
+                    url=f"{self._goals_base_url(request)}?error={quote_plus(str(exc))}",
+                    status_code=303,
+                )
         org_svc = OrganizationService(db, org_id)
         svc = PerformanceService(db)
 
@@ -1056,7 +1145,10 @@ class PerfWebService:
 
         kras = svc.list_kras(org_id, pagination=PaginationParams(limit=100)).items
 
-        context = base_context(request, auth, "New KPI", "perf", db=db)
+        goals_base_url = self._goals_base_url(request)
+        context = base_context(
+            request, auth, "New KPI", self._goals_active_module(request), db=db
+        )
         context["request"] = request
         context.update(
             {
@@ -1064,6 +1156,7 @@ class PerfWebService:
                 "employees": employees,
                 "kras": kras,
                 "measurement_types": KPI_MEASUREMENT_TYPES,
+                "goals_base_url": goals_base_url,
                 "form_data": {"employee_id": employee_id} if employee_id else {},
                 "error": None,
             }
@@ -1082,6 +1175,8 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            if request.url.path.startswith("/people/perf/pms/"):
+                enforce_private_write_mode(db, org_id)
             employee_id = _get_form_str(form_data, "employee_id")
             if not employee_id:
                 raise ValueError("Employee is required")
@@ -1127,13 +1222,16 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/goals/{kpi.kpi_id}?saved=1",
+                url=f"{self._goals_base_url(request)}/{kpi.kpi_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
-            context = base_context(request, auth, "New KPI", "perf", db=db)
+            goals_base_url = self._goals_base_url(request)
+            context = base_context(
+                request, auth, "New KPI", self._goals_active_module(request), db=db
+            )
             context["request"] = request
             context.update(
                 {
@@ -1146,6 +1244,7 @@ class PerfWebService:
                     ).items,
                     "measurement_types": KPI_MEASUREMENT_TYPES,
                     "form_data": dict(form_data),
+                    "goals_base_url": goals_base_url,
                     "error": str(e),
                 }
             )
@@ -1168,13 +1267,17 @@ class PerfWebService:
         try:
             kpi = svc.get_kpi(org_id, coerce_uuid(kpi_id))
         except Exception:
-            return RedirectResponse(url="/people/perf/goals", status_code=303)
+            return RedirectResponse(url=self._goals_base_url(request), status_code=303)
 
-        context = base_context(request, auth, kpi.kpi_name, "perf", db=db)
+        goals_base_url = self._goals_base_url(request)
+        context = base_context(
+            request, auth, kpi.kpi_name, self._goals_active_module(request), db=db
+        )
         context["request"] = request
         context.update(
             {
                 "kpi": kpi,
+                "goals_base_url": goals_base_url,
                 "success": success,
                 "error": None,
             }
@@ -1195,12 +1298,24 @@ class PerfWebService:
         svc = PerformanceService(db)
         org_svc = OrganizationService(db, org_id)
 
+        if request.url.path.startswith("/people/perf/pms/"):
+            try:
+                enforce_private_write_mode(db, org_id)
+            except ValueError as exc:
+                return RedirectResponse(
+                    url=f"{self._goals_base_url(request)}/{kpi_id}?error={quote_plus(str(exc))}",
+                    status_code=303,
+                )
+
         try:
             kpi = svc.get_kpi(org_id, coerce_uuid(kpi_id))
         except Exception:
-            return RedirectResponse(url="/people/perf/goals", status_code=303)
+            return RedirectResponse(url=self._goals_base_url(request), status_code=303)
 
-        context = base_context(request, auth, f"Edit {kpi.kpi_name}", "perf", db=db)
+        goals_base_url = self._goals_base_url(request)
+        context = base_context(
+            request, auth, f"Edit {kpi.kpi_name}", self._goals_active_module(request), db=db
+        )
         context["request"] = request
         context.update(
             {
@@ -1212,6 +1327,7 @@ class PerfWebService:
                     org_id, pagination=PaginationParams(limit=100)
                 ).items,
                 "measurement_types": KPI_MEASUREMENT_TYPES,
+                "goals_base_url": goals_base_url,
                 "form_data": {},
                 "error": None,
             }
@@ -1231,6 +1347,8 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            if request.url.path.startswith("/people/perf/pms/"):
+                enforce_private_write_mode(db, org_id)
             kpi_name = _get_form_str(form_data, "kpi_name") or _get_form_str(
                 form_data, "title"
             )
@@ -1261,14 +1379,17 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/goals/{kpi_id}?saved=1",
+                url=f"{self._goals_base_url(request)}/{kpi_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
             db.rollback()
             org_svc = OrganizationService(db, org_id)
             kpi = svc.get_kpi(org_id, coerce_uuid(kpi_id))
-            context = base_context(request, auth, f"Edit {kpi.kpi_name}", "perf", db=db)
+            goals_base_url = self._goals_base_url(request)
+            context = base_context(
+                request, auth, f"Edit {kpi.kpi_name}", self._goals_active_module(request), db=db
+            )
             context["request"] = request
             context.update(
                 {
@@ -1280,7 +1401,8 @@ class PerfWebService:
                         org_id, pagination=PaginationParams(limit=100)
                     ).items,
                     "measurement_types": KPI_MEASUREMENT_TYPES,
-                    "form_data": {},
+                    "goals_base_url": goals_base_url,
+                    "form_data": dict(form_data),
                     "error": str(e),
                 }
             )
@@ -1301,6 +1423,8 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            if request.url.path.startswith("/people/perf/pms/"):
+                enforce_private_write_mode(db, org_id)
             actual_value = parse_decimal(
                 _get_form_str(form_data, "actual_value") or None
             )
@@ -1317,11 +1441,12 @@ class PerfWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/perf/goals/{kpi_id}?saved=1", status_code=303
+            url=f"{self._goals_base_url(request)}/{kpi_id}?saved=1", status_code=303
         )
 
     def delete_goal_response(
         self,
+        request: Request,
         auth: WebAuthContext,
         db: Session,
         kpi_id: str,
@@ -1331,15 +1456,19 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
+            if request.url.path.startswith("/people/perf/pms/"):
+                enforce_private_write_mode(db, org_id)
             svc.delete_kpi(org_id, coerce_uuid(kpi_id))
             db.commit()
             return RedirectResponse(
-                url="/people/perf/goals?success=Record+deleted+successfully",
+                url=f"{self._goals_base_url(request)}?success=Record+deleted+successfully",
                 status_code=303,
             )
         except Exception:
             db.rollback()
-            return RedirectResponse(url=f"/people/perf/goals/{kpi_id}", status_code=303)
+            return RedirectResponse(
+                url=f"{self._goals_base_url(request)}/{kpi_id}", status_code=303
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Reports

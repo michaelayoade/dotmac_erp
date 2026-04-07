@@ -1,4 +1,3 @@
-from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -30,7 +29,7 @@ def test_process_pending_notification_emails_skips_inactive_people(monkeypatch):
     monkeypatch.setattr(
         notification_tasks,
         "SessionLocal",
-        lambda: nullcontext(mock_db),
+        lambda: mock_db,
     )
 
     send_calls: list[str] = []

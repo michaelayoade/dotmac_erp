@@ -82,6 +82,28 @@ def test_logout_response_uses_cookie_defaults_when_settings_lookup_fails(monkeyp
     assert any(header.startswith("refresh_token=") for header in set_cookie_headers)
 
 
+def test_login_response_sets_no_cache_headers():
+    request = _request("/login")
+    auth = SimpleNamespace(is_authenticated=False, roles=[])
+
+    response = auth_web_service.login_response(request, "/", auth, db=None)
+
+    assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    assert response.headers["Pragma"] == "no-cache"
+    assert response.headers["Vary"] == "Cookie"
+
+
+def test_admin_login_response_sets_no_cache_headers():
+    request = _request("/admin/login")
+    auth = SimpleNamespace(is_authenticated=False, roles=[])
+
+    response = auth_web_service.admin_login_response(request, "/admin", auth, db=None)
+
+    assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    assert response.headers["Pragma"] == "no-cache"
+    assert response.headers["Vary"] == "Cookie"
+
+
 def test_require_web_auth_accepts_valid_refresh_cookie_when_access_token_invalid(
     db_session, person
 ):

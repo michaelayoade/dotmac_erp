@@ -20,6 +20,8 @@
     .table-input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.12); }
     .dark .table-input { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08); color: white; }
     .dark .table-input:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15); }
+    .dark select.table-input { color: #ffffff; -webkit-text-fill-color: #ffffff; }
+    .dark select.table-input option { background-color: #1a1f36; color: #ffffff; }
     select.table-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7194'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1rem; padding-right: 2.5rem; }
 
     /* Amount display cell */
@@ -289,7 +291,8 @@
                 </select>
             </div>
 
-            <div class="mt-4 overflow-x-auto -mx-2 px-2">
+            <div class="mt-4 -mx-2 px-2 overflow-visible">
+                <div class="overflow-x-auto">
                 <table class="table min-w-[960px]">
                     <thead>
                         <tr>
@@ -365,35 +368,67 @@
                                 </td>
                                 <td>
                                     <!-- Multi-tax selector -->
-                                    <div class="relative" x-data="{ taxOpen: false }">
+                                    <div class="relative"
+                                         x-data="{
+                                             taxOpen: false,
+                                             taxMenuStyle: '',
+                                             updateTaxMenuPosition() {
+                                                 if (!this.$refs.taxTrigger) return;
+                                                 const rect = this.$refs.taxTrigger.getBoundingClientRect();
+                                                 const menuWidth = 256;
+                                                 const gutter = 16;
+                                                 const maxLeft = Math.max(gutter, window.innerWidth - menuWidth - gutter);
+                                                 const left = Math.min(Math.max(gutter, rect.left), maxLeft);
+                                                 this.taxMenuStyle = `position: fixed; top: ${rect.bottom + 4}px; left: ${left}px; width: ${menuWidth}px; max-height: min(12rem, calc(100vh - ${rect.bottom + 20}px)); z-index: 120;`;
+                                             },
+                                             openTaxMenu() {
+                                                 this.taxOpen = true;
+                                                 this.$nextTick(() => this.updateTaxMenuPosition());
+                                             },
+                                             closeTaxMenu() {
+                                                 this.taxOpen = false;
+                                             },
+                                             toggleTaxMenu() {
+                                                 if (this.taxOpen) {
+                                                     this.closeTaxMenu();
+                                                     return;
+                                                 }
+                                                 this.openTaxMenu();
+                                             }
+                                         }"
+                                         @keydown.escape.window="closeTaxMenu()"
+                                         @resize.window="taxOpen && updateTaxMenuPosition()"
+                                         @scroll.window="taxOpen && updateTaxMenuPosition()">
                                         <button type="button"
-                                                @click="taxOpen = !taxOpen"
+                                                x-ref="taxTrigger"
+                                                @click="toggleTaxMenu()"
                                                 class="table-input text-left flex items-center justify-between gap-2">
                                             <span x-text="getTaxLabels(line.tax_code_ids)" class="truncate">Select tax code</span>
                                             <svg class="w-4 h-4 flex-shrink-0 transition-transform" :class="{ 'rotate-180': taxOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                             </svg>
                                         </button>
-                                        <div x-show="taxOpen"
-                                             @click.away="taxOpen = false"
-                                             x-cloak
-                                             class="absolute z-50 mt-1 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-2 max-h-48 overflow-y-auto">
-                                            {% for tax in tax_codes %}
-                                            <label class="flex items-center px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">
-                                                <input type="checkbox"
-                                                       :checked="line.tax_code_ids && line.tax_code_ids.includes('{{ tax.tax_code_id }}')"
-                                                       @change="toggleTaxCode(index, '{{ tax.tax_code_id }}', $event.target.checked)"
-                                                       class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
-                                                <span class="ml-2 text-sm text-slate-900 dark:text-white">{{ tax.tax_code }} ({{ tax.rate }}%){% if tax.is_inclusive %} <span class="text-xs text-amber-600 dark:text-amber-400">Incl.</span>{% endif %}</span>
-                                            </label>
-                                            {% else %}
-                                            <tr>
-                                                <td colspan="99" class="p-0">
+                                        <template x-teleport="body">
+                                            <div x-show="taxOpen"
+                                                 @click.outside="closeTaxMenu()"
+                                                 x-cloak
+                                                 :style="taxMenuStyle"
+                                                 class="fixed bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-2 overflow-y-auto">
+                                                {% for tax in tax_codes %}
+                                                <label class="flex items-center px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">
+                                                    <input type="checkbox"
+                                                           :checked="line.tax_code_ids && line.tax_code_ids.includes('{{ tax.tax_code_id }}')"
+                                                           @change="toggleTaxCode(index, '{{ tax.tax_code_id }}', $event.target.checked)"
+                                                           class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                                                    <span class="ml-2 text-sm text-slate-900 dark:text-white">{{ tax.tax_code }} ({{ tax.rate }}%){% if tax.is_inclusive %} <span class="text-xs text-amber-600 dark:text-amber-400">Incl.</span>{% endif %}</span>
+                                                </label>
+                                                {% else %}
+                                                <div class="p-0">
                                                     {{ empty_state("No tax_codes found", "There are no tax_codes to display.") }}
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </template>
                                     </div>
                                 </td>
                                 <td>
@@ -411,6 +446,7 @@
                         </template>
                     </tbody>
                 </table>
+                </div>
             </div>
 
             <!-- Totals -->

@@ -112,29 +112,32 @@ class SupplyChainAnalyzer:
         )
 
         # Items below reorder point (using current stock from latest transaction)
-        # Subquery: latest quantity_after per item
+        # Pick the latest transaction deterministically by timestamp, not UUID max().
         latest_txn = (
             select(
-                InventoryTransaction.item_id,
-                func.max(InventoryTransaction.transaction_id).label("max_txn"),
+                InventoryTransaction.item_id.label("item_id"),
+                InventoryTransaction.quantity_after.label("current_qty"),
+                func.row_number()
+                .over(
+                    partition_by=InventoryTransaction.item_id,
+                    order_by=(
+                        InventoryTransaction.created_at.desc(),
+                        InventoryTransaction.transaction_date.desc(),
+                        InventoryTransaction.transaction_id.desc(),
+                    ),
+                )
+                .label("rn"),
             )
             .where(InventoryTransaction.organization_id == organization_id)
-            .group_by(InventoryTransaction.item_id)
             .subquery()
         )
 
         current_stock_sq = (
             select(
-                InventoryTransaction.item_id,
-                InventoryTransaction.quantity_after.label("current_qty"),
+                latest_txn.c.item_id,
+                latest_txn.c.current_qty,
             )
-            .join(
-                latest_txn,
-                and_(
-                    InventoryTransaction.item_id == latest_txn.c.item_id,
-                    InventoryTransaction.transaction_id == latest_txn.c.max_txn,
-                ),
-            )
+            .where(latest_txn.c.rn == 1)
             .subquery()
         )
 

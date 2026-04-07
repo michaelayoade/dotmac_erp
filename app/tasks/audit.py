@@ -9,14 +9,80 @@ import logging
 from typing import Any
 
 from celery import shared_task
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.db import SessionLocal
 
 logger = logging.getLogger(__name__)
+_DB_RETRYABLE_ERRORS = (OperationalError, ProgrammingError)
 
 
-@shared_task
+def _write_audit_event(
+    actor_type: str,
+    organization_id: str | None,
+    actor_person_id: str | None,
+    actor_id: str | None,
+    action: str,
+    entity_type: str,
+    entity_id: str | None,
+    status_code: int,
+    is_success: bool,
+    ip_address: str | None,
+    user_agent: str | None,
+    request_id: str | None,
+    metadata_: dict[str, Any],
+) -> str:
+    from app.models.audit import AuditActorType, AuditEvent
+    from app.schemas.audit import AuditEventCreate
+    from app.services.common import coerce_uuid
+
+    try:
+        resolved_actor_type = AuditActorType(actor_type)
+    except ValueError:
+        resolved_actor_type = AuditActorType.system
+
+    with SessionLocal() as db:
+        try:
+            org_uuid = coerce_uuid(organization_id, raise_http=False)
+            actor_person_uuid = coerce_uuid(actor_person_id, raise_http=False)
+            payload = AuditEventCreate(
+                actor_type=resolved_actor_type,
+                organization_id=org_uuid,
+                actor_person_id=actor_person_uuid,
+                actor_id=actor_id,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                status_code=status_code,
+                is_success=is_success,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                request_id=request_id,
+                metadata_=metadata_,
+            )
+
+            data = payload.model_dump()
+            if payload.occurred_at is None:
+                data.pop("occurred_at", None)
+
+            event = AuditEvent(**data)
+            db.add(event)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        return str(event.id)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_jitter=True,
+)
 def log_audit_event(
+    self,
     actor_type: str,
     organization_id: str | None,
     actor_person_id: str | None,
@@ -54,10 +120,6 @@ def log_audit_event(
     Returns:
         Dict with event_id if successful, or error details
     """
-    from app.models.audit import AuditActorType, AuditEvent
-    from app.schemas.audit import AuditEventCreate
-    from app.services.common import coerce_uuid
-
     logger.debug("Logging audit event: %s %s", action, entity_type)
 
     result: dict[str, Any] = {
@@ -67,43 +129,29 @@ def log_audit_event(
     }
 
     try:
-        # Resolve actor type
-        try:
-            resolved_actor_type = AuditActorType(actor_type)
-        except ValueError:
-            resolved_actor_type = AuditActorType.system
-
-        with SessionLocal() as db:
-            org_uuid = coerce_uuid(organization_id, raise_http=False)
-            actor_person_uuid = coerce_uuid(actor_person_id, raise_http=False)
-            payload = AuditEventCreate(
-                actor_type=resolved_actor_type,
-                organization_id=org_uuid,
-                actor_person_id=actor_person_uuid,
-                actor_id=actor_id,
-                action=action,
-                entity_type=entity_type,
-                entity_id=entity_id,
-                status_code=status_code,
-                is_success=is_success,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                request_id=request_id,
-                metadata_=metadata_,
-            )
-
-            data = payload.model_dump()
-            if payload.occurred_at is None:
-                data.pop("occurred_at", None)
-
-            event = AuditEvent(**data)
-            db.add(event)
-            db.commit()
-
-            result["success"] = True
-            result["event_id"] = str(event.id)
-            logger.debug("Audit event logged: %s", event.id)
-
+        result["event_id"] = _write_audit_event(
+            actor_type=actor_type,
+            organization_id=organization_id,
+            actor_person_id=actor_person_id,
+            actor_id=actor_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            status_code=status_code,
+            is_success=is_success,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            request_id=request_id,
+            metadata_=metadata_,
+        )
+        result["success"] = True
+        logger.debug("Audit event logged: %s", result["event_id"])
+    except _DB_RETRYABLE_ERRORS as exc:
+        logger.warning(
+            "Retrying audit event task after database error",
+            exc_info=True,
+        )
+        raise self.retry(exc=exc)
     except Exception as e:
         logger.exception("Failed to log audit event")
         result["error"] = str(e)

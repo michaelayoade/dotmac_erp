@@ -1,197 +1,209 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import empty_state, icon_svg, stats_card, status_badge %}
+{% from "components/macros.html" import icon_svg, status_badge %}
 
-{% block page_title %}{{ pms_nav_label }} Dashboard{% endblock %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/people" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/perf" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">{{ performance_nav_label }}</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ pms_nav_label }} Dashboard</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/perf/pms" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">{{ pms_nav_label }}</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Dashboard</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
 <div class="flex items-center gap-2">
-    <a href="/people/perf/pms/contracts/new" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+    <a href="/people/perf/pms/contracts/new" class="btn btn-primary">
         {{ icon_svg("plus", "h-4 w-4") }}
-        New Contract
+        New Agreement
     </a>
 </div>
 {% endblock %}
 
 {% block content %}
+{% set contracts = compliance.contracts if compliance and compliance.contracts else None %}
+{% set monthly_reviews = compliance.monthly_reviews if compliance and compliance.monthly_reviews else None %}
+{% set appraisals = compliance.appraisals if compliance and compliance.appraisals else None %}
+{% set appeals = compliance.appeals if compliance and compliance.appeals else None %}
+{% set pips = compliance.pips if compliance and compliance.pips else None %}
+{% set grievances = compliance.grievances if compliance and compliance.grievances else None %}
+
+{% set contracts_total = contracts.total if contracts and contracts.total else 0 %}
+{% set contracts_signed = contracts.signed if contracts and contracts.signed else 0 %}
+{% set monthly_expected = monthly_reviews.expected if monthly_reviews and monthly_reviews.expected else 0 %}
+{% set monthly_completed = monthly_reviews.completed if monthly_reviews and monthly_reviews.completed else 0 %}
+{% set appraisals_total = appraisals.total if appraisals and appraisals.total else 0 %}
+{% set appraisals_completed = appraisals.completed if appraisals and appraisals.completed else 0 %}
+{% set appeals_pending = appeals.pending if appeals and appeals.pending else 0 %}
+{% set pips_active = pips.active if pips and pips.active else 0 %}
+{% set grievances_open = grievances.open if grievances and grievances.open else 0 %}
+
+{% set planning_total = (contracts_total if contracts_total else 0) + 1 %}
+{% set planning_done = (contracts_signed if contracts_signed else 0) %}
+{% set monthly_percent = (monthly_completed * 100 / monthly_expected) if monthly_expected else 0 %}
+{% set appraisal_percent = (appraisals_completed * 100 / appraisals_total) if appraisals_total else 0 %}
+{% set agreements_percent = (contracts_signed * 100 / contracts_total) if contracts_total else 0 %}
+
 <div class="space-y-6 page-enter">
     {% if not active_cycle %}
-    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
+    <div class="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 flex items-start gap-3">
         <div class="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400">
             {{ icon_svg("warning", "h-4 w-4") }}
         </div>
         <div>
             <p class="font-semibold text-amber-700 dark:text-amber-400">No Active Appraisal Cycle</p>
-            <p class="text-sm text-amber-600 dark:text-amber-300 mt-0.5">Create and activate an annual appraisal cycle to begin PMS tracking.</p>
-            <a href="/people/perf/cycles/new" class="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-400 underline hover:no-underline">Create a cycle</a>
+            <p class="text-sm text-amber-600 dark:text-amber-300 mt-0.5">Create and activate an annual cycle to see Performance dashboard metrics.</p>
+            <a href="/people/perf/cycles/new" class="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 underline hover:no-underline">Create a cycle</a>
         </div>
     </div>
-    {% else %}
+    {% endif %}
 
-    {# Active cycle header #}
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">{{ active_cycle.cycle_name }}</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                {{ active_cycle.review_period_start.strftime("%d %b %Y") if active_cycle.review_period_start else "" }}
-                –
-                {{ active_cycle.review_period_end.strftime("%d %b %Y") if active_cycle.review_period_end else "" }}
-                &nbsp;·&nbsp;
-                {{ status_badge(active_cycle.status.value, "sm") }}
-            </p>
-        </div>
-        <a href="/people/perf/cycles/{{ active_cycle.cycle_id }}" class="btn btn-secondary text-sm">
-            {{ icon_svg("external-link", "h-4 w-4") }}
-            View Cycle
-        </a>
-    </div>
-
-    {# KPI stat cards #}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {{ stats_card(
-            label="Contracts Signed",
-            value=(compliance.contracts.signed if compliance.contracts else 0) ~ " / " ~ (compliance.contracts.total if compliance.contracts else 0),
-            icon="document",
-            color="teal",
-            href="/people/perf/pms/contracts"
-        ) }}
-        {{ stats_card(
-            label="Monthly Reviews",
-            value=(compliance.monthly_reviews.completed if compliance.monthly_reviews else 0) ~ " / " ~ (compliance.monthly_reviews.expected if compliance.monthly_reviews else 0),
-            icon="check-circle",
-            color="blue",
-            href="/people/perf/pms/reviews"
-        ) }}
-        {{ stats_card(
-            label="Appraisals Done",
-            value=(compliance.appraisals.completed if compliance.appraisals else 0) ~ " / " ~ (compliance.appraisals.total if compliance.appraisals else 0),
-            icon="users",
-            color="emerald",
-            href="/people/perf/appraisals"
-        ) }}
-        {{ stats_card(
-            label="Appeals / PIPs",
-            value=(compliance.appeals.pending if compliance.appeals else 0) ~ " / " ~ (compliance.pips.active if compliance.pips else 0),
-            icon="warning",
-            color="amber",
-            href="/people/perf/pms/appeals"
-        ) }}
-    </div>
-
-    {# Rating Distribution #}
-    {% if rating_distribution and rating_distribution.ratings and rating_distribution.total > 0 %}
-    <div class="card">
-        <div class="card-header">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Rating Distribution</h2>
-            <span class="text-sm text-slate-500 dark:text-slate-400">{{ rating_distribution.total }} completed appraisal{{ "s" if rating_distribution.total != 1 else "" }}</span>
-        </div>
-        <div class="p-6">
-            <div class="space-y-4">
-                {% for r in rating_distribution.ratings %}
-                {% if r.count > 0 %}
-                <div class="flex items-center gap-3">
-                    <span class="w-24 text-sm text-slate-600 dark:text-slate-400 text-right shrink-0">{{ r.label }}</span>
-                    <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-6 overflow-hidden">
-                        <div class="h-6 rounded-full bg-violet-500 dark:bg-violet-400 flex items-center justify-end pr-2 transition-all"
-                             style="width: {{ r.percentage if r.percentage else 0 }}%">
-                            {% if r.percentage and r.percentage > 8 %}
-                            <span class="text-xs text-white font-medium">{{ r.count }}</span>
-                            {% endif %}
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <section class="card p-5">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Workflow Progress</h2>
+            <div class="mt-4 space-y-3 text-sm">
+                {% set wf_steps = [
+                    ('Set Goals', planning_done, planning_total),
+                    ('Agreements Signed', contracts_signed, contracts_total),
+                    ('Monthly Reviews', monthly_completed, monthly_expected),
+                    ('Appraisals', appraisals_completed, appraisals_total)
+                ] %}
+                {% for step_label, step_done, step_total in wf_steps %}
+                    {% set step_pct = ((step_done * 100 / step_total) if step_total else 0) | round(0) | int %}
+                    <div>
+                        <div class="mb-1 flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
+                            <span>{{ step_label }}</span>
+                            <span>{{ step_done }} / {{ step_total }}</span>
+                        </div>
+                        <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-700">
+                            <div class="h-2 rounded-full bg-violet-500 dark:bg-violet-400" style="width: {{ step_pct }}%"></div>
                         </div>
                     </div>
-                    <span class="w-14 text-right text-sm font-mono tabular-nums text-slate-600 dark:text-slate-400 shrink-0">{{ r.percentage if r.percentage else 0 }}%</span>
-                </div>
-                {% endif %}
                 {% endfor %}
             </div>
+        </section>
+
+        <section class="card p-5">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Rate vs Target</h2>
+            <div class="mt-4 space-y-3">
+                <div>
+                    <div class="mb-1 flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                        <span>Agreements Signed</span>
+                        <span>{{ agreements_percent | round(0) | int }}%</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div class="h-2 rounded-full bg-teal-500 dark:bg-teal-400" style="width: {{ agreements_percent }}%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="mb-1 flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                        <span>Monthly Check-ins</span>
+                        <span>{{ monthly_percent | round(0) | int }}%</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div class="h-2 rounded-full bg-blue-500 dark:bg-blue-400" style="width: {{ monthly_percent }}%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="mb-1 flex justify-between text-xs text-slate-600 dark:text-slate-300">
+                        <span>Appraisal Completion</span>
+                        <span>{{ appraisal_percent | round(0) | int }}%</span>
+                    </div>
+                    <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div class="h-2 rounded-full bg-emerald-500 dark:bg-emerald-400" style="width: {{ appraisal_percent }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <section class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">What to do next</h2>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Pick a workflow area to open that section.</p>
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <a href="/people/perf/pms/institutional" class="block rounded-lg border border-slate-200 dark:border-slate-800 p-4 hover:border-violet-300 dark:hover:border-violet-600">
+                <p class="font-semibold text-sm text-slate-900 dark:text-white">Planning</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Department Goals, Strategic Objectives, Annual Cycles, Agreements</p>
+            </a>
+            <a href="/people/perf/pms/reviews" class="block rounded-lg border border-slate-200 dark:border-slate-800 p-4 hover:border-violet-300 dark:hover:border-violet-600">
+                <p class="font-semibold text-sm text-slate-900 dark:text-white">Reviews</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Monthly Check-ins, Self-Assessments, Manager Review, Countersign, Committee</p>
+            </a>
+            <a href="/people/perf/pms/pips" class="block rounded-lg border border-slate-200 dark:border-slate-800 p-4 hover:border-violet-300 dark:hover:border-violet-600">
+                <p class="font-semibold text-sm text-slate-900 dark:text-white">Issues</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">PIPs, Appeals, Grievances, Stakeholder Feedback</p>
+            </a>
+            <a href="/people/perf/pms/reports" class="block rounded-lg border border-slate-200 dark:border-slate-800 p-4 hover:border-violet-300 dark:hover:border-violet-600">
+                <p class="font-semibold text-sm text-slate-900 dark:text-white">Reports</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Compliance Dashboard, Reports, Rewards, Feedback</p>
+            </a>
         </div>
-    </div>
-    {% endif %}
-
-    {% endif %}
-
-    {# “Merged” PMS entry points: fewer top-level sections with deep links #}
-    <div class="card p-6">
-        <h2 class="text-base font-semibold text-slate-900 dark:text-white">PMS Sections</h2>
-        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Navigate PMS by section instead of individual modules.</p>
-    </div>
+    </section>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="card p-5">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
-                    {{ icon_svg("document", "h-5 w-5") }}
-                </div>
-                <div class="flex-1">
-                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Performance Execution</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Contracts, check-ins, and improvement plans.</p>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/contracts">Contracts</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/reviews">Monthly Reviews</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/pips">Improvement Plans</a>
-                    </div>
-                </div>
+        <section class="card p-5">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Planning Compliance</h2>
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <a href="/people/perf/pms/institutional" class="rounded-lg border border-slate-200 dark:border-slate-800 p-3 flex justify-between">
+                    <span class="text-slate-600 dark:text-slate-300">Department goals</span>
+                    <span>{{ contracts_signed }} / {{ contracts_total }}</span>
+                </a>
+                <a href="/people/perf/pms/objectives" class="rounded-lg border border-slate-200 dark:border-slate-800 p-3 flex justify-between">
+                    <span class="text-slate-600 dark:text-slate-300">Strategic objectives</span>
+                    <span>Open</span>
+                </a>
+                <a href="/people/perf/pms/cycles" class="rounded-lg border border-slate-200 dark:border-slate-800 p-3 flex justify-between">
+                    <span class="text-slate-600 dark:text-slate-300">Annual cycles</span>
+                    <span>Manage</span>
+                </a>
+                <a href="/people/perf/pms/contracts" class="rounded-lg border border-slate-200 dark:border-slate-800 p-3 flex justify-between">
+                    <span class="text-slate-600 dark:text-slate-300">Agreements</span>
+                    <span>{{ contracts_signed }}</span>
+                </a>
             </div>
-        </div>
-
-        <div class="card p-5">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    {{ icon_svg("shield-check", "h-5 w-5") }}
-                </div>
-                <div class="flex-1">
-                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Governance & Disputes</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Governance oversight and dispute resolution.</p>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/governance">Governance</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/grievances">Grievances</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/stakeholder-feedback">Stakeholder Feedback</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/appeals">Appeals</a>
-                    </div>
-                </div>
+        </section>
+        <section class="card p-5">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Issues Snapshot</h2>
+            <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+                <a href="/people/perf/pms/pips" class="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-center">
+                    <p class="text-xs uppercase tracking-wide text-emerald-700">Active PIPs</p>
+                    <p class="mt-2 text-xl font-semibold text-emerald-900">{{ pips_active }}</p>
+                </a>
+                <a href="/people/perf/pms/appeals" class="rounded-lg border border-amber-100 bg-amber-50 p-3 text-center">
+                    <p class="text-xs uppercase tracking-wide text-amber-700">Pending Appeals</p>
+                    <p class="mt-2 text-xl font-semibold text-amber-900">{{ appeals_pending }}</p>
+                </a>
+                <a href="/people/perf/pms/grievances" class="rounded-lg border border-sky-100 bg-sky-50 p-3 text-center">
+                    <p class="text-xs uppercase tracking-wide text-sky-700">Open Grievances</p>
+                    <p class="mt-2 text-xl font-semibold text-sky-900">{{ grievances_open }}</p>
+                </a>
             </div>
-        </div>
-
-        <div class="card p-5">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-                    {{ icon_svg("building", "h-5 w-5") }}
-                </div>
-                <div class="flex-1">
-                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Institutional Performance</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Objectives and institutional scoring workflows.</p>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/institutional">Institutional Records</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/objectives">Objectives</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card p-5">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                    {{ icon_svg("clipboard", "h-5 w-5") }}
-                </div>
-                <div class="flex-1">
-                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Insights & Outcomes</h3>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Reports and reward actions.</p>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/reports">Reports</a>
-                        <a class="btn btn-secondary text-sm" href="/people/perf/pms/rewards">Rewards</a>
-                    </div>
-                </div>
-            </div>
-        </div>
+        </section>
     </div>
+
+    {% if rating_distribution and rating_distribution.ratings and rating_distribution.total > 0 %}
+    <section class="card p-5">
+        <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Rating Distribution</h2>
+            <span class="text-xs text-slate-500 dark:text-slate-400">{{ rating_distribution.total }} completed appraisal{{ "s" if rating_distribution.total != 1 else "" }}</span>
+        </div>
+        <div class="mt-4 space-y-3">
+            {% for r in rating_distribution.ratings %}
+            {% if r.count > 0 %}
+            <div class="flex items-center gap-3">
+                <span class="w-32 text-xs text-right text-slate-600 dark:text-slate-300">{{ r.label }}</span>
+                <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-5 overflow-hidden">
+                    <div class="h-5 rounded-full bg-violet-500 dark:bg-violet-400" style="width: {{ r.percentage if r.percentage else 0 }}%"></div>
+                </div>
+                <span class="w-14 text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums">{{ r.count }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}

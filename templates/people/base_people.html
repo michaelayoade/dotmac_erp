@@ -10,7 +10,7 @@
 {% include "partials/_brand_context.html" %}
 <div class="app-shell"
      style="display: flex !important; flex-direction: row !important;"
-     x-data="{
+        x-data="{
         sidebarOpen: false,
         sidebarCollapsed: false,
         sidebarCollapsedStored: localStorage.getItem('appSidebarCollapsed') === 'true',
@@ -185,19 +185,19 @@
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a1 1 0 012 0v16a1 1 0 01-2 0V4zM4 10a1 1 0 011-1h3a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V10zm14-4a1 1 0 011-1h3a1 1 0 011 1v14a1 1 0 01-1 1h-3a1 1 0 01-1-1V6z"/>
                 </svg>
-                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>{{ performance_nav_label }}</span>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Performance</span>
             </a>
             {% endif %}
 
             {% if performance_government_enabled %}
             <a href="/people/perf/pms/dashboard"
-               :aria-current="['pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'page' : false"
-               :class="['pms-dashboard','pms-governance','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               :aria-current="['pms-dashboard','pms-governance','pms-templates','pms-kras','pms-cycles','pms-goals','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-feedback','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'page' : false"
+               :class="['pms-dashboard','pms-governance','pms-templates','pms-kras','pms-cycles','pms-goals','pms-contracts','pms-reviews','pms-institutional','pms-objectives','pms-pips','pms-appeals','pms-reports','pms-feedback','pms-grievances','pms-stakeholder-feedback','pms-rewards'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
-                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>{{ pms_nav_label }}</span>
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Performance</span>
             </a>
             {% endif %}
 

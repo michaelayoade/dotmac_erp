@@ -18,6 +18,7 @@ from app.services.common import (
     ServiceError,
     ValidationError,
 )
+from app.services.people.leave.leave_service import LeaveServiceError
 from app.templates import templates
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,24 @@ def _friendly_bad_request_message(detail: object) -> str:
         return fallback
 
     return fallback
+
+
+def _unwrap_http_exception(
+    exc: BaseException,
+) -> HTTPException | StarletteHTTPException | None:
+    """Extract a wrapped HTTPException from ExceptionGroup-like containers."""
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
+        return exc
+
+    children = getattr(exc, "exceptions", None)
+    if not children:
+        return None
+
+    for child in children:
+        unwrapped = _unwrap_http_exception(child)
+        if unwrapped is not None:
+            return unwrapped
+    return None
 
 
 def register_error_handlers(app) -> None:
@@ -407,6 +426,26 @@ def register_error_handlers(app) -> None:
             headers={"Retry-After": str(exc.retry_after)},
         )
 
+    @app.exception_handler(LeaveServiceError)
+    async def leave_service_error_handler(request: Request, exc: LeaveServiceError):
+        """Handle leave service validation/overlap errors (409)."""
+        message = str(exc)
+        logger.warning(
+            "Leave service error on %s %s: %s",
+            request.method,
+            request.url.path,
+            message,
+        )
+        if _is_html_request(request):
+            return RedirectResponse(
+                url=f"/people/self/leave?error={quote(message)}",
+                status_code=303,
+            )
+        return JSONResponse(
+            status_code=409,
+            content=_error_payload("leave_service_error", message, None),
+        )
+
     @app.exception_handler(AuthenticationError)
     async def authentication_error_handler(request: Request, exc: AuthenticationError):
         """Handle authentication errors (401)."""
@@ -475,6 +514,18 @@ def register_error_handlers(app) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
+        http_exc = _unwrap_http_exception(exc)
+        if http_exc is not None:
+            logger.warning(
+                "HTTP exception on %s %s: %s",
+                request.method,
+                request.url.path,
+                http_exc.detail,
+            )
+            return await _handle_http_exception(
+                request, http_exc.status_code, http_exc.detail
+            )
+
         # Log the full exception with stack trace for debugging
         logger.exception(
             "Unhandled exception on %s %s: %s",

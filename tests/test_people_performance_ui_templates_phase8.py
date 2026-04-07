@@ -14,8 +14,7 @@ def test_sidebar_template_has_mode_gated_performance_entries() -> None:
     assert "{% if performance_government_enabled %}" in src
     assert 'href="/people/perf"' in src
     assert 'href="/people/perf/pms/dashboard"' in src
-    assert "{{ performance_nav_label }}" in src
-    assert "{{ pms_nav_label }}" in src
+    assert ">Performance<" in src
 
 
 def test_landing_templates_use_mode_specific_labels() -> None:
@@ -23,4 +22,4 @@ def test_landing_templates_use_mode_specific_labels() -> None:
     pms_src = _read("templates/people/perf/pms/dashboard.html")
 
     assert "{{ performance_nav_label }}" in private_src
-    assert "{{ pms_nav_label }} Dashboard" in pms_src
+    assert "{{ pms_nav_label }}" in pms_src

@@ -1,5 +1,7 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination, icon_svg %}
+{% set cycles_base = cycles_base_url | default("/people/perf/cycles") %}
+{% set perf_home = "/people/perf/pms/dashboard" if active_module and active_module.startswith("pms-") else "/people/perf/appraisals" %}
 
 {% block page_title %}Appraisal Cycles{% endblock %}
 
@@ -8,14 +10,14 @@
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ performance_nav_label }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="{{ perf_home }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ performance_nav_label }}</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Cycles</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/people/perf/cycles/new" class="btn btn-primary">
+<a href="{{ cycles_base }}/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
     New Cycle
 </a>
@@ -33,7 +35,7 @@
     {% endif %}
 
     {% call(filter_attrs) compact_filters(
-        base_url="/people/perf/appraisal-cycles",
+        base_url=cycles_base,
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
@@ -66,12 +68,12 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for cycle in cycles %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='/people/perf/cycles/{{ cycle.cycle_id }}'">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='{{ cycles_base }}/{{ cycle.cycle_id }}'">
                         <td class="px-4 py-3 text-sm font-mono text-slate-600 dark:text-slate-300">
                             {{ cycle.cycle_code }}
                         </td>
                         <td class="px-4 py-3">
-                            <a href="/people/perf/cycles/{{ cycle.cycle_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                            <a href="{{ cycles_base }}/{{ cycle.cycle_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
                                 {{ cycle.cycle_name }}
                             </a>
                             {% if cycle.description %}
@@ -98,7 +100,7 @@
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <a href="/people/perf/cycles/{{ cycle.cycle_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View">
+                            <a href="{{ cycles_base }}/{{ cycle.cycle_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View">
                                 {{ icon_svg("chevron-right", "h-4 w-4") }}
                             </a>
                         </td>
@@ -118,7 +120,7 @@
     <div class="card p-8 text-center">
         {{ icon_svg("calendar", "w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4") }}
         <p class="text-slate-500 dark:text-slate-400 mb-4">No appraisal cycles found.</p>
-        <a href="/people/perf/cycles/new" class="btn btn-primary">Create First Cycle</a>
+        <a href="{{ cycles_base }}/new" class="btn btn-primary">Create First Cycle</a>
     </div>
     {% endif %}
 
@@ -126,7 +128,7 @@
     {{ pagination(
         page=page,
         total_pages=total_pages,
-        total_count=total_count,
+        total_count=total | default(0),
         limit=limit,
         search=search
     ) }}

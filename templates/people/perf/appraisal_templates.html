@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg %}
+{% set templates_base = templates_base_url | default("/people/perf/templates") %}
 
 {% block page_title %}Appraisal Templates{% endblock %}
 
@@ -15,7 +16,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/people/perf/templates/new" class="btn btn-primary">
+<a href="{{ templates_base }}/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
     New Template
 </a>
@@ -33,7 +34,7 @@
     {% endif %}
 
     {% call(filter_attrs) compact_filters(
-        base_url="/people/perf/appraisal-templates",
+        base_url=templates_base,
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
@@ -66,12 +67,12 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for template in templates %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='/people/perf/templates/{{ template.template_id }}'">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='{{ templates_base }}/{{ template.template_id }}'">
                         <td class="px-4 py-3 text-sm font-mono text-slate-600 dark:text-slate-300">
                             {{ template.template_code }}
                         </td>
                         <td class="px-4 py-3">
-                            <a href="/people/perf/templates/{{ template.template_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                            <a href="{{ templates_base }}/{{ template.template_id }}" class="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
                                 {{ template.template_name }}
                             </a>
                             {% if template.description %}
@@ -111,7 +112,7 @@
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <a href="/people/perf/templates/{{ template.template_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View">
+                            <a href="{{ templates_base }}/{{ template.template_id }}" class="text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" title="View">
                                 {{ icon_svg("chevron-right", "h-4 w-4") }}
                             </a>
                         </td>
@@ -125,7 +126,7 @@
     <div class="card p-8 text-center">
         {{ icon_svg("document", "w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4") }}
         <p class="text-slate-500 dark:text-slate-400 mb-4">No appraisal templates found.</p>
-        <a href="/people/perf/templates/new" class="btn btn-primary">Create First Template</a>
+        <a href="{{ templates_base }}/new" class="btn btn-primary">Create First Template</a>
     </div>
     {% endif %}
 
@@ -133,7 +134,7 @@
     {{ pagination(
         page=page,
         total_pages=total_pages,
-        total_count=total_count,
+        total_count=total | default(0),
         limit=limit,
         search=search
     ) }}
