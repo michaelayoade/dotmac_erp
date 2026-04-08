@@ -46,6 +46,7 @@ from app.services.finance.ar.web.base import (
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.tax.tax_master import tax_code_service
+from app.services.people.payroll.payslip_pdf import PayslipPDFService
 from app.services.recent_activity import get_recent_activity
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -55,6 +56,30 @@ logger = logging.getLogger(__name__)
 
 class InvoiceWebService:
     """Web service methods for AR invoices."""
+
+    @staticmethod
+    def _resolve_print_logo_url(org, organization_id: UUID) -> str | None:
+        """Resolve invoice print logo using the same flow as payslip PDFs."""
+        resolved_logo_url: str | None = None
+
+        if org:
+            if getattr(org, "branding", None) and org.branding.logo_url:
+                resolved_logo_url = org.branding.logo_url
+            elif getattr(org, "logo_url", None):
+                resolved_logo_url = org.logo_url
+
+        if not resolved_logo_url:
+            return None
+
+        resolved_logo_url = PayslipPDFService._resolve_logo_url(
+            resolved_logo_url,
+            PayslipPDFService._pdf_asset_base_url(),
+        )
+        embedded_logo_data = PayslipPDFService._try_embed_branding_logo(
+            resolved_logo_url,
+            organization_id=organization_id,
+        )
+        return embedded_logo_data or resolved_logo_url
 
     @staticmethod
     def build_invoice_input(
@@ -512,12 +537,14 @@ class InvoiceWebService:
 
         # Fetch org TIN for display on invoice document
         org_tin: str | None = None
+        print_logo_url: str | None = None
         try:
             from app.models.finance.core_org.organization import Organization
 
             org = db.get(Organization, org_id)
             if org:
                 org_tin = org.tax_identification_number
+                print_logo_url = InvoiceWebService._resolve_print_logo_url(org, org_id)
         except (AttributeError, TypeError):
             pass  # org TIN lookup is best-effort
 
@@ -527,6 +554,7 @@ class InvoiceWebService:
             "lines": lines_view,
             "attachments": attachments_view,
             "org_tin": org_tin,
+            "print_logo_url": print_logo_url,
             "recent_activity": get_recent_activity(
                 db,
                 org_id,

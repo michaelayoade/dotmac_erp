@@ -167,6 +167,183 @@
 {% endif %}
 
 {% if invoice %}
+{% include "partials/_brand_context.html" %}
+{% set org_display_name = organization.legal_name if organization and organization.legal_name else (organization.name if organization and organization.name else brand_name) %}
+{% set org_address = organization.address if organization and organization.address else "" %}
+{% set org_phone = organization.phone if organization and organization.phone else "" %}
+{% set raw_addr = customer.address if customer and customer.address else invoice.billing_address %}
+
+<div class="invoice-print-sheet" aria-hidden="true">
+    <div class="print-sheet-header">
+        <div class="print-company-info">
+            {% if print_logo_url %}
+            <img src="{{ print_logo_url }}" alt="{{ org_display_name }} logo" class="print-company-logo">
+            {% else %}
+            <div class="print-company-name">{{ org_display_name }}</div>
+            {% endif %}
+            {% if org_address %}
+            <div class="print-company-address">{{ org_address }}</div>
+            {% endif %}
+            {% if org_phone %}
+            <div class="print-company-address">{{ org_phone }}</div>
+            {% endif %}
+        </div>
+        <div class="print-document-info">
+            <div class="print-document-title">Invoice</div>
+            <div class="print-document-number">{{ invoice.invoice_number }}</div>
+            <div class="print-document-period">
+                Invoice Date: {{ invoice.invoice_date }}
+            </div>
+        </div>
+    </div>
+
+    <div class="print-party-section">
+        <div class="print-party-details">
+            <div class="print-party-name">{{ customer.customer_name if customer and customer.customer_name else (invoice.customer_name if invoice.customer_name else '') }}</div>
+            <div class="print-party-meta">
+                <span>Due: {{ invoice.due_date }}</span>
+                <span>Terms: {{ invoice.payment_terms if invoice.payment_terms else "Net 30" }}</span>
+                <span>Currency: {{ invoice.currency if invoice.currency else "NGN" }}</span>
+                {% if customer and customer.customer_code %}
+                <span>Customer Code: {{ customer.customer_code }}</span>
+                {% endif %}
+            </div>
+            {% if raw_addr %}
+            <div class="print-party-address">
+                {% if raw_addr is mapping %}
+                {{ [raw_addr.street_1, raw_addr.street_2, raw_addr.city, raw_addr.zip_code] | select | join(', ') }}
+                {% else %}
+                {{ raw_addr }}
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if invoice.purpose %}
+            <div class="print-purpose">{{ invoice.purpose }}</div>
+            {% endif %}
+        </div>
+        <div class="print-balance-box">
+            <div class="print-balance-label">Balance Due</div>
+            <div class="print-balance-value">{{ invoice.balance if invoice.balance else (invoice.total_amount if invoice.total_amount else "0.00") }}</div>
+        </div>
+    </div>
+
+    <div class="print-table-section">
+        <div class="print-table-title">Invoice Lines</div>
+        <table class="print-lines-table">
+            <thead>
+                <tr>
+                    <th scope="col">Description</th>
+                    <th scope="col">Qty</th>
+                    <th scope="col">Unit Price</th>
+                    <th scope="col">VAT/Tax</th>
+                    <th scope="col">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}
+                <tr>
+                    <td>
+                        <div>{{ line.description }}</div>
+                        {% if line.item_code %}
+                        <div class="print-line-meta">{{ line.item_code }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ line.quantity }}</td>
+                    <td>{{ line.unit_price }}</td>
+                    <td>
+                        {% if line.vat_amount_raw and line.vat_amount_raw > 0 %}
+                        <div>{{ line.vat_amount }}</div>
+                        {% if line.vat_label %}
+                        <div class="print-line-meta">{{ line.vat_label }}</div>
+                        {% endif %}
+                        {% elif line.tax_amount_raw and line.tax_amount_raw > 0 %}
+                        <div>{{ line.tax_amount }}</div>
+                        {% if line.tax_code or line.tax_name %}
+                        <div class="print-line-meta">{{ line.tax_code or line.tax_name }}</div>
+                        {% endif %}
+                        {% else %}
+                        <span class="print-line-empty">No Tax</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ line.line_amount }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="print-line-empty">No invoice lines</td>
+                </tr>
+                {% endfor %}
+                <tr class="print-table-total">
+                    <td colspan="4"><strong>Subtotal</strong></td>
+                    <td><strong>{{ invoice.subtotal if invoice.subtotal else "0.00" }}</strong></td>
+                </tr>
+                {% if invoice.discount_amount and invoice.discount_amount != 0 %}
+                <tr class="print-table-total">
+                    <td colspan="4"><strong>Discount</strong></td>
+                    <td><strong>-{{ invoice.discount_amount }}</strong></td>
+                </tr>
+                {% endif %}
+                <tr class="print-table-total">
+                    <td colspan="4"><strong>Tax (VAT)</strong></td>
+                    <td><strong>{{ invoice.tax_amount if invoice.tax_amount else "0.00" }}</strong></td>
+                </tr>
+                <tr class="print-table-grand-total">
+                    <td colspan="4"><strong>Total Amount</strong></td>
+                    <td><strong>{{ invoice.total_amount if invoice.total_amount else "0.00" }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="print-summary-section">
+        <div class="print-summary-grid">
+            <div class="print-bank-details">
+                <div class="print-bank-title">Bank Details</div>
+                <div class="print-bank-row">
+                    <span>Name:</span>
+                    <span>DOTMAC TECHNOLOGIES LIMITED</span>
+                </div>
+                <div class="print-bank-row">
+                    <span>Account Number:</span>
+                    <span>1011649523</span>
+                </div>
+                <div class="print-bank-row">
+                    <span>Sort Code:</span>
+                    <span>057080196</span>
+                </div>
+                <div class="print-bank-row">
+                    <span>Bank:</span>
+                    <span>ZENITH BANK PLC</span>
+                </div>
+                <div class="print-bank-row">
+                    <span>TIN:</span>
+                    <span>05476120-0001</span>
+                </div>
+            </div>
+            <div class="print-summary-right">
+                <div class="print-summary-breakdown">
+                    <div class="print-summary-row">
+                        <span>Total Amount</span>
+                        <span>{{ invoice.total_amount if invoice.total_amount else "0.00" }}</span>
+                    </div>
+                    <div class="print-summary-row">
+                        <span>Amount Paid</span>
+                        <span>{{ invoice.amount_paid if invoice.amount_paid else "0.00" }}</span>
+                    </div>
+                    <div class="print-summary-row print-summary-row-net">
+                        <span>Balance Due</span>
+                        <span>{{ invoice.balance if invoice.balance else (invoice.total_amount if invoice.total_amount else "0.00") }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="print-footer">
+        <div class="print-footer-copy">Directors | Michael Ayoade, Nigerian | Raphael Ayoade, Nigerian | No 8, Ikot Ekpene Close, off Emeka Anyaoku Street, Area 11, Garki, Abuja. www.dotmac.ng Contact: +234 805 346 0893; +234 911 272 0945.</div>
+    </div>
+</div>
+
+<div class="invoice-screen-view">
 {# Define workflow steps for AR Invoice #}
 {% set workflow_steps = [
     {'key': 'DRAFT', 'label': 'Draft', 'icon': 'edit'},
@@ -550,13 +727,40 @@
 <div class="mt-6">
     {% include "partials/_recent_activity.html" %}
 </div>
+</div>
 
 {# Print Styles #}
 <style>
+    .invoice-print-sheet {
+        display: none;
+    }
+
 @media print {
     /* Hide non-essential elements */
     .print\:hidden {
         display: none !important;
+    }
+
+    .invoice-screen-view {
+        display: none !important;
+    }
+
+    .invoice-print-sheet {
+        display: block !important;
+        padding-bottom: 32mm;
+    }
+
+    body {
+        font-family: 'Helvetica Neue', Arial, sans-serif !important;
+        font-size: 10pt;
+        line-height: 1.4;
+        color: #1e293b !important;
+        background: white !important;
+    }
+
+    @page {
+        size: A4;
+        margin: 1.5cm;
     }
 
     /* Ensure page breaks work well */
@@ -573,6 +777,288 @@
     /* Ensure monospace fonts for amounts */
     .font-mono {
         font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+    .invoice-print-sheet * {
+        box-sizing: border-box;
+    }
+
+    .print-sheet-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding-bottom: 15px;
+        border-bottom: 2px solid var(--brand-primary, #0d9488);
+        margin-bottom: 20px;
+    }
+
+    .print-company-info {
+        flex: 1;
+    }
+
+    .print-company-logo {
+        max-height: 44px;
+        max-width: 180px;
+        margin-bottom: 6px;
+        object-fit: contain;
+        display: block;
+    }
+
+    .print-company-name {
+        font-size: 16pt;
+        font-weight: 700;
+        color: var(--brand-primary, #0d9488);
+        margin-bottom: 4px;
+    }
+
+    .print-company-address {
+        font-size: 9pt;
+        color: #64748b;
+    }
+
+    .print-document-info {
+        text-align: right;
+    }
+
+    .print-document-title {
+        font-size: 14pt;
+        font-weight: 700;
+        color: #1e293b;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .print-document-number {
+        font-size: 11pt;
+        color: var(--brand-primary, #0d9488);
+        font-weight: 600;
+        margin-top: 4px;
+    }
+
+    .print-document-period {
+        font-size: 9pt;
+        color: #64748b;
+        margin-top: 4px;
+    }
+
+    .print-party-section {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .print-party-details {
+        flex: 1;
+    }
+
+    .print-party-name {
+        font-size: 12pt;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 4px;
+    }
+
+    .print-party-meta {
+        font-size: 9pt;
+        color: #64748b;
+    }
+
+    .print-party-meta span {
+        display: inline-block;
+        margin-right: 15px;
+        margin-bottom: 4px;
+    }
+
+    .print-party-address,
+    .print-purpose {
+        font-size: 9pt;
+        color: #475569;
+        margin-top: 8px;
+        white-space: pre-wrap;
+    }
+
+    .print-balance-box {
+        min-width: 180px;
+        text-align: right;
+    }
+
+    .print-balance-label {
+        font-size: 8pt;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .print-balance-value {
+        font-size: 18pt;
+        font-weight: 700;
+        color: #1e293b;
+        font-family: 'Courier New', monospace;
+    }
+
+    .print-table-section {
+        margin-bottom: 20px;
+    }
+
+    .print-table-title {
+        font-size: 10pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 8px 12px;
+        border-radius: 4px 4px 0 0;
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .print-lines-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9pt;
+    }
+
+    .print-lines-table th {
+        background: #f1f5f9;
+        font-weight: 600;
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .print-lines-table th:not(:first-child),
+    .print-lines-table td:not(:first-child) {
+        text-align: right;
+    }
+
+    .print-lines-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .print-lines-table td:last-child,
+    .print-lines-table td:nth-child(2),
+    .print-lines-table td:nth-child(3),
+    .print-lines-table td:nth-child(4) {
+        font-family: 'Courier New', monospace;
+    }
+
+    .print-line-meta {
+        color: #94a3b8;
+        font-size: 8pt;
+        margin-top: 2px;
+    }
+
+    .print-line-empty {
+        color: #94a3b8;
+        font-style: italic;
+    }
+
+    .print-table-total {
+        background: #f8fafc;
+        font-weight: 700;
+    }
+
+    .print-table-grand-total td {
+        border-top: 2px solid #e2e8f0;
+        background: #f8fafc;
+        font-weight: 700;
+    }
+
+    .print-summary-section {
+        background: linear-gradient(135deg, var(--brand-primary, #0d9488) 0%, var(--brand-accent, #14b8a6) 100%);
+        color: white !important;
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .print-summary-grid {
+        display: flex;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 28px;
+    }
+
+    .print-bank-details {
+        flex: 1;
+    }
+
+    .print-bank-title {
+        font-size: 10pt;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .print-bank-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 6px;
+        font-size: 10pt;
+    }
+
+    .print-bank-row span:first-child {
+        min-width: 110px;
+        opacity: 0.9;
+    }
+
+    .print-bank-row span:last-child {
+        font-weight: 600;
+    }
+
+    .print-summary-right {
+        min-width: 320px;
+        max-width: 360px;
+        margin-left: auto;
+    }
+
+    .print-summary-breakdown {
+        width: 100%;
+    }
+
+    .print-summary-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 10pt;
+    }
+
+    .print-summary-row span:last-child {
+        font-family: 'Courier New', monospace;
+    }
+
+    .print-summary-row-net {
+        font-size: 11pt;
+        font-weight: 700;
+        border-top: 1px solid rgba(255, 255, 255, 0.3);
+        padding-top: 8px;
+        margin-top: 8px;
+    }
+
+    .print-footer {
+        position: fixed;
+        left: 1.5cm;
+        right: 1.5cm;
+        bottom: 1.5cm;
+        padding-top: 15px;
+        border-top: 1px solid #e2e8f0;
+        text-align: left;
+        padding-left: 18px;
+        background: white;
+    }
+
+    .print-footer-copy {
+        font-size: 8pt;
+        color: #64748b;
+        width: 100%;
+        max-width: none;
+        line-height: 1.45;
     }
 }
 </style>
