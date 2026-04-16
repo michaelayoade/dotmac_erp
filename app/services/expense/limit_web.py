@@ -1390,11 +1390,11 @@ class ExpenseLimitWebService:
 
         now = datetime.now(UTC)
 
-        latest_reset = service.get_latest_weekly_reset(
+        window_start, latest_reset = service._get_weekly_budget_window(
             org_id,
-            approver_id=limit.scope_id,
-            approver_limit_id=limit.approver_limit_id,
-            from_datetime=None,
+            limit.scope_id,
+            limit.approver_limit_id,
+            as_of=now,
         )
         usage_query = select(
             func.coalesce(func.sum(ExpenseClaim.total_approved_amount), Decimal("0"))
@@ -1402,13 +1402,10 @@ class ExpenseLimitWebService:
             ExpenseClaim.organization_id == org_id,
             ExpenseClaim.status == ExpenseClaimStatus.PAID,
             ExpenseClaim.paid_on.isnot(None),
+            ExpenseClaim.paid_on >= window_start.date(),
             ExpenseClaim.paid_on <= now.date(),
             ExpenseClaim.approver_id == limit.scope_id,
         )
-        if latest_reset is not None:
-            usage_query = usage_query.where(
-                ExpenseClaim.paid_on >= latest_reset.reset_at.date()
-            )
 
         used_amount = db.scalar(usage_query) or Decimal("0")
         remaining_budget = base_budget - used_amount
@@ -1417,7 +1414,7 @@ class ExpenseLimitWebService:
             "usage_label": (
                 f"Since manual reset on {latest_reset.reset_at.date().isoformat()}"
                 if latest_reset
-                else "Since budget tracking began; manual reset required"
+                else f"This week starting {window_start.date().isoformat()}"
             ),
             "base_budget": base_budget,
             "used_amount": used_amount,

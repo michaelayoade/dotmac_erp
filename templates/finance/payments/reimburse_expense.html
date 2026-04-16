@@ -96,6 +96,38 @@
                 </div>
             </div>
         </div>
+        {% elif can_reset_intent and not can_reimburse %}
+        <div class="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
+            <div class="flex items-start gap-3">
+                {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0 text-indigo-500 mt-0.5") }}
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-indigo-700 dark:text-indigo-400">Reimburse intent is recoverable</p>
+                    <p class="mt-1 text-xs text-indigo-600 dark:text-indigo-500">
+                        Latest intent status is {{ latest_intent_status }} and can be reset for retry.
+                        {% if latest_intent_error %}
+                        Reason: {{ latest_intent_error }}
+                        {% endif %}
+                    </p>
+                    <form method="post" action="/finance/payments/reimburse/{{ expense_claim.claim_id }}/reset-intent" class="mt-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <label for="reset_reason" class="mb-1 block text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                            Reset reason (optional)
+                        </label>
+                        <textarea id="reset_reason" name="reason" rows="2" class="w-full rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm dark:border-indigo-600 dark:bg-slate-800 dark:text-white" placeholder="Reconcile gateway error, retry after funding update, etc."></textarea>
+                        <label class="mt-3 flex items-start gap-2 text-xs text-indigo-700 dark:text-indigo-200">
+                            <input type="checkbox" name="force" value="true" class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            <span>Force reset even if the intent is not in a retryable state (ABANDONED/FAILED/EXPIRED).</span>
+                        </label>
+                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Use force reset only when an active intent is stuck and cannot be retried normally.
+                        </p>
+                        <button type="submit" class="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-300 bg-indigo-100 px-4 py-2.5 text-sm font-medium text-indigo-700 shadow-sm transition-colors hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-200 dark:hover:bg-indigo-900/60">
+                            Mark intent as Abandoned and continue
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
         {% elif not can_reimburse %}
         <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
             <div class="flex items-center gap-3">
@@ -129,6 +161,24 @@
             </div>
         </div>
         {% else %}
+        {% if can_reset_intent %}
+        <div class="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+            <div class="flex items-start gap-3">
+                {{ icon_svg("refresh", "h-5 w-5 flex-shrink-0 text-slate-500 mt-0.5") }}
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Previous reimbursement attempt is closed</p>
+                    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                        Latest intent status is {{ latest_intent_status }}.
+                        {% if latest_intent_error %}
+                        Reason: {{ latest_intent_error }}
+                        {% endif %}
+                        You can proceed with a fresh reimbursement intent below.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Bank Account Form -->
         <form id="reimbursementForm" class="space-y-4">
             <div>

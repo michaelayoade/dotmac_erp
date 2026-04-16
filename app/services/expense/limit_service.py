@@ -1306,7 +1306,7 @@ class ExpenseLimitService(ExpenseServiceBase):
         *,
         approval_at: datetime | None = None,
     ) -> None:
-        """Check if approver has remaining budget since the last manual reset."""
+        """Check if approver has remaining budget for the current week."""
         from app.models.people.hr.employee import Employee
 
         approver = self.db.get(Employee, approver_id)
@@ -1319,11 +1319,11 @@ class ExpenseLimitService(ExpenseServiceBase):
 
         budget, limit_id = budget_info
         as_of = approval_at.astimezone(UTC) if approval_at else datetime.now(UTC)
-        latest_reset = self.get_latest_weekly_reset(
+        window_start, latest_reset = self._get_weekly_budget_window(
             org_id,
             approver_id,
             limit_id,
-            from_datetime=None,
+            as_of=as_of,
         )
 
         usage_query = select(
@@ -1333,19 +1333,16 @@ class ExpenseLimitService(ExpenseServiceBase):
             ExpenseClaim.approver_id == approver_id,
             ExpenseClaim.status == ExpenseClaimStatus.PAID,
             ExpenseClaim.paid_on.isnot(None),
+            ExpenseClaim.paid_on >= window_start.date(),
             ExpenseClaim.paid_on <= as_of.date(),
         )
-        if latest_reset is not None:
-            usage_query = usage_query.where(
-                ExpenseClaim.paid_on >= latest_reset.reset_at.date()
-            )
 
         used = self.db.scalar(usage_query) or Decimal("0")
 
         period_label = (
             f"since manual reset on {latest_reset.reset_at.date().isoformat()}"
             if latest_reset is not None
-            else "since budget tracking began; manual reset required"
+            else f"this week starting {window_start.date().isoformat()}"
         )
 
         if used + claim_amount > budget:
@@ -1355,6 +1352,27 @@ class ExpenseLimitService(ExpenseServiceBase):
                 claim_amount=claim_amount,
                 period_label=period_label,
             )
+
+    def _get_weekly_budget_window(
+        self,
+        org_id: UUID,
+        approver_id: UUID,
+        approver_limit_id: UUID,
+        *,
+        as_of: datetime | None = None,
+    ) -> tuple[datetime, ExpenseApproverLimitReset | None]:
+        """Return the effective weekly usage window start and latest in-week reset."""
+        current_time = as_of.astimezone(UTC) if as_of else datetime.now(UTC)
+        week_start = self._start_of_week_utc(current_time)
+        latest_reset = self.get_latest_weekly_reset(
+            org_id,
+            approver_id,
+            approver_limit_id,
+            from_datetime=week_start,
+        )
+        if latest_reset is not None and latest_reset.reset_at > week_start:
+            return latest_reset.reset_at, latest_reset
+        return week_start, latest_reset
 
     def _get_approver_weekly_budget(
         self,

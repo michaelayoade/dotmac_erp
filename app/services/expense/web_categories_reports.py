@@ -610,11 +610,11 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                 if budget_info is not None:
                     budget_amount, limit_id = budget_info
                     now = datetime.now(UTC).date()
-                    latest_reset = limit_svc.get_latest_weekly_reset(
+                    window_start, latest_reset = limit_svc._get_weekly_budget_window(
                         org_id,
-                        approver_id=approver_id,
-                        approver_limit_id=limit_id,
-                        from_datetime=None,
+                        approver_id,
+                        limit_id,
+                        as_of=datetime.now(UTC),
                     )
                     usage_query = (
                         select(
@@ -629,20 +629,17 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                             ExpenseClaim.status == ExpenseClaimStatus.PAID,
                             ExpenseClaim.approver_id == approver_id,
                             ExpenseClaim.paid_on.isnot(None),
+                            ExpenseClaim.paid_on >= window_start.date(),
                             ExpenseClaim.paid_on <= now,
                         )
                     )
-                    if latest_reset is not None:
-                        usage_query = usage_query.where(
-                            ExpenseClaim.paid_on >= latest_reset.reset_at.date()
-                        )
 
                     used_amount = db.scalar(usage_query) or Decimal("0")
                     weekly_balance = {
                         "usage_label": (
                             f"Since manual reset on {latest_reset.reset_at.date().isoformat()}"
                             if latest_reset
-                            else "Since budget tracking began; manual reset required"
+                            else f"This week starting {window_start.date().isoformat()}"
                         ),
                         "budget": budget_amount,
                         "used": used_amount,
