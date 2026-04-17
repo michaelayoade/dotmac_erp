@@ -302,6 +302,7 @@ let verifiedBankCode = null;
 let verifiedAccountNumber = null;
 let verifiedAccountName = null;
 const presetBankCode = '{{ claim_bank_code }}';
+const presetBankName = '{{ claim_bank_name }}';
 const presetAccountNumber = '{{ claim_account_number }}';
 
 // Load banks on page load
@@ -310,6 +311,22 @@ document.addEventListener('DOMContentLoaded', loadBanks);
 async function loadBanks() {
     const select = document.getElementById('bank_code');
     const accountInput = document.getElementById('account_number');
+
+    // For reimbursement, claim bank details are already stored and the field is read-only.
+    // Use the saved bank directly so Paystack bank-list timeouts do not block payment.
+    if (presetBankCode && presetBankName) {
+        select.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = presetBankCode;
+        opt.textContent = presetBankName;
+        opt.selected = true;
+        select.appendChild(opt);
+        accountInput.value = presetAccountNumber || '';
+        select.disabled = true;
+        accountInput.disabled = true;
+        return;
+    }
+
     try {
         const response = await fetch('/api/v1/payments/banks', {
             headers: {
@@ -337,6 +354,13 @@ async function loadBanks() {
         accountInput.disabled = true;
     } catch (error) {
         console.error('Error loading banks:', error);
+        if (presetBankCode && presetBankName) {
+            select.innerHTML = `<option value="${presetBankCode}" selected>${presetBankName}</option>`;
+            accountInput.value = presetAccountNumber || '';
+            select.disabled = true;
+            accountInput.disabled = true;
+            return;
+        }
         select.innerHTML = '<option value="">Failed to load banks</option>';
     }
 }

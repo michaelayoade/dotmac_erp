@@ -945,15 +945,23 @@ class PaymentService:
             )
         )
 
-        # Initiate the transfer
         with PaystackClient(paystack_config) as client:
-            result = client.initiate_transfer(
-                amount=amount_kobo,
-                recipient_code=intent.transfer_recipient_code,
-                reference=intent.paystack_reference,
-                reason=f"Expense reimbursement: {(intent.intent_metadata or {}).get('claim_number', '')}",
-                currency=intent.currency_code,
-            )
+            try:
+                result = client.initiate_transfer(
+                    amount=amount_kobo,
+                    recipient_code=intent.transfer_recipient_code,
+                    reference=intent.paystack_reference,
+                    reason=f"Expense reimbursement: {(intent.intent_metadata or {}).get('claim_number', '')}",
+                    currency=intent.currency_code,
+                )
+            except PaystackError as exc:
+                result = self._recover_transfer_initiation(
+                    intent=intent,
+                    client=client,
+                    error=exc,
+                )
+                if result is None:
+                    raise
 
         # Update intent with transfer code
         intent.transfer_code = result.transfer_code
@@ -1024,6 +1032,45 @@ class PaymentService:
         self._commit_and_refresh(intent)
 
         return intent
+
+    def _recover_transfer_initiation(
+        self,
+        *,
+        intent: PaymentIntent,
+        client: PaystackClient,
+        error: PaystackError,
+    ) -> Any | None:
+        """Recover from ambiguous initiate failures by verifying the reference."""
+        error_message = str(error)
+        is_timeout = "Request timed out" in error_message
+        is_duplicate_reference = "duplicate_transfer_reference" in error_message or (
+            "Reference already exists on a transfer" in error_message
+        )
+
+        if not (is_timeout or is_duplicate_reference):
+            return None
+
+        try:
+            verified = client.verify_transfer(intent.paystack_reference)
+        except PaystackError:
+            logger.warning(
+                "Failed to recover transfer initiation for intent %s after error: %s",
+                intent.intent_id,
+                error_message,
+            )
+            return None
+
+        logger.info(
+            "Recovered transfer initiation for intent %s via verify_transfer after error: %s",
+            intent.intent_id,
+            error_message,
+            extra={
+                "intent_id": str(intent.intent_id),
+                "transfer_code": verified.transfer_code,
+                "verified_status": verified.status,
+            },
+        )
+        return verified
 
     def build_transfer_result(self, intent: PaymentIntent) -> dict[str, Any]:
         """Build transfer result with claim status and user-facing message.
