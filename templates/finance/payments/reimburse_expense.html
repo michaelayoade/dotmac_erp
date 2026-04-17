@@ -355,7 +355,12 @@ async function loadBanks() {
     } catch (error) {
         console.error('Error loading banks:', error);
         if (presetBankCode && presetBankName) {
-            select.innerHTML = `<option value="${presetBankCode}" selected>${presetBankName}</option>`;
+            select.innerHTML = '';
+            const opt = document.createElement('option');
+            opt.value = presetBankCode;
+            opt.textContent = presetBankName;
+            opt.selected = true;
+            select.appendChild(opt);
             accountInput.value = presetAccountNumber || '';
             select.disabled = true;
             accountInput.disabled = true;
