@@ -456,6 +456,28 @@ def my_tickets(
     return self_service_web_service.tickets_response(request, auth, db, page=page)
 
 
+@router.post("/tickets")
+async def create_my_ticket(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Create a self-service support ticket for the current employee."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+
+    return self_service_web_service.ticket_create_response(
+        request,
+        auth,
+        db,
+        subject=_safe_form_text(form.get("subject")),
+        description=_safe_form_text(form.get("description")),
+        priority=_safe_form_text(form.get("priority"), default="MEDIUM"),
+        category_id=_safe_form_text(form.get("category_id")),
+    )
+
+
 @router.get("/tasks", response_class=HTMLResponse)
 def my_tasks(
     request: Request,

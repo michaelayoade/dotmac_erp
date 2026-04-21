@@ -12,6 +12,19 @@
 </nav>
 {% endblock %}
 
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/projects/new" class="btn btn-primary" title="Create a new project">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        New Project
+    </a>
+    <a href="/projects/all" class="btn btn-secondary" title="Browse all projects">
+        {{ icon_svg("folder", "h-4 w-4 mr-1.5") }}
+        All Projects
+    </a>
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="space-y-6 page-enter">
     <div class="card p-6">

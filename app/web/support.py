@@ -14,20 +14,6 @@ from app.web.deps import WebAuthContext, get_db, require_support_access
 router = APIRouter(prefix="/support", tags=["support-web"])
 
 
-def _manual_ticket_creation_disabled_response(request: Request):
-    """Manual ticket creation is disabled; tickets are CRM-synced."""
-    from app.templates import templates
-
-    return templates.TemplateResponse(
-        request,
-        "errors/404.html",
-        {
-            "message": "Manual ticket creation is disabled. Tickets are synced from CRM.",
-        },
-        status_code=404,
-    )
-
-
 # ============================================================================
 # SLA Dashboard & Reports
 # ============================================================================
@@ -158,17 +144,49 @@ def new_ticket_form(
     db: Session = Depends(get_db),
 ):
     """New ticket form page."""
-    return _manual_ticket_creation_disabled_response(request)
+    return support_web_service.ticket_form_response(request, auth, db)
 
 
 @router.post("/tickets")
 async def create_ticket(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
+    subject: str = Form(...),
+    description: str | None = Form(default=None),
+    priority: str = Form(default="MEDIUM"),
+    raised_by_email: str | None = Form(default=None),
+    assigned_to_id: str | None = Form(default=None),
+    project_id: str | None = Form(default=None),
+    customer_id: str | None = Form(default=None),
+    category_id: str | None = Form(default=None),
+    team_id: str | None = Form(default=None),
+    opening_date: str | None = Form(default=None),
+    contact_email: str | None = Form(default=None),
+    contact_phone: str | None = Form(default=None),
+    contact_address: str | None = Form(default=None),
+    files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new support ticket."""
-    return _manual_ticket_creation_disabled_response(request)
+    return support_web_service.create_ticket_response(
+        request,
+        auth,
+        db,
+        subject=subject,
+        description=description,
+        priority=priority,
+        raised_by_email=raised_by_email,
+        assigned_to_id=assigned_to_id if assigned_to_id else None,
+        project_id=project_id if project_id else None,
+        customer_id=customer_id if customer_id else None,
+        category_id=category_id if category_id else None,
+        team_id=team_id if team_id else None,
+        opening_date=opening_date,
+        contact_email=contact_email,
+        contact_phone=contact_phone,
+        contact_address=contact_address,
+        files=files,
+    )
 
 
 # ============================================================================

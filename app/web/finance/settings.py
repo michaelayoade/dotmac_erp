@@ -50,6 +50,12 @@ async def settings_index(
                     "icon": "hashtag",
                 },
                 {
+                    "title": "Automation",
+                    "description": "Open automation workflows, templates, fields, and recurring jobs.",
+                    "url": "/settings/automation",
+                    "icon": "cog",
+                },
+                {
                     "title": "Automation Settings",
                     "description": "Configure recurring transactions, workflows, and custom fields.",
                     "url": "/settings/automation-settings",

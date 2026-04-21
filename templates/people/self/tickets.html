@@ -18,9 +18,55 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">My Tickets</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400">Tickets assigned to you.</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Create and track your personal support tickets.</p>
         </div>
     </div>
+
+    {% if request.query_params.get("saved") %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+        Ticket created successfully.
+    </div>
+    {% endif %}
+    {% if request.query_params.get("error") %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
+        {{ request.query_params.get("error") }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/self/tickets" class="card p-6 space-y-4">
+        {{ request.state.csrf_form | safe }}
+        <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white">Create Ticket</h3>
+            <button type="submit" class="btn btn-primary btn-sm">Submit Ticket</button>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div class="sm:col-span-2">
+                <label class="form-label required">Subject</label>
+                <input type="text" name="subject" maxlength="255" required class="form-input" placeholder="e.g. Payroll discrepancy for March salary">
+            </div>
+            <div class="sm:col-span-2">
+                <label class="form-label">Description</label>
+                <textarea name="description" rows="3" class="form-input" placeholder="Provide details to help support resolve this quickly."></textarea>
+            </div>
+            <div>
+                <label class="form-label required">Priority</label>
+                <select name="priority" required class="form-input">
+                    {% for priority in priorities %}
+                    <option value="{{ priority }}" {{ "selected" if priority == "MEDIUM" else "" }}>{{ priority.replace("_", " ").title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Category</label>
+                <select name="category_id" class="form-input">
+                    <option value="">Select category</option>
+                    {% for category in categories %}
+                    <option value="{{ category.value }}">{{ category.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </form>
 
     {% if tickets %}
     <div class="card overflow-hidden">
@@ -79,8 +125,8 @@
                 {{ icon_svg("exclamation-circle", "h-8 w-8 text-slate-400") }}
             </div>
         </div>
-        <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">No tickets assigned</h3>
-        <p class="text-slate-500 dark:text-slate-400">You have no tickets assigned to you yet.</p>
+        <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-2">No tickets yet</h3>
+        <p class="text-slate-500 dark:text-slate-400">Submit a ticket above and it will appear here and in the Support module queue.</p>
     </div>
     {% endif %}
 </div>

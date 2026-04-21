@@ -7,6 +7,9 @@ Template response helpers for the support/helpdesk module.
 from __future__ import annotations
 
 import logging
+import ast
+import html
+import json
 import re
 from datetime import date
 from typing import TYPE_CHECKING, Any
@@ -108,6 +111,60 @@ def _strip_html(html: str) -> str:
     # Collapse whitespace
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def _format_system_activity_content(content: str | None) -> str:
+    """Convert machine-formatted system activity into readable text."""
+    if not content:
+        return ""
+
+    raw = html.unescape(str(content)).strip()
+    match = re.match(
+        r"^<?(?P<event>[a-zA-Z0-9_.-]+)\s+(?P<payload>\{.*\})>?$",
+        raw,
+    )
+    if not match:
+        return raw
+
+    event_name = match.group("event").replace(".", " ").replace("_", " ").title()
+
+    payload_text = match.group("payload")
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        try:
+            payload = ast.literal_eval(payload_text)
+        except (ValueError, SyntaxError):
+            return raw
+
+    if not isinstance(payload, dict):
+        return event_name
+
+    title = payload.get("title")
+    subject = payload.get("subject")
+    status = payload.get("status")
+    priority = payload.get("priority")
+    channel = payload.get("channel")
+
+    details: list[str] = []
+    if title:
+        details.append(str(title))
+    if subject and subject != title:
+        details.append(f"Subject: {subject}")
+    if status:
+        details.append(f"Status: {str(status).replace('_', ' ').title()}")
+    if priority:
+        details.append(f"Priority: {str(priority).replace('_', ' ').title()}")
+    if channel:
+        details.append(f"Channel: {str(channel).replace('_', ' ').title()}")
+
+    return f"{event_name}: {' | '.join(details)}" if details else event_name
+
+
+def _comment_type_name(comment_type: Any) -> str:
+    """Normalize comment_type enum/string to uppercase name."""
+    value = getattr(comment_type, "value", comment_type)
+    return str(value).strip().upper()
 
 
 def _is_numeric_subject(subject: str) -> bool:
@@ -1542,7 +1599,9 @@ class SupportWebService:
             if activity.author:
                 author_name = activity.author.name
 
-            if activity.comment_type == CommentType.SYSTEM:
+            comment_type = _comment_type_name(activity.comment_type)
+
+            if comment_type == CommentType.SYSTEM.value:
                 config = ACTION_CONFIG.get(
                     activity.action,
                     {
@@ -1555,7 +1614,7 @@ class SupportWebService:
                     {
                         "type": "system",
                         "action": activity.action,
-                        "content": activity.content,
+                        "content": _format_system_activity_content(activity.content),
                         "old_value": activity.old_value,
                         "new_value": activity.new_value,
                         "author_name": author_name,
@@ -1568,14 +1627,18 @@ class SupportWebService:
                     }
                 )
             else:
-                config = COMMENT_CONFIG.get(
-                    activity.comment_type, COMMENT_CONFIG[CommentType.COMMENT]
+                config = (
+                    COMMENT_CONFIG[CommentType.INTERNAL_NOTE]
+                    if comment_type == CommentType.INTERNAL_NOTE.value
+                    else COMMENT_CONFIG[CommentType.COMMENT]
                 )
                 formatted.append(
                     {
-                        "type": "comment"
-                        if activity.comment_type == CommentType.COMMENT
-                        else "internal_note",
+                        "type": (
+                            "internal_note"
+                            if comment_type == CommentType.INTERNAL_NOTE.value
+                            else "comment"
+                        ),
                         "content": activity.content,
                         "is_internal": activity.is_internal,
                         "comment_id": str(activity.comment_id),

@@ -7,8 +7,8 @@
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation/workflows" class="hover:text-teal-600 dark:hover:text-teal-400">Workflows</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/settings/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/settings/automation/workflows" class="hover:text-teal-600 dark:hover:text-teal-400">Workflows</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Monitoring</span></li>
     </ol>
 </nav>
@@ -53,7 +53,7 @@
             <div class="divide-y divide-slate-200 dark:divide-slate-700">
                 {% for rule in top_failing %}
                 <div class="flex items-center justify-between px-6 py-3">
-                    <a href="/automation/workflows/{{ rule.rule_id }}" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 truncate max-w-[200px]">
+                    <a href="/settings/automation/workflows/{{ rule.rule_id }}" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 truncate max-w-[200px]">
                         {{ rule.rule_name }}
                     </a>
                     <span class="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">

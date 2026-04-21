@@ -14,7 +14,18 @@
 </nav>
 {% endblock %}
 
-{% block header_actions %}{% endblock %}
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/projects/new" class="btn btn-primary" title="Create a new project">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        New Project
+    </a>
+    <a href="/projects" class="btn btn-secondary" title="Back to projects home">
+        {{ icon_svg("home", "h-4 w-4 mr-1.5") }}
+        Projects Home
+    </a>
+</div>
+{% endblock %}
 
 {% block content %}
 <div class="space-y-6">

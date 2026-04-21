@@ -967,22 +967,49 @@ class SelfServiceWebService:
                 )
             raise
 
-        from app.services.support.ticket import ticket_service
+        from app.models.support.ticket import Ticket, TicketPriority
+        from app.services.support.category import category_service
 
         per_page = 20
-        tickets, total = ticket_service.list_tickets(
-            db,
-            org_id,
-            assigned_to_id=employee_id,
-            page=page,
-            per_page=per_page,
+        filters = [
+            Ticket.organization_id == org_id,
+            Ticket.is_deleted == False,  # noqa: E712
+            or_(
+                Ticket.raised_by_id == employee_id,
+                Ticket.assigned_to_id == employee_id,
+            ),
+        ]
+        total = (
+            db.scalar(select(func.count()).select_from(Ticket).where(*filters)) or 0
+        )
+        tickets = list(
+            db.execute(
+                select(Ticket)
+                .where(*filters)
+                .options(
+                    joinedload(Ticket.raised_by),
+                    joinedload(Ticket.assigned_to),
+                )
+                .order_by(Ticket.opening_date.desc(), Ticket.created_at.desc())
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+            )
+            .scalars()
+            .unique()
+            .all()
         )
         total_pages = (total + per_page - 1) // per_page
+        categories = category_service.list_categories(db, org_id)
 
         context = base_context(request, auth, "My Tickets", "self-tickets", db=db)
         context.update(
             {
                 "tickets": tickets,
+                "categories": [
+                    {"value": str(c.category_id), "label": c.category_name}
+                    for c in categories
+                ],
+                "priorities": [p.value for p in TicketPriority],
                 "page": page,
                 "total": total,
                 "total_pages": total_pages,
@@ -998,6 +1025,66 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         return templates.TemplateResponse(request, "people/self/tickets.html", context)
+
+    def ticket_create_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        subject: str,
+        description: str | None = None,
+        priority: str = "MEDIUM",
+        category_id: str | None = None,
+    ) -> RedirectResponse:
+        """Create a support ticket from self-service and return to My Tickets."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        user_id = coerce_uuid(auth.user_id)
+        try:
+            employee_id = self._get_employee_id(db, org_id, person_id)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return RedirectResponse(
+                    url=f"/people/self/tickets?error={quote(str(exc.detail))}",
+                    status_code=303,
+                )
+            raise
+
+        if not subject:
+            return RedirectResponse(
+                url="/people/self/tickets?error=Subject+is+required",
+                status_code=303,
+            )
+
+        from app.services.support.ticket import ticket_service
+
+        try:
+            ticket_service.create_ticket(
+                db,
+                org_id,
+                user_id,
+                subject=subject,
+                description=description,
+                priority=priority,
+                raised_by_id=employee_id,
+                category_id=coerce_uuid(category_id) if category_id else None,
+            )
+            db.commit()
+            return RedirectResponse(
+                url="/people/self/tickets?saved=1",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            logger.exception("Failed to create self-service ticket")
+            message = getattr(exc, "detail", None) if isinstance(exc, HTTPException) else None
+            if not message:
+                message = "Unable to create ticket"
+            return RedirectResponse(
+                url=f"/people/self/tickets?error={quote(str(message))}",
+                status_code=303,
+            )
 
     def tasks_response(
         self,

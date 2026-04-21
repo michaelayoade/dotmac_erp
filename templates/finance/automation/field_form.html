@@ -6,8 +6,8 @@
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation/fields" class="hover:text-teal-600 dark:hover:text-teal-400">Custom Fields</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/settings/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/settings/automation/fields" class="hover:text-teal-600 dark:hover:text-teal-400">Custom Fields</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">{% if is_edit %}Edit{% else %}New{% endif %}</span></li>
     </ol>
 </nav>
@@ -15,7 +15,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-3xl">
-    <form method="post" action="/automation/fields/{% if is_edit %}{{ field.field_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+    <form method="post" action="/settings/automation/fields/{% if is_edit %}{{ field.field_id }}/edit{% else %}new{% endif %}" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- Basic Info -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
@@ -166,7 +166,7 @@
 
         <!-- Actions -->
         <div class="flex items-center justify-end gap-3">
-            <a href="/automation/fields" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            <a href="/settings/automation/fields" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
                 Cancel
             </a>
             <button type="submit" class="rounded-lg bg-amber-600 hover:bg-amber-700 px-6 py-2 text-sm font-medium text-white shadow-lg">

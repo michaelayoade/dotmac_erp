@@ -14,6 +14,10 @@
 
 {% block header_actions %}
 <div class="flex items-center gap-2">
+    <a href="/support/tickets/new" class="btn btn-primary" title="Create a new ticket">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        Create Ticket
+    </a>
     <a href="/support/dashboard" class="btn btn-secondary" title="SLA Dashboard">
         {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
         SLA Dashboard

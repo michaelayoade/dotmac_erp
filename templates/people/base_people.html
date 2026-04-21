@@ -210,8 +210,8 @@
             </a>
 
             <a href="/people/self"
-               :aria-current="['self','self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'page' : false"
-               :class="['self','self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               :aria-current="['self','self-attendance','self-leave','self-payslips','self-expenses','self-tickets','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'page' : false"
+               :class="['self','self-attendance','self-leave','self-payslips','self-expenses','self-tickets','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
                 <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 1.104-.895 2-2 2s-2-.896-2-2 .895-2 2-2 2 .896 2 2zm0 0c0 1.104.895 2 2 2s2-.896 2-2-.895-2-2-2-2 .896-2 2zm9 1c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z"/>
@@ -235,7 +235,7 @@
             {% endif %}
 
             <a href="/people/self"
-               :class="['self','self-attendance','self-leave','self-payslips','self-expenses','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               :class="['self','self-attendance','self-leave','self-payslips','self-expenses','self-tickets','self-tax-info','self-discipline','self-team-leave','self-team-expenses','self-team-discipline'].includes(activeModule) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
                class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all mb-2">
                 {{ icon_svg("user", "h-5 w-5 flex-shrink-0") }}
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Self Service</span>

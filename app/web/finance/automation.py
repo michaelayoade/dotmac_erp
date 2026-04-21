@@ -20,7 +20,7 @@ from app.services.finance.automation.workflow import workflow_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
 
-router = APIRouter(prefix="/automation", tags=["automation-web"])
+router = APIRouter(prefix="/settings/automation", tags=["automation-web"])
 
 
 # =============================================================================
@@ -198,7 +198,7 @@ async def create_recurring(
             return {"success": True, "template_id": str(template.template_id)}
 
         return RedirectResponse(
-            url="/automation/recurring?success=Template+created+successfully",
+            url="/settings/automation/recurring?success=Template+created+successfully",
             status_code=303,
         )
 
@@ -265,7 +265,7 @@ async def update_recurring(
             return {"success": True, "template_id": str(template.template_id)}
 
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?success=Template+updated",
+            url=f"/settings/automation/recurring/{template_id}?success=Template+updated",
             status_code=303,
         )
 
@@ -300,12 +300,12 @@ def pause_recurring(
     try:
         recurring_service.pause(db, UUID(template_id))
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?success=Template+paused",
+            url=f"/settings/automation/recurring/{template_id}?success=Template+paused",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?error={str(e)}",
+            url=f"/settings/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
         )
 
@@ -321,12 +321,12 @@ def resume_recurring(
     try:
         recurring_service.resume(db, UUID(template_id))
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?success=Template+resumed",
+            url=f"/settings/automation/recurring/{template_id}?success=Template+resumed",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?error={str(e)}",
+            url=f"/settings/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
         )
 
@@ -342,12 +342,12 @@ def cancel_recurring(
     try:
         recurring_service.cancel(db, UUID(template_id))
         return RedirectResponse(
-            url="/automation/recurring?success=Template+cancelled",
+            url="/settings/automation/recurring?success=Template+cancelled",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?error={str(e)}",
+            url=f"/settings/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
         )
 
@@ -364,7 +364,7 @@ def generate_now(
         template = recurring_service.get(db, UUID(template_id))
         if not template:
             return RedirectResponse(
-                url="/automation/recurring?error=Template+not+found",
+                url="/settings/automation/recurring?error=Template+not+found",
                 status_code=303,
             )
 
@@ -372,17 +372,17 @@ def generate_now(
 
         if log.status.value == "SUCCESS":
             return RedirectResponse(
-                url=f"/automation/recurring/{template_id}?success=Generated+successfully",
+                url=f"/settings/automation/recurring/{template_id}?success=Generated+successfully",
                 status_code=303,
             )
         else:
             return RedirectResponse(
-                url=f"/automation/recurring/{template_id}?error=Generation+failed:+{log.error_message}",
+                url=f"/settings/automation/recurring/{template_id}?error=Generation+failed:+{log.error_message}",
                 status_code=303,
             )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/recurring/{template_id}?error={str(e)}",
+            url=f"/settings/automation/recurring/{template_id}?error={str(e)}",
             status_code=303,
         )
 
@@ -529,7 +529,7 @@ async def create_workflow(
             return {"success": True, "rule_id": str(rule.rule_id)}
 
         return RedirectResponse(
-            url="/automation/workflows?success=Rule+created+successfully",
+            url="/settings/automation/workflows?success=Rule+created+successfully",
             status_code=303,
         )
 
@@ -625,7 +625,7 @@ async def update_workflow(
             return {"success": True, "rule_id": str(rule.rule_id)}
 
         return RedirectResponse(
-            url=f"/automation/workflows/{rule_id}?success=Rule+updated",
+            url=f"/settings/automation/workflows/{rule_id}?success=Rule+updated",
             status_code=303,
         )
 
@@ -661,7 +661,7 @@ def toggle_workflow(
         rule = workflow_service.get(db, UUID(rule_id))
         if not rule:
             return RedirectResponse(
-                url="/automation/workflows?error=Rule+not+found",
+                url="/settings/automation/workflows?error=Rule+not+found",
                 status_code=303,
             )
 
@@ -674,12 +674,12 @@ def toggle_workflow(
 
         status = "activated" if not rule.is_active else "deactivated"
         return RedirectResponse(
-            url=f"/automation/workflows?success=Rule+{status}",
+            url=f"/settings/automation/workflows?success=Rule+{status}",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/workflows?error={str(e)}",
+            url=f"/settings/automation/workflows?error={str(e)}",
             status_code=303,
         )
 
@@ -740,12 +740,12 @@ def delete_workflow(
     try:
         workflow_service.delete(db, UUID(rule_id))
         return RedirectResponse(
-            url="/automation/workflows?success=Rule+deleted",
+            url="/settings/automation/workflows?success=Rule+deleted",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/workflows/{rule_id}?error={str(e)}",
+            url=f"/settings/automation/workflows/{rule_id}?error={str(e)}",
             status_code=303,
         )
 
@@ -872,7 +872,7 @@ async def create_custom_field(
             return {"success": True, "field_id": str(field.field_id)}
 
         return RedirectResponse(
-            url="/automation/fields?success=Field+created+successfully",
+            url="/settings/automation/fields?success=Field+created+successfully",
             status_code=303,
         )
 
@@ -942,7 +942,7 @@ async def update_custom_field(
             return {"success": True, "field_id": str(field.field_id)}
 
         return RedirectResponse(
-            url=f"/automation/fields/{field_id}?success=Field+updated",
+            url=f"/settings/automation/fields/{field_id}?success=Field+updated",
             status_code=303,
         )
 
@@ -977,12 +977,12 @@ def delete_custom_field(
     try:
         custom_fields_service.delete(db, UUID(field_id))
         return RedirectResponse(
-            url="/automation/fields?success=Field+deleted",
+            url="/settings/automation/fields?success=Field+deleted",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/fields/{field_id}?error={str(e)}",
+            url=f"/settings/automation/fields/{field_id}?error={str(e)}",
             status_code=303,
         )
 
@@ -1107,7 +1107,7 @@ async def create_template(
             return {"success": True, "template_id": str(template.template_id)}
 
         return RedirectResponse(
-            url="/automation/templates?success=Template+created+successfully",
+            url="/settings/automation/templates?success=Template+created+successfully",
             status_code=303,
         )
 
@@ -1158,7 +1158,7 @@ async def update_template(
             return {"success": True, "template_id": str(template.template_id)}
 
         return RedirectResponse(
-            url=f"/automation/templates/{template_id}?success=Template+updated",
+            url=f"/settings/automation/templates/{template_id}?success=Template+updated",
             status_code=303,
         )
 
@@ -1195,11 +1195,11 @@ def delete_template(
             db, UUID(template_id), organization_id=auth.organization_id
         )
         return RedirectResponse(
-            url="/automation/templates?success=Template+deleted",
+            url="/settings/automation/templates?success=Template+deleted",
             status_code=303,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"/automation/templates/{template_id}?error={str(e)}",
+            url=f"/settings/automation/templates/{template_id}?error={str(e)}",
             status_code=303,
         )

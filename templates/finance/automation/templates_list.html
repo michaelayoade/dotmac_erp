@@ -8,14 +8,14 @@
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Dashboard</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <a href="/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/settings/automation" class="hover:text-teal-600 dark:hover:text-teal-400">Automation</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Document Templates</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block header_actions %}
-<a href="/automation/templates/new"
+<a href="/settings/automation/templates/new"
    class="inline-flex items-center gap-2 rounded-lg bg-rose-600 hover:bg-rose-700 px-4 py-2 text-sm font-medium text-white shadow-lg">
     {{ icon_svg("plus", "h-4 w-4") }}
     New Template
@@ -28,7 +28,7 @@
     <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
         {# Filters #}
         {% call(filter_attrs) compact_filters(
-            base_url="/finance/automation/templates-list",
+            base_url="/settings/automation/templates-list",
             active_filters=active_filters | default([]),
             auto_submit=false,
             show_apply_button=true
@@ -86,7 +86,7 @@
             <div class="p-4">
                 <div class="flex items-start justify-between">
                     <div>
-                        <a href="/automation/templates/{{ template.template_id }}" class="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">
+                        <a href="/settings/automation/templates/{{ template.template_id }}" class="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400">
                             {{ template.template_name }}
                         </a>
                         <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ template.template_type }}</p>
@@ -98,12 +98,12 @@
                 <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-700">
                     <span class="text-xs text-slate-500 dark:text-slate-400">Updated {{ template.updated_at }}</span>
                     <div class="flex items-center gap-2">
-                        <a href="/automation/templates/{{ template.template_id }}/preview"
+                        <a href="/settings/automation/templates/{{ template.template_id }}/preview"
                            class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                            title="Preview" aria-label="Preview">
                             {{ icon_svg("eye", "h-4 w-4") }}
                         </a>
-                        <a href="/automation/templates/{{ template.template_id }}/edit"
+                        <a href="/settings/automation/templates/{{ template.template_id }}/edit"
                            class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                            title="Edit" aria-label="Edit">
                             {{ icon_svg("edit", "h-4 w-4") }}
@@ -119,7 +119,7 @@
         <div class="px-6 py-12 text-center">
             {{ icon_svg("document", "mx-auto h-12 w-12 text-slate-400") }}
             <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No document templates found</p>
-            <a href="/automation/templates/new" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400">
+            <a href="/settings/automation/templates/new" class="mt-4 inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400">
                 {{ icon_svg("plus", "h-4 w-4") }}
                 Create Template
             </a>

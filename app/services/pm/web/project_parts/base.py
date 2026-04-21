@@ -42,7 +42,7 @@ from app.web.deps import (
 )
 
 logger = logging.getLogger(__name__)
-MANUAL_PROJECT_CREATION_ENABLED = False
+MANUAL_PROJECT_CREATION_ENABLED = True
 
 
 def _manual_project_creation_disabled_response(request: Request):

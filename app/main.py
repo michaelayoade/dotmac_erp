@@ -670,7 +670,6 @@ app.include_router(admin_web_router)
 app.include_router(profile_web_router)
 app.include_router(notifications_web_router)
 app.include_router(workflow_tasks_web_router)
-app.include_router(module_settings_web_router)  # /settings/* web routes
 
 # ---------------------------------------------------------------------------
 # People/HR module
@@ -702,7 +701,9 @@ if is_module_enabled("finance"):
     app.include_router(
         finance_settings_web_router
     )  # Has its own /settings prefix (finance)
-    app.include_router(automation_web_router)  # Has its own /automation prefix
+    app.include_router(
+        automation_web_router
+    )  # Has its own /settings/automation prefix
     _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])
@@ -733,6 +734,9 @@ if is_module_enabled("expense"):
     _include_api_router(
         expense_limits_router, dependencies=[Depends(require_tenant_auth)]
     )
+
+# Keep after automation router so /settings/automation* wins over /settings/{module_key}
+app.include_router(module_settings_web_router)  # /settings/* web routes
 
 # ---------------------------------------------------------------------------
 # Support/Helpdesk module

@@ -159,6 +159,15 @@ MODULE_SETTINGS_SECTIONS = [
     for config in MODULE_SETTINGS_CONFIGS
 ]
 
+MODULE_SETTINGS_SECTIONS.append(
+    {
+        "title": "Automation",
+        "description": "Recurring templates, workflows, fields, and documents",
+        "url": "/settings/automation",
+        "icon": "cog",
+    }
+)
+
 
 class ModuleSettingsWebService:
     """Service for Module Settings UI."""
