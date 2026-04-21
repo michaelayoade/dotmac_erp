@@ -701,9 +701,7 @@ if is_module_enabled("finance"):
     app.include_router(
         finance_settings_web_router
     )  # Has its own /settings prefix (finance)
-    app.include_router(
-        automation_web_router
-    )  # Has its own /settings/automation prefix
+    app.include_router(automation_web_router)  # Has its own /settings/automation prefix
     _include_api_router(gl_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(ap_router, dependencies=[Depends(require_tenant_auth)])
     _include_api_router(ar_router, dependencies=[Depends(require_tenant_auth)])

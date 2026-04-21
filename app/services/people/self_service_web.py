@@ -979,9 +979,7 @@ class SelfServiceWebService:
                 Ticket.assigned_to_id == employee_id,
             ),
         ]
-        total = (
-            db.scalar(select(func.count()).select_from(Ticket).where(*filters)) or 0
-        )
+        total = db.scalar(select(func.count()).select_from(Ticket).where(*filters)) or 0
         tickets = list(
             db.execute(
                 select(Ticket)
@@ -1078,7 +1076,9 @@ class SelfServiceWebService:
         except Exception as exc:
             db.rollback()
             logger.exception("Failed to create self-service ticket")
-            message = getattr(exc, "detail", None) if isinstance(exc, HTTPException) else None
+            message = (
+                getattr(exc, "detail", None) if isinstance(exc, HTTPException) else None
+            )
             if not message:
                 message = "Unable to create ticket"
             return RedirectResponse(
