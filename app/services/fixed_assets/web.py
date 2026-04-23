@@ -715,22 +715,33 @@ class FixedAssetWebService:
 
         total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
         rows = db.execute(
-            query.add_columns(AssetCategory)
+            query.outerjoin(Location, Asset.location_id == Location.location_id)
+            .add_columns(AssetCategory, Location)
             .order_by(Asset.asset_number)
             .limit(limit)
             .offset(offset)
         ).all()
 
         assets_view = []
-        for asset, category_row in rows:
+        for row in rows:
+            asset = row[0]
+            category_row = row[1] if len(row) > 1 else None
+            location_row = row[2] if len(row) > 2 else None
             assets_view.append(
                 {
                     "asset_id": asset.asset_id,
                     "asset_number": asset.asset_number,
                     "asset_name": asset.asset_name,
                     "serial_number": asset.serial_number,
-                    "category_name": category_row.category_name,
-                    "category_code": category_row.category_code,
+                    "location_name": (
+                        location_row.location_name if location_row else None
+                    ),
+                    "category_name": (
+                        category_row.category_name if category_row else None
+                    ),
+                    "category_code": (
+                        category_row.category_code if category_row else None
+                    ),
                     "acquisition_date": _format_date(asset.acquisition_date),
                     "acquisition_cost": _format_currency(
                         asset.acquisition_cost, asset.currency_code
@@ -1435,6 +1446,14 @@ class FixedAssetWebService:
         context["form_location_id"] = (
             str(asset.location_id) if asset.location_id else ""
         )
+        context["form_description"] = asset.description or ""
+        context["form_acquisition_date"] = (
+            asset.acquisition_date.isoformat() if asset.acquisition_date else ""
+        )
+        context["form_acquisition_cost"] = (
+            str(asset.acquisition_cost) if asset.acquisition_cost is not None else ""
+        )
+        context["form_currency_code"] = asset.currency_code or ""
         context["selected_depreciation_schedule_id"] = (
             str(asset.current_depreciation_schedule_id)
             if asset.current_depreciation_schedule_id
@@ -1453,13 +1472,46 @@ class FixedAssetWebService:
     ) -> RedirectResponse:
         """Handle asset update."""
         try:
-            await request.form()
-            # For now, just redirect back - full implementation would update the asset
+            form_data = await request.form()
+            updates: dict[str, object] = {}
+
+            asset_name = _safe_form_text(form_data.get("asset_name")).strip()
+            category_id = _safe_form_text(form_data.get("category_id")).strip()
+            serial_number = _safe_form_text(form_data.get("serial_number")).strip()
+            location_id = _safe_form_text(form_data.get("location_id")).strip()
+            description = _safe_form_text(form_data.get("description")).strip()
+            acquisition_date = _safe_form_text(form_data.get("acquisition_date")).strip()
+            acquisition_cost = _safe_form_text(form_data.get("acquisition_cost")).strip()
+
+            if asset_name:
+                updates["asset_name"] = asset_name
+            if category_id:
+                updates["category_id"] = UUID(category_id)
+            updates["serial_number"] = serial_number or None
+            updates["location_id"] = UUID(location_id) if location_id else None
+            updates["description"] = description or None
+
+            if acquisition_date:
+                updates["acquisition_date"] = datetime.strptime(
+                    acquisition_date, "%Y-%m-%d"
+                ).date()
+            if acquisition_cost:
+                updates["acquisition_cost"] = Decimal(acquisition_cost)
+
+            asset_service.update_asset(
+                db,
+                coerce_uuid(auth.organization_id),
+                coerce_uuid(asset_id),
+                updates,
+            )
+            db.commit()
+
             return RedirectResponse(
                 url=f"/fixed-assets/assets/{asset_id}?success=Asset+updated",
                 status_code=303,
             )
         except Exception as e:
+            db.rollback()
             return RedirectResponse(
                 url=f"/fixed-assets/assets/{asset_id}?error={str(e)}",
                 status_code=303,

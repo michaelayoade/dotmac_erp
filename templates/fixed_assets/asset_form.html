@@ -1,7 +1,8 @@
 {% extends "fixed_assets/base_fixed_assets.html" %}
 {% from "components/macros.html" import icon_svg %}
 
-{% block page_title %}New Asset{% endblock %}
+{% set is_edit = asset is defined and asset %}
+{% block page_title %}{{ "Edit Asset" if is_edit else "New Asset" }}{% endblock %}
 
 {% block head %}
 {{ super() }}
@@ -40,7 +41,7 @@
     <ol class="flex items-center gap-2">
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fixed-assets/assets" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Asset Management</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if is_edit else "New" }}</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -48,10 +49,10 @@
 {% block content %}
 <div class="fixed-assets-form-page max-w-3xl mx-auto pb-12">
     <p class="mb-6 text-sm text-slate-500 dark:text-slate-400">
-        Register a fixed asset and capture acquisition details
+        {{ "Update fixed asset details and acquisition information" if is_edit else "Register a fixed asset and capture acquisition details" }}
     </p>
 
-    <form method="post" action="/fixed-assets/assets/new" class="space-y-6">
+    <form method="post" action="{{ '/fixed-assets/assets/' ~ asset.asset_id ~ '/edit' if is_edit else '/fixed-assets/assets/new' }}" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <div id="form-result">
             {% if error %}
@@ -175,7 +176,7 @@
                     <textarea name="description"
                               rows="3"
                               placeholder="Add notes about the asset"
-                              class="form-input resize-none"></textarea>
+                              class="form-input resize-none">{{ form_description if form_description is defined else '' }}</textarea>
                 </div>
             </div>
         </div>
@@ -200,7 +201,7 @@
                     </label>
                     <input type="date"
                            name="acquisition_date"
-                           value="{{ form_acquisition_date if form_acquisition_date is defined else today }}"
+                           value="{{ form_acquisition_date if form_acquisition_date is defined and form_acquisition_date else today }}"
                            class="form-input">
                 </div>
 
@@ -235,7 +236,7 @@
 
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/fixed-assets/assets" class="btn btn-secondary">Cancel</a>
-            <button type="submit" class="btn btn-primary">Create Asset</button>
+            <button type="submit" class="btn btn-primary">{{ "Update Asset" if is_edit else "Create Asset" }}</button>
         </div>
     </form>
 </div>

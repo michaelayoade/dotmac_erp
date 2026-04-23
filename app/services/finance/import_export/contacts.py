@@ -392,8 +392,12 @@ def get_ar_control_account(db: Session, organization_id: UUID) -> UUID | None:
         select(Account).where(
             Account.organization_id == organization_id,
             Account.subledger_type == "AR",
+        ).order_by(
+            Account.is_active.desc(),
+            Account.is_posting_allowed.desc(),
+            Account.account_code.asc(),
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     return account.account_id if account else None
 
 
@@ -403,6 +407,10 @@ def get_ap_control_account(db: Session, organization_id: UUID) -> UUID | None:
         select(Account).where(
             Account.organization_id == organization_id,
             Account.subledger_type == "AP",
+        ).order_by(
+            Account.is_active.desc(),
+            Account.is_posting_allowed.desc(),
+            Account.account_code.asc(),
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     return account.account_id if account else None

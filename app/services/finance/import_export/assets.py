@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.finance.core_org.location import Location
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 
@@ -136,7 +137,10 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         unique_categories = set()
         for row in rows:
             cat_name = (
-                row.get("Asset Category") or row.get("Asset Class") or "General Assets"
+                row.get("Asset Category")
+                or row.get("Asset Class")
+                or row.get("Category")
+                or "General Assets"
             )
             if cat_name:
                 unique_categories.add(cat_name.strip())
@@ -190,6 +194,7 @@ class AssetImporter(BaseImporter[Asset]):
             depreciation_expense_account_id,
             gain_loss_disposal_account_id,
         )
+        self._location_cache: dict[str, UUID | None] = {}
 
     def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings supporting various CSV formats."""
@@ -374,6 +379,9 @@ class AssetImporter(BaseImporter[Asset]):
             or "General Assets"
         )
         category_id = self._category_importer.get_category_id(category_name)
+        location_id = self._resolve_location_id(
+            row.get("location") or row.get("department_alt")
+        )
 
         # Get acquisition details
         acquisition_date = (
@@ -426,7 +434,7 @@ class AssetImporter(BaseImporter[Asset]):
             net_book_value = acquisition_cost or Decimal("0")
 
         # Determine status
-        status_str = row.get("status_str", "ACTIVE")
+        status_str = row.get("status_str") or "ACTIVE"
         status = self._parse_status(status_str)
 
         asset = Asset(
@@ -436,6 +444,7 @@ class AssetImporter(BaseImporter[Asset]):
             asset_name=asset_name[:200],
             description=row.get("description"),
             category_id=category_id,
+            location_id=location_id,
             acquisition_date=acquisition_date,
             in_service_date=acquisition_date,
             acquisition_cost=acquisition_cost,
@@ -464,6 +473,40 @@ class AssetImporter(BaseImporter[Asset]):
 
         return asset
 
+    def _resolve_location_id(self, raw_location: Any) -> UUID | None:
+        """Resolve free-text location value to an organization location_id."""
+        text = str(raw_location or "").strip()
+        if not text:
+            return None
+
+        key = text.lower()
+        if key in self._location_cache:
+            return self._location_cache[key]
+
+        location = self.db.execute(
+            select(Location).where(
+                Location.organization_id == self.config.organization_id,
+                Location.is_active.is_(True),
+                (Location.location_name.ilike(text) | Location.location_code.ilike(text)),
+            )
+        ).scalars().first()
+
+        if not location:
+            location = self.db.execute(
+                select(Location).where(
+                    Location.organization_id == self.config.organization_id,
+                    Location.is_active.is_(True),
+                    (
+                        Location.location_name.ilike(f"%{text}%")
+                        | Location.location_code.ilike(f"%{text}%")
+                    ),
+                )
+            ).scalars().first()
+
+        resolved = location.location_id if location else None
+        self._location_cache[key] = resolved
+        return resolved
+
     def _parse_depreciation_method(self, method_str: str) -> str:
         """Parse depreciation method string."""
         method_map = {
@@ -483,8 +526,9 @@ class AssetImporter(BaseImporter[Asset]):
         }
         return method_map.get(method_str.upper().replace("-", "_"), "STRAIGHT_LINE")
 
-    def _parse_status(self, status_str: str) -> AssetStatus:
+    def _parse_status(self, status_str: str | None) -> AssetStatus:
         """Parse asset status string."""
+        normalized = str(status_str or "ACTIVE").strip().upper().replace(" ", "_")
         status_map = {
             "ACTIVE": AssetStatus.ACTIVE,
             "DRAFT": AssetStatus.DRAFT,
@@ -495,7 +539,7 @@ class AssetImporter(BaseImporter[Asset]):
             "UNDER_CONSTRUCTION": AssetStatus.UNDER_CONSTRUCTION,
             "WIP": AssetStatus.UNDER_CONSTRUCTION,
         }
-        return status_map.get(status_str.upper().replace(" ", "_"), AssetStatus.ACTIVE)
+        return status_map.get(normalized, AssetStatus.ACTIVE)
 
     def import_file(self, file_path):
         """Override to ensure categories are created first."""
@@ -512,6 +556,21 @@ class AssetImporter(BaseImporter[Asset]):
             rows = list(reader)
 
         # Ensure categories exist
+        self._category_importer.ensure_categories(rows)
+        self.db.flush()
+
+        return super().import_rows(rows)
+
+    def import_xlsx_file(self, file_path):
+        """Override XLSX import to ensure categories are created first."""
+        from pathlib import Path
+
+        file_path = Path(file_path)
+        if not file_path.exists():
+            self.result.add_error(0, f"File not found: {file_path}", None)
+            return self.result
+
+        rows = self.parse_xlsx_file(file_path)
         self._category_importer.ensure_categories(rows)
         self.db.flush()
 

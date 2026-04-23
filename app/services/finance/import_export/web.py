@@ -64,14 +64,23 @@ class ImportWebService:
     def _find_account_by_type(
         db: Session, org_id: UUID, subledger_type: str
     ) -> UUID | None:
-        """Find account by subledger type."""
-        result = db.execute(
+        """Find account by subledger type.
+
+        Multiple accounts can legitimately share a subledger type (for example,
+        several ASSET accounts). In that case, pick a deterministic best match
+        instead of raising ``MultipleResultsFound``.
+        """
+        account = db.execute(
             select(Account).where(
                 Account.organization_id == org_id,
                 Account.subledger_type == subledger_type,
+            ).order_by(
+                Account.is_active.desc(),
+                Account.is_posting_allowed.desc(),
+                Account.account_code.asc(),
             )
-        ).scalar_one_or_none()
-        return result.account_id if result else None
+        ).scalars().first()
+        return account.account_id if account else None
 
     @staticmethod
     def _find_account_by_name_pattern(
@@ -182,6 +191,21 @@ class ImportWebService:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
     @staticmethod
+    def _display_target_name(importer: Any, target_field: str) -> str:
+        """Convert internal target field names to user-facing mapping labels."""
+        try:
+            mappings = importer.get_field_mappings()
+        except Exception:
+            mappings = []
+
+        for mapping in mappings:
+            if getattr(mapping, "target_field", None) == target_field:
+                source = getattr(mapping, "source_field", None)
+                if isinstance(source, str) and source.strip():
+                    return source
+        return target_field
+
+    @staticmethod
     async def preview_import(
         db: Session,
         organization_id: UUID,
@@ -243,7 +267,9 @@ class ImportWebService:
                 "column_mappings": [
                     {
                         "source": m.source_column,
-                        "target": m.target_field,
+                        "target": ImportWebService._display_target_name(
+                            importer, m.target_field
+                        ),
                         "confidence": m.confidence,
                         "samples": m.sample_values[:3],
                     }
