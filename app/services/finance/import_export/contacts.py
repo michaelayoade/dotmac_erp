@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -388,41 +389,41 @@ class SupplierImporter(BaseImporter[Supplier]):
 
 def get_ar_control_account(db: Session, organization_id: UUID) -> UUID | None:
     """Find the AR control account for the organization."""
-    account = (
-        db.execute(
-            select(Account)
-            .where(
-                Account.organization_id == organization_id,
-                Account.subledger_type == "AR",
-            )
-            .order_by(
-                Account.is_active.desc(),
-                Account.is_posting_allowed.desc(),
-                Account.account_code.asc(),
-            )
+    query = (
+        select(Account)
+        .where(
+            Account.organization_id == organization_id,
+            Account.subledger_type == "AR",
         )
-        .scalars()
-        .first()
+        .order_by(
+            Account.is_active.desc(),
+            Account.is_posting_allowed.desc(),
+            Account.account_code.asc(),
+        )
     )
+    try:
+        account = db.execute(query).scalar_one_or_none()
+    except MultipleResultsFound:
+        account = db.execute(query).scalars().first()
     return account.account_id if account else None
 
 
 def get_ap_control_account(db: Session, organization_id: UUID) -> UUID | None:
     """Find the AP control account for the organization."""
-    account = (
-        db.execute(
-            select(Account)
-            .where(
-                Account.organization_id == organization_id,
-                Account.subledger_type == "AP",
-            )
-            .order_by(
-                Account.is_active.desc(),
-                Account.is_posting_allowed.desc(),
-                Account.account_code.asc(),
-            )
+    query = (
+        select(Account)
+        .where(
+            Account.organization_id == organization_id,
+            Account.subledger_type == "AP",
         )
-        .scalars()
-        .first()
+        .order_by(
+            Account.is_active.desc(),
+            Account.is_posting_allowed.desc(),
+            Account.account_code.asc(),
+        )
     )
+    try:
+        account = db.execute(query).scalar_one_or_none()
+    except MultipleResultsFound:
+        account = db.execute(query).scalars().first()
     return account.account_id if account else None
