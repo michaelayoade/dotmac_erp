@@ -1340,16 +1340,22 @@ def find_account_by_subledger_type(
 
     from app.models.finance.gl.account import Account
 
-    account = db.execute(
-        select(Account).where(
-            Account.organization_id == organization_id,
-            Account.subledger_type == subledger_type,
-        ).order_by(
-            Account.is_active.desc(),
-            Account.is_posting_allowed.desc(),
-            Account.account_code.asc(),
+    account = (
+        db.execute(
+            select(Account)
+            .where(
+                Account.organization_id == organization_id,
+                Account.subledger_type == subledger_type,
+            )
+            .order_by(
+                Account.is_active.desc(),
+                Account.is_posting_allowed.desc(),
+                Account.account_code.asc(),
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return account.account_id if account else None
 
 

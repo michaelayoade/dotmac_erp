@@ -483,25 +483,36 @@ class AssetImporter(BaseImporter[Asset]):
         if key in self._location_cache:
             return self._location_cache[key]
 
-        location = self.db.execute(
-            select(Location).where(
-                Location.organization_id == self.config.organization_id,
-                Location.is_active.is_(True),
-                (Location.location_name.ilike(text) | Location.location_code.ilike(text)),
-            )
-        ).scalars().first()
-
-        if not location:
-            location = self.db.execute(
+        location = (
+            self.db.execute(
                 select(Location).where(
                     Location.organization_id == self.config.organization_id,
                     Location.is_active.is_(True),
                     (
-                        Location.location_name.ilike(f"%{text}%")
-                        | Location.location_code.ilike(f"%{text}%")
+                        Location.location_name.ilike(text)
+                        | Location.location_code.ilike(text)
                     ),
                 )
-            ).scalars().first()
+            )
+            .scalars()
+            .first()
+        )
+
+        if not location:
+            location = (
+                self.db.execute(
+                    select(Location).where(
+                        Location.organization_id == self.config.organization_id,
+                        Location.is_active.is_(True),
+                        (
+                            Location.location_name.ilike(f"%{text}%")
+                            | Location.location_code.ilike(f"%{text}%")
+                        ),
+                    )
+                )
+                .scalars()
+                .first()
+            )
 
         resolved = location.location_id if location else None
         self._location_cache[key] = resolved

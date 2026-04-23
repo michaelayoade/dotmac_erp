@@ -1480,8 +1480,12 @@ class FixedAssetWebService:
             serial_number = _safe_form_text(form_data.get("serial_number")).strip()
             location_id = _safe_form_text(form_data.get("location_id")).strip()
             description = _safe_form_text(form_data.get("description")).strip()
-            acquisition_date = _safe_form_text(form_data.get("acquisition_date")).strip()
-            acquisition_cost = _safe_form_text(form_data.get("acquisition_cost")).strip()
+            acquisition_date = _safe_form_text(
+                form_data.get("acquisition_date")
+            ).strip()
+            acquisition_cost = _safe_form_text(
+                form_data.get("acquisition_cost")
+            ).strip()
 
             if asset_name:
                 updates["asset_name"] = asset_name

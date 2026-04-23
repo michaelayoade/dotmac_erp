@@ -70,16 +70,22 @@ class ImportWebService:
         several ASSET accounts). In that case, pick a deterministic best match
         instead of raising ``MultipleResultsFound``.
         """
-        account = db.execute(
-            select(Account).where(
-                Account.organization_id == org_id,
-                Account.subledger_type == subledger_type,
-            ).order_by(
-                Account.is_active.desc(),
-                Account.is_posting_allowed.desc(),
-                Account.account_code.asc(),
+        account = (
+            db.execute(
+                select(Account)
+                .where(
+                    Account.organization_id == org_id,
+                    Account.subledger_type == subledger_type,
+                )
+                .order_by(
+                    Account.is_active.desc(),
+                    Account.is_posting_allowed.desc(),
+                    Account.account_code.asc(),
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         return account.account_id if account else None
 
     @staticmethod
