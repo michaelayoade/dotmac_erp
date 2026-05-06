@@ -92,6 +92,11 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         ForeignKey("recruit.job_opening.job_opening_id"),
         nullable=False,
     )
+    form_submission_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("forms.form_submission.submission_id"),
+        nullable=True,
+    )
 
     # Personal details
     first_name: Mapped[str] = mapped_column(

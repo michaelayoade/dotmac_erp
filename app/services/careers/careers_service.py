@@ -29,6 +29,7 @@ from app.models.people.recruit.job_offer import JobOffer, OfferStatus
 from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
 from app.services.careers.candidate_notifications import CandidateNotificationService
 from app.services.careers.resume_service import ResumeService
+from app.services.forms import FormEngineService, FormValidationError
 from app.services.people.recruit.notifications import (
     send_new_applicant_notification,
     send_offer_response_notification,
@@ -76,6 +77,13 @@ class CareersService:
         self.db = db
         self.resume_service = ResumeService()
         self.notification_service = CandidateNotificationService()
+
+    @staticmethod
+    def split_locations(value: str | None) -> list[str]:
+        """Split comma-separated job locations into display/filter values."""
+        if not value:
+            return []
+        return [item.strip() for item in value.split(",") if item.strip()]
 
     def get_organization_by_slug(self, slug: str) -> Organization | None:
         """
@@ -290,7 +298,10 @@ class CareersService:
             .order_by(JobOpening.location)
         )
 
-        return [loc for loc in self.db.scalars(stmt).all() if loc]
+        locations: set[str] = set()
+        for raw_location in self.db.scalars(stmt).all():
+            locations.update(self.split_locations(raw_location))
+        return sorted(locations)
 
     def _generate_application_number(self, org_id: uuid.UUID) -> str:
         """Generate a unique application number.
@@ -426,6 +437,86 @@ class CareersService:
         )
         send_new_applicant_notification(self.db, org_id, applicant, job)
 
+        return applicant
+
+    def submit_dynamic_application(
+        self,
+        org_id: uuid.UUID,
+        job_id: uuid.UUID,
+        answers: dict,
+    ) -> JobApplicant:
+        """Submit an application using a fully dynamic form definition."""
+        job = self.get_public_job(org_id, job_id)
+        if not job:
+            raise JobNotFoundError(
+                "Job position not found or no longer accepting applications"
+            )
+        form_svc = FormEngineService(self.db)
+        form_version = form_svc.get_job_form_version(
+            org_id,
+            job.job_opening_id,
+            job.application_form_version_id,
+        )
+        if not form_version:
+            raise ApplicationSubmissionError(
+                "This job does not have an application form."
+            )
+
+        try:
+            submission, mapped = form_svc.submit(org_id, form_version, answers)
+        except FormValidationError as exc:
+            raise ApplicationSubmissionError(str(exc)) from exc
+
+        email = str(mapped["email"]).lower().strip()
+        existing = self.db.scalar(
+            select(JobApplicant).where(
+                JobApplicant.organization_id == org_id,
+                JobApplicant.job_opening_id == job_id,
+                JobApplicant.email == email,
+            )
+        )
+        if existing:
+            raise ApplicationSubmissionError(
+                "You have already applied for this position. "
+                f"Your application number is {existing.application_number}."
+            )
+
+        display_name = str(mapped["display_name"]).strip()
+        first_name = str(mapped.get("first_name") or display_name).strip()[:80]
+        last_name = str(mapped.get("last_name") or "-").strip()[:80]
+        resume_value = mapped.get("resume")
+        resume_url = None
+        if isinstance(resume_value, dict):
+            resume_url = resume_value.get("file_url")
+        elif resume_value:
+            resume_url = str(resume_value)
+
+        applicant = JobApplicant(
+            organization_id=org_id,
+            application_number=self._generate_application_number(org_id),
+            job_opening_id=job_id,
+            form_submission_id=submission.submission_id,
+            first_name=first_name or display_name[:80],
+            last_name=last_name or "-",
+            email=email,
+            phone=str(mapped.get("phone")).strip() if mapped.get("phone") else None,
+            resume_url=resume_url,
+            applied_on=date.today(),
+            source="WEBSITE",
+            status=ApplicantStatus.NEW,
+        )
+        self.db.add(applicant)
+        self.db.flush()
+        form_svc.attach_submission_to_subject(
+            submission, "JOB_APPLICANT", applicant.applicant_id
+        )
+        logger.info(
+            "Dynamic application submitted: %s for job %s (org %s)",
+            applicant.application_number,
+            job.job_code,
+            org_id,
+        )
+        send_new_applicant_notification(self.db, org_id, applicant, job)
         return applicant
 
     def request_status_check(

@@ -6,6 +6,7 @@ Provides view-focused data and operations for job opening web routes.
 
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from fastapi import Request
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import EmployeeStatus
 from app.models.people.recruit import JobOpeningStatus
+from app.services.forms import FormEngineService, FormValidationError
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import (
     DepartmentFilters,
@@ -111,11 +113,20 @@ class JobOpeningWebService:
         ).items
 
         opening = None
+        application_form = None
         if job_opening_id:
             svc = RecruitmentService(db)
             try:
                 opening = svc.get_job_opening(
                     organization_id, coerce_uuid(job_opening_id)
+                )
+                form_svc = FormEngineService(db)
+                application_form = form_svc.serialize_version(
+                    form_svc.get_job_form_version(
+                        organization_id,
+                        opening.job_opening_id,
+                        opening.application_form_version_id,
+                    )
                 )
             except Exception:
                 opening = None
@@ -125,6 +136,8 @@ class JobOpeningWebService:
             "departments": departments,
             "designations": designations,
             "managers": managers,
+            "application_form": application_form
+            or FormEngineService(db).serialize_version(None),
             "form_data": {},
         }
 
@@ -183,6 +196,22 @@ class JobOpeningWebService:
             "preferred_skills": form_data.get("preferred_skills") or None,
             "education_requirements": form_data.get("education_requirements") or None,
         }
+
+    @staticmethod
+    def parse_application_form_payload(form_data: dict) -> dict | None:
+        """Parse embedded application form builder JSON."""
+        raw = form_data.get("application_form_json")
+        if not raw:
+            return None
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise FormValidationError(
+                "Application form configuration is invalid."
+            ) from exc
+        if not isinstance(payload, dict):
+            raise FormValidationError("Application form configuration is invalid.")
+        return payload
 
     # ─────────────────────────────────────────────────────────────────────────
     # Response Methods
@@ -304,6 +333,19 @@ class JobOpeningWebService:
         try:
             input_kwargs = self.build_job_opening_input(dict(form_data))
             opening = svc.create_job_opening(org_id, **input_kwargs)
+            application_form_payload = self.parse_application_form_payload(
+                dict(form_data)
+            )
+            form_version = FormEngineService(db).upsert_job_form_version(
+                org_id,
+                opening.job_opening_id,
+                opening.job_title,
+                application_form_payload,
+            )
+            if form_version:
+                opening.application_form_version_id = form_version.form_version_id
+            elif application_form_payload is not None:
+                opening.application_form_version_id = None
             db.commit()
             return RedirectResponse(
                 url=f"/people/recruit/jobs/{opening.job_opening_id}?saved=1",
@@ -335,7 +377,22 @@ class JobOpeningWebService:
 
         try:
             input_kwargs = self.build_job_opening_input(dict(form_data))
-            svc.update_job_opening(org_id, coerce_uuid(job_opening_id), **input_kwargs)
+            opening = svc.update_job_opening(
+                org_id, coerce_uuid(job_opening_id), **input_kwargs
+            )
+            application_form_payload = self.parse_application_form_payload(
+                dict(form_data)
+            )
+            form_version = FormEngineService(db).upsert_job_form_version(
+                org_id,
+                opening.job_opening_id,
+                opening.job_title,
+                application_form_payload,
+            )
+            if form_version:
+                opening.application_form_version_id = form_version.form_version_id
+            elif application_form_payload is not None:
+                opening.application_form_version_id = None
             db.commit()
             return RedirectResponse(
                 url=f"/people/recruit/jobs/{job_opening_id}?saved=1",
@@ -347,6 +404,7 @@ class JobOpeningWebService:
             context = base_context(request, auth, "Edit Job Opening", "recruit", db=db)
             context["request"] = request
             context.update(self.job_opening_form_context(db, org_id, job_opening_id))
+            context["form_data"] = dict(form_data)
             context["error"] = str(e)
             return templates.TemplateResponse(
                 request, "people/recruit/job_opening_form.html", context

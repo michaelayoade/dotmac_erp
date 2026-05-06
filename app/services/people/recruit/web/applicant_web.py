@@ -16,6 +16,7 @@ from starlette.datastructures import UploadFile
 
 from app.models.people.recruit import ApplicantStatus, JobOpeningStatus
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.forms import FormEngineService
 from app.services.people.recruit import RecruitmentService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -72,8 +73,14 @@ class ApplicantWebService:
             pagination=PaginationParams(limit=200),
         ).items
 
+        dynamic_columns, dynamic_values = FormEngineService(db).list_column_answers(
+            organization_id, [applicant.applicant_id for applicant in result.items]
+        )
+
         return {
             "applicants": result.items,
+            "dynamic_columns": dynamic_columns,
+            "dynamic_values": dynamic_values,
             "job_openings": job_openings,
             "search": search or "",
             "status": status or "",
@@ -156,11 +163,15 @@ class ApplicantWebService:
             applicant_id=coerce_uuid(applicant_id),
             pagination=PaginationParams(limit=10),
         ).items
+        dynamic_answers = FormEngineService(db).detail_answers(
+            organization_id, applicant.applicant_id
+        )
 
         return {
             "applicant": applicant,
             "interviews": interviews,
             "offers": offers,
+            "dynamic_answers": dynamic_answers,
             "statuses": [s.value for s in ApplicantStatus],
         }
 

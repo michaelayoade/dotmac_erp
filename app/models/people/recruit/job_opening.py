@@ -89,6 +89,11 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
         Text,
         nullable=True,
     )
+    application_form_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("forms.form_version.form_version_id"),
+        nullable=True,
+    )
 
     # Position details
     department_id: Mapped[uuid.UUID | None] = mapped_column(

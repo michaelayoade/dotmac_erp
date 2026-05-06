@@ -112,6 +112,19 @@ class ApplicationSubmitResponse(BaseModel):
     message: str = Field(..., description="Confirmation message")
 
 
+class DynamicApplicationSubmitRequest(BaseModel):
+    """Request to submit a fully dynamic job application."""
+
+    answers: dict = Field(
+        ...,
+        description=(
+            "Map of form field_key to value. Multi-choice fields use arrays. "
+            "Attachment fields use {file_url, file_name} from the upload endpoint."
+        ),
+    )
+    captcha_token: str | None = Field(None, description="CAPTCHA response token")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Status Check Schemas
 # ═══════════════════════════════════════════════════════════════════════════

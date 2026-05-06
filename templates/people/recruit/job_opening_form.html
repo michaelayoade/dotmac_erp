@@ -99,12 +99,26 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="location" class="form-label">Location</label>
-                        <input type="text" name="location" id="location"
-                            value="{{ opening.location if opening else form_data.location | default('', true) }}"
-                            class="form-input w-full"
-                            placeholder="Lagos, Nigeria">
+                    <div x-data='locationPicker({{ (opening.location if opening else form_data.location | default("", true)) | tojson }})'>
+                        <label for="location_entry" class="form-label">Locations</label>
+                        <input type="hidden" name="location" :value="locations.join(', ')">
+                        <div class="flex gap-2">
+                            <input type="text" id="location_entry"
+                                x-model="newLocation"
+                                @keydown.enter.prevent="addLocation()"
+                                class="form-input w-full"
+                                placeholder="Lagos, Abuja, Remote">
+                            <button type="button" class="btn btn-secondary" @click="addLocation()">Add</button>
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-2" x-show="locations.length">
+                            <template x-for="(loc, index) in locations" :key="loc">
+                                <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                                    <span x-text="loc"></span>
+                                    <button type="button" class="text-slate-500 hover:text-rose-600" @click="locations.splice(index, 1)" aria-label="Remove location">&times;</button>
+                                </span>
+                            </template>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Add one or more job locations. Press Enter or click Add.</p>
                     </div>
                     <div class="flex items-center pt-6">
                         <label class="inline-flex items-center gap-2">
@@ -234,6 +248,109 @@
             </div>
         </div>
 
+        {# Fully dynamic application form #}
+        {% set builder_form = application_form if application_form is defined else {'sections': [{'title': 'Application', 'description': '', 'fields': []}]} %}
+        <div class="card" x-data='applicationFormBuilder({{ builder_form | tojson | safe }})'>
+            <div class="card-header flex items-center justify-between gap-3">
+                <div>
+                    <h3 class="font-medium text-slate-900 dark:text-white">Application Form Builder</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Build every candidate-facing field for this job.</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" @click="addField()">
+                    {{ icon_svg("plus", "h-4 w-4 mr-1") }}
+                    Add Field
+                </button>
+            </div>
+            <div class="card-body space-y-4">
+                <input type="hidden" name="application_form_json" :value="payloadJson()">
+
+                <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+                    A publishable dynamic form must map one field to Applicant Email and either Display Name or both First Name and Last Name.
+                </div>
+
+                <template x-for="(field, index) in fields" :key="field.uid">
+                    <div class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <div>
+                                <label class="form-label required">Label</label>
+                                <input type="text" class="form-input w-full" x-model="field.label" placeholder="Email address">
+                            </div>
+                            <div>
+                                <label class="form-label required">Type</label>
+                                <select class="form-select w-full" x-model="field.field_type">
+                                    <template x-for="type in fieldTypes" :key="type.value">
+                                        <option :value="type.value" x-text="type.label"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">System Mapping</label>
+                                <select class="form-select w-full" x-model="field.system_mapping">
+                                    <option value="">None</option>
+                                    <option value="display_name">Applicant Display Name</option>
+                                    <option value="first_name">Applicant First Name</option>
+                                    <option value="last_name">Applicant Last Name</option>
+                                    <option value="email">Applicant Email</option>
+                                    <option value="phone">Applicant Phone</option>
+                                    <option value="resume">Resume / Primary Attachment</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Placeholder</label>
+                                <input type="text" class="form-input w-full" x-model="field.placeholder">
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label">Help Text</label>
+                            <input type="text" class="form-input w-full" x-model="field.help_text">
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-4">
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" x-model="field.is_required">
+                                Required
+                            </label>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" x-model="field.show_in_list">
+                                Show in applicant list
+                            </label>
+                        </div>
+
+                        <div class="mt-4" x-show="hasOptions(field.field_type)">
+                            <div class="mb-2 flex items-center justify-between">
+                                <label class="form-label">Options</label>
+                                <button type="button" class="btn btn-secondary btn-sm" @click="addOption(field)">Add Option</button>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="(option, optionIndex) in field.options" :key="option.uid">
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" class="form-input w-full" x-model="option.label" placeholder="Lagos">
+                                        <button type="button" class="btn btn-ghost btn-sm" @click="field.options.splice(optionIndex, 1)">
+                                            {{ icon_svg("trash", "h-4 w-4") }}
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 dark:border-slate-700">
+                            <div class="text-xs text-slate-500 dark:text-slate-400">Field <span x-text="index + 1"></span></div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="btn btn-secondary btn-sm" @click="moveField(index, -1)" :disabled="index === 0">Up</button>
+                                <button type="button" class="btn btn-secondary btn-sm" @click="moveField(index, 1)" :disabled="index === fields.length - 1">Down</button>
+                                <button type="button" class="btn btn-danger btn-sm" @click="fields.splice(index, 1)">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="fields.length === 0" class="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    No application fields yet. Add the fields candidates must complete.
+                </div>
+            </div>
+        </div>
+
         {# Form Actions #}
         <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/recruit/jobs{% if opening %}/{{ opening.job_opening_id }}{% endif %}" class="btn btn-secondary">
@@ -245,4 +362,114 @@
         </div>
     </form>
 </div>
+
+<script>
+function locationPicker(initialValue) {
+    const parse = (value) => String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    return {
+        locations: parse(initialValue),
+        newLocation: "",
+        addLocation() {
+            const values = parse(this.newLocation);
+            values.forEach((value) => {
+                if (!this.locations.includes(value)) {
+                    this.locations.push(value);
+                }
+            });
+            this.newLocation = "";
+        },
+    };
+}
+
+function applicationFormBuilder(initialForm) {
+    const uid = () => Math.random().toString(36).slice(2);
+    const normalizeField = (field) => ({
+        uid: uid(),
+        label: field.label || "",
+        field_key: field.field_key || "",
+        field_type: field.field_type || "TEXT",
+        help_text: field.help_text || "",
+        placeholder: field.placeholder || "",
+        is_required: Boolean(field.is_required),
+        show_in_list: Boolean(field.show_in_list),
+        is_filterable: Boolean(field.is_filterable),
+        system_mapping: field.system_mapping || "",
+        settings: field.settings || {},
+        validation: field.validation || {},
+        visibility: field.visibility || {},
+        options: (field.options || []).map((option) => ({
+            uid: uid(),
+            label: option.label || "",
+            value: option.value || "",
+        })),
+    });
+    const initialFields = ((initialForm.sections || [])[0]?.fields || []).map(normalizeField);
+    return {
+        fields: initialFields,
+        fieldTypes: [
+            { value: "TEXT", label: "Short Text" },
+            { value: "LONG_TEXT", label: "Long Text" },
+            { value: "NUMBER", label: "Number" },
+            { value: "DATE", label: "Date" },
+            { value: "EMAIL", label: "Email" },
+            { value: "PHONE", label: "Phone" },
+            { value: "URL", label: "URL" },
+            { value: "DROPDOWN", label: "Dropdown" },
+            { value: "SINGLE_CHOICE", label: "Single Choice" },
+            { value: "MULTI_CHOICE", label: "Multiple Choice" },
+            { value: "CHECKBOX", label: "Checkbox" },
+            { value: "YES_NO", label: "Yes / No" },
+            { value: "FILE", label: "File Attachment" },
+            { value: "IMAGE", label: "Image Attachment" },
+            { value: "PDF", label: "PDF Attachment" },
+            { value: "CONSENT", label: "Consent" },
+            { value: "RATING", label: "Rating" },
+        ],
+        hasOptions(type) {
+            return ["DROPDOWN", "SINGLE_CHOICE", "MULTI_CHOICE"].includes(type);
+        },
+        addField() {
+            this.fields.push(normalizeField({ label: "", field_type: "TEXT" }));
+        },
+        addOption(field) {
+            field.options.push({ uid: uid(), label: "", value: "" });
+        },
+        moveField(index, direction) {
+            const next = index + direction;
+            if (next < 0 || next >= this.fields.length) return;
+            const [field] = this.fields.splice(index, 1);
+            this.fields.splice(next, 0, field);
+        },
+        payloadJson() {
+            return JSON.stringify({
+                sections: [{
+                    title: "Application",
+                    description: "",
+                    fields: this.fields.map((field) => ({
+                        label: field.label,
+                        field_key: field.field_key,
+                        field_type: field.field_type,
+                        help_text: field.help_text,
+                        placeholder: field.placeholder,
+                        is_required: field.is_required,
+                        show_in_list: field.show_in_list,
+                        is_filterable: field.is_filterable,
+                        system_mapping: field.system_mapping,
+                        settings: field.settings,
+                        validation: field.validation,
+                        visibility: field.visibility,
+                        options: field.options.map((option) => ({
+                            label: option.label,
+                            value: option.value,
+                        })),
+                    })),
+                }],
+            });
+        },
+    };
+}
+</script>
 {% endblock %}

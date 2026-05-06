@@ -10,10 +10,11 @@ import secrets
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.api.files import _stream_s3_file
 from app.db import SessionLocal
@@ -255,6 +256,7 @@ def apply_form_page(
     job = service.get_job_by_code(ctx.org_id, job_code)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    application_form = service.get_job_application_form(ctx.org_id, job)
 
     return _render_with_csrf(
         request,
@@ -267,6 +269,7 @@ def apply_form_page(
             "org_logo": ctx.org_logo,
             "brand": ctx.brand,
             "job": job,
+            "application_form": application_form,
             "captcha_enabled": is_captcha_enabled(),
             "captcha_site_key": get_captcha_site_key(),
             "error": None,
@@ -280,33 +283,109 @@ async def submit_application(
     request: Request,
     org_slug: str,
     job_code: str,
-    first_name: str = Form(...),
-    last_name: str = Form(...),
-    email: str = Form(...),
-    phone: str | None = Form(None),
-    cover_letter: str | None = Form(None),
-    current_employer: str | None = Form(None),
-    current_job_title: str | None = Form(None),
-    years_of_experience: int | None = Form(None),
-    highest_qualification: str | None = Form(None),
-    skills: str | None = Form(None),
-    city: str | None = Form(None),
-    country_code: str | None = Form(None),
-    resume: UploadFile | None = None,
-    captcha_token: str | None = Form(None, alias="cf-turnstile-response"),
     db: Session = Depends(get_db),
 ):
-    check_rate_limit(request, max_requests=10, window_seconds=300, key_suffix=email)
     ctx, service = _require_org_ctx(org_slug, db)
 
     job = service.get_job_by_code(ctx.org_id, job_code)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    application_form = service.get_job_application_form(ctx.org_id, job)
+    form_data = await request.form()
+    captcha_token = str(form_data.get("cf-turnstile-response") or "")
+
+    if application_form:
+        answers: dict[str, object] = {}
+        error = None
+        for section in application_form.get("sections", []):
+            for field in section.get("fields", []):
+                key = field["field_key"]
+                form_key = f"field_{key}"
+                if field["field_type"] == "MULTI_CHOICE":
+                    answers[key] = [
+                        value
+                        for value in form_data.getlist(form_key)
+                        if not isinstance(value, StarletteUploadFile)
+                    ]
+                elif field["field_type"] in {"FILE", "IMAGE", "PDF"}:
+                    uploaded = form_data.get(form_key)
+                    if isinstance(uploaded, StarletteUploadFile) and uploaded.filename:
+                        content = await uploaded.read()
+                        file_token, upload_error = await service.upload_form_attachment(
+                            ctx.org_id,
+                            uploaded.filename,
+                            content,
+                            uploaded.content_type,
+                        )
+                        if upload_error:
+                            error = upload_error
+                            break
+                        answers[key] = file_token
+                else:
+                    value = form_data.get(form_key)
+                    if not isinstance(value, StarletteUploadFile):
+                        answers[key] = value
+            if error:
+                break
+        email_key = next(
+            (
+                field["field_key"]
+                for section in application_form.get("sections", [])
+                for field in section.get("fields", [])
+                if field.get("system_mapping") == "email"
+            ),
+            "",
+        )
+        check_rate_limit(
+            request,
+            max_requests=10,
+            window_seconds=300,
+            key_suffix=str(answers.get(email_key) or job_code),
+        )
+        if not error:
+            client_ip = request.client.host if request.client else None
+            result = await service.submit_dynamic_application(
+                ctx.org_id,
+                job_code,
+                answers=answers,
+                captcha_token=captcha_token,
+                client_ip=client_ip,
+            )
+            if result.success:
+                return RedirectResponse(
+                    url=f"/careers/{org_slug}/confirm/{result.application_number}?saved=1",
+                    status_code=303,
+                )
+            error = result.error
+        return _render_with_csrf(
+            request,
+            "careers/apply.html",
+            {
+                "request": request,
+                "org": ctx.org,
+                "org_slug": ctx.org_slug,
+                "org_name": ctx.org_name,
+                "org_logo": ctx.org_logo,
+                "brand": ctx.brand,
+                "job": job,
+                "application_form": application_form,
+                "captcha_enabled": is_captcha_enabled(),
+                "captcha_site_key": get_captcha_site_key(),
+                "error": error,
+                "form_data": answers,
+            },
+        )
+
+    first_name = str(form_data.get("first_name") or "")
+    last_name = str(form_data.get("last_name") or "")
+    email = str(form_data.get("email") or "")
+    check_rate_limit(request, max_requests=10, window_seconds=300, key_suffix=email)
 
     # Handle resume upload
     resume_file_id = None
     error = None
-    if resume and resume.filename:
+    resume = form_data.get("resume")
+    if isinstance(resume, StarletteUploadFile) and resume.filename:
         content = await resume.read()
         resume_file_id, error = await service.upload_resume(
             ctx.org_id, resume.filename, content
@@ -321,16 +400,19 @@ async def submit_application(
             first_name=first_name,
             last_name=last_name,
             email=email,
-            phone=phone,
+            phone=str(form_data.get("phone") or "") or None,
             resume_file_id=resume_file_id,
-            cover_letter=cover_letter,
-            current_employer=current_employer,
-            current_job_title=current_job_title,
-            years_of_experience=years_of_experience,
-            highest_qualification=highest_qualification,
-            skills=skills,
-            city=city,
-            country_code=country_code,
+            cover_letter=str(form_data.get("cover_letter") or "") or None,
+            current_employer=str(form_data.get("current_employer") or "") or None,
+            current_job_title=str(form_data.get("current_job_title") or "") or None,
+            years_of_experience=int(form_data["years_of_experience"])
+            if form_data.get("years_of_experience")
+            else None,
+            highest_qualification=str(form_data.get("highest_qualification") or "")
+            or None,
+            skills=str(form_data.get("skills") or "") or None,
+            city=str(form_data.get("city") or "") or None,
+            country_code=str(form_data.get("country_code") or "") or None,
             captcha_token=captcha_token,
             client_ip=client_ip,
         )
@@ -354,6 +436,7 @@ async def submit_application(
             "org_logo": ctx.org_logo,
             "brand": ctx.brand,
             "job": job,
+            "application_form": application_form,
             "captcha_enabled": is_captcha_enabled(),
             "captcha_site_key": get_captcha_site_key(),
             "error": error,
@@ -361,15 +444,15 @@ async def submit_application(
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
-                "phone": phone,
-                "cover_letter": cover_letter,
-                "current_employer": current_employer,
-                "current_job_title": current_job_title,
-                "years_of_experience": years_of_experience,
-                "highest_qualification": highest_qualification,
-                "skills": skills,
-                "city": city,
-                "country_code": country_code,
+                "phone": str(form_data.get("phone") or ""),
+                "cover_letter": str(form_data.get("cover_letter") or ""),
+                "current_employer": str(form_data.get("current_employer") or ""),
+                "current_job_title": str(form_data.get("current_job_title") or ""),
+                "years_of_experience": form_data.get("years_of_experience"),
+                "highest_qualification": form_data.get("highest_qualification"),
+                "skills": form_data.get("skills"),
+                "city": form_data.get("city"),
+                "country_code": form_data.get("country_code"),
             },
         },
     )

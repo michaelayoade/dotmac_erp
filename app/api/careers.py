@@ -19,6 +19,7 @@ from app.schemas.careers import (
     ApplicationSubmitRequest,
     ApplicationSubmitResponse,
     DepartmentWithCount,
+    DynamicApplicationSubmitRequest,
     PublicJobBrief,
     PublicJobListResponse,
     PublicJobRead,
@@ -170,6 +171,23 @@ def get_job_detail(org_slug: str, job_code: str, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/{org_slug}/jobs/{job_code}/application-form")
+def get_job_application_form(
+    org_slug: str,
+    job_code: str,
+    db: Session = Depends(get_db),
+):
+    """Return the dynamic application form schema for a job, if configured."""
+    ctx, service = _require_org(org_slug, db)
+    job = service.get_job_by_code(ctx.org_id, job_code)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    form = service.get_job_application_form(ctx.org_id, job)
+    if not form:
+        raise HTTPException(status_code=404, detail="Application form not configured")
+    return form
+
+
 @router.get("/{org_slug}/departments", response_model=list[DepartmentWithCount])
 def list_departments(org_slug: str, db: Session = Depends(get_db)):
     ctx, service = _require_org(org_slug, db)
@@ -219,6 +237,34 @@ async def upload_resume(
     return ResumeUploadResponse(file_id=file_id, filename=file.filename)
 
 
+@router.post("/{org_slug}/upload/application-file")
+async def upload_application_file(
+    request: Request,
+    org_slug: str,
+    file: UploadFile,
+    db: Session = Depends(get_db),
+):
+    """Upload a file for a dynamic application field and return an answer token."""
+    check_rate_limit(request, max_requests=10, window_seconds=60)
+    ctx, service = _require_org(org_slug, db)
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    content = await read_upload_bytes(
+        file,
+        10 * 1024 * 1024,
+        error_detail="File too large. Maximum size: 10MB",
+    )
+    token, error = await service.upload_form_attachment(
+        ctx.org_id,
+        file.filename,
+        content,
+        file.content_type,
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return token
+
+
 @router.post(
     "/{org_slug}/jobs/{job_code}/apply", response_model=ApplicationSubmitResponse
 )
@@ -256,6 +302,36 @@ async def submit_application(
     if not result.success:
         raise HTTPException(status_code=400, detail=result.error)
 
+    return ApplicationSubmitResponse(
+        application_number=result.application_number or "",
+        message=f"Application submitted successfully. Reference: {result.application_number}",
+    )
+
+
+@router.post(
+    "/{org_slug}/jobs/{job_code}/apply-dynamic",
+    response_model=ApplicationSubmitResponse,
+)
+async def submit_dynamic_application(
+    request: Request,
+    org_slug: str,
+    job_code: str,
+    data: DynamicApplicationSubmitRequest,
+    db: Session = Depends(get_db),
+):
+    """Submit a fully dynamic application using field_key/value answers."""
+    check_rate_limit(request, max_requests=3, window_seconds=300)
+    ctx, service = _require_org(org_slug, db)
+    client_ip = request.client.host if request.client else None
+    result = await service.submit_dynamic_application(
+        ctx.org_id,
+        job_code,
+        answers=data.answers,
+        captcha_token=data.captcha_token,
+        client_ip=client_ip,
+    )
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
     return ApplicationSubmitResponse(
         application_number=result.application_number or "",
         message=f"Application submitted successfully. Reference: {result.application_number}",

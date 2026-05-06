@@ -29,10 +29,11 @@ from app.services.careers.careers_service import (
     JobNotFoundError,
 )
 from app.services.careers.resume_service import (
-    FileTooLargeError,
     InvalidFileTypeError,
     ResumeService,
 )
+from app.services.file_upload import FileUploadError, get_form_attachment_upload
+from app.services.forms import FormEngineService
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,18 @@ class CareersWebService:
         """Get a job opening by its code."""
         return self._careers_service.get_job_by_code(org_id, job_code)
 
+    def get_job_application_form(
+        self, org_id: uuid.UUID, job: JobOpening
+    ) -> dict | None:
+        """Get the published dynamic application form for a job."""
+        form_svc = FormEngineService(self.db)
+        version = form_svc.get_job_form_version(
+            org_id, job.job_opening_id, job.application_form_version_id
+        )
+        if not version:
+            return None
+        return form_svc.serialize_version(version)
+
     def get_public_job(self, org_id: uuid.UUID, job_id: uuid.UUID) -> JobOpening | None:
         """Get a job opening by ID."""
         return self._careers_service.get_public_job(org_id, job_id)
@@ -235,8 +248,30 @@ class CareersWebService:
             return file_id, None
         except InvalidFileTypeError as e:
             return None, str(e)
-        except FileTooLargeError as e:
+
+    async def upload_form_attachment(
+        self,
+        org_id: uuid.UUID,
+        filename: str,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> tuple[dict | None, str | None]:
+        """Upload a dynamic form attachment and return a file token object."""
+        try:
+            result = get_form_attachment_upload().save(
+                file_data=content,
+                content_type=content_type,
+                subdirs=(str(org_id),),
+                original_filename=filename,
+            )
+        except FileUploadError as e:
             return None, str(e)
+        return {
+            "file_url": f"/files/{result.s3_key}",
+            "file_name": filename,
+            "s3_key": result.s3_key,
+            "file_size": result.file_size,
+        }, None
 
     async def submit_application(
         self,
@@ -321,7 +356,51 @@ class CareersWebService:
 
         except JobNotFoundError as e:
             return ApplicationResult(success=False, error=str(e))
-        except ApplicationSubmissionError as e:
+
+    async def submit_dynamic_application(
+        self,
+        org_id: uuid.UUID,
+        job_code: str,
+        *,
+        answers: dict,
+        captcha_token: str | None = None,
+        client_ip: str | None = None,
+    ) -> ApplicationResult:
+        """Submit an application using a job's dynamic form."""
+        job = self._careers_service.get_job_by_code(org_id, job_code)
+        if not job:
+            return ApplicationResult(
+                success=False,
+                error="Job not found or no longer accepting applications",
+            )
+        if is_captcha_enabled():
+            if not captcha_token:
+                return ApplicationResult(
+                    success=False,
+                    error="Please complete the CAPTCHA verification.",
+                )
+            is_valid = await verify_captcha(captcha_token, client_ip)
+            if not is_valid:
+                return ApplicationResult(
+                    success=False,
+                    error="CAPTCHA verification failed. Please try again.",
+                )
+        try:
+            applicant = self._careers_service.submit_dynamic_application(
+                org_id, job.job_opening_id, answers
+            )
+            org = self.db.get(Organization, org_id)
+            if org:
+                try:
+                    self._careers_service.send_application_confirmation(applicant, org)
+                except Exception as e:
+                    logger.warning("Failed to send confirmation email: %s", e)
+            self.db.commit()
+            return ApplicationResult(
+                success=True,
+                application_number=applicant.application_number,
+            )
+        except (JobNotFoundError, ApplicationSubmissionError) as e:
             return ApplicationResult(success=False, error=str(e))
 
     def request_status_check(

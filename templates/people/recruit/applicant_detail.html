@@ -176,6 +176,29 @@
             </div>
             {% endif %}
 
+            {% if dynamic_answers %}
+            <div class="card">
+                <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 class="text-lg font-medium text-slate-900 dark:text-white">Application Form Responses</h2>
+                </div>
+                <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    {% for answer in dynamic_answers %}
+                    <div class="{% if answer.field_type_snapshot in ['LONG_TEXT', 'FILE', 'IMAGE', 'PDF'] %}md:col-span-2{% endif %}">
+                        <div class="text-slate-500 dark:text-slate-400">{{ answer.field_label_snapshot }}</div>
+                        {% if answer.file_url %}
+                        <a href="{{ answer.file_url }}" target="_blank" class="text-violet-600 hover:text-violet-700 inline-flex items-center gap-1">
+                            {{ answer.file_name or 'View attachment' }}
+                            {{ icon_svg("external-link", "h-4 w-4") }}
+                        </a>
+                        {% else %}
+                        <div class="text-slate-900 dark:text-white whitespace-pre-wrap">{{ answer.display_value or '-' }}</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Interviews -->
             <div class="card">
                 <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">

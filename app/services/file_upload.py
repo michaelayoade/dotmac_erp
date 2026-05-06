@@ -548,6 +548,43 @@ def _support_attachment_config() -> FileUploadConfig:
     )
 
 
+def _form_attachment_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir="/app/uploads/form_attachments",
+        allowed_content_types=frozenset(
+            {
+                "image/jpeg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "text/plain",
+                "text/csv",
+            }
+        ),
+        allowed_extensions=frozenset(
+            {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".webp",
+                ".pdf",
+                ".doc",
+                ".docx",
+                ".txt",
+                ".csv",
+            }
+        ),
+        max_size_bytes=10 * 1024 * 1024,
+        compute_checksum=True,
+        require_magic_bytes=True,
+        s3_prefix="form_attachments",
+    )
+
+
 def get_avatar_upload() -> FileUploadService:
     """Get avatar upload service (lazily configured from settings)."""
     return FileUploadService(_avatar_config())
@@ -571,6 +608,11 @@ def get_finance_attachment_upload() -> FileUploadService:
 def get_support_attachment_upload() -> FileUploadService:
     """Get support attachment upload service."""
     return FileUploadService(_support_attachment_config())
+
+
+def get_form_attachment_upload() -> FileUploadService:
+    """Get generic form attachment upload service."""
+    return FileUploadService(_form_attachment_config())
 
 
 def _pm_attachment_config() -> FileUploadConfig:

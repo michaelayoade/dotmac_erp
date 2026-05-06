@@ -15,6 +15,7 @@ from app.services.careers.careers_service import (
     CareersService,
     JobNotFoundError,
 )
+from app.services.forms import FormEngineService
 
 
 @pytest.fixture
@@ -225,6 +226,120 @@ class TestCareersService:
             )
 
         assert "already applied" in str(exc_info.value)
+
+    def test_submit_dynamic_application(
+        self, db: Session, org_with_slug: Organization, open_job: JobOpening
+    ):
+        """Test submitting a fully dynamic application."""
+        form_version = FormEngineService(db).upsert_job_form_version(
+            org_with_slug.organization_id,
+            open_job.job_opening_id,
+            open_job.job_title,
+            {
+                "sections": [
+                    {
+                        "title": "Application",
+                        "fields": [
+                            {
+                                "label": "Full name",
+                                "field_key": "full_name",
+                                "field_type": "TEXT",
+                                "is_required": True,
+                                "show_in_list": True,
+                                "system_mapping": "display_name",
+                            },
+                            {
+                                "label": "Email",
+                                "field_key": "email",
+                                "field_type": "EMAIL",
+                                "is_required": True,
+                                "system_mapping": "email",
+                            },
+                            {
+                                "label": "Preferred locations",
+                                "field_key": "preferred_locations",
+                                "field_type": "MULTI_CHOICE",
+                                "is_required": True,
+                                "show_in_list": True,
+                                "options": [
+                                    {"label": "Lagos", "value": "lagos"},
+                                    {"label": "Remote", "value": "remote"},
+                                ],
+                            },
+                        ],
+                    }
+                ]
+            },
+        )
+        open_job.application_form_version_id = form_version.form_version_id
+        db.flush()
+
+        applicant = CareersService(db).submit_dynamic_application(
+            org_with_slug.organization_id,
+            open_job.job_opening_id,
+            {
+                "full_name": "Ada Lovelace",
+                "email": "ada@example.com",
+                "preferred_locations": ["lagos", "remote"],
+            },
+        )
+
+        assert applicant.first_name == "Ada Lovelace"
+        assert applicant.last_name == "-"
+        assert applicant.email == "ada@example.com"
+        assert applicant.form_submission_id is not None
+
+    def test_submit_dynamic_application_rejects_invalid_choice(
+        self, db: Session, org_with_slug: Organization, open_job: JobOpening
+    ):
+        """Test dynamic applications reject invalid options."""
+        form_version = FormEngineService(db).upsert_job_form_version(
+            org_with_slug.organization_id,
+            open_job.job_opening_id,
+            open_job.job_title,
+            {
+                "sections": [
+                    {
+                        "title": "Application",
+                        "fields": [
+                            {
+                                "label": "Full name",
+                                "field_key": "full_name",
+                                "field_type": "TEXT",
+                                "is_required": True,
+                                "system_mapping": "display_name",
+                            },
+                            {
+                                "label": "Email",
+                                "field_key": "email",
+                                "field_type": "EMAIL",
+                                "is_required": True,
+                                "system_mapping": "email",
+                            },
+                            {
+                                "label": "Preferred location",
+                                "field_key": "preferred_location",
+                                "field_type": "DROPDOWN",
+                                "options": [{"label": "Lagos", "value": "lagos"}],
+                            },
+                        ],
+                    }
+                ]
+            },
+        )
+        open_job.application_form_version_id = form_version.form_version_id
+        db.flush()
+
+        with pytest.raises(ApplicationSubmissionError):
+            CareersService(db).submit_dynamic_application(
+                org_with_slug.organization_id,
+                open_job.job_opening_id,
+                {
+                    "full_name": "Ada Lovelace",
+                    "email": "ada2@example.com",
+                    "preferred_location": "abuja",
+                },
+            )
 
     def test_submit_application_job_not_found(
         self, db: Session, org_with_slug: Organization

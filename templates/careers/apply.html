@@ -41,6 +41,80 @@
         <form method="POST" enctype="multipart/form-data" class="p-6">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
+            {% if application_form %}
+            {% for section in application_form.sections %}
+            <fieldset class="mb-8">
+                <legend class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">{{ section.title }}</legend>
+                {% if section.description %}
+                <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">{{ section.description }}</p>
+                {% endif %}
+                <div class="space-y-4">
+                    {% for field in section.fields %}
+                    {% set input_name = 'field_' ~ field.field_key %}
+                    {% set existing_value = form_data.get(field.field_key) if form_data else none %}
+                    <div>
+                        <label for="{{ input_name }}" class="form-label{% if field.is_required %} form-label-required{% endif %}">
+                            {{ field.label }}
+                        </label>
+                        {% if field.field_type in ['TEXT', 'EMAIL', 'PHONE', 'URL'] %}
+                        {% set html_type = {'EMAIL': 'email', 'PHONE': 'tel', 'URL': 'url'}.get(field.field_type, 'text') %}
+                        <input type="{{ html_type }}" name="{{ input_name }}" id="{{ input_name }}"
+                               value="{{ existing_value if existing_value else '' }}"
+                               placeholder="{{ field.placeholder if field.placeholder else '' }}"
+                               class="form-input" {% if field.is_required %}required{% endif %}>
+                        {% elif field.field_type == 'LONG_TEXT' %}
+                        <textarea name="{{ input_name }}" id="{{ input_name }}" rows="5"
+                                  placeholder="{{ field.placeholder if field.placeholder else '' }}"
+                                  class="form-input" {% if field.is_required %}required{% endif %}>{{ existing_value if existing_value else '' }}</textarea>
+                        {% elif field.field_type in ['NUMBER', 'RATING'] %}
+                        <input type="number" name="{{ input_name }}" id="{{ input_name }}"
+                               value="{{ existing_value if existing_value else '' }}"
+                               placeholder="{{ field.placeholder if field.placeholder else '' }}"
+                               class="form-input" {% if field.is_required %}required{% endif %}>
+                        {% elif field.field_type == 'DATE' %}
+                        <input type="date" name="{{ input_name }}" id="{{ input_name }}"
+                               value="{{ existing_value if existing_value else '' }}"
+                               class="form-input" {% if field.is_required %}required{% endif %}>
+                        {% elif field.field_type in ['DROPDOWN', 'SINGLE_CHOICE'] %}
+                        <select name="{{ input_name }}" id="{{ input_name }}" class="form-select" {% if field.is_required %}required{% endif %}>
+                            <option value="">Select an option</option>
+                            {% for option in field.options %}
+                            <option value="{{ option.value }}" {% if existing_value == option.value %}selected{% endif %}>{{ option.label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% elif field.field_type == 'MULTI_CHOICE' %}
+                        <div class="space-y-2">
+                            {% for option in field.options %}
+                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                <input type="checkbox" name="{{ input_name }}" value="{{ option.value }}"
+                                       class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                       {% if existing_value and option.value in existing_value %}checked{% endif %}>
+                                <span>{{ option.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% elif field.field_type in ['CHECKBOX', 'YES_NO', 'CONSENT'] %}
+                        <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="{{ input_name }}" value="true"
+                                   class="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                                   {% if existing_value %}checked{% endif %} {% if field.is_required %}required{% endif %}>
+                            <span>{{ field.placeholder if field.placeholder else 'Yes' }}</span>
+                        </label>
+                        {% elif field.field_type in ['FILE', 'IMAGE', 'PDF'] %}
+                        {% set accept_map = {'IMAGE': 'image/*', 'PDF': '.pdf,application/pdf'} %}
+                        <input type="file" name="{{ input_name }}" id="{{ input_name }}"
+                               class="form-input" accept="{{ accept_map.get(field.field_type, '') }}"
+                               {% if field.is_required %}required{% endif %}>
+                        {% endif %}
+                        {% if field.help_text %}
+                        <p class="form-hint">{{ field.help_text }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% endfor %}
+            {% else %}
             <!-- Personal Information -->
             <fieldset class="mb-8">
                 <legend class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">Personal Information</legend>
@@ -171,6 +245,7 @@
                               class="form-input">{{ form_data.cover_letter if form_data else '' }}</textarea>
                 </div>
             </fieldset>
+            {% endif %}
 
             <!-- CAPTCHA -->
             {% if captcha_enabled and captcha_site_key %}
