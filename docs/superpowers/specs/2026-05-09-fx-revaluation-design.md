@@ -51,9 +51,11 @@ Service hard-fails with admin-actionable error if either is unset. No name-patte
 
 Admin clicks "Run FX Revaluation" on a period. Service shows preview (per-currency rate, per-account delta, total proposed journals). Admin confirms. Service posts atomically. No Celery, no scheduling, no period-close coupling. Matches Xero/QuickBooks premium-accountant workflow — the close is a deliberate human action.
 
-### D4 — Re-run: void prior pair + repost in one transaction, mandatory reason
+### D4 — Re-run: reverse prior pair + post new pair in one transaction, mandatory reason
 
-Service detects existing FX revaluation journals for the period. If found, voids both (the period-end posting and its day-1 reversal) using the existing `JournalService.void_journal` mechanism, recording the void reason supplied by the admin. Then posts a fresh pair. Voided journals remain in the audit trail. Reason is required iff prior pair exists.
+Service detects existing posted FX revaluation journals for the period. If found, reverses both (the period-end posting and its day-1 reversal) using `ReversalService.create_reversal`, recording the admin-supplied reason on each reversal. Then posts a fresh pair. The original journals remain POSTED with `status = REVERSED`; the reversals show as their own posted entries. Reason is required iff prior pair exists.
+
+**Note on terminology:** `JournalService.void_journal` only operates on DRAFT/SUBMITTED journals. POSTED journals (which our period-end revaluation pair will be) are undone via `ReversalService.create_reversal`. The audit trail thus shows: original P-end posting (POSTED→REVERSED), original reversal (POSTED→REVERSED), reversal of original P-end (POSTED), reversal of original reversal (POSTED), new P-end posting (POSTED), new reversal (POSTED) — six entries net for a single re-run, which is the auditor-defensible record of the change.
 
 ### Decisions baked in from accounting convention (not user-decided)
 
@@ -136,7 +138,7 @@ class FXRevaluationResult:
     success: bool
     period_end_journal_id: UUID | None
     reversal_journal_id: UUID | None
-    voided_prior_journal_ids: list[UUID]   # if re-run
+    reversed_prior_journal_ids: list[UUID]   # if re-run; ids of the original journals that are now status=REVERSED
     total_gain_functional: Decimal
     total_loss_functional: Decimal
     message: str
@@ -191,7 +193,8 @@ GET /periods/{id}/fx-revaluation
    2. Read DomainSetting: fx_gain_account_id, fx_loss_account_id
         → if missing: HTTPException(400) with admin path
    3. Discover monetary items in non-functional currency:
-        - AR open invoices  (currency_code != functional, outstanding_amount > 0)
+        - AR open invoices  (currency_code != functional, balance_due > 0
+                             where balance_due = total_amount − amount_paid_at_period_end)
         - AP open invoices  (same)
         - BankAccount       (currency_code != functional, status=active,
                              current balance non-zero)
@@ -216,13 +219,15 @@ GET /periods/{id}/fx-revaluation
 POST /periods/{id}/fx-revaluation  (CSRF, optional reason)
    FXRevaluationWebService.post_response()
    → FXRevaluationService.post()
-        ↓ (atomic — single SAVEPOINT for the whole pair)
+        ↓ (atomic via route-level transaction — service flushes only;
+           the route's db.commit() is the atomicity boundary; any raise
+           inside post() unwinds via get_db's finally: db.rollback())
    1. Re-run preview internally (state may have changed since GET)
    2. Lock period row with SELECT FOR UPDATE — serializes concurrent admins
    3. If prior pair exists:
         - Validate reason field is present and non-empty
-        - JournalService.void_journal(prior_period_end, reason=...)
-        - JournalService.void_journal(prior_reversal,    reason=...)
+        - ReversalService.create_reversal(prior_period_end, reversal_date=period.end_date, reason=...)
+        - ReversalService.create_reversal(prior_reversal,    reversal_date=next_period.start_date, reason=...)
    4. Post period-end journal:
         JournalService.create_journal(JournalInput(
           journal_type = JournalType.REVALUATION,
@@ -276,7 +281,7 @@ POST /periods/{id}/fx-revaluation  (CSRF, optional reason)
 
 - **Period lock**: `SELECT FOR UPDATE` on the `FiscalPeriod` row at the start of `post()` serializes concurrent calls within the same period.
 - **Re-preview inside `post()`**: state could have changed between GET preview and POST confirm (a new AR invoice posted, a closing rate updated). Re-running preview inside `post()` ensures the journal posted matches the current state, not a stale snapshot.
-- **Pair atomicity**: both journals (period-end + day-1 reversal) are created within a single SAVEPOINT (`db.begin_nested()`); the surrounding transaction commits them together. If the reversal fails, the period-end journal is rolled back too.
+- **Pair atomicity**: both journals (period-end + day-1 reversal) are flushed within the same route-level transaction; the route calls `db.commit()` only after `post()` returns successfully. Any exception raised inside `post()` (period closed, accounts unconfigured, reason missing, JournalService validation failure, etc.) propagates to the route, which never reaches `db.commit()`; the `get_db` dependency's `finally: db.rollback()` then unwinds. If the day-1 reversal step fails, the period-end journal's flush has not been committed and is rolled back too.
 - **Idempotency token**: `correlation_id` shared between the pair lets the re-run path identify "the prior revaluation pair" deterministically — no fuzzy matching by date or description.
 
 ## Testing approach
