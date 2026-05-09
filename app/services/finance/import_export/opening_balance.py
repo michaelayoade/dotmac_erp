@@ -23,6 +23,7 @@ from app.models.finance.gl.account import Account
 from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.services.finance.gl.period_guard import PeriodGuardService
 from app.services.finance.import_export.base import (
     ImportConfig,
     detect_csv_format,
@@ -488,6 +489,23 @@ class OpeningBalanceImporter:
                 total_credit=preview.total_credit,
                 lines_created=0,
                 errors=[f"No fiscal period found for date {entry_date}"],
+                warnings=[],
+            )
+
+        # Refuse opening-balance imports into closed periods. Re-runs of an
+        # opening import after period close would otherwise land silently.
+        guard = PeriodGuardService.can_post_to_date(
+            self.db, self.config.organization_id, entry_date
+        )
+        if not guard.is_allowed:
+            return OpeningBalanceResult(
+                success=False,
+                journal_entry_id=None,
+                journal_number=None,
+                total_debit=preview.total_debit,
+                total_credit=preview.total_credit,
+                lines_created=0,
+                errors=[guard.message],
                 warnings=[],
             )
 

@@ -850,6 +850,13 @@ class MonoSyncService:
                 )
 
                 for txn in all_transactions:
+                    # Reject transactions without an id before forming the
+                    # dedupe key. Without this guard, every id-less txn
+                    # collapses to "mono_None" and all but the first are
+                    # silently dropped by the unique-index dedupe path —
+                    # data loss disguised as deduplication.
+                    if not txn.id:
+                        raise MonoError("Mono transaction is missing an id")
                     try:
                         parsed_date = self._parse_date(txn.date)
                     except MonoError as exc:

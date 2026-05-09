@@ -23,6 +23,7 @@ from app.models.finance.gl.journal_entry import (
     JournalStatus,
     JournalType,
 )
+from app.services.finance.gl.period_guard import PeriodGuardService
 
 from ..mappings.journal_entry import JournalEntryAccountMapping, JournalEntryMapping
 from .base import BaseSyncService
@@ -214,7 +215,10 @@ class JournalEntrySyncService(BaseSyncService[JournalEntry]):
 
         posting_date = data.get("posting_date")
 
-        # Resolve fiscal period
+        # Resolve fiscal period and refuse posts into closed periods.
+        # ERPNext's docstatus=1 events arrive after the fact; without the
+        # guard, a retroactive entry could land in a hard-closed period
+        # silently (audit-trail integrity loss).
         fiscal_period_id = self._resolve_fiscal_period(posting_date)
         if not fiscal_period_id:
             logger.warning(
@@ -222,6 +226,9 @@ class JournalEntrySyncService(BaseSyncService[JournalEntry]):
                 posting_date,
             )
             raise ValueError(f"No fiscal period for date {posting_date}")
+        fiscal_period_id = PeriodGuardService.require_open_period(
+            self.db, self.organization_id, posting_date
+        )
 
         journal_number = self._generate_journal_number(posting_date)
 

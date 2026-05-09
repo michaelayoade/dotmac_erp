@@ -203,6 +203,63 @@ def test_duplicate_only_window_does_not_create_empty_statement() -> None:
     db.flush.assert_called()
 
 
+def test_sync_rejects_transactions_with_empty_id() -> None:
+    """
+    Mono transactions arriving with empty/None ``id`` must be rejected with
+    MonoError, not silently dropped via dedupe collision on ``"mono_None"``.
+
+    The partial unique index on ``transaction_id LIKE 'mono_%'`` would
+    otherwise accept the first such transaction and silently drop the rest
+    as duplicates — data loss disguised as dedupe.
+    """
+    db = MagicMock()
+    svc = MonoSyncService(db)
+    account = _account()
+    txn_no_id = MonoTransaction(
+        id="",
+        narration="Bad payload",
+        amount=10000,
+        type="credit",
+        balance=12345,
+        date="2026-04-10T12:00:00Z",
+    )
+    client = MagicMock()
+    client.get_account_info.return_value = MonoAccountInfo(
+        id="mono-account-1",
+        name="Operations",
+        account_number="1234567890",
+        currency="NGN",
+        balance=12345,
+    )
+    client.get_all_transactions.return_value = [txn_no_id]
+    client_cm = MagicMock()
+    client_cm.__enter__.return_value = client
+
+    with (
+        patch.object(
+            svc,
+            "_get_mono_config",
+            return_value=MonoConfig(secret_key="secret", public_key="public"),
+        ),
+        patch(
+            "app.services.finance.banking.mono_sync.MonoClient",
+            return_value=client_cm,
+        ),
+        patch.object(svc, "_get_existing_transaction_ids", return_value=set()),
+    ):
+        result = svc._sync_window(
+            account,
+            date(2026, 4, 3),
+            date(2026, 4, 15),
+        )
+
+    assert result.success is False, "Sync accepted a transaction without an id"
+    assert any(
+        "id" in err.lower() or "missing" in err.lower() for err in result.errors
+    ), f"Expected error mentioning missing id; got {result.errors}"
+    db.add.assert_not_called()
+
+
 def test_link_account_rejects_mono_id_already_linked_elsewhere() -> None:
     db = MagicMock()
     org_id = uuid4()
