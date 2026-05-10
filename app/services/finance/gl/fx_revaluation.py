@@ -912,6 +912,8 @@ class FXRevaluationService:
         # Reverse prior pair if re-run
         reversed_ids: list[UUID] = []
         if preview.prior_run_exists:
+            # Earlier guard ensures reason is a non-empty string here.
+            assert reason
             for prior_id in preview.prior_journal_ids:
                 ReversalService.create_reversal(
                     db=self.db,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -219,6 +219,10 @@ class JournalEntrySyncService(BaseSyncService[JournalEntry]):
         # ERPNext's docstatus=1 events arrive after the fact; without the
         # guard, a retroactive entry could land in a hard-closed period
         # silently (audit-trail integrity loss).
+        if not isinstance(posting_date, date):
+            raise ValueError(
+                f"posting_date must be a date, got {type(posting_date).__name__}"
+            )
         fiscal_period_id = self._resolve_fiscal_period(posting_date)
         if not fiscal_period_id:
             logger.warning(
