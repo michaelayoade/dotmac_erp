@@ -257,5 +257,15 @@ class Settings:
         "yes",
     }
 
+    # ==========================================================================
+    # Multi-org session enforcement (see docs/superpowers/plans/2026-05-10-multi-org-listener.md, spec D5)
+    # ==========================================================================
+    # When True, attach the SQLAlchemy do_orm_execute listener that enforces
+    # organization_id filtering on tenant-scoped queries. Phase 1 ships with
+    # this disabled (audit-only); Phase 2 will flip the default to True.
+    enforce_org_filter: bool = (
+        os.getenv("ENFORCE_ORG_FILTER", "false").lower() == "true"
+    )
+
 
 settings = Settings()
