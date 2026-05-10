@@ -3,7 +3,10 @@ from pathlib import Path
 
 
 def _load_real_db_module():
-    module_path = Path(__file__).resolve().parents[1] / "app" / "db.py"
+    # app/db is a package (app/db/__init__.py); load the real package's
+    # __init__ directly to bypass the test conftest's mock for fork-safety
+    # tests that need to exercise the real engine/sessionmaker lifecycle.
+    module_path = Path(__file__).resolve().parents[1] / "app" / "db" / "__init__.py"
     spec = importlib.util.spec_from_file_location(
         "app_db_fork_safety_real", module_path
     )

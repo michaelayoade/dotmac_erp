@@ -88,10 +88,13 @@ def _add_org_filter(orm_execute_state) -> None:
     # ensures the filter applies even when the model is referenced via an
     # alias (e.g., joinedload subqueries). Capture org_id by value, not by
     # reference, so each query gets the org_id current at execute time.
+    def _filter(cls, _org_id=org_id):  # type: ignore[no-untyped-def]
+        return cls.organization_id == _org_id
+
     orm_execute_state.statement = orm_execute_state.statement.options(
         with_loader_criteria(
             target_class,
-            lambda cls, _org_id=org_id: cls.organization_id == _org_id,
+            _filter,
             include_aliases=True,
         )
     )

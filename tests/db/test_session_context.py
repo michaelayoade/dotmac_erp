@@ -44,7 +44,10 @@ class TestAllowCrossOrg:
 
         # After exit: flag must be False (or removed) so subsequent queries
         # are NOT bypassed.
-        assert session.info.get("allow_cross_org") is False or "allow_cross_org" not in session.info
+        assert (
+            session.info.get("allow_cross_org") is False
+            or "allow_cross_org" not in session.info
+        )
 
     def test_restores_state_after_exception(self):
         from app.db.session_context import allow_cross_org
@@ -56,7 +59,10 @@ class TestAllowCrossOrg:
             with allow_cross_org(session):
                 raise RuntimeError("boom")
 
-        assert session.info.get("allow_cross_org") is False or "allow_cross_org" not in session.info
+        assert (
+            session.info.get("allow_cross_org") is False
+            or "allow_cross_org" not in session.info
+        )
 
     def test_nested_preserves_outer_state(self):
         """Nested context managers must restore the OUTER state on inner exit,
@@ -74,7 +80,10 @@ class TestAllowCrossOrg:
             assert session.info["allow_cross_org"] is True
 
         # Outer exit: now False
-        assert session.info.get("allow_cross_org") is False or "allow_cross_org" not in session.info
+        assert (
+            session.info.get("allow_cross_org") is False
+            or "allow_cross_org" not in session.info
+        )
 
 
 class TestSessionForOrg:

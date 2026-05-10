@@ -269,6 +269,8 @@ class MockSettings:
     sso_provider_url = None
     sso_jwt_secret = None
     sso_cookie_domain = None
+    # Multi-org session listener (Phase 1; default off in tests)
+    enforce_org_filter = False
     # Coach / Intelligence Engine
     coach_enabled = False
     coach_llm_backends = "llama,deepseek"

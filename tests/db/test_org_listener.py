@@ -555,8 +555,7 @@ class TestEagerLoadingComposition:
         )
         parent_sql = str(compiled).lower()
         assert "organization_id" in parent_sql, (
-            f"Parent SELECT must carry organization_id filter; SQL was:\n"
-            f"{parent_sql}"
+            f"Parent SELECT must carry organization_id filter; SQL was:\n{parent_sql}"
         )
 
         # (2) Loader-criteria option attachment: the listener attached a
