@@ -6,8 +6,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-import pytest
-
 
 def test_get_db_for_org_primes_session_with_auth_org_id():
     """The dependency must call prime_session(db, auth.organization_id)

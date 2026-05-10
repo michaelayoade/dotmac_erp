@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestMissingOrgContextError:
     def test_inherits_from_runtime_error(self):
