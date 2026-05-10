@@ -4,6 +4,8 @@ GL (General Ledger) Web Routes.
 HTML template routes for Chart of Accounts, Journal Entries, and Fiscal Periods.
 """
 
+from urllib.parse import quote_plus
+
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import (
     FileResponse,
@@ -15,13 +17,22 @@ from fastapi.responses import (
 )
 from sqlalchemy.orm import Session
 
+from app.services.common import coerce_uuid
 from app.services.finance.gl.web import gl_web_service
+from app.services.finance.gl.web.fx_revaluation_web import FXRevaluationWebService
 from app.services.finance.rpt.async_exports import (
     get_completed_export_for_download,
     get_export_status,
     queue_background_export,
 )
-from app.web.deps import WebAuthContext, get_db, require_finance_access
+from app.templates import templates
+from app.web.deps import (
+    WebAuthContext,
+    base_context,
+    get_db,
+    require_finance_access,
+    require_finance_admin,
+)
 
 router = APIRouter(prefix="/gl", tags=["gl-web"])
 
@@ -761,3 +772,57 @@ def trial_balance(
 ):
     """Trial balance report page."""
     return gl_web_service.trial_balance_response(request, auth, db, as_of_date)
+
+
+@router.get(
+    "/periods/{period_id}/fx-revaluation",
+    response_class=HTMLResponse,
+)
+def period_fx_revaluation_preview(
+    request: Request,
+    period_id: str,
+    auth: WebAuthContext = Depends(require_finance_admin),
+    db: Session = Depends(get_db),
+):
+    """Render the FX revaluation preview page for a fiscal period.
+
+    Read-only: shows per-(account, currency) revaluation observations,
+    closing rates used, warnings, and totals so the user can review before
+    posting.
+    """
+    ws = FXRevaluationWebService(db)
+    context = base_context(request, auth, "FX Revaluation Preview", "gl")
+    context.update(
+        ws.preview_response(
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(period_id),
+        )
+    )
+    return templates.TemplateResponse(
+        request, "finance/gl/period_fx_revaluation.html", context
+    )
+
+
+@router.post("/periods/{period_id}/fx-revaluation")
+@router.post("/periods/{period_id}/fx-revaluation/", include_in_schema=False)
+def period_fx_revaluation_post(
+    request: Request,
+    period_id: str,
+    reason: str | None = Form(default=None),
+    auth: WebAuthContext = Depends(require_finance_admin),
+    db: Session = Depends(get_db),
+):
+    """Post the period-end FX revaluation pair (period-end + reversal)."""
+    ws = FXRevaluationWebService(db)
+    result = ws.post_response(
+        coerce_uuid(auth.organization_id),
+        coerce_uuid(period_id),
+        coerce_uuid(auth.person_id),
+        reason,
+    )
+    db.commit()
+    msg = quote_plus(result.message or "FX revaluation posted.")
+    return RedirectResponse(
+        url=f"/finance/gl/periods?msg={msg}",
+        status_code=303,
+    )

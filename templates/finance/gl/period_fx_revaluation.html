@@ -1,0 +1,193 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}FX Revaluation{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-x-1">
+        <li><a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400">Finance</a></li>
+        <li class="flex items-center gap-x-1"><span class="mx-1">/</span><a href="/finance/gl/accounts" class="hover:text-teal-600 dark:hover:text-teal-400">General Ledger</a></li>
+        <li class="flex items-center gap-x-1"><span class="mx-1">/</span><a href="/finance/gl/periods" class="hover:text-teal-600 dark:hover:text-teal-400">Periods</a></li>
+        <li class="flex items-center gap-x-1"><span class="mx-1">/</span><span class="text-slate-900 dark:text-white" aria-current="page">FX Revaluation</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    {# --- Prior-run banner (blue) --- #}
+    {% if prior_run_exists %}
+    <div role="status" class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-900/20">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("information-circle", "h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400 mt-0.5") }}
+            <div>
+                <p class="font-semibold text-blue-800 dark:text-blue-300">A prior FX revaluation already exists for this period</p>
+                <p class="mt-1 text-blue-700 dark:text-blue-300">
+                    Posting again will reverse the previous run before recording the new one.
+                    A reason is required and will be stored on the audit trail.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# --- Warnings panel (amber) --- #}
+    {% if warnings %}
+    <div role="alert" class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-900/20">
+        <div class="flex items-start gap-3">
+            {{ icon_svg("warning", "h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5") }}
+            <div class="flex-1">
+                <p class="font-semibold text-amber-800 dark:text-amber-300">Review warnings before posting</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-amber-700 dark:text-amber-300">
+                    {% for warning in warnings %}
+                    <li>{{ warning }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# --- Summary header card --- #}
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="grid gap-4 sm:grid-cols-3">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period End</p>
+                <p class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
+                    {{ preview.period_end_date.strftime('%d %b %Y') if preview.period_end_date else '—' }}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reversal Posts On</p>
+                <p class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
+                    {{ next_period_start_date.strftime('%d %b %Y') if next_period_start_date else '—' }}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Closing Rates Used</p>
+                <p class="mt-1 font-mono tabular-nums text-sm text-slate-900 dark:text-white">
+                    {% if rates_used %}
+                        {% for ccy, rate in rates_used.items() %}{{ ccy }}: {{ "{:,.4f}".format(rate) }}{% if not loop.last %} · {% endif %}{% endfor %}
+                    {% else %}—{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    {# --- Proposed lines table --- #}
+    <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
+        <div class="border-b border-slate-200 p-6 dark:border-slate-700">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Proposed Revaluation Lines</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                One line per (control account, currency) pair with a non-zero delta in functional currency.
+            </p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-900/40">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Account</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Currency</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Closing Rate</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Book Value</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revalued Value</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Delta</th>
+                        <th scope="col" class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for line in lines %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm font-mono tabular-nums text-slate-900 dark:text-white">{{ line.account_id }}</td>
+                        <td class="px-4 py-3 text-sm font-mono tabular-nums text-slate-700 dark:text-slate-300">{{ line.currency_code }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono tabular-nums text-slate-700 dark:text-slate-300">{{ "{:,.4f}".format(line.closing_rate) }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono tabular-nums text-slate-900 dark:text-white">{{ line.book_value_functional | format_currency }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono tabular-nums text-slate-900 dark:text-white">{{ line.revalued_value_functional | format_currency }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono tabular-nums {{ 'text-emerald-700 dark:text-emerald-400' if line.is_gain else 'text-rose-700 dark:text-rose-400' }}">
+                            {% if line.is_gain %}
+                                {{ line.delta_functional | format_currency }}
+                            {% else %}
+                                ({{ (line.delta_functional | abs) | format_currency }})
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            {% if line.is_gain %}
+                            <span class="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
+                                <span aria-hidden="true">+</span> Gain
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
+                                <span aria-hidden="true">−</span> Loss
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No revaluation observations for this period — all monetary balances already match the closing rate.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if lines %}
+                <tfoot class="bg-slate-50 dark:bg-slate-900/40">
+                    <tr>
+                        <td colspan="5" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Gain</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{{ total_gain | format_currency }}</td>
+                        <td class="px-4 py-3"></td>
+                    </tr>
+                    <tr>
+                        <td colspan="5" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Loss</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono tabular-nums font-semibold text-rose-700 dark:text-rose-400">({{ total_loss | format_currency }})</td>
+                        <td class="px-4 py-3"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    {# --- POST form --- #}
+    <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
+        <form method="POST" action="/finance/gl/periods/{{ period_id }}/fx-revaluation" class="space-y-5">
+            {{ request.state.csrf_form | safe }}
+
+            <div>
+                <label for="reason" class="form-label">
+                    Reason
+                    {% if prior_run_exists %}<span class="text-rose-500" aria-label="required">*</span>{% endif %}
+                </label>
+                <textarea
+                    id="reason"
+                    name="reason"
+                    rows="3"
+                    class="form-input form-textarea w-full"
+                    placeholder="{{ 'Explain why this period is being re-revalued.' if prior_run_exists else 'Optional notes for the audit trail.' }}"
+                    {% if prior_run_exists %}required aria-required="true"{% endif %}></textarea>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {% if prior_run_exists %}
+                    Required because a prior FX revaluation exists for this period.
+                    {% else %}
+                    Optional. Stored on the audit trail.
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 pt-5 dark:border-slate-700">
+                <a href="/finance/gl/periods" class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
+                    Cancel
+                </a>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 hover:from-teal-700 hover:to-emerald-700">
+                    {{ icon_svg("check-circle", "h-4 w-4") }}
+                    Post FX Revaluation
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}
