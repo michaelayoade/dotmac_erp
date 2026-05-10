@@ -26,7 +26,17 @@ def upgrade() -> None:
     # enum type for ``SettingDomain`` is named ``settingdomain`` (lowercased
     # by SQLAlchemy's default naming convention) — see prior migrations
     # such as ``20260310_add_settingdomain_expense.py``.
-    op.execute("ALTER TYPE settingdomain ADD VALUE IF NOT EXISTS 'gl'")
+    #
+    # ``ALTER TYPE ... ADD VALUE`` cannot run inside a transaction on
+    # PostgreSQL < 12; even on >= 12 the new value is not visible to the
+    # same transaction that added it. Wrap in an Alembic-managed
+    # autocommit block so the DDL commits before any subsequent
+    # statement tries to use the new value (matches the codebase pattern
+    # in ``20260218_add_stamp_duty_support.py``,
+    # ``20260208_add_numbering_sequence_types.py``, and
+    # ``20260307_add_pll_dashboard_indexes.py``).
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE settingdomain ADD VALUE IF NOT EXISTS 'gl'")
 
 
 def downgrade() -> None:

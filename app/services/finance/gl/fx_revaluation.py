@@ -49,7 +49,14 @@ class FXRevaluationLine:
     pair's delta. The proposed journal is constructed from these — the
     asset/liability side becomes one journal line per FXRevaluationLine,
     while the gain/loss side aggregates across all observations into two
-    summary lines."""
+    summary lines.
+
+    ``is_liability`` records the source orientation (asset vs liability)
+    so ``_aggregate_per_account_currency`` can re-derive ``is_gain`` from
+    the *aggregated* delta. Without this, summing two opposite-sign lines
+    against the same control account would keep a stale ``is_gain`` from
+    the first line, producing a backwards journal.
+    """
 
     account_id: UUID
     currency_code: str
@@ -58,6 +65,7 @@ class FXRevaluationLine:
     revalued_value_functional: Decimal   # value at closing rate, in NGN
     delta_functional: Decimal            # revalued - book; signed
     is_gain: bool                        # True iff delta increases asset / decreases liability
+    is_liability: bool = False           # True iff source is a liability (AP); False for AR/cash
 
 
 @dataclass
@@ -218,13 +226,20 @@ class FXRevaluationService:
         + ``ap_control_account_id``. The same as-of caveat applies: late
         payment allocations are not back-dated; we read amount_paid as
         of *now*. See the AR docstring for the deferred follow-up.
+
+        Status filter uses ``gl_impacting()`` (POSTED, PARTIALLY_PAID,
+        PAID) rather than ``outstanding()`` because APPROVED supplier
+        invoices have NOT yet hit the GL — revaluing them would create
+        FX journals against an unbooked exposure. The ``balance_due <= 0``
+        Python guard below drops PAID invoices, so the effective scope
+        is {POSTED, PARTIALLY_PAID} with non-zero balance.
         """
         functional = app_settings.default_functional_currency_code
 
         stmt = select(SupplierInvoice).where(
             SupplierInvoice.organization_id == organization_id,
             SupplierInvoice.currency_code != functional,
-            SupplierInvoice.status.in_(SupplierInvoiceStatus.outstanding()),
+            SupplierInvoice.status.in_(SupplierInvoiceStatus.gl_impacting()),
         )
         invoices = self.db.scalars(stmt).all()
 
@@ -306,6 +321,21 @@ class FXRevaluationService:
         Prefer ``last_statement_balance`` when its date is at or after
         ``period_end_date``; otherwise compute from POSTED GL journal
         lines on the linked ``gl_account_id``.
+
+        KNOWN LIMITATION (Phase 2 fix tracked separately):
+        ``last_statement_balance`` is the **foreign-currency** balance per
+        the bank statement, while ``_compute_balance_from_journals``
+        returns the **functional-currency** book value. The two will
+        diverge for accounts with unreconciled items (in-flight
+        deposits, uncleared cheques, bank fees not yet booked). When the
+        two paths produce values for different units, the FX delta
+        absorbs the reconciliation gap as a fictitious gain/loss.
+
+        Tenants should reconcile bank accounts before relying on FX
+        revaluation accuracy. A future Phase 2 fix will normalise both
+        paths to the same currency basis (likely by always computing
+        the foreign-currency balance from a per-account ledger sum, then
+        translating once at the closing rate).
         """
         stmt_date = getattr(account, "last_statement_date", None)
         stmt_balance = getattr(account, "last_statement_balance", None)
@@ -411,6 +441,7 @@ class FXRevaluationService:
                     revalued_value_functional=revalued,
                     delta_functional=delta,
                     is_gain=delta > 0,
+                    is_liability=False,
                 )
             )
 
@@ -432,6 +463,7 @@ class FXRevaluationService:
                     delta_functional=delta,
                     is_gain=delta < 0,
                     # asymmetry: liability up = loss
+                    is_liability=True,
                 )
             )
 
@@ -457,6 +489,7 @@ class FXRevaluationService:
                     revalued_value_functional=revalued,
                     delta_functional=delta,
                     is_gain=delta > 0,
+                    is_liability=False,
                 )
             )
 
@@ -473,10 +506,14 @@ class FXRevaluationService:
         Zero-net aggregations are dropped — they would produce a no-op
         journal line.
 
-        ``is_gain`` and ``closing_rate`` are taken from the first occurrence:
-        all lines for the same ``(account_id, currency)`` come from the same
-        accounting source (AR/AP/cash), so ``is_gain`` is consistent across
-        the bucket and ``closing_rate`` is identical.
+        ``closing_rate`` is taken from the first occurrence: all lines for
+        the same ``(account_id, currency)`` come from the same accounting
+        source and the same closing rate, so it is consistent across the
+        bucket. ``is_gain`` is **re-derived** after summation from the
+        aggregated delta + ``is_liability`` orientation — keeping the
+        first-line ``is_gain`` would produce a backwards journal whenever
+        opposite-sign lines aggregate to a net delta with the opposite
+        sign of the first.
         """
         buckets: dict[tuple[UUID, str], FXRevaluationLine] = {}
 
@@ -492,11 +529,21 @@ class FXRevaluationService:
                     revalued_value_functional=line.revalued_value_functional,
                     delta_functional=line.delta_functional,
                     is_gain=line.is_gain,
+                    is_liability=line.is_liability,
                 )
             else:
                 existing.book_value_functional += line.book_value_functional
                 existing.revalued_value_functional += line.revalued_value_functional
                 existing.delta_functional += line.delta_functional
+
+        # Re-derive is_gain from the aggregated delta + source orientation.
+        # Asset (is_liability=False): delta > 0 → gain (asset went up).
+        # Liability (is_liability=True): delta < 0 → gain (liability went down).
+        for bucket in buckets.values():
+            if bucket.is_liability:
+                bucket.is_gain = bucket.delta_functional < 0
+            else:
+                bucket.is_gain = bucket.delta_functional > 0
 
         # Drop zero-net aggregations
         return [line for line in buckets.values() if line.delta_functional != 0]
@@ -872,11 +919,11 @@ class FXRevaluationService:
         # Re-run preview inside the transaction so state is current
         preview = self.preview(organization_id, fiscal_period_id)
 
-        # Reason check fires BEFORE the empty-lines short-circuit:
-        # if a prior run exists, replacing/voiding it always requires a
-        # reason, even if the new revaluation would be a no-op (lines
-        # could be empty because allocations have since cleared the
-        # prior balances — that's still a state change worth justifying).
+        # 1. Reason check fires BEFORE any other branching: if a prior run
+        # exists, replacing/voiding it always requires a reason, even if
+        # the new revaluation would be a no-op (lines could be empty
+        # because allocations have since cleared the prior balances —
+        # that's still a state change worth justifying).
         if preview.prior_run_exists and not (reason and reason.strip()):
             raise HTTPException(
                 status_code=400,
@@ -886,34 +933,20 @@ class FXRevaluationService:
                 ),
             )
 
-        if not preview.lines:
-            return FXRevaluationResult(
-                success=True,
-                message=(
-                    "Nothing to revalue: no foreign-currency monetary "
-                    "items found in scope."
-                ),
-            )
-
-        if preview.next_period_start_date is None:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"FX revaluation cannot post: no next fiscal period "
-                    f"covers the day after {preview.period_end_date}. The "
-                    f"day-1 reversal needs a target period."
-                ),
-            )
-
-        gain_account_id, loss_account_id = self._read_fx_account_ids(
-            organization_id
-        )
-
-        # Reverse prior pair if re-run
+        # 2. Reverse prior pair if any. This MUST run before the empty-lines
+        # short-circuit below — otherwise a re-run with cleared balances
+        # (lines=[]) would silently leave the prior pair active even though
+        # the user explicitly supplied a reason to replace it.
         reversed_ids: list[UUID] = []
         if preview.prior_run_exists:
-            # Earlier guard ensures reason is a non-empty string here.
-            assert reason
+            if not reason:
+                # Reachable only if the reason guard above is ever moved
+                # below this block. Use a runtime exception, not assert —
+                # asserts are stripped under ``python -O``.
+                raise RuntimeError(
+                    "FXRevaluationService.post: reason guard violated — "
+                    "internal invariant broken"
+                )
             for prior_id in preview.prior_journal_ids:
                 ReversalService.create_reversal(
                     db=self.db,
@@ -928,7 +961,44 @@ class FXRevaluationService:
                 )
                 reversed_ids.append(prior_id)
 
-        # Build and post the new period-end journal
+        # 3. Empty-lines short-circuit. Now safe to return success: any
+        # prior pair has already been reversed above.
+        if not preview.lines:
+            if reversed_ids:
+                msg = (
+                    "Prior revaluation reversed; no new items to revalue."
+                )
+            else:
+                msg = (
+                    "Nothing to revalue: no foreign-currency monetary "
+                    "items found in scope."
+                )
+            return FXRevaluationResult(
+                success=True,
+                reversed_prior_journal_ids=reversed_ids,
+                message=msg,
+            )
+
+        # 4. Next-period guard. Only matters when we actually have new
+        # lines to post — without lines there is nothing to reverse on
+        # day-1.
+        if preview.next_period_start_date is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"FX revaluation cannot post: no next fiscal period "
+                    f"covers the day after {preview.period_end_date}. The "
+                    f"day-1 reversal needs a target period."
+                ),
+            )
+
+        # 5. Read FX accounts (raises 400 if unset; preview already did
+        # this but it's cheap and keeps post() self-contained).
+        gain_account_id, loss_account_id = self._read_fx_account_ids(
+            organization_id
+        )
+
+        # 6. Build and post the new period-end journal
         correlation_id = str(_new_uuid())
         period_end_input = self._build_journal_input(
             lines=preview.lines,

@@ -410,6 +410,59 @@ class TestDiscoverApOpenInvoices:
 
         assert result == []
 
+    def test_excludes_approved_status_unbooked_invoices(self):
+        """REGRESSION (P1-2): APPROVED supplier invoices are NOT
+        gl_impacting — they have not yet been posted to the GL and so
+        carry no booked exposure to revalue. Including them would
+        produce FX journals against a phantom liability.
+
+        The fix uses ``SupplierInvoiceStatus.gl_impacting()`` (POSTED,
+        PARTIALLY_PAID, PAID) at the SQL filter; this test asserts the
+        SQL ``status.in_(...)`` clause's set membership matches the
+        gl-impacting set, not the outstanding set.
+        """
+        from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        captured_statements: list = []
+
+        def capture_scalars(stmt):
+            captured_statements.append(stmt)
+            mock = MagicMock()
+            mock.all.return_value = []
+            return mock
+
+        db.scalars.side_effect = capture_scalars
+
+        result = svc._discover_ap_open_invoices(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert result == []
+        assert len(captured_statements) == 1
+
+        # Inspect the compiled SELECT to confirm the status filter uses
+        # gl_impacting (POSTED, PARTIALLY_PAID, PAID), and explicitly NOT
+        # the unbooked APPROVED status.
+        compiled = str(
+            captured_statements[0].compile(
+                compile_kwargs={"literal_binds": True}
+            )
+        )
+        # APPROVED must not appear in the IN-clause (it would be a bug)
+        assert "'APPROVED'" not in compiled, (
+            f"APPROVED status leaked into FX revaluation discovery: {compiled}"
+        )
+        # The expected gl-impacting statuses must be present
+        for status in SupplierInvoiceStatus.gl_impacting():
+            assert f"'{status.value}'" in compiled, (
+                f"Expected gl-impacting status {status.value} in: {compiled}"
+            )
+
 
 class TestDiscoverBankBalances:
     """Active bank accounts in non-functional currency with non-zero balance.
@@ -648,6 +701,7 @@ class TestComputeRevaluationLines:
         assert line.revalued_value_functional == Decimal("492000")
         assert line.delta_functional == Decimal("42000")
         assert line.is_gain is True
+        assert line.is_liability is False  # AR = asset
 
     def test_ap_loss_when_foreign_currency_strengthens(self):
         """USD bill $1000 outstanding, posted at 750, closing 820.
@@ -672,6 +726,7 @@ class TestComputeRevaluationLines:
         line = lines[0]
         assert line.delta_functional == Decimal("70000")  # 820000 - 750000
         assert line.is_gain is False  # liability up = loss
+        assert line.is_liability is True  # AP = liability
 
     def test_skips_items_in_currencies_without_rate(self):
         from app.services.finance.gl.fx_revaluation import FXRevaluationService
@@ -734,6 +789,7 @@ class TestComputeRevaluationLines:
         assert line.book_value_functional == Decimal("3700000")
         assert line.delta_functional == Decimal("400000")
         assert line.is_gain is True
+        assert line.is_liability is False  # cash = asset
         # The compute helper must be called with org_id + period_end_date,
         # not with magic instance state or today's date.
         assert captured_calls == [(gl_id, period_end, org_id)]
@@ -758,6 +814,7 @@ class TestAggregatePerAccountCurrency:
             revalued_value_functional=Decimal("110"),
             delta_functional=Decimal("10"),
             is_gain=True,
+            is_liability=False,
         )
         b = FXRevaluationLine(
             account_id=control,
@@ -767,6 +824,7 @@ class TestAggregatePerAccountCurrency:
             revalued_value_functional=Decimal("215"),
             delta_functional=Decimal("15"),
             is_gain=True,
+            is_liability=False,
         )
 
         result = svc._aggregate_per_account_currency([a, b])
@@ -778,6 +836,105 @@ class TestAggregatePerAccountCurrency:
         assert agg.delta_functional == Decimal("25")
         assert agg.book_value_functional == Decimal("300")
         assert agg.revalued_value_functional == Decimal("325")
+
+    def test_re_derives_is_gain_after_sign_flip_on_aggregation(self):
+        """REGRESSION (P0-1): Two AP lines on the same control account
+        with opposite-sign deltas — net is a gain (liability went down)
+        but the FIRST line was a loss. Without re-derivation, the bucket
+        would keep ``is_gain=False`` from the first line and
+        ``_build_journal_input`` would produce a backwards journal
+        (debit FX Loss + credit AP, instead of debit AP + credit FX Gain).
+
+        Scenario: same AP control account, two USD invoices revalued.
+          - Invoice A: book=750k, revalued=760k, delta=+10k. AP delta>0
+            means liability up → is_gain=False (loss).
+          - Invoice B: book=800k, revalued=760k, delta=-40k. AP delta<0
+            means liability down → is_gain=True (gain).
+          Net: delta = -30k → liability net DOWN → net gain.
+        """
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        ap_control = uuid4()
+
+        loss_first = FXRevaluationLine(
+            account_id=ap_control,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("750000"),
+            revalued_value_functional=Decimal("760000"),
+            delta_functional=Decimal("10000"),
+            is_gain=False,  # AP up = loss
+            is_liability=True,
+        )
+        gain_second = FXRevaluationLine(
+            account_id=ap_control,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("800000"),
+            revalued_value_functional=Decimal("760000"),
+            delta_functional=Decimal("-40000"),
+            is_gain=True,  # AP down = gain
+            is_liability=True,
+        )
+
+        result = svc._aggregate_per_account_currency([loss_first, gain_second])
+
+        assert len(result) == 1
+        agg = result[0]
+        # Net delta is the loss (which reduces is_gain orientation): -30k
+        assert agg.delta_functional == Decimal("-30000")
+        # Critical re-derivation: after summation, the bucket must reflect
+        # that liability went DOWN net → this is a GAIN. Without the fix
+        # the bucket would carry ``is_gain=False`` from ``loss_first``.
+        assert agg.is_gain is True
+        # is_liability is preserved
+        assert agg.is_liability is True
+
+    def test_re_derives_is_gain_for_asset_after_sign_flip(self):
+        """Symmetric coverage: AR (asset) — first line is a gain, second
+        line wipes it out and pushes net delta negative. Aggregated
+        ``is_gain`` must flip to False."""
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        ar_control = uuid4()
+
+        gain_first = FXRevaluationLine(
+            account_id=ar_control,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("100000"),
+            revalued_value_functional=Decimal("110000"),
+            delta_functional=Decimal("10000"),
+            is_gain=True,  # AR up = gain
+            is_liability=False,
+        )
+        loss_second = FXRevaluationLine(
+            account_id=ar_control,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("200000"),
+            revalued_value_functional=Decimal("180000"),
+            delta_functional=Decimal("-20000"),
+            is_gain=False,  # AR down = loss
+            is_liability=False,
+        )
+
+        result = svc._aggregate_per_account_currency([gain_first, loss_second])
+
+        assert len(result) == 1
+        agg = result[0]
+        assert agg.delta_functional == Decimal("-10000")
+        # AR delta < 0 → loss (asset down). Re-derivation must flip to False.
+        assert agg.is_gain is False
+        assert agg.is_liability is False
 
 
 class TestDetectPriorRun:
@@ -1097,6 +1254,14 @@ class TestPost:
         return period
 
     def test_no_journals_posted_when_nothing_to_revalue(self):
+        """True no-op: no prior run AND no new lines.
+
+        ``prior_run_exists=False`` (default) AND ``lines=[]`` (default) →
+        post() returns success without touching the journal subsystem and
+        without referencing any reversed prior pair (there isn't one).
+        See ``test_reverses_prior_pair_when_lines_empty_and_reason_given``
+        for the re-run-with-cleared-balances variant.
+        """
         from app.services.finance.gl.fx_revaluation import (
             FXRevaluationPreview,
             FXRevaluationResult,
@@ -1123,7 +1288,69 @@ class TestPost:
         assert result.success is True
         assert result.period_end_journal_id is None
         assert result.reversal_journal_id is None
+        assert result.reversed_prior_journal_ids == []
         assert "nothing to revalue" in result.message.lower()
+
+    def test_reverses_prior_pair_when_lines_empty_and_reason_given(self):
+        """REGRESSION (P0-2): Re-run with prior pair + reason, but the
+        new revaluation has no lines (e.g., all FX invoices have since
+        been settled or fully allocated). The prior pair MUST still be
+        reversed — otherwise the user thinks they replaced the prior FXR
+        run when in fact the prior journals remain active and posted.
+
+        Order under test:
+          1. reason guard (passes — reason supplied)
+          2. prior-pair reversal loop (must run BEFORE the empty-lines
+             short-circuit)
+          3. empty-lines short-circuit (returns success)
+
+        Without the fix, step 2 runs after step 3's early return, so the
+        reversal never happens.
+        """
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationPreview,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        org_id = uuid4()
+        user_id = uuid4()
+        prior_a, prior_b = uuid4(), uuid4()
+
+        preview = FXRevaluationPreview(
+            fiscal_period_id=period_id,
+            period_end_date=date(2026, 1, 31),
+            next_period_start_date=date(2026, 2, 1),
+            lines=[],  # cleared since prior run
+            prior_run_exists=True,
+            prior_journal_ids=[prior_a, prior_b],
+        )
+
+        with (
+            patch.object(svc, "preview", return_value=preview),
+            patch(
+                "app.services.finance.gl.fx_revaluation.ReversalService.create_reversal"
+            ) as rev_svc,
+            patch(
+                "app.services.finance.gl.fx_revaluation.JournalService.create_journal"
+            ) as create_jrnl,
+        ):
+            result = svc.post(
+                organization_id=org_id,
+                fiscal_period_id=period_id,
+                user_id=user_id,
+                reason="Fixed an erroneous closing rate after re-allocation",
+            )
+
+        # Reversal called once per prior journal
+        assert rev_svc.call_count == 2
+        # No new journals created (no new lines to post)
+        assert create_jrnl.call_count == 0
+        assert result.success is True
+        assert set(result.reversed_prior_journal_ids) == {prior_a, prior_b}
+        assert "prior revaluation reversed" in result.message.lower()
 
     def test_re_run_requires_reason(self):
         from fastapi import HTTPException
