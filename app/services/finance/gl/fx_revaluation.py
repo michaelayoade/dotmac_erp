@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4 as _new_uuid
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -29,8 +29,15 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.banking import BankAccount, BankAccountStatus
-from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
+from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+)
+from app.services.finance.gl.reversal import ReversalService
 from app.services.finance.platform.fx import FXService
 
 logger = logging.getLogger(__name__)
@@ -87,6 +94,7 @@ class FXRevaluationService:
     """Period-end FX revaluation for AR / AP / cash monetary items."""
 
     SOURCE_MODULE = "FXR"
+    POSTABLE_PERIOD_STATUSES = {PeriodStatus.OPEN, PeriodStatus.REOPENED}
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -557,3 +565,427 @@ class FXRevaluationService:
         )
         rows = self.db.scalars(stmt).all()
         return [row.journal_entry_id for row in rows]
+
+    def _resolve_next_period_start(
+        self, organization_id: UUID, period_end_date: date
+    ) -> date | None:
+        """Find the period whose ``start_date == period_end_date + 1 day``.
+
+        Returns ``None`` if no such period exists. Used by ``preview`` to
+        report the date the auto-reversing journal would post on; if the
+        next period doesn't yet exist, the reversal can still be created
+        on demand at post-time, but the preview will show a ``None`` here
+        so the UI can surface "next period not yet defined".
+        """
+        target = period_end_date + timedelta(days=1)
+        stmt = select(FiscalPeriod).where(
+            FiscalPeriod.organization_id == organization_id,
+            FiscalPeriod.start_date == target,
+        )
+        period = self.db.scalar(stmt)
+        return period.start_date if period else None
+
+    def preview(
+        self,
+        organization_id: UUID,
+        fiscal_period_id: UUID,
+    ) -> FXRevaluationPreview:
+        """Read-only preview of period-end FX revaluation. Performs no
+        DB writes.
+
+        Order of operations (intentional — see the design spec):
+
+        1. Resolve the fiscal period (404 if missing or org mismatch — the
+           404 on org mismatch is deliberate: a 403 would leak the fact
+           that the ID exists in some other tenant).
+        2. Refuse if the period is not currently postable
+           (``OPEN`` or ``REOPENED``).
+        3. Refuse early if FX gain/loss accounts are unset (raises 400).
+        4. Discover AR / AP / cash monetary items in non-functional
+           currency as-of ``period.end_date``.
+        5. Look up closing rates for the union of currencies in scope —
+           items in unrated currencies are silently skipped at compute
+           time, but a human-readable warning is propagated.
+        6. Compute pre-aggregation lines, then aggregate per
+           ``(account_id, currency_code)``.
+        7. Sum totals, detect any prior FXR run, resolve the next period's
+           start_date, and package the result.
+
+        Plan deviation (intentional, fixed in this implementation):
+        the original plan stashed ``period.end_date`` on
+        ``self._period_end_for_compute`` before calling
+        ``_compute_revaluation_lines`` and deleted it in a ``finally``.
+        Task 9 changed ``_compute_revaluation_lines`` to take
+        ``organization_id`` and ``period_end_date`` as explicit kwargs;
+        passing them via mutable instance state was an anti-pattern that
+        fights the type system and breaks under any concurrent use. We
+        therefore pass both as explicit kwargs and never touch
+        ``self._period_end_for_compute``.
+        """
+        period = self.db.get(FiscalPeriod, fiscal_period_id)
+        if not period or period.organization_id != organization_id:
+            raise HTTPException(
+                status_code=404, detail="Fiscal period not found"
+            )
+        if period.status not in self.POSTABLE_PERIOD_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Period must be open to run FX revaluation; "
+                    f"current status is {period.status.value}"
+                ),
+            )
+
+        # Refuse early if FX accounts unconfigured (raises 400)
+        self._read_fx_account_ids(organization_id)
+
+        # Discover monetary items in non-functional currency
+        ar_items = self._discover_ar_open_invoices(
+            organization_id, period.end_date
+        )
+        ap_items = self._discover_ap_open_invoices(
+            organization_id, period.end_date
+        )
+        cash_items = self._discover_bank_balances(
+            organization_id, period.end_date
+        )
+
+        # Collect currencies in scope (item[2] is currency_code in all three)
+        currencies: set[str] = set()
+        for src in (ar_items, ap_items, cash_items):
+            for item in src:
+                currencies.add(item[2])
+
+        # Look up closing rates; warn on misses
+        rates, warnings = self._lookup_closing_rates(
+            organization_id, currencies, period.end_date
+        )
+
+        # Compute pre-aggregation lines. NOTE: organization_id and
+        # period_end_date are passed explicitly (Task 9 contract) — no
+        # ``self._period_end_for_compute`` instance-state hack.
+        raw_lines = self._compute_revaluation_lines(
+            ar_items=ar_items,
+            ap_items=ap_items,
+            cash_items=cash_items,
+            rates=rates,
+            organization_id=organization_id,
+            period_end_date=period.end_date,
+        )
+
+        aggregated = self._aggregate_per_account_currency(raw_lines)
+
+        # Totals: gains add, losses are reported as positive magnitudes.
+        total_gain = sum(
+            (line.delta_functional for line in aggregated if line.is_gain),
+            Decimal("0"),
+        )
+        total_loss = sum(
+            (-line.delta_functional for line in aggregated if not line.is_gain),
+            Decimal("0"),
+        )
+
+        # Detect prior FXR runs for this period (active statuses only)
+        prior_journal_ids = self._detect_prior_run(
+            organization_id, fiscal_period_id
+        )
+
+        # Resolve next-period start date for the auto-reversing journal
+        next_period_start = self._resolve_next_period_start(
+            organization_id, period.end_date
+        )
+
+        return FXRevaluationPreview(
+            fiscal_period_id=fiscal_period_id,
+            period_end_date=period.end_date,
+            next_period_start_date=next_period_start,
+            lines=aggregated,
+            total_gain_functional=total_gain,
+            total_loss_functional=total_loss,
+            rates_used=rates,
+            warnings=warnings,
+            prior_run_exists=bool(prior_journal_ids),
+            prior_journal_ids=prior_journal_ids,
+        )
+
+    def _build_journal_input(
+        self,
+        lines: list[FXRevaluationLine],
+        posting_date: date,
+        description: str,
+        fx_gain_account_id: UUID,
+        fx_loss_account_id: UUID,
+        correlation_id: str,
+    ) -> JournalInput:
+        """Build a balanced JournalInput from aggregated FXRevaluationLines.
+
+        - Asset/liability side: one line per FXRevaluationLine (control
+          account, debit/credit per gain/loss orientation).
+        - Gain/loss side: aggregate summary lines (single debit to
+          fx_loss_account_id for total losses, single credit to
+          fx_gain_account_id for total gains). Summary lines are emitted
+          ONLY when their respective total is non-zero — we never post a
+          zero-amount line.
+
+        Note on multi-tenant scoping: ``JournalInput`` itself does not
+        carry an ``organization_id``; tenant scoping is enforced at
+        ``JournalService.create_journal(db, organization_id, input, …)``
+        call time. The caller (Task 13's ``post()``) is responsible for
+        passing the correct organization_id when creating the journal.
+        """
+        journal_lines: list[JournalLineInput] = []
+
+        total_gain = Decimal("0")
+        total_loss = Decimal("0")
+
+        for line in lines:
+            amount = abs(line.delta_functional)
+            if amount == 0:
+                continue
+
+            # The is_gain flag was set with the asset/liability orientation
+            # already taken into account in _compute_revaluation_lines, so:
+            #   is_gain → debit the control account, credit FX Gain
+            #   not is_gain → credit the control account, debit FX Loss
+            #
+            # For AP specifically: is_gain=False means liability went up,
+            # and "credit the AP control" matches accounting convention
+            # (liabilities increase on credit side).
+            if line.is_gain:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=line.account_id,
+                        debit_amount=amount,
+                        credit_amount=Decimal("0"),
+                        description=(
+                            f"FX revaluation: {line.currency_code} "
+                            f"@ {line.closing_rate}"
+                        ),
+                        currency_code=line.currency_code,
+                        exchange_rate=line.closing_rate,
+                    )
+                )
+                total_gain += amount
+            else:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=line.account_id,
+                        debit_amount=Decimal("0"),
+                        credit_amount=amount,
+                        description=(
+                            f"FX revaluation: {line.currency_code} "
+                            f"@ {line.closing_rate}"
+                        ),
+                        currency_code=line.currency_code,
+                        exchange_rate=line.closing_rate,
+                    )
+                )
+                total_loss += amount
+
+        # Gain/loss summary lines (functional currency, no per-currency
+        # rate). Skip when zero — never post a zero-amount line.
+        if total_gain > 0:
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=fx_gain_account_id,
+                    debit_amount=Decimal("0"),
+                    credit_amount=total_gain,
+                    description="Total FX revaluation gains for the period",
+                )
+            )
+        if total_loss > 0:
+            journal_lines.append(
+                JournalLineInput(
+                    account_id=fx_loss_account_id,
+                    debit_amount=total_loss,
+                    credit_amount=Decimal("0"),
+                    description="Total FX revaluation losses for the period",
+                )
+            )
+
+        return JournalInput(
+            journal_type=JournalType.REVALUATION,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=description,
+            source_module=self.SOURCE_MODULE,
+            correlation_id=correlation_id,
+            lines=journal_lines,
+        )
+
+    def _build_reversal_input(
+        self,
+        period_end_input: JournalInput,
+        reversal_date: date,
+        original_journal_number: str,
+    ) -> JournalInput:
+        """Mirror the period-end journal — debits become credits and vice
+        versa — with ``reversal_date`` as posting_date.
+
+        Used for the day-1-of-next-period auto-reversing journal. NOT
+        used for the prior-FXR-run reversal in Task 13's ``post()``,
+        which delegates to ``ReversalService.create_reversal``.
+        """
+        reversed_lines: list[JournalLineInput] = []
+        for ln in period_end_input.lines:
+            reversed_lines.append(
+                JournalLineInput(
+                    account_id=ln.account_id,
+                    debit_amount=ln.credit_amount,
+                    credit_amount=ln.debit_amount,
+                    description=ln.description,
+                    currency_code=ln.currency_code,
+                    exchange_rate=ln.exchange_rate,
+                )
+            )
+        return JournalInput(
+            journal_type=JournalType.REVALUATION,
+            entry_date=reversal_date,
+            posting_date=reversal_date,
+            description=(
+                f"Reversal of {original_journal_number}: "
+                f"period-end FX revaluation"
+            ),
+            source_module=self.SOURCE_MODULE,
+            correlation_id=period_end_input.correlation_id,
+            lines=reversed_lines,
+        )
+
+    def post(
+        self,
+        organization_id: UUID,
+        fiscal_period_id: UUID,
+        user_id: UUID,
+        reason: str | None = None,
+    ) -> FXRevaluationResult:
+        """Atomic post of period-end FX revaluation pair.
+
+        On re-run (prior pair exists), reverses both prior journals first
+        — reason is required.
+
+        Raises HTTPException(400) on:
+          - period not OPEN/REOPENED
+          - FX accounts unconfigured
+          - prior pair exists but reason missing
+          - next period is missing or closed
+        """
+        # Re-run preview inside the transaction so state is current
+        preview = self.preview(organization_id, fiscal_period_id)
+
+        # Reason check fires BEFORE the empty-lines short-circuit:
+        # if a prior run exists, replacing/voiding it always requires a
+        # reason, even if the new revaluation would be a no-op (lines
+        # could be empty because allocations have since cleared the
+        # prior balances — that's still a state change worth justifying).
+        if preview.prior_run_exists and not (reason and reason.strip()):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Re-running FX revaluation requires a reason for "
+                    "replacing the prior revaluation."
+                ),
+            )
+
+        if not preview.lines:
+            return FXRevaluationResult(
+                success=True,
+                message=(
+                    "Nothing to revalue: no foreign-currency monetary "
+                    "items found in scope."
+                ),
+            )
+
+        if preview.next_period_start_date is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"FX revaluation cannot post: no next fiscal period "
+                    f"covers the day after {preview.period_end_date}. The "
+                    f"day-1 reversal needs a target period."
+                ),
+            )
+
+        gain_account_id, loss_account_id = self._read_fx_account_ids(
+            organization_id
+        )
+
+        # Reverse prior pair if re-run
+        reversed_ids: list[UUID] = []
+        if preview.prior_run_exists:
+            for prior_id in preview.prior_journal_ids:
+                ReversalService.create_reversal(
+                    db=self.db,
+                    organization_id=organization_id,
+                    original_journal_id=prior_id,
+                    # Reverse on the period_end_date so the reversal
+                    # lands within an open period.
+                    reversal_date=preview.period_end_date,
+                    created_by_user_id=user_id,
+                    reason=reason,
+                    auto_post=True,
+                )
+                reversed_ids.append(prior_id)
+
+        # Build and post the new period-end journal
+        correlation_id = str(_new_uuid())
+        period_end_input = self._build_journal_input(
+            lines=preview.lines,
+            posting_date=preview.period_end_date,
+            description=(
+                f"FX revaluation as at {preview.period_end_date}. "
+                f"Rates used: "
+                + ", ".join(
+                    f"{ccy}={rate}"
+                    for ccy, rate in sorted(preview.rates_used.items())
+                )
+            ),
+            fx_gain_account_id=gain_account_id,
+            fx_loss_account_id=loss_account_id,
+            correlation_id=correlation_id,
+        )
+        period_end_journal = JournalService.create_journal(
+            db=self.db,
+            organization_id=organization_id,
+            input=period_end_input,
+            created_by_user_id=user_id,
+        )
+        JournalService.post_journal(
+            db=self.db,
+            organization_id=organization_id,
+            journal_entry_id=period_end_journal.journal_entry_id,
+            posted_by_user_id=user_id,
+        )
+
+        # Build and post the day-1 reversal
+        reversal_input = self._build_reversal_input(
+            period_end_input=period_end_input,
+            reversal_date=preview.next_period_start_date,
+            original_journal_number=period_end_journal.journal_number,
+        )
+        reversal_journal = JournalService.create_journal(
+            db=self.db,
+            organization_id=organization_id,
+            input=reversal_input,
+            created_by_user_id=user_id,
+        )
+        JournalService.post_journal(
+            db=self.db,
+            organization_id=organization_id,
+            journal_entry_id=reversal_journal.journal_entry_id,
+            posted_by_user_id=user_id,
+        )
+
+        return FXRevaluationResult(
+            success=True,
+            period_end_journal_id=period_end_journal.journal_entry_id,
+            reversal_journal_id=reversal_journal.journal_entry_id,
+            reversed_prior_journal_ids=reversed_ids,
+            total_gain_functional=preview.total_gain_functional,
+            total_loss_functional=preview.total_loss_functional,
+            message=(
+                f"FX revaluation posted: gain "
+                f"{preview.total_gain_functional}, loss "
+                f"{preview.total_loss_functional} across "
+                f"{len(preview.rates_used)} currencies."
+            ),
+        )

@@ -812,3 +812,480 @@ class TestDetectPriorRun:
             organization_id=uuid4(), fiscal_period_id=uuid4()
         )
         assert set(ids) == {a, b}
+
+
+class TestPreview:
+    """End-to-end preview — composes discovery + compute, no DB writes."""
+
+    def _setup_open_period(self, svc, period_id, end_date, organization_id):
+        """Patch period lookup and status check for happy paths.
+
+        Plan adaptation: the plan stubs ``period.organization_id = uuid4()``
+        without threading the test's ``organization_id`` through to the
+        period — but ``preview`` checks ``period.organization_id == organization_id``
+        and raises 404 on mismatch. We thread the caller's org through so
+        the happy-path test actually exercises the compute path rather
+        than tripping the multi-tenant 404 guard.
+        """
+        from types import SimpleNamespace
+
+        from app.models.finance.gl.fiscal_period import PeriodStatus
+
+        period = SimpleNamespace(
+            fiscal_period_id=period_id,
+            organization_id=organization_id,
+            start_date=date(2026, 1, 1),
+            end_date=end_date,
+            status=PeriodStatus.OPEN,
+        )
+        svc.db.get.return_value = period
+        # _resolve_next_period_start uses db.scalar(); default to None so
+        # the happy-path tests don't need to stub a "next period" row.
+        svc.db.scalar.return_value = None
+        return period
+
+    def test_refuses_when_period_not_open(self):
+        from types import SimpleNamespace
+
+        from fastapi import HTTPException
+
+        from app.models.finance.gl.fiscal_period import PeriodStatus
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        org_id = uuid4()
+
+        closed = SimpleNamespace(
+            fiscal_period_id=period_id,
+            organization_id=org_id,
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 31),
+            status=PeriodStatus.HARD_CLOSED,
+        )
+        db.get.return_value = closed
+
+        with pytest.raises(HTTPException) as exc:
+            svc.preview(organization_id=org_id, fiscal_period_id=period_id)
+
+        assert exc.value.status_code == 400
+        assert "open" in exc.value.detail.lower()
+
+    def test_returns_empty_preview_when_no_foreign_currency_items(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        org_id = uuid4()
+        self._setup_open_period(svc, period_id, date(2026, 1, 31), org_id)
+
+        with (
+            patch.object(svc, "_read_fx_account_ids", return_value=(uuid4(), uuid4())),
+            patch.object(svc, "_discover_ar_open_invoices", return_value=[]),
+            patch.object(svc, "_discover_ap_open_invoices", return_value=[]),
+            patch.object(svc, "_discover_bank_balances", return_value=[]),
+            patch.object(svc, "_detect_prior_run", return_value=[]),
+        ):
+            preview = svc.preview(organization_id=org_id, fiscal_period_id=period_id)
+
+        assert preview.lines == []
+        assert preview.total_gain_functional == Decimal("0")
+        assert preview.total_loss_functional == Decimal("0")
+        assert preview.warnings == []
+        assert preview.prior_run_exists is False
+
+    def test_detects_prior_run_and_populates_journal_ids(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        org_id = uuid4()
+        prior_a, prior_b = uuid4(), uuid4()
+        self._setup_open_period(svc, period_id, date(2026, 1, 31), org_id)
+
+        with (
+            patch.object(svc, "_read_fx_account_ids", return_value=(uuid4(), uuid4())),
+            patch.object(svc, "_discover_ar_open_invoices", return_value=[]),
+            patch.object(svc, "_discover_ap_open_invoices", return_value=[]),
+            patch.object(svc, "_discover_bank_balances", return_value=[]),
+            patch.object(svc, "_detect_prior_run", return_value=[prior_a, prior_b]),
+        ):
+            preview = svc.preview(organization_id=org_id, fiscal_period_id=period_id)
+
+        assert preview.prior_run_exists is True
+        assert set(preview.prior_journal_ids) == {prior_a, prior_b}
+
+
+class TestBuildJournalInput:
+    """Convert aggregated lines into JournalInput for posting."""
+
+    def test_gain_line_credits_fx_gain_account(self):
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        ar_account = uuid4()
+        gain_account = uuid4()
+        loss_account = uuid4()
+
+        line = FXRevaluationLine(
+            account_id=ar_account,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("450000"),
+            revalued_value_functional=Decimal("492000"),
+            delta_functional=Decimal("42000"),
+            is_gain=True,
+        )
+
+        ji = svc._build_journal_input(
+            lines=[line],
+            posting_date=date(2026, 1, 31),
+            description="FX revaluation as at 2026-01-31",
+            fx_gain_account_id=gain_account,
+            fx_loss_account_id=loss_account,
+            correlation_id="abc",
+        )
+
+        # Debit AR control 42000, credit FX Gain 42000
+        debits = [(l.account_id, l.debit_amount) for l in ji.lines if l.debit_amount > 0]
+        credits = [
+            (l.account_id, l.credit_amount) for l in ji.lines if l.credit_amount > 0
+        ]
+        assert (ar_account, Decimal("42000")) in debits
+        assert (gain_account, Decimal("42000")) in credits
+
+    def test_loss_line_debits_fx_loss_account(self):
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        ap_account = uuid4()
+        gain_account = uuid4()
+        loss_account = uuid4()
+
+        # AP loss: liability up, delta positive in liability terms
+        line = FXRevaluationLine(
+            account_id=ap_account,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("750000"),
+            revalued_value_functional=Decimal("820000"),
+            delta_functional=Decimal("70000"),
+            is_gain=False,  # liability up = loss
+        )
+
+        ji = svc._build_journal_input(
+            lines=[line],
+            posting_date=date(2026, 1, 31),
+            description="FX revaluation as at 2026-01-31",
+            fx_gain_account_id=gain_account,
+            fx_loss_account_id=loss_account,
+            correlation_id="abc",
+        )
+
+        debits = [(l.account_id, l.debit_amount) for l in ji.lines if l.debit_amount > 0]
+        credits = [
+            (l.account_id, l.credit_amount) for l in ji.lines if l.credit_amount > 0
+        ]
+        # Loss → debit FX Loss, credit AP control (liability up = credit AP)
+        assert (loss_account, Decimal("70000")) in debits
+        assert (ap_account, Decimal("70000")) in credits
+
+    def test_aggregates_gains_and_losses_into_single_summary_lines(self):
+        """Two gain lines → one combined credit to FX Gain.
+        Two loss lines → one combined debit to FX Loss."""
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        ar_a, ar_b, gain_a, loss_a = uuid4(), uuid4(), uuid4(), uuid4()
+
+        gain1 = FXRevaluationLine(
+            account_id=ar_a,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("100"),
+            revalued_value_functional=Decimal("110"),
+            delta_functional=Decimal("10"),
+            is_gain=True,
+        )
+        gain2 = FXRevaluationLine(
+            account_id=ar_b,
+            currency_code="GBP",
+            closing_rate=Decimal("1050"),
+            book_value_functional=Decimal("200"),
+            revalued_value_functional=Decimal("215"),
+            delta_functional=Decimal("15"),
+            is_gain=True,
+        )
+
+        ji = svc._build_journal_input(
+            lines=[gain1, gain2],
+            posting_date=date(2026, 1, 31),
+            description="FX revaluation",
+            fx_gain_account_id=gain_a,
+            fx_loss_account_id=loss_a,
+            correlation_id="abc",
+        )
+
+        # Two debits to AR controls (10 + 15) + one credit to FX Gain (25)
+        gain_credits = [
+            l.credit_amount for l in ji.lines if l.account_id == gain_a
+        ]
+        assert sum(gain_credits) == Decimal("25")
+        # No FX Loss line should exist (no losses)
+        assert all(l.account_id != loss_a for l in ji.lines)
+
+    def test_journal_balances(self):
+        """Total debits == total credits in any built journal."""
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        ar = uuid4()
+        ap = uuid4()
+        gain = uuid4()
+        loss = uuid4()
+
+        ji = svc._build_journal_input(
+            lines=[
+                FXRevaluationLine(ar, "USD", Decimal("820"), Decimal("100"),
+                                  Decimal("110"), Decimal("10"), True),
+                FXRevaluationLine(ap, "GBP", Decimal("1050"), Decimal("200"),
+                                  Decimal("220"), Decimal("20"), False),
+            ],
+            posting_date=date(2026, 1, 31),
+            description="FX revaluation",
+            fx_gain_account_id=gain,
+            fx_loss_account_id=loss,
+            correlation_id="abc",
+        )
+
+        total_dr = sum(l.debit_amount or Decimal("0") for l in ji.lines)
+        total_cr = sum(l.credit_amount or Decimal("0") for l in ji.lines)
+        assert total_dr == total_cr
+
+
+class TestPost:
+    """Atomic post with optional re-run reversal."""
+
+    def _setup_open_period(self, db, period_id, end_date):
+        from types import SimpleNamespace
+
+        from app.models.finance.gl.fiscal_period import PeriodStatus
+
+        period = SimpleNamespace(
+            fiscal_period_id=period_id,
+            organization_id=uuid4(),
+            start_date=date(2026, 1, 1),
+            end_date=end_date,
+            status=PeriodStatus.OPEN,
+        )
+        db.get.return_value = period
+        return period
+
+    def test_no_journals_posted_when_nothing_to_revalue(self):
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationPreview,
+            FXRevaluationResult,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        empty_preview = FXRevaluationPreview(
+            fiscal_period_id=period_id,
+            period_end_date=date(2026, 1, 31),
+            next_period_start_date=date(2026, 2, 1),
+        )
+
+        with patch.object(svc, "preview", return_value=empty_preview):
+            result = svc.post(
+                organization_id=uuid4(),
+                fiscal_period_id=period_id,
+                user_id=uuid4(),
+            )
+
+        assert isinstance(result, FXRevaluationResult)
+        assert result.success is True
+        assert result.period_end_journal_id is None
+        assert result.reversal_journal_id is None
+        assert "nothing to revalue" in result.message.lower()
+
+    def test_re_run_requires_reason(self):
+        from fastapi import HTTPException
+
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationPreview,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        prior_pair = [uuid4(), uuid4()]
+        preview = FXRevaluationPreview(
+            fiscal_period_id=period_id,
+            period_end_date=date(2026, 1, 31),
+            next_period_start_date=date(2026, 2, 1),
+            lines=[],  # doesn't matter; reason check fires before line check
+            prior_run_exists=True,
+            prior_journal_ids=prior_pair,
+        )
+
+        with patch.object(svc, "preview", return_value=preview):
+            with pytest.raises(HTTPException) as exc:
+                svc.post(
+                    organization_id=uuid4(),
+                    fiscal_period_id=period_id,
+                    user_id=uuid4(),
+                    reason=None,
+                )
+
+        assert exc.value.status_code == 400
+        assert "reason" in exc.value.detail.lower()
+
+    def test_reverses_prior_pair_then_posts_new_pair(self):
+        """Re-run with reason: ReversalService.create_reversal called for
+        each prior journal, then JournalService.create_journal called twice
+        for the new pair."""
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationPreview,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        org_id = uuid4()
+        user_id = uuid4()
+        prior_a, prior_b = uuid4(), uuid4()
+        ar = uuid4()
+        gain_acct = uuid4()
+        loss_acct = uuid4()
+
+        preview = FXRevaluationPreview(
+            fiscal_period_id=period_id,
+            period_end_date=date(2026, 1, 31),
+            next_period_start_date=date(2026, 2, 1),
+            lines=[
+                FXRevaluationLine(
+                    account_id=ar,
+                    currency_code="USD",
+                    closing_rate=Decimal("820"),
+                    book_value_functional=Decimal("100"),
+                    revalued_value_functional=Decimal("110"),
+                    delta_functional=Decimal("10"),
+                    is_gain=True,
+                ),
+            ],
+            total_gain_functional=Decimal("10"),
+            prior_run_exists=True,
+            prior_journal_ids=[prior_a, prior_b],
+        )
+
+        # Mock created journals (returned by JournalService.create_journal)
+        from types import SimpleNamespace
+        created_pe = SimpleNamespace(
+            journal_entry_id=uuid4(),
+            journal_number="JE-FX-1",
+        )
+        created_rev = SimpleNamespace(
+            journal_entry_id=uuid4(),
+            journal_number="JE-FX-2",
+        )
+
+        with (
+            patch.object(svc, "preview", return_value=preview),
+            patch.object(svc, "_read_fx_account_ids", return_value=(gain_acct, loss_acct)),
+            patch(
+                "app.services.finance.gl.fx_revaluation.ReversalService.create_reversal"
+            ) as rev_svc,
+            patch(
+                "app.services.finance.gl.fx_revaluation.JournalService.create_journal",
+                side_effect=[created_pe, created_rev],
+            ) as jrnl_svc,
+            patch(
+                "app.services.finance.gl.fx_revaluation.JournalService.post_journal"
+            ) as post_jrnl,
+        ):
+            result = svc.post(
+                organization_id=org_id,
+                fiscal_period_id=period_id,
+                user_id=user_id,
+                reason="Closing rate was wrong",
+            )
+
+        # ReversalService called twice, once per prior journal
+        assert rev_svc.call_count == 2
+        # JournalService.create_journal called twice (period-end + reversal)
+        assert jrnl_svc.call_count == 2
+        # post_journal called twice
+        assert post_jrnl.call_count == 2
+
+        assert result.success is True
+        assert result.period_end_journal_id == created_pe.journal_entry_id
+        assert result.reversal_journal_id == created_rev.journal_entry_id
+        assert set(result.reversed_prior_journal_ids) == {prior_a, prior_b}
+
+    def test_rolls_back_when_next_period_missing(self):
+        """If next_period_start_date is None on the preview, post must
+        refuse before any journal is created."""
+        from fastapi import HTTPException
+
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationPreview,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        ar = uuid4()
+
+        preview = FXRevaluationPreview(
+            fiscal_period_id=period_id,
+            period_end_date=date(2026, 1, 31),
+            next_period_start_date=None,  # the trigger
+            lines=[
+                FXRevaluationLine(
+                    account_id=ar,
+                    currency_code="USD",
+                    closing_rate=Decimal("820"),
+                    book_value_functional=Decimal("100"),
+                    revalued_value_functional=Decimal("110"),
+                    delta_functional=Decimal("10"),
+                    is_gain=True,
+                )
+            ],
+            total_gain_functional=Decimal("10"),
+        )
+
+        with (
+            patch.object(svc, "preview", return_value=preview),
+            patch.object(svc, "_read_fx_account_ids", return_value=(uuid4(), uuid4())),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                svc.post(
+                    organization_id=uuid4(),
+                    fiscal_period_id=period_id,
+                    user_id=uuid4(),
+                )
+
+        assert exc.value.status_code == 400
+        assert "next" in exc.value.detail.lower()
