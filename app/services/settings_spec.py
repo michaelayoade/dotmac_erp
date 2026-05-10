@@ -1087,6 +1087,33 @@ SETTINGS_SPECS: list[SettingSpec] = [
         label="Request Timeout (seconds)",
         description="HTTP timeout for Nextcloud API calls",
     ),
+    # GL Domain Settings (FX revaluation accounts)
+    SettingSpec(
+        domain=SettingDomain.gl,
+        key="fx_gain_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="",
+        label="FX Gain Account",
+        description=(
+            "GL account that receives credit-side FX gains during period-end "
+            "revaluation. Must be set per organization before FX revaluation "
+            "can run."
+        ),
+    ),
+    SettingSpec(
+        domain=SettingDomain.gl,
+        key="fx_loss_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="",
+        label="FX Loss Account",
+        description=(
+            "GL account that receives debit-side FX losses during period-end "
+            "revaluation. Must be set per organization before FX revaluation "
+            "can run."
+        ),
+    ),
 ]
 
 DOMAIN_SETTINGS_SERVICE = {

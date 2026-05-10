@@ -53,6 +53,7 @@ class SettingDomain(enum.Enum):
     coach = "coach"
     notifications = "notifications"
     expense = "expense"
+    gl = "gl"
 
 
 class SettingChangeAction(enum.Enum):
