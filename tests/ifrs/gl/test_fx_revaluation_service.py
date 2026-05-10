@@ -14,7 +14,9 @@ canonical ``settings_spec.get_spec`` / ``resolve_value`` accessors.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from datetime import date
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -224,3 +226,589 @@ class TestReadFxAccountIds:
         # The crucial assertion: tenants do NOT share account IDs.
         assert gain_a != gain_b
         assert loss_a != loss_b
+
+
+class TestDiscoverArOpenInvoices:
+    """Returns AR invoices in non-functional currency with positive
+    balance_due as-of period_end_date.
+
+    Plan-vs-conftest reconciliation: the plan's test data assumes
+    functional currency is NGN (so USD invoices are non-functional and
+    in scope). The shared MockSettings in tests/conftest.py hardcodes
+    ``default_functional_currency_code = "USD"`` for unrelated reasons.
+    These tests therefore monkey-patch ``app_settings`` so the plan's
+    NGN-functional assumption holds — without that patch, the service's
+    "defense in depth" Python-side filter would (correctly) drop every
+    USD invoice the stub returns.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _force_functional_ngn(self, monkeypatch):
+        from app.services.finance.gl import fx_revaluation as mod
+
+        monkeypatch.setattr(
+            mod.app_settings, "default_functional_currency_code", "NGN"
+        )
+
+    def _make_invoice(self, **overrides):
+        from types import SimpleNamespace
+
+        defaults = {
+            "invoice_id": uuid4(),
+            "ar_control_account_id": uuid4(),
+            "currency_code": "USD",
+            "exchange_rate": Decimal("750.0"),
+            "total_amount": Decimal("1000"),
+            "amount_paid": Decimal("400"),
+            "status": MagicMock(value="OPEN"),
+        }
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
+    def test_excludes_functional_currency_invoices(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        ngn_invoice = self._make_invoice(currency_code="NGN")
+        db.scalars.return_value.all.return_value = [ngn_invoice]
+
+        result = svc._discover_ar_open_invoices(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        # The query itself filters out NGN, but our test confirms the
+        # service does not expose functional-currency invoices in its
+        # return shape even if the query mock yields them.
+        assert all(item[2] != "NGN" for item in result)
+
+    def test_returns_balance_due_in_invoice_currency(self):
+        """balance_due is total_amount - amount_paid (the unpaid USD)."""
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        invoice = self._make_invoice(
+            total_amount=Decimal("1000"),
+            amount_paid=Decimal("400"),
+        )
+        db.scalars.return_value.all.return_value = [invoice]
+
+        result = svc._discover_ar_open_invoices(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert len(result) == 1
+        invoice_id, control_account_id, currency, posting_rate, balance_due = result[0]
+        assert invoice_id == invoice.invoice_id
+        assert control_account_id == invoice.ar_control_account_id
+        assert currency == "USD"
+        assert posting_rate == Decimal("750.0")
+        assert balance_due == Decimal("600")  # 1000 - 400
+
+    def test_skips_fully_paid_invoices(self):
+        """balance_due == 0 → not in scope for revaluation."""
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        paid = self._make_invoice(
+            total_amount=Decimal("1000"),
+            amount_paid=Decimal("1000"),
+        )
+        db.scalars.return_value.all.return_value = [paid]
+
+        result = svc._discover_ar_open_invoices(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert result == []
+
+
+class TestDiscoverApOpenInvoices:
+    """Returns AP supplier invoices in non-functional currency with
+    positive balance_due as-of period_end_date.
+
+    Mirrors TestDiscoverArOpenInvoices: same NGN-functional fixture, same
+    test shape, but reads SupplierInvoice + ap_control_account_id. Two
+    near-identical methods is intentional — a generic helper would
+    obscure the per-module model contract.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _force_functional_ngn(self, monkeypatch):
+        from app.services.finance.gl import fx_revaluation as mod
+
+        monkeypatch.setattr(
+            mod.app_settings, "default_functional_currency_code", "NGN"
+        )
+
+    def _make_invoice(self, **overrides):
+        from types import SimpleNamespace
+
+        defaults = {
+            "invoice_id": uuid4(),
+            "ap_control_account_id": uuid4(),
+            "currency_code": "USD",
+            "exchange_rate": Decimal("750.0"),
+            "total_amount": Decimal("1000"),
+            "amount_paid": Decimal("400"),
+            "status": MagicMock(value="POSTED"),
+        }
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
+    def test_returns_balance_due_in_invoice_currency(self):
+        """balance_due is total_amount - amount_paid (the unpaid USD)."""
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        invoice = self._make_invoice(
+            total_amount=Decimal("1000"),
+            amount_paid=Decimal("400"),
+        )
+        db.scalars.return_value.all.return_value = [invoice]
+
+        result = svc._discover_ap_open_invoices(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert len(result) == 1
+        invoice_id, control_account_id, currency, posting_rate, balance_due = result[0]
+        assert invoice_id == invoice.invoice_id
+        assert control_account_id == invoice.ap_control_account_id
+        assert currency == "USD"
+        assert posting_rate == Decimal("750.0")
+        assert balance_due == Decimal("600")  # 1000 - 400
+
+    def test_skips_fully_paid_invoices(self):
+        """balance_due == 0 → not in scope for revaluation."""
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        paid = self._make_invoice(
+            total_amount=Decimal("1000"),
+            amount_paid=Decimal("1000"),
+        )
+        db.scalars.return_value.all.return_value = [paid]
+
+        result = svc._discover_ap_open_invoices(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert result == []
+
+
+class TestDiscoverBankBalances:
+    """Active bank accounts in non-functional currency with non-zero balance.
+
+    Plan-vs-conftest reconciliation: same NGN-functional autouse fixture
+    used by the AR/AP discovery test classes. Conftest defaults the
+    functional currency to USD; production defaults to NGN; the plan's
+    test data assumes NGN, so we patch ``app_settings`` here for parity.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _force_functional_ngn(self, monkeypatch):
+        from app.services.finance.gl import fx_revaluation as mod
+
+        monkeypatch.setattr(
+            mod.app_settings, "default_functional_currency_code", "NGN"
+        )
+
+    def _make_account(self, **overrides):
+        from types import SimpleNamespace
+
+        defaults = {
+            "bank_account_id": uuid4(),
+            "gl_account_id": uuid4(),
+            # Required so _resolve_bank_balance can pass org_id through to
+            # _compute_balance_from_journals — the production-code signature
+            # adds organization_id (multi-tenant safety) beyond what the
+            # plan's original signature called for.
+            "organization_id": uuid4(),
+            "currency_code": "USD",
+            "status": MagicMock(value="active"),
+            "last_statement_balance": Decimal("12345.67"),
+            "last_statement_date": date(2026, 1, 31),
+        }
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
+    def test_uses_last_statement_balance_when_recent(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        acct = self._make_account(
+            last_statement_balance=Decimal("12345.67"),
+            last_statement_date=date(2026, 1, 31),
+        )
+        db.scalars.return_value.all.return_value = [acct]
+
+        result = svc._discover_bank_balances(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert len(result) == 1
+        _, gl_acct_id, currency, posting_rate, balance = result[0]
+        assert gl_acct_id == acct.gl_account_id
+        assert currency == "USD"
+        assert posting_rate is None  # bank balances have no single posting rate
+        assert balance == Decimal("12345.67")
+
+    def test_falls_back_to_journal_sum_when_statement_stale(self):
+        """If last_statement_date < period_end_date, compute from GL postings."""
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        stale = self._make_account(
+            last_statement_balance=Decimal("100.00"),
+            last_statement_date=date(2026, 1, 1),  # stale relative to 1/31
+        )
+        db.scalars.return_value.all.return_value = [stale]
+
+        # Patch the journal-sum helper to return a known value
+        with patch.object(
+            svc, "_compute_balance_from_journals", return_value=Decimal("9999.99")
+        ):
+            result = svc._discover_bank_balances(
+                organization_id=uuid4(),
+                period_end_date=date(2026, 1, 31),
+            )
+
+        assert result[0][4] == Decimal("9999.99")
+
+    def test_skips_zero_balance_accounts(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        empty = self._make_account(last_statement_balance=Decimal("0"))
+        db.scalars.return_value.all.return_value = [empty]
+
+        result = svc._discover_bank_balances(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+        assert result == []
+
+    def test_skips_functional_currency_accounts(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        ngn = self._make_account(currency_code="NGN")
+        db.scalars.return_value.all.return_value = [ngn]
+
+        result = svc._discover_bank_balances(
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+        assert result == []
+
+
+class TestLookupClosingRates:
+    """Resolve closing rates for a set of currencies; warn on misses.
+
+    NOTE — adapted from plan Task 8: the plan assumed ``FXService.lookup_spot_rate``
+    returns ``Decimal | None``, but verification of
+    ``app/services/finance/platform/fx.py`` shows it is a ``@staticmethod``
+    returning a ``dict`` with key ``"rate"`` holding either a stringified
+    rate or ``None`` (when no rate is configured). The tests below patch
+    that real shape; the production code unwraps ``result["rate"]``.
+    """
+
+    def test_returns_rates_for_known_currencies(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        rate_map = {
+            "USD": {"rate": "820", "effective_date": "2026-01-31", "source": "MANUAL"},
+            "GBP": {"rate": "1050", "effective_date": "2026-01-31", "source": "MANUAL"},
+        }
+
+        with patch(
+            "app.services.finance.gl.fx_revaluation.FXService.lookup_spot_rate",
+            side_effect=lambda _db, _org, ccy, _date: rate_map[ccy],
+        ):
+            rates, warnings = svc._lookup_closing_rates(
+                organization_id=uuid4(),
+                currencies={"USD", "GBP"},
+                period_end_date=date(2026, 1, 31),
+            )
+
+        assert rates == {"USD": Decimal("820"), "GBP": Decimal("1050")}
+        assert warnings == []
+
+    def test_warns_and_omits_currencies_without_rate(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        def _fake_lookup(_db, _org, ccy, _date):
+            if ccy == "USD":
+                return {
+                    "rate": "820",
+                    "effective_date": "2026-01-31",
+                    "source": "MANUAL",
+                }
+            return {"rate": None, "message": f"No rate found for NGN/{ccy}"}
+
+        with patch(
+            "app.services.finance.gl.fx_revaluation.FXService.lookup_spot_rate",
+            side_effect=_fake_lookup,
+        ):
+            rates, warnings = svc._lookup_closing_rates(
+                organization_id=uuid4(),
+                currencies={"USD", "EUR"},
+                period_end_date=date(2026, 1, 31),
+            )
+
+        assert rates == {"USD": Decimal("820")}
+        assert any("EUR" in w for w in warnings)
+
+
+class TestComputeRevaluationLines:
+    """Pure compute: items + rates → list[FXRevaluationLine].
+
+    Plan-vs-implementation reconciliation: the plan's signature reads
+    ``period_end_date`` from a magic instance attribute
+    (``self._period_end_for_compute``) and calls ``_compute_balance_from_journals``
+    with two args. Both are bugs:
+
+    1. The instance-attribute hack is the "pass parameters via instance state"
+       anti-pattern — it forces callers to mutate ``self`` before calling a
+       compute method, which fights the type system and breaks under any
+       parallel use.
+    2. ``_compute_balance_from_journals`` was tightened in Task 7 to require
+       ``organization_id`` as the third parameter (multi-tenant safety —
+       ``JournalEntryLine`` has no org_id; we filter via the joined
+       ``JournalEntry``).
+
+    We therefore call ``_compute_revaluation_lines`` with explicit
+    ``organization_id`` and ``period_end_date`` keyword arguments. The cash
+    test's patch signature accepts the third positional ``organization_id``
+    argument so the production code's call site is exercised correctly.
+    """
+
+    def test_ar_gain_when_foreign_currency_strengthens(self):
+        """USD invoice $600 outstanding, posted at 750, closing 820.
+        Functional book value: 600*750=450,000.
+        Functional revalued:   600*820=492,000.
+        Delta: +42,000 → gain (asset increased)."""
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        control_account_id = uuid4()
+
+        lines = svc._compute_revaluation_lines(
+            ar_items=[
+                (uuid4(), control_account_id, "USD", Decimal("750"), Decimal("600")),
+            ],
+            ap_items=[],
+            cash_items=[],
+            rates={"USD": Decimal("820")},
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert len(lines) == 1
+        line = lines[0]
+        assert isinstance(line, FXRevaluationLine)
+        assert line.account_id == control_account_id
+        assert line.currency_code == "USD"
+        assert line.closing_rate == Decimal("820")
+        assert line.book_value_functional == Decimal("450000")
+        assert line.revalued_value_functional == Decimal("492000")
+        assert line.delta_functional == Decimal("42000")
+        assert line.is_gain is True
+
+    def test_ap_loss_when_foreign_currency_strengthens(self):
+        """USD bill $1000 outstanding, posted at 750, closing 820.
+        Liability went up in functional terms → loss."""
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        control_account_id = uuid4()
+
+        lines = svc._compute_revaluation_lines(
+            ar_items=[],
+            ap_items=[
+                (uuid4(), control_account_id, "USD", Decimal("750"), Decimal("1000")),
+            ],
+            cash_items=[],
+            rates={"USD": Decimal("820")},
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        line = lines[0]
+        assert line.delta_functional == Decimal("70000")  # 820000 - 750000
+        assert line.is_gain is False  # liability up = loss
+
+    def test_skips_items_in_currencies_without_rate(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        control_id = uuid4()
+
+        lines = svc._compute_revaluation_lines(
+            ar_items=[
+                (uuid4(), control_id, "EUR", Decimal("800"), Decimal("100")),
+            ],
+            ap_items=[],
+            cash_items=[],
+            rates={},  # no rate for EUR
+            organization_id=uuid4(),
+            period_end_date=date(2026, 1, 31),
+        )
+
+        assert lines == []
+
+    def test_cash_revaluation_uses_current_book_from_journals(self):
+        """Bank balance: $5,000 at posting rate captured per-receipt is
+        irrelevant; we revalue the current book value in NGN against the
+        closing-rate equivalent.
+
+        The patch accepts the same positional args the production code
+        passes: ``(gl_account_id, period_end_date, organization_id)``. If
+        the production code drops org_id from this call, the patch's
+        signature would not bind correctly — exposing the regression.
+        """
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        gl_id = uuid4()
+        org_id = uuid4()
+        period_end = date(2026, 1, 31)
+
+        captured_calls: list[tuple] = []
+
+        def fake_balance(gl_account_id, as_of_date, organization_id):
+            captured_calls.append((gl_account_id, as_of_date, organization_id))
+            return Decimal("3700000")
+
+        with patch.object(
+            svc, "_compute_balance_from_journals", side_effect=fake_balance
+        ):
+            lines = svc._compute_revaluation_lines(
+                ar_items=[],
+                ap_items=[],
+                cash_items=[(uuid4(), gl_id, "USD", None, Decimal("5000"))],
+                rates={"USD": Decimal("820")},
+                organization_id=org_id,
+                period_end_date=period_end,
+            )
+
+        line = lines[0]
+        assert line.revalued_value_functional == Decimal("4100000")  # 5000*820
+        assert line.book_value_functional == Decimal("3700000")
+        assert line.delta_functional == Decimal("400000")
+        assert line.is_gain is True
+        # The compute helper must be called with org_id + period_end_date,
+        # not with magic instance state or today's date.
+        assert captured_calls == [(gl_id, period_end, org_id)]
+
+
+class TestAggregatePerAccountCurrency:
+    """Sum deltas per (account_id, currency_code)."""
+
+    def test_aggregates_two_invoices_against_same_control_account(self):
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationService,
+        )
+
+        svc = FXRevaluationService(MagicMock())
+        control = uuid4()
+        a = FXRevaluationLine(
+            account_id=control,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("100"),
+            revalued_value_functional=Decimal("110"),
+            delta_functional=Decimal("10"),
+            is_gain=True,
+        )
+        b = FXRevaluationLine(
+            account_id=control,
+            currency_code="USD",
+            closing_rate=Decimal("820"),
+            book_value_functional=Decimal("200"),
+            revalued_value_functional=Decimal("215"),
+            delta_functional=Decimal("15"),
+            is_gain=True,
+        )
+
+        result = svc._aggregate_per_account_currency([a, b])
+
+        assert len(result) == 1
+        agg = result[0]
+        assert agg.account_id == control
+        assert agg.currency_code == "USD"
+        assert agg.delta_functional == Decimal("25")
+        assert agg.book_value_functional == Decimal("300")
+        assert agg.revalued_value_functional == Decimal("325")
+
+
+class TestDetectPriorRun:
+    """Identify active FXR-source journals for a period."""
+
+    def test_returns_empty_when_no_prior_run(self):
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        db.scalars.return_value.all.return_value = []
+
+        ids = svc._detect_prior_run(
+            organization_id=uuid4(), fiscal_period_id=uuid4()
+        )
+        assert ids == []
+
+    def test_returns_journal_ids_when_prior_run_exists(self):
+        from types import SimpleNamespace
+
+        from app.services.finance.gl.fx_revaluation import FXRevaluationService
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+
+        a, b = uuid4(), uuid4()
+        je_a = SimpleNamespace(journal_entry_id=a)
+        je_b = SimpleNamespace(journal_entry_id=b)
+        db.scalars.return_value.all.return_value = [je_a, je_b]
+
+        ids = svc._detect_prior_run(
+            organization_id=uuid4(), fiscal_period_id=uuid4()
+        )
+        assert set(ids) == {a, b}
