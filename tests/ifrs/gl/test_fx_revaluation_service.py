@@ -1521,3 +1521,79 @@ class TestPost:
 
         assert exc.value.status_code == 400
         assert "next" in exc.value.detail.lower()
+
+    def test_re_run_with_lines_but_missing_next_period_does_not_post_new_pair(self):
+        """Torn-state guard: prior pair exists, reason given, lines non-empty,
+        but next_period_start_date is None.
+
+        Post() reverses the prior pair (flushed inside the same db tx) and
+        THEN raises 400 on the missing-next-period check, before reaching
+        JournalService.create_journal. The route's db.commit() is therefore
+        never reached, and SQLAlchemy rolls back the entire transaction —
+        leaving the prior pair intact. This test pins the contract that no
+        partial new-pair is ever created in this scenario.
+        """
+        from fastapi import HTTPException
+
+        from app.services.finance.gl.fx_revaluation import (
+            FXRevaluationLine,
+            FXRevaluationPreview,
+            FXRevaluationService,
+        )
+
+        db = MagicMock()
+        svc = FXRevaluationService(db)
+        period_id = uuid4()
+        prior_a, prior_b = uuid4(), uuid4()
+        ar = uuid4()
+
+        preview = FXRevaluationPreview(
+            fiscal_period_id=period_id,
+            period_end_date=date(2026, 1, 31),
+            next_period_start_date=None,  # missing next period
+            lines=[
+                FXRevaluationLine(
+                    account_id=ar,
+                    currency_code="USD",
+                    closing_rate=Decimal("820"),
+                    book_value_functional=Decimal("100"),
+                    revalued_value_functional=Decimal("110"),
+                    delta_functional=Decimal("10"),
+                    is_gain=True,
+                )
+            ],
+            total_gain_functional=Decimal("10"),
+            prior_run_exists=True,
+            prior_journal_ids=[prior_a, prior_b],
+        )
+
+        with (
+            patch.object(svc, "preview", return_value=preview),
+            patch.object(svc, "_read_fx_account_ids", return_value=(uuid4(), uuid4())),
+            patch(
+                "app.services.finance.gl.fx_revaluation.ReversalService.create_reversal"
+            ) as rev_svc,
+            patch(
+                "app.services.finance.gl.fx_revaluation.JournalService.create_journal"
+            ) as create_jrnl,
+            patch(
+                "app.services.finance.gl.fx_revaluation.JournalService.post_journal"
+            ) as post_jrnl,
+        ):
+            with pytest.raises(HTTPException) as exc:
+                svc.post(
+                    organization_id=uuid4(),
+                    fiscal_period_id=period_id,
+                    user_id=uuid4(),
+                    reason="Re-run requested with no successor period",
+                )
+
+        # The reversal loop ran (flushes will be rolled back by the route on
+        # the propagating exception, since SQLAlchemy rolls back the tx).
+        assert rev_svc.call_count == 2
+        # Critically: NO new journal was created or posted.
+        assert create_jrnl.call_count == 0
+        assert post_jrnl.call_count == 0
+        # And the surfaced error must mention the missing next period.
+        assert exc.value.status_code == 400
+        assert "next" in exc.value.detail.lower()

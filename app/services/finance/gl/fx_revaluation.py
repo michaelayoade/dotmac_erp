@@ -616,21 +616,24 @@ class FXRevaluationService:
     def _resolve_next_period_start(
         self, organization_id: UUID, period_end_date: date
     ) -> date | None:
-        """Find the period whose ``start_date == period_end_date + 1 day``.
+        """Find the postable period whose ``start_date == period_end_date + 1 day``.
 
-        Returns ``None`` if no such period exists. Used by ``preview`` to
-        report the date the auto-reversing journal would post on; if the
-        next period doesn't yet exist, the reversal can still be created
-        on demand at post-time, but the preview will show a ``None`` here
-        so the UI can surface "next period not yet defined".
+        Returns ``None`` if no such period exists OR the next period exists
+        but is not in ``POSTABLE_PERIOD_STATUSES`` (e.g., already closed).
+        Filtering on status here keeps ``preview()`` honest: if it shows a
+        ``next_period_start_date``, the auto-reversal is actually postable
+        there. Otherwise the post-time reversal would 400 from the
+        ``ReversalService`` period guard, which the user couldn't predict
+        from the preview.
         """
         target = period_end_date + timedelta(days=1)
         stmt = select(FiscalPeriod).where(
             FiscalPeriod.organization_id == organization_id,
             FiscalPeriod.start_date == target,
+            FiscalPeriod.status.in_(self.POSTABLE_PERIOD_STATUSES),
         )
         period = self.db.scalar(stmt)
-        return period.start_date if period else None
+        return target if period else None
 
     def preview(
         self,
