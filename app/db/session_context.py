@@ -45,3 +45,28 @@ def allow_cross_org(session: Session) -> Iterator[None]:
         yield
     finally:
         session.info["allow_cross_org"] = prior
+
+
+@contextmanager
+def session_for_org(organization_id: UUID) -> Iterator[Session]:
+    """Open a primed session for non-HTTP entry points (Celery tasks, CLI
+    scripts). Yields a Session with ``organization_id`` already set on
+    ``info``. Closes the session on exit, even on exception.
+
+    For tasks that span multiple organizations (e.g., daily reminder
+    batch), call this once per org_id in the loop:
+
+        with session_for_org(org_id) as db:
+            service.process(db)
+            db.commit()
+    """
+    # Local import: SessionLocal is at module top-level of app.db; importing
+    # it here avoids a circular dependency at import time.
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        prime_session(session, organization_id)
+        yield session
+    finally:
+        session.close()
