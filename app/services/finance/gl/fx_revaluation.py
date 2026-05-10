@@ -61,11 +61,11 @@ class FXRevaluationLine:
     account_id: UUID
     currency_code: str
     closing_rate: Decimal
-    book_value_functional: Decimal       # current carrying amount in NGN
-    revalued_value_functional: Decimal   # value at closing rate, in NGN
-    delta_functional: Decimal            # revalued - book; signed
-    is_gain: bool                        # True iff delta increases asset / decreases liability
-    is_liability: bool = False           # True iff source is a liability (AP); False for AR/cash
+    book_value_functional: Decimal  # current carrying amount in NGN
+    revalued_value_functional: Decimal  # value at closing rate, in NGN
+    delta_functional: Decimal  # revalued - book; signed
+    is_gain: bool  # True iff delta increases asset / decreases liability
+    is_liability: bool = False  # True iff source is a liability (AP); False for AR/cash
 
 
 @dataclass
@@ -671,9 +671,7 @@ class FXRevaluationService:
         """
         period = self.db.get(FiscalPeriod, fiscal_period_id)
         if not period or period.organization_id != organization_id:
-            raise HTTPException(
-                status_code=404, detail="Fiscal period not found"
-            )
+            raise HTTPException(status_code=404, detail="Fiscal period not found")
         if period.status not in self.POSTABLE_PERIOD_STATUSES:
             raise HTTPException(
                 status_code=400,
@@ -687,15 +685,9 @@ class FXRevaluationService:
         self._read_fx_account_ids(organization_id)
 
         # Discover monetary items in non-functional currency
-        ar_items = self._discover_ar_open_invoices(
-            organization_id, period.end_date
-        )
-        ap_items = self._discover_ap_open_invoices(
-            organization_id, period.end_date
-        )
-        cash_items = self._discover_bank_balances(
-            organization_id, period.end_date
-        )
+        ar_items = self._discover_ar_open_invoices(organization_id, period.end_date)
+        ap_items = self._discover_ap_open_invoices(organization_id, period.end_date)
+        cash_items = self._discover_bank_balances(organization_id, period.end_date)
 
         # Collect currencies in scope (item[2] is currency_code in all three)
         currencies: set[str] = set()
@@ -733,9 +725,7 @@ class FXRevaluationService:
         )
 
         # Detect prior FXR runs for this period (active statuses only)
-        prior_journal_ids = self._detect_prior_run(
-            organization_id, fiscal_period_id
-        )
+        prior_journal_ids = self._detect_prior_run(organization_id, fiscal_period_id)
 
         # Resolve next-period start date for the auto-reversing journal
         next_period_start = self._resolve_next_period_start(
@@ -890,8 +880,7 @@ class FXRevaluationService:
             entry_date=reversal_date,
             posting_date=reversal_date,
             description=(
-                f"Reversal of {original_journal_number}: "
-                f"period-end FX revaluation"
+                f"Reversal of {original_journal_number}: period-end FX revaluation"
             ),
             source_module=self.SOURCE_MODULE,
             correlation_id=period_end_input.correlation_id,
@@ -965,9 +954,7 @@ class FXRevaluationService:
         # prior pair has already been reversed above.
         if not preview.lines:
             if reversed_ids:
-                msg = (
-                    "Prior revaluation reversed; no new items to revalue."
-                )
+                msg = "Prior revaluation reversed; no new items to revalue."
             else:
                 msg = (
                     "Nothing to revalue: no foreign-currency monetary "
@@ -994,9 +981,7 @@ class FXRevaluationService:
 
         # 5. Read FX accounts (raises 400 if unset; preview already did
         # this but it's cheap and keeps post() self-contained).
-        gain_account_id, loss_account_id = self._read_fx_account_ids(
-            organization_id
-        )
+        gain_account_id, loss_account_id = self._read_fx_account_ids(organization_id)
 
         # 6. Build and post the new period-end journal
         correlation_id = str(_new_uuid())
@@ -1007,8 +992,7 @@ class FXRevaluationService:
                 f"FX revaluation as at {preview.period_end_date}. "
                 f"Rates used: "
                 + ", ".join(
-                    f"{ccy}={rate}"
-                    for ccy, rate in sorted(preview.rates_used.items())
+                    f"{ccy}={rate}" for ccy, rate in sorted(preview.rates_used.items())
                 )
             ),
             fx_gain_account_id=gain_account_id,

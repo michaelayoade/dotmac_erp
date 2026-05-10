@@ -203,9 +203,7 @@ class TestReadFxAccountIds:
             # Inspect the compiled SELECT's WHERE parameters to pick the
             # right row. We stringify with literal_binds so UUID + string
             # values appear in-line and we can match them.
-            compiled = str(
-                stmt.compile(compile_kwargs={"literal_binds": True})
-            )
+            compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
             for (org_id, key), row in rows_by_org_and_key.items():
                 if str(org_id) in compiled and key in compiled:
                     return row
@@ -246,9 +244,7 @@ class TestDiscoverArOpenInvoices:
     def _force_functional_ngn(self, monkeypatch):
         from app.services.finance.gl import fx_revaluation as mod
 
-        monkeypatch.setattr(
-            mod.app_settings, "default_functional_currency_code", "NGN"
-        )
+        monkeypatch.setattr(mod.app_settings, "default_functional_currency_code", "NGN")
 
     def _make_invoice(self, **overrides):
         from types import SimpleNamespace
@@ -345,9 +341,7 @@ class TestDiscoverApOpenInvoices:
     def _force_functional_ngn(self, monkeypatch):
         from app.services.finance.gl import fx_revaluation as mod
 
-        monkeypatch.setattr(
-            mod.app_settings, "default_functional_currency_code", "NGN"
-        )
+        monkeypatch.setattr(mod.app_settings, "default_functional_currency_code", "NGN")
 
     def _make_invoice(self, **overrides):
         from types import SimpleNamespace
@@ -449,9 +443,7 @@ class TestDiscoverApOpenInvoices:
         # gl_impacting (POSTED, PARTIALLY_PAID, PAID), and explicitly NOT
         # the unbooked APPROVED status.
         compiled = str(
-            captured_statements[0].compile(
-                compile_kwargs={"literal_binds": True}
-            )
+            captured_statements[0].compile(compile_kwargs={"literal_binds": True})
         )
         # APPROVED must not appear in the IN-clause (it would be a bug)
         assert "'APPROVED'" not in compiled, (
@@ -477,9 +469,7 @@ class TestDiscoverBankBalances:
     def _force_functional_ngn(self, monkeypatch):
         from app.services.finance.gl import fx_revaluation as mod
 
-        monkeypatch.setattr(
-            mod.app_settings, "default_functional_currency_code", "NGN"
-        )
+        monkeypatch.setattr(mod.app_settings, "default_functional_currency_code", "NGN")
 
     def _make_account(self, **overrides):
         from types import SimpleNamespace
@@ -947,9 +937,7 @@ class TestDetectPriorRun:
         svc = FXRevaluationService(db)
         db.scalars.return_value.all.return_value = []
 
-        ids = svc._detect_prior_run(
-            organization_id=uuid4(), fiscal_period_id=uuid4()
-        )
+        ids = svc._detect_prior_run(organization_id=uuid4(), fiscal_period_id=uuid4())
         assert ids == []
 
     def test_returns_journal_ids_when_prior_run_exists(self):
@@ -965,9 +953,7 @@ class TestDetectPriorRun:
         je_b = SimpleNamespace(journal_entry_id=b)
         db.scalars.return_value.all.return_value = [je_a, je_b]
 
-        ids = svc._detect_prior_run(
-            organization_id=uuid4(), fiscal_period_id=uuid4()
-        )
+        ids = svc._detect_prior_run(organization_id=uuid4(), fiscal_period_id=uuid4())
         assert set(ids) == {a, b}
 
 
@@ -1110,7 +1096,9 @@ class TestBuildJournalInput:
         )
 
         # Debit AR control 42000, credit FX Gain 42000
-        debits = [(l.account_id, l.debit_amount) for l in ji.lines if l.debit_amount > 0]
+        debits = [
+            (l.account_id, l.debit_amount) for l in ji.lines if l.debit_amount > 0
+        ]
         credits = [
             (l.account_id, l.credit_amount) for l in ji.lines if l.credit_amount > 0
         ]
@@ -1148,7 +1136,9 @@ class TestBuildJournalInput:
             correlation_id="abc",
         )
 
-        debits = [(l.account_id, l.debit_amount) for l in ji.lines if l.debit_amount > 0]
+        debits = [
+            (l.account_id, l.debit_amount) for l in ji.lines if l.debit_amount > 0
+        ]
         credits = [
             (l.account_id, l.credit_amount) for l in ji.lines if l.credit_amount > 0
         ]
@@ -1196,9 +1186,7 @@ class TestBuildJournalInput:
         )
 
         # Two debits to AR controls (10 + 15) + one credit to FX Gain (25)
-        gain_credits = [
-            l.credit_amount for l in ji.lines if l.account_id == gain_a
-        ]
+        gain_credits = [l.credit_amount for l in ji.lines if l.account_id == gain_a]
         assert sum(gain_credits) == Decimal("25")
         # No FX Loss line should exist (no losses)
         assert all(l.account_id != loss_a for l in ji.lines)
@@ -1218,10 +1206,24 @@ class TestBuildJournalInput:
 
         ji = svc._build_journal_input(
             lines=[
-                FXRevaluationLine(ar, "USD", Decimal("820"), Decimal("100"),
-                                  Decimal("110"), Decimal("10"), True),
-                FXRevaluationLine(ap, "GBP", Decimal("1050"), Decimal("200"),
-                                  Decimal("220"), Decimal("20"), False),
+                FXRevaluationLine(
+                    ar,
+                    "USD",
+                    Decimal("820"),
+                    Decimal("100"),
+                    Decimal("110"),
+                    Decimal("10"),
+                    True,
+                ),
+                FXRevaluationLine(
+                    ap,
+                    "GBP",
+                    Decimal("1050"),
+                    Decimal("200"),
+                    Decimal("220"),
+                    Decimal("20"),
+                    False,
+                ),
             ],
             posting_date=date(2026, 1, 31),
             description="FX revaluation",
@@ -1427,6 +1429,7 @@ class TestPost:
 
         # Mock created journals (returned by JournalService.create_journal)
         from types import SimpleNamespace
+
         created_pe = SimpleNamespace(
             journal_entry_id=uuid4(),
             journal_number="JE-FX-1",
@@ -1438,7 +1441,9 @@ class TestPost:
 
         with (
             patch.object(svc, "preview", return_value=preview),
-            patch.object(svc, "_read_fx_account_ids", return_value=(gain_acct, loss_acct)),
+            patch.object(
+                svc, "_read_fx_account_ids", return_value=(gain_acct, loss_acct)
+            ),
             patch(
                 "app.services.finance.gl.fx_revaluation.ReversalService.create_reversal"
             ) as rev_svc,
