@@ -107,10 +107,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/finance/ap/goods_receipt_form.html": {
-    "nameless": 0,
-    "unlabeled": 6
-  },
   "templates/finance/ap/invoice_detail.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -130,10 +126,6 @@
   "templates/finance/ar/sales_order_detail.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/finance/ar/sales_order_form.html": {
-    "nameless": 0,
-    "unlabeled": 6
   },
   "templates/finance/ar/shipment_form.html": {
     "nameless": 0,
@@ -607,10 +599,6 @@
     "nameless": 0,
     "unlabeled": 3
   },
-  "templates/people/recruit/job_opening_form.html": {
-    "nameless": 0,
-    "unlabeled": 7
-  },
   "templates/people/recruit/job_openings.html": {
     "nameless": 0,
     "unlabeled": 2
@@ -737,11 +725,7 @@
   },
   "templates/projects/tasks/list.html": {
     "nameless": 1,
-    "unlabeled": 7
-  },
-  "templates/projects/team.html": {
-    "nameless": 0,
-    "unlabeled": 7
+    "unlabeled": 0
   },
   "templates/projects/templates/form.html": {
     "nameless": 0,

@@ -59,7 +59,7 @@
                     <label class="form-label">
                         Purchase Order <span class="text-rose-500">*</span>
                     </label>
-                    <select x-model="formData.po_id" required class="form-select" @change="onPOChange">
+                    <select aria-label="Purchase Order" x-model="formData.po_id" required class="form-select" @change="onPOChange">
                         <option value="">Select purchase order</option>
                         {% for po in po_list %}
                         <option value="{{ po.po_id }}"
@@ -76,14 +76,14 @@
                     <label class="form-label">
                         Receipt Date <span class="text-rose-500">*</span>
                     </label>
-                    <input type="date" x-model="formData.receipt_date" required class="form-input">
+                    <input aria-label="Receipt Date" type="date" x-model="formData.receipt_date" required class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">
                         Warehouse <span class="text-rose-500">*</span>
                     </label>
-                    <select x-model="formData.warehouse_id" class="form-select" required>
+                    <select aria-label="Warehouse" x-model="formData.warehouse_id" class="form-select" required>
                         <option value="">Select warehouse</option>
                         {% for w in warehouse_list %}
                         <option value="{{ w.warehouse_id }}">{{ w.warehouse_code }} - {{ w.warehouse_name }}</option>
@@ -94,7 +94,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Notes</label>
-                    <textarea x-model="formData.notes" rows="2" class="form-input resize-none" placeholder="Receiving notes, delivery details, etc."></textarea>
+                    <textarea aria-label="Notes" x-model="formData.notes" rows="2" class="form-input resize-none" placeholder="Receiving notes, delivery details, etc."></textarea>
                 </div>
             </div>
         </div>
@@ -137,7 +137,7 @@
                                 <td class="table-cell-amount text-slate-600 dark:text-slate-300" x-text="line.quantity_received"></td>
                                 <td class="table-cell-amount text-blue-600 dark:text-blue-400" x-text="line.quantity_remaining"></td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Quantity" type="number"
                                            x-model.number="line.quantity_to_receive"
                                            :max="line.quantity_remaining"
                                            min="0"
@@ -145,7 +145,7 @@
                                            class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 </td>
                                 <td>
-                                    <input type="text"
+                                    <input aria-label="Optional" type="text"
                                            x-model="line.lot_number"
                                            placeholder="Optional"
                                            class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">

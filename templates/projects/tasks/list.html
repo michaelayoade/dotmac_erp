@@ -52,7 +52,7 @@
             active_filters=active_filters | default([])
         ) %}
         <div>
-            <select name="status"
+            <select aria-label="Filter by status" name="status"
                     class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 <option value="">All Statuses</option>
                 {% for s in statuses %}
@@ -61,7 +61,7 @@
             </select>
         </div>
         <div>
-            <select name="priority"
+            <select aria-label="Filter by priority" name="priority"
                     class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 <option value="">All Priorities</option>
                 {% for p in priorities %}
@@ -100,7 +100,7 @@
             <form method="post" action="/projects/{{ project.project_code }}/tasks/bulk-status" class="flex items-center gap-2">
                 {{ request.state.csrf_form | safe }}
                 <input type="hidden" name="task_ids" :value="selectedTasks.join(',')">
-                <select name="status" class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
+                <select aria-label="Change status for selected tasks" name="status" class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                     <option value="">Change status...</option>
                     {% for s in statuses %}
                     <option value="{{ s }}">{{ s }}</option>
@@ -134,7 +134,7 @@
             <thead class="bg-slate-50 dark:bg-slate-800/50">
                 <tr>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                        <input type="checkbox" x-model="selectAll"
+                        <input aria-label="Select all tasks" type="checkbox" x-model="selectAll"
                                @change="selectedTasks = selectAll ? [{% for task in tasks %}'{{ task.task_id }}'{% if not loop.last %},{% endif %}{% endfor %}] : []"
                                class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
                     </th>
@@ -155,7 +155,7 @@
                         <!-- Parent Task Row -->
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <td class="px-4 py-4">
-                                <input type="checkbox" :value="'{{ task.task_id }}'"
+                                <input aria-label="Select task" type="checkbox" :value="'{{ task.task_id }}'"
                                        x-model="selectedTasks"
                                        class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
                             </td>
@@ -229,7 +229,7 @@
                         <tr x-show="expandedTasks['{{ task.task_id }}']" x-cloak
                             class="bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
                             <td class="px-4 py-3">
-                                <input type="checkbox" :value="'{{ subtask.task_id }}'"
+                                <input aria-label="Select subtask" type="checkbox" :value="'{{ subtask.task_id }}'"
                                        x-model="selectedTasks"
                                        class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
                             </td>
@@ -291,7 +291,7 @@
                         {% for task in tasks %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <td class="px-4 py-4">
-                                <input type="checkbox" :value="'{{ task.task_id }}'"
+                                <input aria-label="Select task" type="checkbox" :value="'{{ task.task_id }}'"
                                        x-model="selectedTasks"
                                        class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
                             </td>

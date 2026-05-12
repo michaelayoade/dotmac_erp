@@ -37,14 +37,14 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="job_code" class="form-label required">Job Code</label>
-                        <input type="text" name="job_code" id="job_code"
+                        <input aria-label="JOB-001" type="text" name="job_code" id="job_code"
                             value="{{ opening.job_code if opening else form_data.job_code | default('', true) }}"
                             required class="form-input w-full"
                             placeholder="JOB-001">
                     </div>
                     <div>
                         <label for="job_title" class="form-label required">Job Title</label>
-                        <input type="text" name="job_title" id="job_title"
+                        <input aria-label="Software Engineer" type="text" name="job_title" id="job_title"
                             value="{{ opening.job_title if opening else form_data.job_title | default('', true) }}"
                             required class="form-input w-full"
                             placeholder="Software Engineer">
@@ -103,7 +103,7 @@
                         <label for="location_entry" class="form-label">Locations</label>
                         <input type="hidden" name="location" :value="locations.join(', ')">
                         <div class="flex gap-2">
-                            <input type="text" id="location_entry"
+                            <input aria-label="Lagos, Abuja, Remote" type="text" id="location_entry"
                                 x-model="newLocation"
                                 @keydown.enter.prevent="addLocation()"
                                 class="form-input w-full"
@@ -164,14 +164,14 @@
                     </div>
                     <div>
                         <label for="min_salary" class="form-label">Min Salary</label>
-                        <input type="number" name="min_salary" id="min_salary" step="0.01" min="0"
+                        <input aria-label="0.00" type="number" name="min_salary" id="min_salary" step="0.01" min="0"
                             value="{{ opening.min_salary if opening else form_data.min_salary | default('', true) }}"
                             class="form-input w-full"
                             placeholder="0.00">
                     </div>
                     <div>
                         <label for="max_salary" class="form-label">Max Salary</label>
-                        <input type="number" name="max_salary" id="max_salary" step="0.01" min="0"
+                        <input aria-label="0.00" type="number" name="max_salary" id="max_salary" step="0.01" min="0"
                             value="{{ opening.max_salary if opening else form_data.max_salary | default('', true) }}"
                             class="form-input w-full"
                             placeholder="0.00">
@@ -219,19 +219,19 @@
 
                 <div>
                     <label for="required_skills" class="form-label">Required Skills <span class="text-rose-500">*</span></label>
-                    <textarea name="required_skills" id="required_skills" rows="3" class="form-input w-full"
+                    <textarea aria-label="List required skills, one per line" name="required_skills" id="required_skills" rows="3" class="form-input w-full"
                         placeholder="List required skills, one per line">{{ opening.required_skills if opening else form_data.required_skills | default('', true) }}</textarea>
                 </div>
 
                 <div>
                     <label for="preferred_skills" class="form-label">Preferred Skills</label>
-                    <textarea name="preferred_skills" id="preferred_skills" rows="3" class="form-input w-full"
+                    <textarea aria-label="List preferred skills, one per line" name="preferred_skills" id="preferred_skills" rows="3" class="form-input w-full"
                         placeholder="List preferred skills, one per line">{{ opening.preferred_skills if opening else form_data.preferred_skills | default('', true) }}</textarea>
                 </div>
 
                 <div>
                     <label for="education_requirements" class="form-label">Education Requirements</label>
-                    <textarea name="education_requirements" id="education_requirements" rows="2" class="form-input w-full"
+                    <textarea aria-label="Required educational qualifications" name="education_requirements" id="education_requirements" rows="2" class="form-input w-full"
                         placeholder="Required educational qualifications">{{ opening.education_requirements if opening else form_data.education_requirements | default('', true) }}</textarea>
                 </div>
             </div>
@@ -243,7 +243,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Job Description</h3>
             </div>
             <div class="card-body">
-                <textarea name="description" id="description" rows="6" class="form-input w-full"
+                <textarea aria-label="Full job description, responsibilities, and expectations" name="description" id="description" rows="6" class="form-input w-full"
                     placeholder="Full job description, responsibilities, and expectations">{{ opening.description if opening else form_data.description | default('', true) }}</textarea>
             </div>
         </div>
@@ -273,11 +273,11 @@
                         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                             <div>
                                 <label class="form-label required">Label</label>
-                                <input type="text" class="form-input w-full" x-model="field.label" placeholder="Email address">
+                                <input aria-label="Email address" type="text" class="form-input w-full" x-model="field.label" placeholder="Email address">
                             </div>
                             <div>
                                 <label class="form-label required">Type</label>
-                                <select class="form-select w-full" x-model="field.field_type">
+                                <select aria-label="Type" class="form-select w-full" x-model="field.field_type">
                                     <template x-for="type in fieldTypes" :key="type.value">
                                         <option :value="type.value" x-text="type.label"></option>
                                     </template>
@@ -285,7 +285,7 @@
                             </div>
                             <div>
                                 <label class="form-label">System Mapping</label>
-                                <select class="form-select w-full" x-model="field.system_mapping">
+                                <select aria-label="System Mapping" class="form-select w-full" x-model="field.system_mapping">
                                     <option value="">None</option>
                                     <option value="display_name">Applicant Display Name</option>
                                     <option value="first_name">Applicant First Name</option>
@@ -297,13 +297,13 @@
                             </div>
                             <div>
                                 <label class="form-label">Placeholder</label>
-                                <input type="text" class="form-input w-full" x-model="field.placeholder">
+                                <input aria-label="Placeholder" type="text" class="form-input w-full" x-model="field.placeholder">
                             </div>
                         </div>
 
                         <div class="mt-3">
                             <label class="form-label">Help Text</label>
-                            <input type="text" class="form-input w-full" x-model="field.help_text">
+                            <input aria-label="Help Text" type="text" class="form-input w-full" x-model="field.help_text">
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-4">
@@ -325,7 +325,7 @@
                             <div class="space-y-2">
                                 <template x-for="(option, optionIndex) in field.options" :key="option.uid">
                                     <div class="flex items-center gap-2">
-                                        <input type="text" class="form-input w-full" x-model="option.label" placeholder="Lagos">
+                                        <input aria-label="Options" type="text" class="form-input w-full" x-model="option.label" placeholder="Lagos">
                                         <button type="button" class="btn btn-ghost btn-sm" @click="field.options.splice(optionIndex, 1)">
                                             {{ icon_svg("trash", "h-4 w-4") }}
                                         </button>

@@ -73,7 +73,7 @@
                 <!-- Exchange Rate -->
                 <div>
                     <label for="exchange_rate" class="form-label">Exchange Rate</label>
-                    <input type="text" id="exchange_rate" name="exchange_rate" x-model="form.exchange_rate"
+                    <input aria-label="1.0" type="text" id="exchange_rate" name="exchange_rate" x-model="form.exchange_rate"
                            class="form-input font-mono tabular-nums" placeholder="1.0">
                     <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
@@ -127,7 +127,7 @@
                 <!-- Ship To Name -->
                 <div>
                     <label for="ship_to_name" class="form-label">Ship To Name</label>
-                    <input type="text" id="ship_to_name" name="ship_to_name" x-model="form.ship_to_name"
+                    <input aria-label="Recipient name" type="text" id="ship_to_name" name="ship_to_name" x-model="form.ship_to_name"
                            maxlength="100" placeholder="Recipient name" class="form-input">
                 </div>
 
@@ -155,35 +155,35 @@
                 <!-- Address -->
                 <div class="sm:col-span-2 lg:col-span-3">
                     <label for="ship_to_address" class="form-label">Address</label>
-                    <input type="text" id="ship_to_address" name="ship_to_address" x-model="form.ship_to_address"
+                    <input aria-label="Street address" type="text" id="ship_to_address" name="ship_to_address" x-model="form.ship_to_address"
                            maxlength="255" placeholder="Street address" class="form-input">
                 </div>
 
                 <!-- City -->
                 <div>
                     <label for="ship_to_city" class="form-label">City</label>
-                    <input type="text" id="ship_to_city" name="ship_to_city" x-model="form.ship_to_city"
+                    <input aria-label="City" type="text" id="ship_to_city" name="ship_to_city" x-model="form.ship_to_city"
                            maxlength="100" placeholder="City" class="form-input">
                 </div>
 
                 <!-- State -->
                 <div>
                     <label for="ship_to_state" class="form-label">State/Province</label>
-                    <input type="text" id="ship_to_state" name="ship_to_state" x-model="form.ship_to_state"
+                    <input aria-label="State" type="text" id="ship_to_state" name="ship_to_state" x-model="form.ship_to_state"
                            maxlength="100" placeholder="State" class="form-input">
                 </div>
 
                 <!-- Postal Code -->
                 <div>
                     <label for="ship_to_postal_code" class="form-label">Postal Code</label>
-                    <input type="text" id="ship_to_postal_code" name="ship_to_postal_code" x-model="form.ship_to_postal_code"
+                    <input aria-label="Postal code" type="text" id="ship_to_postal_code" name="ship_to_postal_code" x-model="form.ship_to_postal_code"
                            maxlength="20" placeholder="Postal code" class="form-input">
                 </div>
 
                 <!-- Country -->
                 <div>
                     <label for="ship_to_country" class="form-label">Country</label>
-                    <input type="text" id="ship_to_country" name="ship_to_country" x-model="form.ship_to_country"
+                    <input aria-label="Country" type="text" id="ship_to_country" name="ship_to_country" x-model="form.ship_to_country"
                            maxlength="100" placeholder="Country" class="form-input">
                 </div>
             </div>
@@ -220,10 +220,10 @@
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr class="border-b border-slate-100 dark:border-slate-800">
                                 <td class="py-2 pr-2">
-                                    <input type="text" x-model="line.item_code" placeholder="SKU" list="item-code-list" required class="form-input text-sm py-1.5">
+                                    <input aria-label="SKU" type="text" x-model="line.item_code" placeholder="SKU" list="item-code-list" required class="form-input text-sm py-1.5">
                                 </td>
                                 <td class="py-2 px-2">
-                                    <select x-model="line.revenue_account_id" required class="form-input form-select text-sm py-1.5">
+                                    <select aria-label="Revenue account" x-model="line.revenue_account_id" required class="form-input form-select text-sm py-1.5">
                                         <option value="">Account</option>
                                         {% for account in revenue_accounts %}
                                         <option value="{{ account.account_id }}">{{ account.name }} ({{ account.code }})</option>
@@ -237,18 +237,18 @@
                                     </select>
                                 </td>
                                 <td class="py-2 px-2">
-                                    <input type="text" x-model="line.description" required placeholder="Description" class="form-input text-sm py-1.5">
+                                    <input aria-label="Description" type="text" x-model="line.description" required placeholder="Description" class="form-input text-sm py-1.5">
                                 </td>
                                 <td class="py-2 px-2">
-                                    <input type="number" x-model.number="line.quantity" @input="calculateLine(index)"
+                                    <input aria-label="Quantity" type="number" x-model.number="line.quantity" @input="calculateLine(index)"
                                            required min="0.01" step="0.01" class="form-input text-sm py-1.5 text-right">
                                 </td>
                                 <td class="py-2 px-2">
-                                    <input type="number" x-model.number="line.unit_price" @input="calculateLine(index)"
+                                    <input aria-label="Unit price" type="number" x-model.number="line.unit_price" @input="calculateLine(index)"
                                            required min="0" step="0.01" class="form-input text-sm py-1.5 text-right">
                                 </td>
                                 <td class="py-2 px-2">
-                                    <select x-model="line.tax_code_id" @change="calculateLine(index)" class="form-input form-select text-sm py-1.5">
+                                    <select aria-label="Tax code" x-model="line.tax_code_id" @change="calculateLine(index)" class="form-input form-select text-sm py-1.5">
                                         <option value="">No Tax</option>
                                         {% for tax in tax_codes %}
                                         <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}">{{ tax.code }} ({{ tax.rate }}%)</option>
@@ -311,14 +311,14 @@
                 <!-- Customer Notes -->
                 <div>
                     <label for="customer_notes" class="form-label">Customer Notes</label>
-                    <textarea id="customer_notes" name="customer_notes" x-model="form.customer_notes" rows="3"
+                    <textarea aria-label="Notes visible to customer" id="customer_notes" name="customer_notes" x-model="form.customer_notes" rows="3"
                               placeholder="Notes visible to customer" class="form-input resize-none"></textarea>
                 </div>
 
                 <!-- Internal Notes -->
                 <div>
                     <label for="internal_notes" class="form-label">Internal Notes</label>
-                    <textarea id="internal_notes" name="internal_notes" x-model="form.internal_notes" rows="3"
+                    <textarea aria-label="Internal notes only" id="internal_notes" name="internal_notes" x-model="form.internal_notes" rows="3"
                               placeholder="Internal notes only" class="form-input resize-none"></textarea>
                 </div>
             </div>
