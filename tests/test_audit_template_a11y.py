@@ -92,6 +92,26 @@ def test_input_outside_label_block_is_flagged() -> None:
     assert len(results) == 1
 
 
+def test_strip_jinja_comments_preserves_line_numbers(tmp_path) -> None:
+    """Jinja `{# ... #}` blocks contain doc/example HTML that's never rendered.
+
+    The replacement should preserve line breaks so violation line numbers
+    in the rest of the file remain accurate.
+    """
+    f = tmp_path / "t.html"
+    f.write_text(
+        "{# Usage example:\n"
+        '   <input type="text" name="example">\n'
+        "#}\n"
+        '<input type="text" name="real_violation">\n'
+    )
+    findings = audit_module.scan_file(f)
+    # Only the real input outside the comment should be flagged
+    assert len(findings["unlabeled_controls"]) == 1
+    line, _ = findings["unlabeled_controls"][0]
+    assert line == 4  # the real input is on line 4
+
+
 # Icon-action detection
 def test_button_with_visible_text_is_not_flagged() -> None:
     html = "<button><svg></svg> Save</button>"

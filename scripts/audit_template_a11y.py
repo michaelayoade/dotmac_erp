@@ -54,6 +54,17 @@ RE_SVG_OR_ICON = re.compile(r"<svg\b|\bicon_svg\s*\(", re.IGNORECASE)
 RE_NAME_TOKEN = re.compile(
     r"""\bname\s*=\s*['"]?(?:_token|csrf_token|csrfmiddlewaretoken)""", re.IGNORECASE
 )
+# Jinja2 line comment `{# ... #}` — content inside is not rendered HTML.
+RE_JINJA_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
+
+
+def _strip_jinja_comments(text: str) -> str:
+    """Replace Jinja2 `{# ... #}` blocks with equal-length whitespace.
+
+    Equal-length replacement keeps character offsets / line numbers stable
+    so violations point at the right line in the original file.
+    """
+    return RE_JINJA_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
 
 
 def has_inner_text(inner_html: str) -> bool:
@@ -182,7 +193,7 @@ def find_nameless_icon_actions(text: str) -> list[tuple[int, str]]:
 
 
 def scan_file(path: Path) -> dict[str, list[tuple[int, str]]]:
-    text = path.read_text()
+    text = _strip_jinja_comments(path.read_text())
     return {
         "unlabeled_controls": find_unlabeled_controls(text),
         "nameless_icon_actions": find_nameless_icon_actions(text),

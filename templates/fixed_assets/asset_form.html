@@ -91,7 +91,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Asset Number</label>
-                    <input type="text"
+                    <input aria-label="Asset Number" type="text"
                            name="asset_number"
                            value="{{ form_asset_number or '' }}"
                            {{ 'disabled' if is_edit and not is_pre_use_asset else '' }}
@@ -109,7 +109,7 @@
                     <label class="form-label">
                         Asset Name <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Asset Name" type="text"
                            name="asset_name"
                            value="{{ form_asset_name or '' }}"
                            {{ 'required' if is_pre_use_asset else 'disabled' }}
@@ -126,7 +126,7 @@
                     <label class="form-label">
                         Category <span class="text-rose-500">*</span>
                     </label>
-                    <select name="category_id" {{ 'required' if is_pre_use_asset else 'disabled' }} class="form-select">
+                    <select aria-label="Category" name="category_id" {{ 'required' if is_pre_use_asset else 'disabled' }} class="form-select">
                         <option value="">Select category</option>
                         {% set selected_category = form_category_id if form_category_id is defined else '' %}
                         {% for category in categories %}
@@ -142,7 +142,7 @@
 
                 <div>
                     <label class="form-label">Location</label>
-                    <select name="location_id" class="form-select">
+                    <select aria-label="Location" name="location_id" class="form-select">
                         <option value="">Select location</option>
                         {% set selected_location = form_location_id if form_location_id is defined else '' %}
                         {% for location in locations_list %}
@@ -156,7 +156,7 @@
                 <div>
                     <label class="form-label">Department</label>
                     {% set selected_department = form_department_id if form_department_id is defined else (selected_department_id if selected_department_id is defined else '') %}
-                    <select id="asset-department-select" name="department_id" class="form-select">
+                    <select aria-label="Department" id="asset-department-select" name="department_id" class="form-select">
                         <option value="">Select department</option>
                         {% for department in departments_list %}
                         <option value="{{ department.department_id }}" {{ 'selected' if selected_department == department.department_id else '' }}>
@@ -169,7 +169,7 @@
 
                 <div>
                     <label class="form-label">Assign To</label>
-                    <select id="asset-custodian-select" name="custodian_employee_id" class="form-select">
+                    <select aria-label="Assign To" id="asset-custodian-select" name="custodian_employee_id" class="form-select">
                         <option value="">Select employee</option>
                     </select>
                     <p class="form-hint">Optional. This links the asset to the employee currently responsible for it.</p>
@@ -177,7 +177,7 @@
 
                 <div>
                     <label class="form-label">Serial Number</label>
-                    <input type="text"
+                    <input aria-label="Serial Number" type="text"
                            name="serial_number"
                            value="{{ form_serial_number or '' }}"
                            maxlength="100"
@@ -189,7 +189,7 @@
                 <div>
                     <label class="form-label">Status</label>
                     {% set selected_status = form_status if form_status is defined and form_status else 'NOT_IN_USE' %}
-                    <select name="status" class="form-select">
+                    <select aria-label="Status" name="status" class="form-select">
                         {% for option in asset_statuses %}
                         <option value="{{ option.value }}" {{ 'selected' if option.value == selected_status else '' }}>
                             {{ option.label }}
@@ -203,7 +203,7 @@
                     <label class="form-label">
                         Depreciation Schedule
                     </label>
-                    <select name="depreciation_schedule_id" class="form-select">
+                    <select aria-label="Depreciation Schedule" name="depreciation_schedule_id" class="form-select">
                         <option value="">Use category default</option>
                         {% for schedule in depreciation_schedules %}
                         <option value="{{ schedule.schedule_id }}" {{ 'selected' if selected_depreciation_schedule_id == schedule.schedule_id else '' }}>
@@ -216,7 +216,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description"
+                    <textarea aria-label="Description" name="description"
                               rows="3"
                               placeholder="Add notes about the asset"
                               class="form-input resize-none">{{ form_description if form_description is defined else '' }}</textarea>
@@ -242,7 +242,7 @@
                     <label class="form-label">
                         Acquisition Date <span class="text-rose-500">*</span>
                     </label>
-                    <input type="date"
+                    <input aria-label="Acquisition Date" type="date"
                            name="acquisition_date"
                            value="{{ form_acquisition_date if form_acquisition_date is defined and form_acquisition_date else today }}"
                            {{ 'required' if is_pre_use_asset else '' }}
@@ -257,7 +257,7 @@
                     <label class="form-label">
                         Acquisition Cost <span class="text-rose-500">*</span>
                     </label>
-                    <input type="number"
+                    <input aria-label="Acquisition Cost" type="number"
                            name="acquisition_cost"
                            step="0.01"
                            min="0"
@@ -275,7 +275,7 @@
                     <label class="form-label">
                         Currency <span class="text-rose-500">*</span>
                     </label>
-                    <select name="currency_code" {{ 'required' if is_pre_use_asset else '' }} {{ 'disabled' if is_edit and not is_pre_use_asset else '' }} class="form-select">
+                    <select aria-label="Currency" name="currency_code" {{ 'required' if is_pre_use_asset else '' }} {{ 'disabled' if is_edit and not is_pre_use_asset else '' }} class="form-select">
                         {% set selected_currency = form_currency_code if form_currency_code is defined else default_currency_code %}
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>

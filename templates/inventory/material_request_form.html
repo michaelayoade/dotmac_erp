@@ -76,7 +76,7 @@
             <div class="grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label required">Request Type</label>
-                    <select name="request_type" x-model="requestType" required class="form-input form-select">
+                    <select aria-label="Request Type" name="request_type" x-model="requestType" required class="form-input form-select">
                         <option value="PURCHASE" {% if material_request and material_request.request_type == 'PURCHASE' %}selected{% endif %}>Purchase</option>
                         <option value="TRANSFER" {% if material_request and material_request.request_type == 'TRANSFER' %}selected{% endif %}>Material Transfer</option>
                         <option value="ISSUE" {% if material_request and material_request.request_type == 'ISSUE' %}selected{% endif %}>Material Issue</option>
@@ -89,14 +89,14 @@
                 </div>
                 <div>
                     <label class="form-label required">Schedule Date</label>
-                    <input type="date" name="schedule_date" value="{{ material_request.schedule_date if material_request else today }}" required class="form-input">
+                    <input aria-label="Schedule Date" type="date" name="schedule_date" value="{{ material_request.schedule_date if material_request else today }}" required class="form-input">
                     <p class="text-xs text-slate-400 mt-1">Date when items are required</p>
                 </div>
             </div>
             <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-6">
                 <div>
                     <label class="form-label" x-text="requestType === 'TRANSFER' ? 'Default Source Warehouse' : 'Default Warehouse'"></label>
-                    <select name="default_warehouse_id" class="form-input form-select">
+                    <select aria-label="Default warehouse" name="default_warehouse_id" class="form-input form-select">
                         <option value="">Select warehouse...</option>
                         {% for wh in warehouses %}
                         <option value="{{ wh.warehouse_id }}" {% if material_request and material_request.default_warehouse_id == wh.warehouse_id %}selected{% endif %}>
@@ -108,7 +108,7 @@
                 </div>
                 <div x-show="requestType === 'TRANSFER'" x-cloak>
                     <label class="form-label required">Destination Warehouse</label>
-                    <select name="transfer_to_warehouse_id" class="form-input form-select" :required="requestType === 'TRANSFER'">
+                    <select aria-label="Destination Warehouse" name="transfer_to_warehouse_id" class="form-input form-select" :required="requestType === 'TRANSFER'">
                         <option value="">Select warehouse...</option>
                         {% for wh in warehouses %}
                         <option value="{{ wh.warehouse_id }}" {% if material_request and material_request.transfer_to_warehouse_id == wh.warehouse_id %}selected{% endif %}>
@@ -122,7 +122,7 @@
                     <label class="form-label">Project</label>
                     <div class="relative w-[16rem] max-w-full" @click.outside="projectOpen = false">
                         <div class="relative">
-                            <input
+                            <input aria-label="Select project..."
                                 type="text"
                                 x-model="projectSearch"
                                 @input="onProjectSearch"
@@ -165,7 +165,7 @@
                     <label class="form-label">Ticket</label>
                     <div class="relative w-[16rem] max-w-full" @click.outside="ticketOpen = false">
                         <div class="relative">
-                            <input
+                            <input aria-label="Select ticket..."
                                 type="text"
                                 x-model="ticketSearch"
                                 @input="onTicketSearch"
@@ -207,7 +207,7 @@
                 <div>
                     <label class="form-label">Requested By</label>
                     <div class="relative" data-typeahead-url="/inventory/material-requests/requested-by/search" data-typeahead-min="2" data-typeahead-limit="8">
-                        <input
+                        <input aria-label="Requested By"
                             type="text"
                             name="requested_by_name"
                             class="form-input w-full"
@@ -228,7 +228,7 @@
             </div>
             <div class="mt-6">
                 <label class="form-label">Remarks</label>
-                <textarea name="remarks" rows="2" class="form-input" placeholder="Additional notes...">{{ material_request.remarks if material_request else '' }}</textarea>
+                <textarea aria-label="Remarks" name="remarks" rows="2" class="form-input" placeholder="Additional notes...">{{ material_request.remarks if material_request else '' }}</textarea>
             </div>
         </div>
 
@@ -261,7 +261,7 @@
                                 <td class="py-2 px-2">
                                     <div class="relative w-[16rem] max-w-full" @click.outside="item.item_open = false">
                                         <div class="relative">
-                                            <input
+                                            <input aria-label="Select item..."
                                                 type="text"
                                                 x-model="item.item_search"
                                                 @input="onItemSearch(item)"
@@ -303,7 +303,7 @@
                                     </div>
                                 </td>
                                 <td class="py-2 px-2">
-                                    <select x-model="item.warehouse_id" class="form-input form-select text-sm py-1.5">
+                                    <select aria-label="Warehouse for row" x-model="item.warehouse_id" class="form-input form-select text-sm py-1.5">
                                         <option value="" x-text="requestType === 'TRANSFER' ? 'Use default source' : 'Default'"></option>
                                         {% for wh in warehouses %}
                                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_name }}</option>
@@ -311,13 +311,13 @@
                                     </select>
                                 </td>
                                 <td class="py-2 px-2">
-                                    <input type="number" x-model="item.qty" min="0.01" step="0.01" required class="form-input text-sm py-1.5 w-24 text-right font-mono">
+                                    <input aria-label="Quantity" type="number" x-model="item.qty" min="0.01" step="0.01" required class="form-input text-sm py-1.5 w-24 text-right font-mono">
                                 </td>
                                 <td class="py-2 px-2">
-                                    <input type="text" x-model="item.uom" class="form-input text-sm py-1.5 w-20" placeholder="Nos">
+                                    <input aria-label="Nos" type="text" x-model="item.uom" class="form-input text-sm py-1.5 w-20" placeholder="Nos">
                                 </td>
                                 <td class="py-2 px-2">
-                                    <input type="date" x-model="item.schedule_date" class="form-input text-sm py-1.5">
+                                    <input aria-label="Schedule date" type="date" x-model="item.schedule_date" class="form-input text-sm py-1.5">
                                 </td>
                                 <td class="py-2 px-2">
                                     <button type="button" @click="removeItem(index)" class="p-1 text-slate-400 hover:text-rose-500 transition-colors" title="Remove" aria-label="Remove">

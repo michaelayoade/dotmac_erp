@@ -45,15 +45,11 @@
   },
   "templates/components/_file_upload.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/components/_import_wizard.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/components/macros.html": {
-    "nameless": 0,
-    "unlabeled": 15
   },
   "templates/documents/warning_letter.html": {
     "nameless": 0,
@@ -339,10 +335,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/fixed_assets/asset_form.html": {
-    "nameless": 0,
-    "unlabeled": 13
-  },
   "templates/fleet/document_form.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -419,10 +411,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/inventory/material_request_form.html": {
-    "nameless": 0,
-    "unlabeled": 13
-  },
   "templates/inventory/material_request_report.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -434,10 +422,6 @@
   "templates/inventory/price_list_form.html": {
     "nameless": 0,
     "unlabeled": 4
-  },
-  "templates/inventory/receipt_form.html": {
-    "nameless": 0,
-    "unlabeled": 14
   },
   "templates/inventory/report_stock_on_hand.html": {
     "nameless": 0,
@@ -886,9 +870,5 @@
   "templates/support/ticket_detail.html": {
     "nameless": 0,
     "unlabeled": 4
-  },
-  "templates/support/ticket_form.html": {
-    "nameless": 0,
-    "unlabeled": 14
   }
 }
