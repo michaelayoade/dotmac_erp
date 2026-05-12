@@ -109,7 +109,7 @@
                     <label class="form-label">Item <span class="text-rose-500">*</span></label>
                     <div class="relative" @click.outside="itemDropdownOpen = false">
                         <input type="hidden" name="item_id" :value="selectedItemId" required>
-                        <input type="search"
+                        <input aria-label="Item" type="search"
                                class="form-input pr-10"
                                placeholder="Search or select item..."
                                x-model="itemSearch"
@@ -142,7 +142,7 @@
 
                 <div>
                     <label class="form-label">Warehouse <span class="text-rose-500">*</span></label>
-                    <select name="warehouse_id" required class="form-select">
+                    <select aria-label="Warehouse" name="warehouse_id" required class="form-select">
                         <option value="">Select warehouse</option>
                         {% for wh in warehouses_list %}
                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
@@ -152,27 +152,27 @@
 
                 <div>
                     <label class="form-label">Quantity <span class="text-rose-500">*</span></label>
-                    <input type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input" x-model="quantity">
+                    <input aria-label="Quantity" type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input" x-model="quantity">
                 </div>
 
                 <div>
                     <label class="form-label">Unit Cost <span class="text-rose-500">*</span></label>
-                    <input type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
+                    <input aria-label="Unit Cost" type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">Transaction Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="transaction_date" value="{{ today }}" required class="form-input">
+                    <input aria-label="Transaction Date" type="date" name="transaction_date" value="{{ today }}" required class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">Reference</label>
-                    <input type="text" name="reference" placeholder="PO number, delivery note, etc." class="form-input">
+                    <input aria-label="Reference" type="text" name="reference" placeholder="PO number, delivery note, etc." class="form-input">
                 </div>
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Notes</label>
-                    <textarea name="notes" rows="2" placeholder="Additional notes" class="form-input resize-none"></textarea>
+                    <textarea aria-label="Notes" name="notes" rows="2" placeholder="Additional notes" class="form-input resize-none"></textarea>
                 </div>
 
                 <div class="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-900/20"
@@ -187,7 +187,7 @@
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label class="form-label">Service Batch / Lot Number <span class="text-rose-500">*</span></label>
-                            <input type="text"
+                            <input aria-label="Service Batch / Lot Number" type="text"
                                    name="lot_number"
                                    placeholder="Example: CIRCUIT-APR-001"
                                    class="form-input"
@@ -197,7 +197,7 @@
 
                         <div>
                             <label class="form-label">Provider / Circuit Reference</label>
-                            <input type="text"
+                            <input aria-label="Provider / Circuit Reference" type="text"
                                    name="lot_provider_reference"
                                    placeholder="Carrier circuit ID, provider batch, or vendor ref"
                                    class="form-input"
@@ -206,7 +206,7 @@
 
                         <div>
                             <label class="form-label">Service Start Date</label>
-                            <input type="date"
+                            <input aria-label="Service Start Date" type="date"
                                    name="lot_service_start_date"
                                    class="form-input"
                                    :disabled="!tracksLots">
@@ -214,7 +214,7 @@
 
                         <div>
                             <label class="form-label">Service End / Expiry Date</label>
-                            <input type="date"
+                            <input aria-label="Service End / Expiry Date" type="date"
                                    name="lot_service_end_date"
                                    class="form-input"
                                    :disabled="!tracksLots">
@@ -222,7 +222,7 @@
 
                         <div class="sm:col-span-2">
                             <label class="form-label">SLA / Provisioning Document Reference</label>
-                            <input type="text"
+                            <input aria-label="SLA / Provisioning Document Reference" type="text"
                                    name="lot_document_reference"
                                    placeholder="SLA, installation order, acceptance document, or provisioning ref"
                                    class="form-input"
@@ -233,7 +233,7 @@
 
                 <div class="sm:col-span-2" x-show="tracksSerials" x-cloak>
                     <label class="form-label">Serial Numbers</label>
-                    <textarea name="serial_numbers" rows="3" placeholder="For serial-tracked items, enter one serial per line or separate with commas." class="form-input resize-none" :disabled="autoGenerateSerials"></textarea>
+                    <textarea aria-label="Serial Numbers" name="serial_numbers" rows="3" placeholder="For serial-tracked items, enter one serial per line or separate with commas." class="form-input resize-none" :disabled="autoGenerateSerials"></textarea>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Serial-tracked quantities must have exactly one serial number per unit.</p>
                 </div>
 
@@ -250,7 +250,7 @@
                 <div class="sm:col-span-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/60 dark:bg-emerald-900/20"
                      x-show="tracksSerials && autoGenerateSerials" x-cloak>
                     <label class="form-label">Optional Serial Prefix</label>
-                    <input type="text" name="serial_prefix" placeholder="Defaults to item code" class="form-input" x-model="serialPrefix">
+                    <input aria-label="Optional Serial Prefix" type="text" name="serial_prefix" placeholder="Defaults to item code" class="form-input" x-model="serialPrefix">
                     <p class="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
                         Quantity controls how many serials are created. Manual serial input is disabled while auto-generate is selected.
                     </p>

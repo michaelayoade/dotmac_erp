@@ -38,20 +38,20 @@
         {# Subject #}
         <div>
             <label class="form-label required">Subject</label>
-            <input type="text" name="subject" value="{{ ticket.subject if ticket else '' }}" required maxlength="255" class="form-input" placeholder="Brief description of the issue">
+            <input aria-label="Brief description of the issue" type="text" name="subject" value="{{ ticket.subject if ticket else '' }}" required maxlength="255" class="form-input" placeholder="Brief description of the issue">
         </div>
 
         {# Description #}
         <div>
             <label class="form-label">Description</label>
-            <textarea name="description" rows="5" class="form-input" placeholder="Detailed description of the issue...">{{ ticket.description if ticket else '' }}</textarea>
+            <textarea aria-label="Description" name="description" rows="5" class="form-input" placeholder="Detailed description of the issue...">{{ ticket.description if ticket else '' }}</textarea>
         </div>
 
         {# Priority and Date #}
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label required">Priority</label>
-                <select name="priority" required class="form-input">
+                <select aria-label="Priority" name="priority" required class="form-input">
                     {% for p in priorities %}
                     <option value="{{ p.value }}" {{ 'selected' if (ticket and ticket.priority.value == p.value) or (not ticket and p.value == 'MEDIUM') }}>
                         {{ p.label }}
@@ -61,7 +61,7 @@
             </div>
             <div>
                 <label class="form-label">Opening Date</label>
-                <input type="date" name="opening_date" value="{{ ticket.opening_date.isoformat() if ticket and ticket.opening_date else today }}" class="form-input">
+                <input aria-label="Opening Date" type="date" name="opening_date" value="{{ ticket.opening_date.isoformat() if ticket and ticket.opening_date else today }}" class="form-input">
             </div>
         </div>
 
@@ -69,7 +69,7 @@
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label">Customer</label>
-                <select id="customer_id" name="customer_id" class="form-input">
+                <select aria-label="Customer" id="customer_id" name="customer_id" class="form-input">
                     <option value="">No customer linked</option>
                     {% for cust in customers %}
                     <option value="{{ cust.customer_id }}"
@@ -85,7 +85,7 @@
             </div>
             <div>
                 <label class="form-label">Category</label>
-                <select name="category_id" class="form-input">
+                <select aria-label="Category" name="category_id" class="form-input">
                     <option value="">No category</option>
                     {% for cat in categories %}
                     <option value="{{ cat.value }}" {{ 'selected' if ticket and ticket.category_id and ticket.category_id|string == cat.value }}>
@@ -99,28 +99,28 @@
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label">Contact Email</label>
-                <input id="contact_email" name="contact_email" type="email"
+                <input aria-label="Contact Email" id="contact_email" name="contact_email" type="email"
                        value="{{ ticket.contact_email if ticket else '' }}"
                        class="form-input" placeholder="Auto-filled from customer or enter manually">
                 <p class="text-xs text-slate-400 mt-1">Auto-populated from customer, but can be edited</p>
             </div>
             <div>
                 <label class="form-label">Contact Phone</label>
-                <input id="contact_phone" name="contact_phone" type="tel"
+                <input aria-label="Contact Phone" id="contact_phone" name="contact_phone" type="tel"
                        value="{{ ticket.contact_phone if ticket else '' }}"
                        class="form-input" placeholder="Auto-filled from customer or enter manually">
             </div>
         </div>
         <div>
             <label class="form-label">Address</label>
-            <textarea id="contact_address" name="contact_address" rows="2"
+            <textarea aria-label="Address" id="contact_address" name="contact_address" rows="2"
                       class="form-input" placeholder="Auto-filled from customer or enter manually">{{ ticket.contact_address if ticket else '' }}</textarea>
         </div>
 
         {# Raised By #}
         <div>
             <label class="form-label">Raised By (Email)</label>
-            <input type="email" name="raised_by_email" value="{{ ticket.raised_by_email if ticket else '' }}" maxlength="255" class="form-input" placeholder="email@example.com">
+            <input aria-label="Raised By (Email)" type="email" name="raised_by_email" value="{{ ticket.raised_by_email if ticket else '' }}" maxlength="255" class="form-input" placeholder="email@example.com">
             <p class="text-xs text-slate-400 mt-1">The email address of the person who raised this ticket</p>
         </div>
 
@@ -128,7 +128,7 @@
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label">Team</label>
-                <select name="team_id" class="form-input">
+                <select aria-label="Team" name="team_id" class="form-input">
                     <option value="">No team assigned</option>
                     {% for tm in teams %}
                     <option value="{{ tm.value }}" {{ 'selected' if ticket and ticket.team_id and ticket.team_id|string == tm.value }}>
@@ -139,7 +139,7 @@
             </div>
             <div>
                 <label class="form-label">Assign To</label>
-                <select name="assigned_to_id" class="form-input">
+                <select aria-label="Assign To" name="assigned_to_id" class="form-input">
                     <option value="">Unassigned</option>
                     {% for emp in employees %}
                     <option value="{{ emp.employee_id }}" {{ 'selected' if ticket and ticket.assigned_to_id and ticket.assigned_to_id|string == emp.employee_id }}>
@@ -153,7 +153,7 @@
         {# Project #}
         <div>
             <label class="form-label">Project</label>
-            <select name="project_id" class="form-input">
+            <select aria-label="Project" name="project_id" class="form-input">
                 <option value="">No project</option>
                 {% for proj in projects %}
                 <option value="{{ proj.project_id }}" {{ 'selected' if ticket and ticket.project_id and ticket.project_id|string == proj.project_id }}>
@@ -166,7 +166,7 @@
         {# Attachments #}
         <div>
             <label class="form-label">Attachments</label>
-            <input type="file" name="files" multiple
+            <input aria-label="Attachments" type="file" name="files" multiple
                    accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
                    class="block w-full text-sm text-slate-500 dark:text-slate-400
                           file:mr-4 file:py-2 file:px-4
