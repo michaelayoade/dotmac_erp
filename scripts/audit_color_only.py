@@ -52,21 +52,15 @@ RE_DOT = re.compile(
 
 # Small rounded shape signature — appears in any order in the class list.
 RE_ROUNDED_FULL = re.compile(r"\brounded-full\b")
-RE_SMALL_SIZE = re.compile(
-    r"\b(?:h-[1-4]\s+w-[1-4]|w-[1-4]\s+h-[1-4])\b"
-)
-RE_STATUS_BG = re.compile(
-    rf"\bbg-(?:{STATUS_COLORS})-(?:[3-7]00|400|500)\b"
-)
+RE_SMALL_SIZE = re.compile(r"\b(?:h-[1-4]\s+w-[1-4]|w-[1-4]\s+h-[1-4])\b")
+RE_STATUS_BG = re.compile(rf"\bbg-(?:{STATUS_COLORS})-(?:[3-7]00|400|500)\b")
 
 # Things that indicate the dot is NOT color-only.
 RE_CLASS = re.compile(r"""\bclass\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
 RE_ARIA_LABEL = re.compile(
     r"""\baria-(?:label|labelledby|describedby)\s*=\s*['"]""", re.IGNORECASE
 )
-RE_ARIA_HIDDEN = re.compile(
-    r"""\baria-hidden\s*=\s*['"]true['"]""", re.IGNORECASE
-)
+RE_ARIA_HIDDEN = re.compile(r"""\baria-hidden\s*=\s*['"]true['"]""", re.IGNORECASE)
 RE_TITLE_ATTR = re.compile(r"""\btitle\s*=\s*['"]""", re.IGNORECASE)
 RE_ROLE_ATTR = re.compile(r"""\brole\s*=\s*['"]img['"]""", re.IGNORECASE)
 
@@ -114,10 +108,12 @@ def scan_file(path: Path) -> list[dict]:
         if not body_is_empty(body):
             continue
         line = text.count("\n", 0, m.start()) + 1
-        violations.append({
-            "line": line,
-            "snippet": m.group(0)[:160],
-        })
+        violations.append(
+            {
+                "line": line,
+                "snippet": m.group(0)[:160],
+            }
+        )
     return violations
 
 
@@ -143,9 +139,7 @@ def load_baseline() -> dict[str, int]:
 
 
 def write_baseline(counts: dict[str, int]) -> None:
-    BASELINE_PATH.write_text(
-        json.dumps(counts, indent=2, sort_keys=True) + "\n"
-    )
+    BASELINE_PATH.write_text(json.dumps(counts, indent=2, sort_keys=True) + "\n")
 
 
 def collect_templates(paths: list[str] | None) -> list[Path]:
@@ -179,9 +173,7 @@ def main() -> int:
     if args.update_baseline:
         write_baseline(counts)
         total = sum(counts.values())
-        print(
-            f"Wrote baseline: {total} violations across {len(counts)} files"
-        )
+        print(f"Wrote baseline: {total} violations across {len(counts)} files")
         return 0
 
     if args.report or args.verbose:
@@ -207,8 +199,8 @@ def main() -> int:
         for r in regressions:
             print(f"  {r}", file=sys.stderr)
         print(
-            "\nFix: add aria-hidden=\"true\" if adjacent text conveys status,\n"
-            "or add <span class=\"sr-only\">{Status}</span> sibling if standalone.\n"
+            '\nFix: add aria-hidden="true" if adjacent text conveys status,\n'
+            'or add <span class="sr-only">{Status}</span> sibling if standalone.\n'
             "Run --update-baseline only if intentionally accepting the violation.",
             file=sys.stderr,
         )

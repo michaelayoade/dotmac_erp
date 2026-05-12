@@ -27,6 +27,7 @@ def _scan(html: str, tmp_path: Path) -> list[dict]:
 
 # --- looks_like_status_dot --------------------------------------------------
 
+
 def test_small_rounded_emerald_dot_is_status_dot() -> None:
     assert audit.looks_like_status_dot('class="h-2 w-2 rounded-full bg-emerald-500"')
 
@@ -55,9 +56,7 @@ def test_pill_shape_without_size_is_not_status_dot() -> None:
 
 def test_slate_grey_is_not_flagged_as_status_color() -> None:
     # slate is intentionally excluded from STATUS_COLORS (used for neutral chrome).
-    assert not audit.looks_like_status_dot(
-        'class="h-2 w-2 rounded-full bg-slate-500"'
-    )
+    assert not audit.looks_like_status_dot('class="h-2 w-2 rounded-full bg-slate-500"')
 
 
 def test_pastel_shade_below_300_is_not_status_dot() -> None:
@@ -68,6 +67,7 @@ def test_pastel_shade_below_300_is_not_status_dot() -> None:
 
 
 # --- has_accessible_name ---------------------------------------------------
+
 
 def test_aria_label_exempts() -> None:
     assert audit.has_accessible_name('aria-label="Urgent priority"')
@@ -91,6 +91,7 @@ def test_plain_class_does_not_exempt() -> None:
 
 # --- scan_file end-to-end --------------------------------------------------
 
+
 def test_empty_status_dot_is_flagged(tmp_path: Path) -> None:
     html = '<span class="h-2 w-2 rounded-full bg-emerald-500"></span>'
     violations = _scan(html, tmp_path)
@@ -100,17 +101,13 @@ def test_empty_status_dot_is_flagged(tmp_path: Path) -> None:
 
 def test_status_dot_with_aria_hidden_is_not_flagged(tmp_path: Path) -> None:
     html = (
-        '<span class="h-2 w-2 rounded-full bg-emerald-500" '
-        'aria-hidden="true"></span>'
+        '<span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>'
     )
     assert _scan(html, tmp_path) == []
 
 
 def test_status_dot_with_aria_label_is_not_flagged(tmp_path: Path) -> None:
-    html = (
-        '<span class="h-2 w-2 rounded-full bg-rose-500" '
-        'aria-label="Urgent"></span>'
-    )
+    html = '<span class="h-2 w-2 rounded-full bg-rose-500" aria-label="Urgent"></span>'
     assert _scan(html, tmp_path) == []
 
 
@@ -121,10 +118,7 @@ def test_status_dot_with_inner_text_is_not_flagged(tmp_path: Path) -> None:
 
 
 def test_decorative_large_circle_is_not_flagged(tmp_path: Path) -> None:
-    html = (
-        '<div class="absolute h-72 w-72 rounded-full bg-cyan-500/10 '
-        'blur-3xl"></div>'
-    )
+    html = '<div class="absolute h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl"></div>'
     assert _scan(html, tmp_path) == []
 
 

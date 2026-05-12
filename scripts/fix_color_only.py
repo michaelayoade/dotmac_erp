@@ -52,9 +52,7 @@ def fix_file(path: Path, dry_run: bool = False) -> int:
         if open_close_rel == -1:
             continue
         insert_pos = m.start() + open_close_rel
-        text = (
-            text[:insert_pos] + ' aria-hidden="true"' + text[insert_pos:]
-        )
+        text = text[:insert_pos] + ' aria-hidden="true"' + text[insert_pos:]
         fixes += 1
 
     if fixes and not dry_run:
