@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import AsyncSessionLocal, SessionLocal, get_auth_db_session
+from app.db.session_context import prime_session
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus
 from app.models.person import Person
@@ -1474,6 +1475,38 @@ def require_web_auth(
         roles=roles,
         scopes=scopes,
     )
+
+
+# Auth-aware DB dependency variant — Phase 1 of the multi-tenant session
+# listener. See docs/superpowers/specs/2026-05-10-multi-org-listener-design.md.
+# Routes that act on org-scoped data should depend on this in place of
+# ``get_db`` so the session is primed with ``auth.organization_id`` before
+# yielding. ``get_db`` itself is left unchanged for routes that legitimately
+# have no per-request org context (login, healthcheck, public pages).
+def get_db_for_org(
+    auth: WebAuthContext = Depends(require_web_auth),
+):
+    """DB session dependency that primes the session with the request's
+    organization_id before yielding.
+
+    Use this dependency in routes that act on org-scoped data::
+
+        @router.get("/things")
+        def list_things(
+            auth: WebAuthContext = Depends(require_web_auth),
+            db: Session = Depends(get_db_for_org),
+        ):
+            ...
+
+    The plain ``get_db`` remains for routes that legitimately don't have
+    a per-request organization context (login, healthcheck, public pages).
+    """
+    db = SessionLocal()
+    try:
+        prime_session(db, auth.organization_id)
+        yield db
+    finally:
+        db.close()
 
 
 def optional_web_auth(

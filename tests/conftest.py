@@ -120,7 +120,19 @@ _MockAsyncSessionLocal = MockAsyncSessionLocalProxy()
 
 
 # Create a mock db module
+# NOTE: app/db is now a real package (app/db/__init__.py + submodules like
+# multi_tenant.py). We make this mock module behave like a package by giving
+# it __path__ pointing at the real package directory, so submodules resolve
+# normally via `import app.db.multi_tenant` while the top-level Base /
+# SessionLocal / get_db are still our SQLite test doubles.
+import os as _os_for_db_mock  # noqa: E402
+
+_repo_root = _os_for_db_mock.path.abspath(
+    _os_for_db_mock.path.join(_os_for_db_mock.path.dirname(__file__), "..")
+)
+_real_app_db_path = _os_for_db_mock.path.join(_repo_root, "app", "db")
 mock_db_module = ModuleType("app.db")
+mock_db_module.__path__ = [_real_app_db_path]
 mock_db_module.Base = TestBase
 mock_db_module.SessionLocal = _TestSessionLocal
 mock_db_module.AsyncSessionLocal = _MockAsyncSessionLocal
@@ -257,6 +269,8 @@ class MockSettings:
     sso_provider_url = None
     sso_jwt_secret = None
     sso_cookie_domain = None
+    # Multi-org session listener (Phase 1; default off in tests)
+    enforce_org_filter = False
     # Coach / Intelligence Engine
     coach_enabled = False
     coach_llm_backends = "llama,deepseek"

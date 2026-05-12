@@ -374,3 +374,14 @@ def atomic_operation(db: Session) -> Generator[Session, None, None]:
     except Exception:
         savepoint.rollback()
         raise
+
+
+# Phase 1: org-filter listener is registered only when the env flag is on.
+# Default is OFF — no behavior change. See:
+#   docs/superpowers/specs/2026-05-10-multi-org-listener-design.md (D5)
+from app.config import settings as _app_settings
+
+if _app_settings.enforce_org_filter:
+    from app.db.org_listener import register_org_listener
+
+    register_org_listener()
