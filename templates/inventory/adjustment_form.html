@@ -64,7 +64,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Item <span class="text-rose-500">*</span></label>
-                    <select name="item_id" required class="form-select">
+                    <select aria-label="Item" name="item_id" required class="form-select">
                         <option value="">Select item</option>
                         {% for item in items_list %}
                         <option value="{{ item.item_id }}" data-cost="{{ item.average_cost }}">
@@ -76,7 +76,7 @@
 
                 <div>
                     <label class="form-label">Warehouse <span class="text-rose-500">*</span></label>
-                    <select name="warehouse_id" required class="form-select">
+                    <select aria-label="Warehouse" name="warehouse_id" required class="form-select">
                         <option value="">Select warehouse</option>
                         {% for wh in warehouses_list %}
                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
@@ -86,7 +86,7 @@
 
                 <div>
                     <label class="form-label">Adjustment Type <span class="text-rose-500">*</span></label>
-                    <select name="adjustment_type" required class="form-select">
+                    <select aria-label="Adjustment Type" name="adjustment_type" required class="form-select">
                         <option value="">Select type</option>
                         <option value="INCREASE">Increase (add to inventory)</option>
                         <option value="DECREASE">Decrease (remove from inventory)</option>
@@ -95,24 +95,24 @@
 
                 <div>
                     <label class="form-label">Quantity <span class="text-rose-500">*</span></label>
-                    <input type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input">
+                    <input aria-label="Quantity" type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input">
                     <p class="form-hint">Always enter positive quantity</p>
                 </div>
 
                 <div>
                     <label class="form-label">Unit Cost <span class="text-rose-500">*</span></label>
-                    <input type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
+                    <input aria-label="Unit Cost" type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
                     <p class="form-hint">Used for inventory valuation</p>
                 </div>
 
                 <div>
                     <label class="form-label">Transaction Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="transaction_date" value="{{ today }}" required class="form-input">
+                    <input aria-label="Transaction Date" type="date" name="transaction_date" value="{{ today }}" required class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">Reason <span class="text-rose-500">*</span></label>
-                    <select name="reason" required class="form-select">
+                    <select aria-label="Reason" name="reason" required class="form-select">
                         <option value="">Select reason</option>
                         <option value="Physical Count">Physical Count Variance</option>
                         <option value="Damaged">Damaged Goods</option>
@@ -126,7 +126,7 @@
 
                 <div>
                     <label class="form-label">Reference</label>
-                    <input type="text" name="reference" placeholder="Count sheet number, etc." class="form-input">
+                    <input aria-label="Reference" type="text" name="reference" placeholder="Count sheet number, etc." class="form-input">
                 </div>
             </div>
         </div>

@@ -312,7 +312,7 @@
                 <!-- Exchange Rate -->
                 <div>
                     <label for="exchange_rate" class="form-label">Exchange Rate</label>
-                    <input type="text"
+                    <input aria-label="1.0" type="text"
                            id="exchange_rate"
                            name="exchange_rate"
                            x-model="form.exchange_rate"
@@ -368,7 +368,7 @@
                     <label for="contact_name" class="form-label">
                         Contact Name
                     </label>
-                    <input type="text"
+                    <input aria-label="Contact person" type="text"
                            id="contact_name"
                            name="contact_name"
                            x-model="form.contact_name"
@@ -382,7 +382,7 @@
                     <label for="contact_email" class="form-label">
                         Contact Email
                     </label>
-                    <input type="email"
+                    <input aria-label="contact@example.com" type="email"
                            id="contact_email"
                            name="contact_email"
                            x-model="form.contact_email"
@@ -425,7 +425,7 @@
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr>
                                 <td>
-                                    <input type="text"
+                                    <input aria-label="SKU" type="text"
                                            x-model="line.item_code"
                                            placeholder="SKU"
                                            list="quote-item-code-list"
@@ -433,7 +433,7 @@
                                            class="table-input">
                                 </td>
                                 <td>
-                                    <select x-model="line.revenue_account_id"
+                                    <select aria-label="Revenue account" x-model="line.revenue_account_id"
                                             required
                                             class="table-input">
                                         <option value="">Select account</option>
@@ -449,14 +449,14 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <input type="text"
+                                    <input aria-label="Description" type="text"
                                            x-model="line.description"
                                            required
                                            placeholder="Description"
                                            class="table-input">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Quantity" type="number"
                                            x-model.number="line.quantity"
                                            @input="calculateLineAmount(index)"
                                            required
@@ -465,7 +465,7 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Unit price" type="number"
                                            x-model.number="line.unit_price"
                                            @input="calculateLineAmount(index)"
                                            required
@@ -474,7 +474,7 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Discount" type="number"
                                            x-model.number="line.discount_amount"
                                            @input="calculateLineAmount(index)"
                                            min="0"
@@ -482,7 +482,7 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <select x-model="line.tax_code_id"
+                                    <select aria-label="Tax code" x-model="line.tax_code_id"
                                             @change="calculateLineAmount(index)"
                                             class="table-input">
                                         <option value="">No Tax</option>
@@ -556,7 +556,7 @@
                     <label for="customer_notes" class="form-label">
                         Customer Notes
                     </label>
-                    <textarea id="customer_notes"
+                    <textarea aria-label="Notes visible to the customer" id="customer_notes"
                               name="customer_notes"
                               x-model="form.customer_notes"
                               rows="3"
@@ -569,7 +569,7 @@
                     <label for="internal_notes" class="form-label">
                         Internal Notes
                     </label>
-                    <textarea id="internal_notes"
+                    <textarea aria-label="Notes for internal use only" id="internal_notes"
                               name="internal_notes"
                               x-model="form.internal_notes"
                               rows="2"
@@ -582,7 +582,7 @@
                     <label for="terms_and_conditions" class="form-label">
                         Terms & Conditions
                     </label>
-                    <textarea id="terms_and_conditions"
+                    <textarea aria-label="Terms and conditions for the quote" id="terms_and_conditions"
                               name="terms_and_conditions"
                               x-model="form.terms_and_conditions"
                               rows="4"

@@ -33,7 +33,7 @@
             <form method="GET" class="flex items-end gap-3">
                 <div>
                     <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Year</label>
-                    <select name="year" class="form-select min-w-[120px]">
+                    <select aria-label="Year" name="year" class="form-select min-w-[120px]">
                         {% for option in available_years %}
                         <option value="{{ option.value }}" {% if option.value == year %}selected{% endif %}>{{ option.label }}</option>
                         {% endfor %}
@@ -240,13 +240,13 @@
                                     <input type="hidden" name="evidence_type" value="CUSTOMER_WHT_CERTIFICATE">
                                     <input type="hidden" name="entity_type" value="CUSTOMER">
                                     <input type="hidden" name="entity_id" value="{{ row.customer_id }}">
-                                    <select name="status" class="form-select text-sm">
+                                    <select aria-label="Evidence status" name="status" class="form-select text-sm">
                                         {% for opt in evidence_status_options %}
                                         <option value="{{ opt.value }}" {% if row.evidence_status == opt.value %}selected{% endif %}>{{ opt.label }}</option>
                                         {% endfor %}
                                     </select>
-                                    <input type="text" name="reference" value="{{ row.evidence_reference }}" placeholder="Certificate reference" class="form-input text-sm">
-                                    <input type="text" name="notes" value="{{ row.evidence_notes }}" placeholder="Notes" class="form-input text-sm">
+                                    <input aria-label="Certificate reference" type="text" name="reference" value="{{ row.evidence_reference }}" placeholder="Certificate reference" class="form-input text-sm">
+                                    <input aria-label="Notes" type="text" name="notes" value="{{ row.evidence_notes }}" placeholder="Notes" class="form-input text-sm">
                                     <button type="submit" class="btn btn-secondary btn-sm">Save</button>
                                 </form>
                             </td>
@@ -306,13 +306,13 @@
                                     <input type="hidden" name="evidence_type" value="SUPPLIER_WHT_REMITTANCE">
                                     <input type="hidden" name="entity_type" value="SUPPLIER">
                                     <input type="hidden" name="entity_id" value="{{ row.supplier_id }}">
-                                    <select name="status" class="form-select text-sm">
+                                    <select aria-label="Evidence status" name="status" class="form-select text-sm">
                                         {% for opt in evidence_status_options %}
                                         <option value="{{ opt.value }}" {% if row.evidence_status == opt.value %}selected{% endif %}>{{ opt.label }}</option>
                                         {% endfor %}
                                     </select>
-                                    <input type="text" name="reference" value="{{ row.evidence_reference }}" placeholder="Remittance reference" class="form-input text-sm">
-                                    <input type="text" name="notes" value="{{ row.evidence_notes }}" placeholder="Notes" class="form-input text-sm">
+                                    <input aria-label="Remittance reference" type="text" name="reference" value="{{ row.evidence_reference }}" placeholder="Remittance reference" class="form-input text-sm">
+                                    <input aria-label="Notes" type="text" name="notes" value="{{ row.evidence_notes }}" placeholder="Notes" class="form-input text-sm">
                                     <button type="submit" class="btn btn-secondary btn-sm">Save</button>
                                 </form>
                             </td>

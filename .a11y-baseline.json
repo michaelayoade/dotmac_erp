@@ -127,10 +127,6 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/finance/ar/quote_form.html": {
-    "nameless": 0,
-    "unlabeled": 7
-  },
   "templates/finance/ar/sales_order_detail.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -211,10 +207,6 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/finance/profile.html": {
-    "nameless": 0,
-    "unlabeled": 8
-  },
   "templates/finance/remita/generate.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -254,10 +246,6 @@
   "templates/finance/tax/codes.html": {
     "nameless": 0,
     "unlabeled": 2
-  },
-  "templates/finance/tax/control_tracker.html": {
-    "nameless": 0,
-    "unlabeled": 7
   },
   "templates/finance/tax/fiscal_positions/form.html": {
     "nameless": 0,
@@ -339,10 +327,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/inventory/adjustment_form.html": {
-    "nameless": 0,
-    "unlabeled": 8
-  },
   "templates/inventory/bom_form.html": {
     "nameless": 0,
     "unlabeled": 4
@@ -374,10 +358,6 @@
   "templates/onboarding/portal/base_onboarding.html": {
     "nameless": 1,
     "unlabeled": 0
-  },
-  "templates/people/attendance/record_form.html": {
-    "nameless": 0,
-    "unlabeled": 7
   },
   "templates/people/attendance/records.html": {
     "nameless": 0,

@@ -75,39 +75,39 @@
                         <div class="grid gap-6 sm:grid-cols-2">
                             <div>
                                 <label class="form-label">First name <span class="text-rose-500">*</span></label>
-                                <input type="text" name="first_name" value="{{ person.first_name }}"
+                                <input aria-label="First name" type="text" name="first_name" value="{{ person.first_name }}"
                                        class="form-input" required>
                             </div>
                             <div>
                                 <label class="form-label">Last name <span class="text-rose-500">*</span></label>
-                                <input type="text" name="last_name" value="{{ person.last_name }}"
+                                <input aria-label="Last name" type="text" name="last_name" value="{{ person.last_name }}"
                                        class="form-input" required>
                             </div>
                         </div>
 
                         <div>
                             <label class="form-label">Display name</label>
-                            <input type="text" name="display_name" value="{{ person.display_name if person.display_name and person.display_name|lower not in ['none', 'null'] else '' }}"
+                            <input aria-label="Display name" type="text" name="display_name" value="{{ person.display_name if person.display_name and person.display_name|lower not in ['none', 'null'] else '' }}"
                                    class="form-input" placeholder="How you want to be addressed">
                             <p class="form-hint">Leave blank to use your full name</p>
                         </div>
 
                         <div>
                             <label class="form-label">Email address <span class="text-rose-500">*</span></label>
-                            <input type="email" name="email" value="{{ person.email }}"
+                            <input aria-label="Email address" type="email" name="email" value="{{ person.email }}"
                                    class="form-input" required disabled>
                             <p class="form-hint">Contact support to update your email address</p>
                         </div>
 
                         <div>
                             <label class="form-label">Phone number</label>
-                            <input type="tel" name="phone" value="{{ person.phone or '' }}"
+                            <input aria-label="Phone number" type="tel" name="phone" value="{{ person.phone or '' }}"
                                    class="form-input" placeholder="+1 (555) 123-4567">
                         </div>
 
                         <div>
                             <label class="form-label">Bio</label>
-                            <textarea name="bio" rows="3" class="form-input"
+                            <textarea aria-label="Bio" name="bio" rows="3" class="form-input"
                                       placeholder="A brief description about yourself">{{ person.bio or '' }}</textarea>
                         </div>
 
@@ -132,7 +132,7 @@
                         <div class="grid gap-6 sm:grid-cols-2">
                             <div>
                                 <label class="form-label">Timezone</label>
-                                <select name="timezone" class="form-input form-select">
+                                <select aria-label="Timezone" name="timezone" class="form-input form-select">
                                     <option value="">Select timezone</option>
                                     <option value="Africa/Lagos" {% if person.timezone == 'Africa/Lagos' %}selected{% endif %}>Africa/Lagos (WAT)</option>
                                     <option value="America/New_York" {% if person.timezone == 'America/New_York' %}selected{% endif %}>America/New_York (EST)</option>
@@ -146,7 +146,7 @@
                             </div>
                             <div>
                                 <label class="form-label">Locale</label>
-                                <select name="locale" class="form-input form-select">
+                                <select aria-label="Locale" name="locale" class="form-input form-select">
                                     <option value="">Select locale</option>
                                     <option value="en-US" {% if person.locale == 'en-US' %}selected{% endif %}>English (US)</option>
                                     <option value="en-GB" {% if person.locale == 'en-GB' %}selected{% endif %}>English (UK)</option>

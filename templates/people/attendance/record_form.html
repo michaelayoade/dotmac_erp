@@ -31,7 +31,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="form-label">Employee <span class="text-rose-500">*</span></label>
-                <select name="employee_id" class="form-select" required>
+                <select aria-label="Employee" name="employee_id" class="form-select" required>
                     <option value="">Select employee</option>
                     {% for emp in employees %}
                     <option value="{{ emp.employee_id }}" {% if form_data.employee_id == emp.employee_id|string %}selected{% endif %}>
@@ -45,13 +45,13 @@
             </div>
             <div>
                 <label class="form-label">Attendance Date <span class="text-rose-500">*</span></label>
-                <input type="date" name="attendance_date" required
+                <input aria-label="Attendance Date" type="date" name="attendance_date" required
                        value="{{ form_data.attendance_date | default('', true) }}"
                        class="form-input">
             </div>
             <div>
                 <label class="form-label">Status <span class="text-rose-500">*</span></label>
-                <select name="status" class="form-select" required>
+                <select aria-label="Status" name="status" class="form-select" required>
                     <option value="">Select status</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if form_data.status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
@@ -60,7 +60,7 @@
             </div>
             <div>
                 <label class="form-label">Shift Type (optional)</label>
-                <select name="shift_type_id" class="form-select">
+                <select aria-label="Shift Type (optional)" name="shift_type_id" class="form-select">
                     <option value="">No shift</option>
                     {% for shift in shifts %}
                     <option value="{{ shift.shift_type_id }}" {% if form_data.shift_type_id == shift.shift_type_id|string %}selected{% endif %}>
@@ -74,13 +74,13 @@
             </div>
             <div>
                 <label class="form-label">Check In (optional)</label>
-                <input type="datetime-local" name="check_in"
+                <input aria-label="Check In (optional)" type="datetime-local" name="check_in"
                        value="{{ form_data.check_in | default('', true) }}"
                        class="form-input">
             </div>
             <div>
                 <label class="form-label">Check Out (optional)</label>
-                <input type="datetime-local" name="check_out"
+                <input aria-label="Check Out (optional)" type="datetime-local" name="check_out"
                        value="{{ form_data.check_out | default('', true) }}"
                        class="form-input">
             </div>
@@ -88,7 +88,7 @@
 
         <div>
             <label class="form-label">Remarks</label>
-            <textarea name="remarks" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.remarks | default('', true) }}</textarea>
+            <textarea aria-label="Remarks" name="remarks" rows="3" class="form-input" placeholder="Optional notes">{{ form_data.remarks | default('', true) }}</textarea>
         </div>
 
         <div class="flex items-center gap-3">
