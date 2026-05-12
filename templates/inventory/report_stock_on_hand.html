@@ -118,8 +118,12 @@
                 <tbody>
                     {% for row in stock_data | default([]) %}
                     <tr class="{{ 'bg-amber-50 dark:bg-amber-900/10' if row.is_low_stock else '' }}">
-                        <td class="font-mono font-medium text-slate-900 dark:text-white">{{ row.item_code }}</td>
-                        <td>{{ row.item_name }}</td>
+                        <td class="font-mono font-medium text-slate-900 dark:text-white">
+                            <span class="block max-w-[10rem] truncate" title="{{ row.item_code }}">{{ row.item_code }}</span>
+                        </td>
+                        <td>
+                            <span class="block max-w-[16rem] truncate" title="{{ row.item_name }}">{{ row.item_name }}</span>
+                        </td>
                         <td class="text-sm text-slate-500">{{ row.category_name or '-' }}</td>
                         <td>{{ row.warehouse_name or 'All' }}</td>
                         <td class="text-right font-mono">{{ '{:,.2f}'.format(row.on_hand or 0) }}</td>

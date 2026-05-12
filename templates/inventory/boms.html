@@ -126,9 +126,9 @@
                         onclick="window.location='/inventory/boms/{{ bom.bom_id }}'">
                         <td class="font-medium text-slate-900 dark:text-white">{{ bom.bom_name }}</td>
                         <td>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-mono text-slate-500">{{ bom.finished_item.item_code if bom.finished_item else '-' }}</span>
-                                <span>{{ bom.finished_item.item_name if bom.finished_item else '-' }}</span>
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="block max-w-[8rem] truncate text-xs font-mono text-slate-500" title="{{ bom.finished_item.item_code if bom.finished_item else '' }}">{{ bom.finished_item.item_code if bom.finished_item else '-' }}</span>
+                                <span class="block truncate" title="{{ bom.finished_item.item_name if bom.finished_item else '' }}">{{ bom.finished_item.item_name if bom.finished_item else '-' }}</span>
                             </div>
                         </td>
                         <td>

@@ -122,9 +122,9 @@
                 <tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
                     {% for row in valuation_rows %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                        <td class="px-4 py-3">
-                            <div class="font-medium text-slate-900 dark:text-white">{{ row.item_name }}</div>
-                            <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ row.item_code }}</div>
+                        <td class="px-4 py-3 max-w-[16rem]">
+                            <div class="truncate font-medium text-slate-900 dark:text-white" title="{{ row.item_name }}">{{ row.item_name }}</div>
+                            <div class="mt-0.5 truncate text-xs font-mono text-slate-500 dark:text-slate-400" title="{{ row.item_code }}">{{ row.item_code }}</div>
                         </td>
                         <td class="px-4 py-3 text-slate-700 dark:text-slate-300">{{ row.warehouse_name }}</td>
                         <td class="px-4 py-3 text-right font-mono text-slate-700 dark:text-slate-300">{{ row.quantity_on_hand }}</td>

@@ -189,9 +189,9 @@
                     {% for item in material_request_items %}
                     <tr>
                         <td class="text-slate-400 font-mono text-sm">{{ loop.index }}</td>
-                        <td>
-                            <div class="font-medium text-slate-900 dark:text-white">{{ item.item_code }}</div>
-                            <div class="text-xs text-slate-500">{{ item.item_name }}</div>
+                        <td class="max-w-[14rem]">
+                            <div class="truncate font-mono font-medium text-slate-900 dark:text-white" title="{{ item.item_code }}">{{ item.item_code }}</div>
+                            <div class="truncate text-xs text-slate-500" title="{{ item.item_name }}">{{ item.item_name }}</div>
                         </td>
                         <td class="text-slate-500">{{ item.warehouse_name or '-' }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ item.requested_qty }}</td>

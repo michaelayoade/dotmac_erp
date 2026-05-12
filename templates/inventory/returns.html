@@ -68,11 +68,11 @@
                         <td class="text-sm text-slate-600 dark:text-slate-300">
                             {{ inventory_return.return_date | format_date if inventory_return.return_date else '-' }}
                         </td>
-                        <td>
-                            <p class="text-sm font-medium text-slate-900 dark:text-white">
+                        <td class="max-w-[14rem]">
+                            <p class="truncate text-sm font-mono font-medium text-slate-900 dark:text-white" title="{{ inventory_return.item.item_code if inventory_return.item else '' }}">
                                 {{ inventory_return.item.item_code if inventory_return.item else '-' }}
                             </p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                            <p class="truncate text-xs text-slate-500 dark:text-slate-400" title="{{ inventory_return.item.item_name if inventory_return.item else '' }}">
                                 {{ inventory_return.item.item_name if inventory_return.item else '-' }}
                             </p>
                         </td>
