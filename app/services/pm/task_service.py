@@ -68,7 +68,7 @@ class TaskService:
             .where(
                 Task.task_id == task_id,
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .options(
                 selectinload(Task.assigned_to),
@@ -100,7 +100,7 @@ class TaskService:
             select(Task)
             .where(
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .options(
                 selectinload(Task.assigned_to),
@@ -132,7 +132,7 @@ class TaskService:
             .where(
                 Task.parent_task_id == task_id,
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .order_by(Task.task_code)
         )
@@ -145,7 +145,7 @@ class TaskService:
             .where(
                 Task.project_id == project_id,
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .options(
                 selectinload(Task.dependencies),
@@ -161,7 +161,7 @@ class TaskService:
             select(Task)
             .where(
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
                 Task.due_date < date.today(),
                 Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
             )
@@ -263,9 +263,9 @@ class TaskService:
         for subtask in self.get_subtasks(task_id):
             self.delete_task(subtask.task_id)
 
-        task.is_deleted = True
+        task.status = TaskStatus.CANCELLED
         if self.principal and hasattr(self.principal, "person_id"):
-            task.deleted_by_id = self.principal.person_id
+            task.updated_by_id = self.principal.person_id
 
         return True
 
@@ -452,7 +452,7 @@ class TaskService:
             select(Task.status, func.count(Task.task_id))
             .where(
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .group_by(Task.status)
         )
@@ -470,7 +470,7 @@ class TaskService:
             select(Task.priority, func.count(Task.task_id))
             .where(
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .group_by(Task.priority)
         )

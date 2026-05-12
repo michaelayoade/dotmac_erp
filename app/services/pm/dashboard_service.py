@@ -96,7 +96,7 @@ class DashboardService:
         base_where = and_(
             Task.project_id == project_id,
             Task.organization_id == self.organization_id,
-            Task.is_deleted == False,  # noqa: E712
+            Task.status != TaskStatus.CANCELLED,
         )
 
         # Total tasks
@@ -353,7 +353,7 @@ class DashboardService:
             select(Task.project_id)
             .where(
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
                 Task.due_date < date.today(),
                 Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED]),
             )

@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance.core_org.project import Project
-from app.models.pm import Milestone, MilestoneStatus, Task
+from app.models.pm import Milestone, MilestoneStatus, Task, TaskStatus
 from app.schemas.pm.gantt import (
     GanttChartData,
     GanttLink,
@@ -66,7 +66,7 @@ class GanttService:
             .where(
                 Task.project_id == project_id,
                 Task.organization_id == self.organization_id,
-                Task.is_deleted == False,  # noqa: E712
+                Task.status != TaskStatus.CANCELLED,
             )
             .options(
                 selectinload(Task.assigned_to),

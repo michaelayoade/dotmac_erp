@@ -30,7 +30,6 @@ from app.db import Base
 from app.models.people.base import (
     AuditMixin,
     ERPNextSyncMixin,
-    SoftDeleteMixin,
 )
 
 if TYPE_CHECKING:
@@ -62,7 +61,7 @@ class TaskPriority(str, enum.Enum):
     URGENT = "URGENT"
 
 
-class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
+class Task(Base, AuditMixin, ERPNextSyncMixin):
     """
     Project task/work item with hierarchy and status tracking.
 

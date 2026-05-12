@@ -250,7 +250,7 @@ class ProjectSLAService:
                 select(Task).where(
                     Task.organization_id == self.organization_id,
                     Task.project_id == project_id,
-                    Task.is_deleted == False,  # noqa: E712
+                    Task.status != TaskStatus.CANCELLED,
                 )
             ).all()
         )

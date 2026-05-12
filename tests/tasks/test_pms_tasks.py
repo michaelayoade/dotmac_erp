@@ -68,11 +68,13 @@ class TestPMSProbationCheck:
         manager_employee_id = uuid4()
         manager_person_id = uuid4()
         org = SimpleNamespace(organization_id=org_id)
+        from app.models.people.hr.employee import EmployeeStatus
+
         employee = SimpleNamespace(
             employee_id=employee_id,
             organization_id=org_id,
             reports_to_id=manager_employee_id,
-            is_deleted=False,
+            status=EmployeeStatus.ACTIVE,
         )
         milestone = {"employee_id": employee_id, "months_of_service": 20}
 

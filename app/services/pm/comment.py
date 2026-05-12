@@ -39,7 +39,7 @@ class PMCommentService:
             query = query.where(PMComment.is_internal == False)  # noqa: E712
 
         if not include_deleted:
-            query = query.where(PMComment.is_deleted == False)  # noqa: E712
+            query = query.where(PMComment.is_active.is_(True))
 
         query = query.order_by(PMComment.created_at.asc())
         return list(db.execute(query).scalars().all())
@@ -95,7 +95,7 @@ class PMCommentService:
         if hard_delete:
             db.delete(comment)
         else:
-            comment.is_deleted = True
+            comment.is_active = False
             db.flush()
         return True
 
