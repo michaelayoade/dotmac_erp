@@ -71,6 +71,27 @@ def test_hidden_input_is_not_flagged() -> None:
     assert audit_module.find_unlabeled_controls(html) == []
 
 
+def test_input_nested_in_label_is_implicit_labeled() -> None:
+    """Implicit labeling: input inside a <label> element is accessible without for=."""
+    html = """
+    <label class="flex items-center gap-3">
+      <input type="checkbox" name="agree">
+      <span>I agree to terms</span>
+    </label>
+    """
+    assert audit_module.find_unlabeled_controls(html) == []
+
+
+def test_input_outside_label_block_is_flagged() -> None:
+    """An input that follows a closed <label> is NOT implicitly labeled."""
+    html = """
+    <label class="block">Section heading</label>
+    <input type="text" name="foo">
+    """
+    results = audit_module.find_unlabeled_controls(html)
+    assert len(results) == 1
+
+
 # Icon-action detection
 def test_button_with_visible_text_is_not_flagged() -> None:
     html = "<button><svg></svg> Save</button>"

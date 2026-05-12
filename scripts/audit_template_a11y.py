@@ -88,12 +88,41 @@ def has_attr(attrs: str, *patterns: re.Pattern[str]) -> bool:
     return any(p.search(attrs) for p in patterns)
 
 
+def _find_implicit_label_ranges(text: str) -> list[tuple[int, int]]:
+    """Find character ranges of <label>...</label> elements.
+
+    A control nested inside a <label> is implicitly labeled (HTML standard).
+    This catches the common pattern:
+        <label class="...">
+          <input type="checkbox" name="...">
+          <span>Visible label</span>
+        </label>
+    """
+    ranges: list[tuple[int, int]] = []
+    depth = 0
+    start = -1
+    for m in re.finditer(r"<(/?)label\b[^>]*>", text, re.IGNORECASE):
+        is_close = bool(m.group(1))
+        if not is_close:
+            if depth == 0:
+                start = m.start()
+            depth += 1
+        else:
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start >= 0:
+                    ranges.append((start, m.end()))
+                    start = -1
+    return ranges
+
+
 def find_unlabeled_controls(text: str) -> list[tuple[int, str]]:
     """Find form controls without an accessible label.
 
     Returns list of (line_number, snippet) tuples.
     """
     label_targets = set(RE_LABEL_FOR.findall(text))
+    label_ranges = _find_implicit_label_ranges(text)
     results: list[tuple[int, str]] = []
 
     for m in RE_INPUT.finditer(text):
@@ -111,6 +140,9 @@ def find_unlabeled_controls(text: str) -> list[tuple[int, str]]:
         # Has a <label for=id> pointing to it?
         id_match = RE_ID.search(attrs)
         if id_match and id_match.group(1) in label_targets:
+            continue
+        # Nested inside a <label> element? (implicit labeling)
+        if any(lo <= m.start() < hi for lo, hi in label_ranges):
             continue
         line = text.count("\n", 0, m.start()) + 1
         # Snippet: tag + attrs trimmed
