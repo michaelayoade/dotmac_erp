@@ -133,11 +133,13 @@ def test_migration_drops_deleted_by_id_on_mixin_tables():
     tree = ast.parse(source)
 
     upgrade_fn = next(
-        n for n in ast.walk(tree)
+        n
+        for n in ast.walk(tree)
         if isinstance(n, ast.FunctionDef) and n.name == "upgrade"
     )
     downgrade_fn = next(
-        n for n in ast.walk(tree)
+        n
+        for n in ast.walk(tree)
         if isinstance(n, ast.FunctionDef) and n.name == "downgrade"
     )
 

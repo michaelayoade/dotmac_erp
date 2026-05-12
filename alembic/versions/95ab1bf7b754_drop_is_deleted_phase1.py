@@ -109,24 +109,24 @@ _TABLES_WITH_DELETED_AT = {
 #   (schema, table, sql_setting_lifecycle_field_when_is_deleted_true)
 # The SQL fragment goes in the SET clause of an UPDATE.
 _PER_TABLE_MIGRATION = [
-    ("hr",      "employee",                 "status = 'TERMINATED'"),
-    ("hr",      "department",               "is_active = false"),
-    ("hr",      "designation",              "is_active = false"),
-    ("hr",      "employee_document",        "is_active = false"),
-    ("hr",      "employee_qualification",   "is_active = false"),
-    ("hr",      "employee_certification",   "is_active = false"),
-    ("hr",      "employee_dependent",       "is_active = false"),
-    ("hr",      "skill",                    "is_active = false"),
-    ("hr",      "competency",               "is_active = false"),
-    ("hr",      "job_description",          "status = 'archived'"),
-    ("hr",      "disciplinary_case",        "status = 'WITHDRAWN'"),
-    ("pm",      "task",                     "status = 'CANCELLED'"),
-    ("pm",      "pm_comment",               "is_active = false"),
-    ("support", "ticket",                   "status = 'CLOSED'"),
-    ("support", "ticket_attachment",        "is_active = false"),
-    ("support", "ticket_comment",           "is_active = false"),
-    ("fleet",   "vehicle",                  "status = 'DISPOSED'"),
-    ("fleet",   "vehicle_incident",         "is_active = false"),
+    ("hr", "employee", "status = 'TERMINATED'"),
+    ("hr", "department", "is_active = false"),
+    ("hr", "designation", "is_active = false"),
+    ("hr", "employee_document", "is_active = false"),
+    ("hr", "employee_qualification", "is_active = false"),
+    ("hr", "employee_certification", "is_active = false"),
+    ("hr", "employee_dependent", "is_active = false"),
+    ("hr", "skill", "is_active = false"),
+    ("hr", "competency", "is_active = false"),
+    ("hr", "job_description", "status = 'archived'"),
+    ("hr", "disciplinary_case", "status = 'WITHDRAWN'"),
+    ("pm", "task", "status = 'CANCELLED'"),
+    ("pm", "pm_comment", "is_active = false"),
+    ("support", "ticket", "status = 'CLOSED'"),
+    ("support", "ticket_attachment", "is_active = false"),
+    ("support", "ticket_comment", "is_active = false"),
+    ("fleet", "vehicle", "status = 'DISPOSED'"),
+    ("fleet", "vehicle_incident", "is_active = false"),
 ]
 
 
@@ -146,11 +146,7 @@ def upgrade() -> None:
 
     # 2. Migrate is_deleted=true rows to their lifecycle terminal value.
     for schema, table, set_clause in _PER_TABLE_MIGRATION:
-        op.execute(
-            f"UPDATE {schema}.{table} "
-            f"SET {set_clause} "
-            f"WHERE is_deleted = true"
-        )
+        op.execute(f"UPDATE {schema}.{table} SET {set_clause} WHERE is_deleted = true")
 
     # 3. Drop is_deleted on all tables, and deleted_at only on tables that have it.
     for schema, table, _ in _PER_TABLE_MIGRATION:
@@ -209,15 +205,9 @@ def downgrade() -> None:
 
     # 2. Reverse-engineer is_deleted=true from the lifecycle field
     #    (LOSSY -- see module docstring).
-    op.execute(
-        "UPDATE hr.employee SET is_deleted = true WHERE status = 'TERMINATED'"
-    )
-    op.execute(
-        "UPDATE hr.department SET is_deleted = true WHERE is_active = false"
-    )
-    op.execute(
-        "UPDATE hr.designation SET is_deleted = true WHERE is_active = false"
-    )
+    op.execute("UPDATE hr.employee SET is_deleted = true WHERE status = 'TERMINATED'")
+    op.execute("UPDATE hr.department SET is_deleted = true WHERE is_active = false")
+    op.execute("UPDATE hr.designation SET is_deleted = true WHERE is_active = false")
     op.execute(
         "UPDATE hr.employee_document SET is_deleted = true WHERE is_active = false"
     )
@@ -230,36 +220,24 @@ def downgrade() -> None:
     op.execute(
         "UPDATE hr.employee_dependent SET is_deleted = true WHERE is_active = false"
     )
-    op.execute(
-        "UPDATE hr.skill SET is_deleted = true WHERE is_active = false"
-    )
-    op.execute(
-        "UPDATE hr.competency SET is_deleted = true WHERE is_active = false"
-    )
+    op.execute("UPDATE hr.skill SET is_deleted = true WHERE is_active = false")
+    op.execute("UPDATE hr.competency SET is_deleted = true WHERE is_active = false")
     op.execute(
         "UPDATE hr.job_description SET is_deleted = true WHERE status = 'archived'"
     )
     op.execute(
         "UPDATE hr.disciplinary_case SET is_deleted = true WHERE status = 'WITHDRAWN'"
     )
-    op.execute(
-        "UPDATE pm.task SET is_deleted = true WHERE status = 'CANCELLED'"
-    )
-    op.execute(
-        "UPDATE pm.pm_comment SET is_deleted = true WHERE is_active = false"
-    )
-    op.execute(
-        "UPDATE support.ticket SET is_deleted = true WHERE status = 'CLOSED'"
-    )
+    op.execute("UPDATE pm.task SET is_deleted = true WHERE status = 'CANCELLED'")
+    op.execute("UPDATE pm.pm_comment SET is_deleted = true WHERE is_active = false")
+    op.execute("UPDATE support.ticket SET is_deleted = true WHERE status = 'CLOSED'")
     op.execute(
         "UPDATE support.ticket_attachment SET is_deleted = true WHERE is_active = false"
     )
     op.execute(
         "UPDATE support.ticket_comment SET is_deleted = true WHERE is_active = false"
     )
-    op.execute(
-        "UPDATE fleet.vehicle SET is_deleted = true WHERE status = 'DISPOSED'"
-    )
+    op.execute("UPDATE fleet.vehicle SET is_deleted = true WHERE status = 'DISPOSED'")
     op.execute(
         "UPDATE fleet.vehicle_incident SET is_deleted = true WHERE is_active = false"
     )
