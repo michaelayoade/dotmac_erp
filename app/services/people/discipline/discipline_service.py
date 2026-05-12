@@ -113,7 +113,7 @@ class DisciplineService:
     ) -> DisciplinaryCase | None:
         """Get a single case by ID."""
         case = self.db.get(DisciplinaryCase, case_id)
-        if case and case.is_deleted:
+        if case and case.status == CaseStatus.WITHDRAWN:
             return None
         if (
             case
@@ -147,7 +147,7 @@ class DisciplineService:
                 selectinload(DisciplinaryCase.responses),
             )
             .where(DisciplinaryCase.case_id == case_id)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
         )
         case = self.db.scalar(stmt)
         if not case:
@@ -165,7 +165,7 @@ class DisciplineService:
         stmt = (
             select(DisciplinaryCase)
             .where(DisciplinaryCase.organization_id == organization_id)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
         )
 
         if filters:
@@ -219,7 +219,7 @@ class DisciplineService:
             select(DisciplinaryCase)
             .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
         )
 
         if not include_closed:
@@ -336,18 +336,22 @@ class DisciplineService:
         case_id: UUID,
         deleted_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
-        """Soft delete a case (only allowed in DRAFT status)."""
+        """Soft delete a case (only allowed in DRAFT status).
+
+        Lifecycle: sets status to WITHDRAWN. The deleted_by_id parameter
+        is preserved for API compatibility but no longer persisted.
+        """
         case = self.get_case_or_404(case_id)
 
-        if case.status != CaseStatus.DRAFT:
+        if case.status not in (CaseStatus.DRAFT, CaseStatus.WITHDRAWN):
             raise ValidationError("Can only delete case in DRAFT status")
 
-        if case.is_deleted:
+        if case.status == CaseStatus.WITHDRAWN:
             raise ValidationError("Case is already deleted")
 
-        case.is_deleted = True
-        case.deleted_at = datetime.now(UTC)
-        case.deleted_by_id = deleted_by_id
+        prior_status = case.status
+        case.status = CaseStatus.WITHDRAWN
+        case.updated_by_id = deleted_by_id
         self.db.flush()
 
         fire_audit_event(
@@ -357,8 +361,8 @@ class DisciplineService:
             "disciplinary_case",
             str(case.case_id),
             AuditAction.DELETE,
-            old_values={"status": case.status.value, "is_deleted": False},
-            new_values={"is_deleted": True},
+            old_values={"status": prior_status.value},
+            new_values={"status": CaseStatus.WITHDRAWN.value},
             user_id=deleted_by_id,
         )
 
@@ -1034,7 +1038,7 @@ class DisciplineService:
             .join(DisciplinaryCase)
             .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(CaseAction.is_active == True)
             .where(
                 (CaseAction.end_date == None) | (CaseAction.end_date >= date.today())
@@ -1055,7 +1059,7 @@ class DisciplineService:
             .join(DisciplinaryCase)
             .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(CaseAction.action_type == ActionType.SUSPENSION_UNPAID)
             .where(CaseAction.is_active == True)
             .where(CaseAction.effective_date <= to_date)
@@ -1071,7 +1075,7 @@ class DisciplineService:
             select(func.count(DisciplinaryCase.case_id))
             .where(DisciplinaryCase.organization_id == organization_id)
             .where(DisciplinaryCase.employee_id == employee_id)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(
                 DisciplinaryCase.status.in_(
                     [
@@ -1151,7 +1155,7 @@ class DisciplineService:
             select(DisciplinaryCase)
             .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.QUERY_ISSUED)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(DisciplinaryCase.response_due_date.isnot(None))
             .where(DisciplinaryCase.response_due_date <= cutoff)
             .where(DisciplinaryCase.response_due_date >= today)
@@ -1173,7 +1177,7 @@ class DisciplineService:
             select(DisciplinaryCase)
             .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.QUERY_ISSUED)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(DisciplinaryCase.response_due_date.isnot(None))
             .where(DisciplinaryCase.response_due_date < today)
             .where(DisciplinaryCase.response_due_date >= max_overdue)
@@ -1200,7 +1204,7 @@ class DisciplineService:
             select(DisciplinaryCase)
             .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.HEARING_SCHEDULED)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(DisciplinaryCase.hearing_date.isnot(None))
             .where(DisciplinaryCase.hearing_date <= cutoff)
             .where(DisciplinaryCase.hearing_date >= now)
@@ -1227,7 +1231,7 @@ class DisciplineService:
             select(DisciplinaryCase)
             .options(joinedload(DisciplinaryCase.employee))
             .where(DisciplinaryCase.status == CaseStatus.DECISION_MADE)
-            .where(DisciplinaryCase.is_deleted == False)
+            .where(DisciplinaryCase.status != CaseStatus.WITHDRAWN)
             .where(DisciplinaryCase.appeal_deadline.isnot(None))
             .where(DisciplinaryCase.appeal_deadline <= cutoff)
             .where(DisciplinaryCase.appeal_deadline >= today)

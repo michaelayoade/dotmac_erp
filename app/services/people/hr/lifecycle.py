@@ -9,7 +9,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.hr.lifecycle import (
     BoardingStatus,
     EmployeeOnboarding,
@@ -47,7 +47,7 @@ class LifecycleService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == org_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:

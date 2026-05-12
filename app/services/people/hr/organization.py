@@ -131,7 +131,7 @@ class OrganizationService:
             select(Department).where(
                 Department.department_id == parent_id,
                 Department.organization_id == self.organization_id,
-                Department.is_deleted == False,
+                Department.is_active.is_(True),
             )
         )
         if not parent:
@@ -171,7 +171,11 @@ class OrganizationService:
             or getattr(record, "organization_id", None) != self.organization_id
         ):
             raise ValidationError(f"{label} {entity_id} not found")
-        if getattr(record, "is_deleted", False):
+        # Lifecycle check: TERMINATED employee or inactive Department/Designation
+        if (
+            getattr(record, "status", None) == EmployeeStatus.TERMINATED
+            or getattr(record, "is_active", True) is False
+        ):
             raise ValidationError(f"{label} {entity_id} not found")
 
     # =========================================================================
@@ -221,7 +225,7 @@ class OrganizationService:
             .options(joinedload(Department.head))
             .where(
                 Department.organization_id == self.organization_id,
-                Department.is_deleted == False,
+                Department.is_active.is_(True),
             )
         )
 
@@ -268,7 +272,7 @@ class OrganizationService:
             .where(
                 Department.department_id == department_id,
                 Department.organization_id == self.organization_id,
-                Department.is_deleted == False,
+                Department.is_active.is_(True),
             )
         )
         department = self.db.scalar(stmt)
@@ -291,7 +295,7 @@ class OrganizationService:
             select(Department).where(
                 Department.department_code == code,
                 Department.organization_id == self.organization_id,
-                Department.is_deleted == False,
+                Department.is_active.is_(True),
             )
         )
 
@@ -414,7 +418,7 @@ class OrganizationService:
         employee_count = self.db.scalar(
             select(func.count(Employee.employee_id)).where(
                 Employee.department_id == department_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee_count and employee_count > 0:
@@ -426,7 +430,7 @@ class OrganizationService:
             select(func.count(Department.department_id)).where(
                 Department.parent_department_id == department_id,
                 Department.organization_id == self.organization_id,
-                Department.is_deleted == False,
+                Department.is_active.is_(True),
             )
         )
         if child_count and child_count > 0:
@@ -434,9 +438,9 @@ class OrganizationService:
                 f"Cannot delete department with {child_count} child departments"
             )
 
-        department.is_deleted = True
-        department.deleted_at = datetime.now(UTC)
-        department.deleted_by_id = self.principal.id if self.principal else None
+        department.is_active = False
+        department.updated_at = datetime.now(UTC)
+        department.updated_by_id = self.principal.id if self.principal else None
 
     def get_department_tree(self) -> list[DepartmentNode]:
         """Get the department hierarchy as a tree.
@@ -451,7 +455,7 @@ class OrganizationService:
             .options(joinedload(Department.head))
             .where(
                 Department.organization_id == self.organization_id,
-                Department.is_deleted == False,
+                Department.is_active.is_(True),
             )
         )
 
@@ -509,7 +513,7 @@ class OrganizationService:
             .where(
                 Employee.department_id == department_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .group_by(Employee.status)
         )
@@ -546,7 +550,7 @@ class OrganizationService:
             .where(
                 Employee.department_id.in_(department_ids),
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .group_by(Employee.department_id)
         )
@@ -580,7 +584,7 @@ class OrganizationService:
 
         stmt = select(Designation).where(
             Designation.organization_id == self.organization_id,
-            Designation.is_deleted == False,
+            Designation.is_active.is_(True),
         )
 
         if filters.search:
@@ -616,7 +620,7 @@ class OrganizationService:
         stmt = select(Designation).where(
             Designation.designation_id == designation_id,
             Designation.organization_id == self.organization_id,
-            Designation.is_deleted == False,
+            Designation.is_active.is_(True),
         )
         designation = self.db.scalar(stmt)
 
@@ -638,7 +642,7 @@ class OrganizationService:
             select(Designation).where(
                 Designation.designation_code == code,
                 Designation.organization_id == self.organization_id,
-                Designation.is_deleted == False,
+                Designation.is_active.is_(True),
             )
         )
 
@@ -729,7 +733,7 @@ class OrganizationService:
         employee_count = self.db.scalar(
             select(func.count(Employee.employee_id)).where(
                 Employee.designation_id == designation_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee_count and employee_count > 0:
@@ -737,9 +741,9 @@ class OrganizationService:
                 f"Cannot delete designation with {employee_count} employees assigned"
             )
 
-        designation.is_deleted = True
-        designation.deleted_at = datetime.now(UTC)
-        designation.deleted_by_id = self.principal.id if self.principal else None
+        designation.is_active = False
+        designation.updated_at = datetime.now(UTC)
+        designation.updated_by_id = self.principal.id if self.principal else None
 
     def get_designation_headcount(
         self, designation_id: uuid.UUID
@@ -761,7 +765,7 @@ class OrganizationService:
             select(Employee.status, func.count(Employee.employee_id))
             .where(
                 Employee.designation_id == designation_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .group_by(Employee.status)
         )
@@ -893,7 +897,7 @@ class OrganizationService:
         employee_count = self.db.scalar(
             select(func.count(Employee.employee_id)).where(
                 Employee.employment_type_id == employment_type_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee_count and employee_count > 0:
@@ -1029,7 +1033,7 @@ class OrganizationService:
         employee_count = self.db.scalar(
             select(func.count(Employee.employee_id)).where(
                 Employee.grade_id == grade_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee_count and employee_count > 0:

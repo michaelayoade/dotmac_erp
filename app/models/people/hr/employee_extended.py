@@ -33,7 +33,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin, SoftDeleteMixin
+from app.models.people.base import AuditMixin
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
@@ -114,7 +114,7 @@ class SkillCategory(str, enum.Enum):
 # =============================================================================
 
 
-class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
+class EmployeeDocument(Base, AuditMixin):
     """
     Employee document storage.
 
@@ -215,6 +215,14 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
     )
 
+    # Lifecycle (replaces former SoftDeleteMixin)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+
     # Relationships
     employee: Mapped["Employee"] = relationship(
         "Employee",
@@ -249,7 +257,7 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
 # =============================================================================
 
 
-class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
+class EmployeeQualification(Base, AuditMixin):
     """
     Employee educational qualifications.
 
@@ -352,6 +360,14 @@ class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
     )
 
+    # Lifecycle (replaces former SoftDeleteMixin)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+
     # Relationships
     employee: Mapped["Employee"] = relationship(
         "Employee",
@@ -370,7 +386,7 @@ class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
 # =============================================================================
 
 
-class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
+class EmployeeCertification(Base, AuditMixin):
     """
     Employee professional certifications and licenses.
 
@@ -463,6 +479,14 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
     )
 
+    # Lifecycle (replaces former SoftDeleteMixin)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+
     # Relationships
     employee: Mapped["Employee"] = relationship(
         "Employee",
@@ -505,7 +529,7 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
 # =============================================================================
 
 
-class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
+class EmployeeDependent(Base, AuditMixin):
     """
     Employee dependents and beneficiaries.
 
@@ -608,6 +632,14 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
         nullable=True,
     )
 
+    # Lifecycle (replaces former SoftDeleteMixin)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
+    )
+
     # Relationships
     employee: Mapped["Employee"] = relationship(
         "Employee",
@@ -638,7 +670,7 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
 # =============================================================================
 
 
-class Skill(Base, AuditMixin, SoftDeleteMixin):
+class Skill(Base, AuditMixin):
     """
     Skill catalog.
 

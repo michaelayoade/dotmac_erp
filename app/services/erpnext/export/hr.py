@@ -66,7 +66,6 @@ class DepartmentExportService(BaseExportService[Department]):
         stmt = select(Department).where(
             Department.organization_id == self.organization_id,
             Department.is_active == True,
-            Department.deleted_at.is_(None),
         )
         return list(self.db.execute(stmt).scalars().all())
 
@@ -122,7 +121,6 @@ class EmployeeExportService(BaseExportService[Employee]):
         stmt = select(Employee).where(
             Employee.organization_id == self.organization_id,
             Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
-            Employee.deleted_at.is_(None),
         )
         return list(self.db.execute(stmt).scalars().all())
 

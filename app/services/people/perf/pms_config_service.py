@@ -105,7 +105,7 @@ class PMSConfigService:
         # Fetch all existing codes for this org in one query
         existing_stmt = select(Competency.competency_code).where(
             Competency.organization_id == org_id,
-            Competency.deleted_at.is_(None),
+            Competency.is_active.is_(True),
         )
         existing_codes: set[str] = set(self.db.scalars(existing_stmt).all())
 

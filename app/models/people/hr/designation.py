@@ -13,14 +13,14 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin, ERPNextSyncMixin, SoftDeleteMixin
+from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
     from app.models.people.hr.employee import Employee
 
 
-class Designation(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
+class Designation(Base, AuditMixin, ERPNextSyncMixin):
     """
     Designation entity for job titles/positions.
 

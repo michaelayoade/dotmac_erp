@@ -85,7 +85,6 @@ class MockDisciplinaryCase:
         created_by_id: uuid.UUID | None = None,
         status_changed_at: datetime | None = None,
         status_changed_by_id: uuid.UUID | None = None,
-        is_deleted: bool = False,
         created_at: datetime = None,
         updated_at: datetime | None = None,
         employee: MockEmployee | None = None,
@@ -119,7 +118,6 @@ class MockDisciplinaryCase:
         self.created_by_id = created_by_id
         self.status_changed_at = status_changed_at
         self.status_changed_by_id = status_changed_by_id
-        self.is_deleted = is_deleted
         self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         self.employee = employee

@@ -648,7 +648,7 @@ class HRDocumentService:
                 select(func.count(Employee.employee_id)).where(
                     Employee.organization_id == org_id,
                     Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             or 0
@@ -703,7 +703,7 @@ class HRDocumentService:
                 select(func.count(Employee.employee_id)).where(
                     Employee.organization_id == org_id,
                     Employee.status == EmployeeStatus.ACTIVE,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             or 0
@@ -763,7 +763,7 @@ class HRDocumentService:
         query = select(Employee).where(
             Employee.organization_id == org_id,
             Employee.status == EmployeeStatus.ACTIVE,
-            Employee.is_deleted == False,
+            Employee.status != EmployeeStatus.TERMINATED,
         )
 
         if acknowledged_ids:

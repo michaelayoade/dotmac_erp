@@ -464,13 +464,13 @@ class ExpenseService:
         resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         if vehicle_id is not None:
-            from app.models.fleet.vehicle import Vehicle
+            from app.models.fleet.vehicle import Vehicle, VehicleStatus
 
             vehicle = self.db.get(Vehicle, vehicle_id)
             if (
                 not vehicle
                 or getattr(vehicle, "organization_id", None) != org_id
-                or getattr(vehicle, "is_deleted", False)
+                or getattr(vehicle, "status", None) == VehicleStatus.DISPOSED
             ):
                 raise ExpenseServiceError("Fleet vehicle not found")
 

@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin, ERPNextSyncMixin, SoftDeleteMixin
+from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.cost_center import CostCenter
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
 
 
-class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
+class Department(Base, AuditMixin, ERPNextSyncMixin):
     """
     Department entity for organizational structure.
 

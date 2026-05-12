@@ -104,12 +104,6 @@ FILTER_SCHEMA: dict[str, FilterFieldSpec] = {
         value_type="date",
         operators={"=", "!=", ">", "<", ">=", "<=", "is", "is not"},
     ),
-    "is_deleted": FilterFieldSpec(
-        model="employee",
-        column="is_deleted",
-        value_type="bool",
-        operators={"=", "!=", "is", "is not"},
-    ),
     "first_name": FilterFieldSpec(
         model="person",
         column="first_name",

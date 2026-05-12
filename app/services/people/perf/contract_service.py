@@ -347,13 +347,13 @@ class PerformanceContractService:
 
     def _get_employee_for_person(self, org_id: UUID, person_id: UUID) -> UUID | None:
         """Resolve the actor's employee ID for the organisation."""
-        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee import Employee, EmployeeStatus
 
         employee = self.db.scalar(
             select(Employee).where(
                 Employee.organization_id == org_id,
                 Employee.person_id == person_id,
-                Employee.is_deleted.is_(False),
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         return employee.employee_id if employee is not None else None

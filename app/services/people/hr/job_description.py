@@ -98,7 +98,7 @@ class CompetencyService:
             and_(
                 Competency.competency_id == competency_id,
                 Competency.organization_id == self.organization_id,
-                Competency.is_deleted == False,
+                Competency.is_active.is_(True),
             )
         )
         return self.db.execute(stmt).scalar_one_or_none()
@@ -109,7 +109,7 @@ class CompetencyService:
             and_(
                 Competency.competency_code == code,
                 Competency.organization_id == self.organization_id,
-                Competency.is_deleted == False,
+                Competency.is_active.is_(True),
             )
         )
         return self.db.execute(stmt).scalar_one_or_none()
@@ -126,7 +126,7 @@ class CompetencyService:
         stmt = select(Competency).where(
             and_(
                 Competency.organization_id == self.organization_id,
-                Competency.is_deleted == False,
+                Competency.is_active.is_(True),
             )
         )
 
@@ -246,10 +246,10 @@ class CompetencyService:
         if not competency:
             raise CompetencyNotFoundError(f"Competency {competency_id} not found")
 
-        competency.is_deleted = True
-        competency.deleted_at = datetime.now(UTC)
+        competency.is_active = False
+        competency.updated_at = datetime.now(UTC)
         if self.principal:
-            competency.deleted_by_id = self.principal.user_id
+            competency.updated_by_id = self.principal.user_id
 
 
 # =============================================================================
@@ -284,7 +284,12 @@ class JobDescriptionService:
             or getattr(record, "organization_id", None) != self.organization_id
         ):
             raise ValidationError(f"{label} {entity_id} not found")
-        if getattr(record, "is_deleted", False):
+        # Lifecycle check: archived JD, inactive Competency/Designation/Department
+        status = getattr(record, "status", None)
+        if (
+            status == JobDescriptionStatus.ARCHIVED
+            or getattr(record, "is_active", True) is False
+        ):
             raise ValidationError(f"{label} {entity_id} not found")
 
     def get_job_description(
@@ -295,7 +300,7 @@ class JobDescriptionService:
             and_(
                 JobDescription.job_description_id == jd_id,
                 JobDescription.organization_id == self.organization_id,
-                JobDescription.is_deleted == False,
+                JobDescription.status != JobDescriptionStatus.ARCHIVED,
             )
         )
 
@@ -314,7 +319,7 @@ class JobDescriptionService:
             and_(
                 JobDescription.jd_code == code,
                 JobDescription.organization_id == self.organization_id,
-                JobDescription.is_deleted == False,
+                JobDescription.status != JobDescriptionStatus.ARCHIVED,
             )
         )
         return self.db.execute(stmt).scalar_one_or_none()
@@ -334,7 +339,7 @@ class JobDescriptionService:
             .where(
                 and_(
                     JobDescription.organization_id == self.organization_id,
-                    JobDescription.is_deleted == False,
+                    JobDescription.status != JobDescriptionStatus.ARCHIVED,
                 )
             )
             .options(
@@ -508,10 +513,10 @@ class JobDescriptionService:
         if not jd:
             raise JobDescriptionNotFoundError(f"Job description {jd_id} not found")
 
-        jd.is_deleted = True
-        jd.deleted_at = datetime.now(UTC)
+        jd.status = JobDescriptionStatus.ARCHIVED
+        jd.updated_at = datetime.now(UTC)
         if self.principal:
-            jd.deleted_by_id = self.principal.user_id
+            jd.updated_by_id = self.principal.user_id
 
     def activate_job_description(self, jd_id: uuid.UUID) -> JobDescription:
         """Activate a job description."""

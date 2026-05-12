@@ -319,7 +319,6 @@ class RunWebService:
             .where(
                 Designation.organization_id == org_id,
                 Designation.is_active.is_(True),
-                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
         ).all()
@@ -420,7 +419,6 @@ class RunWebService:
             .where(
                 Designation.organization_id == org_id,
                 Designation.is_active.is_(True),
-                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
         ).all()
@@ -930,7 +928,6 @@ class RunWebService:
             .where(
                 Designation.organization_id == org_id,
                 Designation.is_active.is_(True),
-                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
         ).all()

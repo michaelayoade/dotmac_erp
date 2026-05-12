@@ -85,7 +85,7 @@ class TestCaseCRUD:
         mock_case = MockDisciplinaryCase(
             case_id=case_id,
             organization_id=organization_id,
-            is_deleted=True,
+            status=CaseStatus.WITHDRAWN,
         )
         db = create_mock_db_session(get_returns={case_id: mock_case})
 
@@ -227,16 +227,14 @@ class TestCaseCRUD:
             case_id=case_id,
             organization_id=organization_id,
             status=CaseStatus.DRAFT,
-            is_deleted=False,
         )
         db = create_mock_db_session(get_returns={case_id: mock_case})
 
         service = DisciplineService(db)
         result = service.delete_case(case_id, deleted_by_id=user_id)
 
-        assert result.is_deleted is True
-        assert result.deleted_by_id == user_id
-        assert result.deleted_at is not None
+        assert result.status == CaseStatus.WITHDRAWN
+        assert result.updated_by_id == user_id
         # Service may flush more than once as related fields/audit info are updated.
         db.flush.assert_called()
 

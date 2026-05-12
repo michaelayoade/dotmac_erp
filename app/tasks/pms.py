@@ -39,13 +39,13 @@ def _resolve_person_id(
 
     from sqlalchemy import select
 
-    from app.models.people.hr.employee import Employee
+    from app.models.people.hr.employee import Employee, EmployeeStatus
 
     employee = db.scalar(
         select(Employee).where(
             Employee.organization_id == organization_id,
             Employee.employee_id == employee_id,
-            Employee.is_deleted.is_(False),
+            Employee.status != EmployeeStatus.TERMINATED,
         )
     )
     return employee.person_id if employee is not None else None
@@ -587,7 +587,7 @@ def pms_probation_check() -> dict[str, Any]:
             NotificationChannel,
             NotificationType,
         )
-        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee import Employee, EmployeeStatus
         from app.services.notification import NotificationService
         from app.services.people.perf.underperformance_service import (
             UnderperformanceService,
@@ -621,7 +621,7 @@ def pms_probation_check() -> dict[str, Any]:
                         if (
                             employee is None
                             or employee.organization_id != org.organization_id
-                            or employee.is_deleted
+                            or employee.status == EmployeeStatus.TERMINATED
                         ):
                             logger.warning(
                                 "Skipping probation milestone alert for %s: employee not found in org",

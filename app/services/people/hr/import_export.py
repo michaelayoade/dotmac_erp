@@ -69,7 +69,7 @@ class DepartmentImporter(BaseImporter[Department]):
             select(Department).where(
                 Department.organization_id == self.config.organization_id,
                 Department.department_code == code,
-                Department.is_deleted == False,  # noqa: E712
+                Department.is_active.is_(True),
             )
         )
 
@@ -83,7 +83,7 @@ class DepartmentImporter(BaseImporter[Department]):
             select(Department).where(
                 Department.organization_id == self.config.organization_id,
                 Department.department_code == code,
-                Department.is_deleted == False,  # noqa: E712
+                Department.is_active.is_(True),
             )
         )
         if dept:
@@ -118,7 +118,7 @@ class DepartmentImporter(BaseImporter[Department]):
             select(Employee).where(
                 Employee.organization_id == self.config.organization_id,
                 Employee.employee_code == code,
-                Employee.is_deleted == False,  # noqa: E712
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee:
@@ -195,7 +195,7 @@ class DesignationImporter(BaseImporter[Designation]):
             select(Designation).where(
                 Designation.organization_id == self.config.organization_id,
                 Designation.designation_code == code,
-                Designation.is_deleted == False,  # noqa: E712
+                Designation.is_active.is_(True),
             )
         )
 
@@ -326,7 +326,7 @@ class EmployeeImporter(BaseImporter[Employee]):
                 select(Employee).where(
                     Employee.organization_id == self.config.organization_id,
                     Employee.employee_code == employee_code,
-                    Employee.is_deleted == False,  # noqa: E712
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if existing:
@@ -340,7 +340,7 @@ class EmployeeImporter(BaseImporter[Employee]):
                     select(Employee).where(
                         Employee.organization_id == self.config.organization_id,
                         Employee.person_id == person.id,
-                        Employee.is_deleted == False,  # noqa: E712
+                        Employee.status != EmployeeStatus.TERMINATED,
                     )
                 )
         return None
@@ -355,7 +355,7 @@ class EmployeeImporter(BaseImporter[Employee]):
             select(Department).where(
                 Department.organization_id == self.config.organization_id,
                 Department.department_code == code,
-                Department.is_deleted == False,  # noqa: E712
+                Department.is_active.is_(True),
             )
         )
         if dept:
@@ -373,7 +373,7 @@ class EmployeeImporter(BaseImporter[Employee]):
             select(Designation).where(
                 Designation.organization_id == self.config.organization_id,
                 Designation.designation_code == code,
-                Designation.is_deleted == False,  # noqa: E712
+                Designation.is_active.is_(True),
             )
         )
         if designation:
@@ -408,7 +408,7 @@ class EmployeeImporter(BaseImporter[Employee]):
             select(Employee).where(
                 Employee.organization_id == self.config.organization_id,
                 Employee.employee_code == code,
-                Employee.is_deleted == False,  # noqa: E712
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee:

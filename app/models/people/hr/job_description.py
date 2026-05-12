@@ -26,7 +26,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin, ERPNextSyncMixin, SoftDeleteMixin
+from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
@@ -52,7 +52,7 @@ class JobDescriptionStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
-class Competency(Base, AuditMixin, SoftDeleteMixin):
+class Competency(Base, AuditMixin):
     """
     Competency definition.
 
@@ -157,7 +157,7 @@ class Competency(Base, AuditMixin, SoftDeleteMixin):
     )
 
 
-class JobDescription(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
+class JobDescription(Base, AuditMixin, ERPNextSyncMixin):
     """
     Detailed job description for a position.
 

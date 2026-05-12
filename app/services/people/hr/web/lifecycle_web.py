@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.hr.checklist_template import (
     ChecklistTemplate,
     ChecklistTemplateType,
@@ -302,7 +302,7 @@ class LifecycleWebService:
         linked_people_subq = (
             select(Employee.person_id)
             .where(Employee.organization_id == org_id)
-            .where(Employee.is_deleted == False)
+            .where(Employee.status != EmployeeStatus.TERMINATED)
         )
         results = list(
             db.scalars(

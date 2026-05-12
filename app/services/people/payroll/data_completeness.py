@@ -768,10 +768,7 @@ class PayrollReadinessService:
                     period_start=period_start,
                     period_end=period_end,
                 ),
-                or_(
-                    Employee.is_deleted.is_(None),
-                    Employee.is_deleted == False,
-                ),
+                Employee.status != EmployeeStatus.TERMINATED,
                 # Joined before or during period
                 Employee.date_of_joining <= period_end,
                 # Either no leaving date, or leaving date is within/after period start

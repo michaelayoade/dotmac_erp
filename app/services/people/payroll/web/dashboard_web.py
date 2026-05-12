@@ -281,7 +281,7 @@ class PayrollDashboardService:
                 select(func.count(Employee.employee_id)).where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                         Employee.status == EmployeeStatus.ACTIVE,
                     )
                 )

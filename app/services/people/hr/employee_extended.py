@@ -29,6 +29,7 @@ from app.models.people.hr import (
     EmployeeDocument,
     EmployeeQualification,
     EmployeeSkill,
+    EmployeeStatus,
     QualificationType,
     RelationshipType,
     Skill,
@@ -120,7 +121,7 @@ class EmployeeDocumentService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:
@@ -138,7 +139,7 @@ class EmployeeDocumentService:
         query = select(EmployeeDocument).where(
             EmployeeDocument.organization_id == self.organization_id,
             EmployeeDocument.employee_id == employee_id,
-            EmployeeDocument.is_deleted == False,
+            EmployeeDocument.is_active.is_(True),
         )
 
         if document_type:
@@ -163,7 +164,7 @@ class EmployeeDocumentService:
             select(EmployeeDocument).where(
                 EmployeeDocument.document_id == document_id,
                 EmployeeDocument.organization_id == self.organization_id,
-                EmployeeDocument.is_deleted == False,
+                EmployeeDocument.is_active.is_(True),
             )
         )
         if not doc:
@@ -251,8 +252,7 @@ class EmployeeDocumentService:
     def delete_document(self, document_id: uuid.UUID) -> None:
         """Soft delete a document."""
         doc = self.get_document(document_id)
-        doc.is_deleted = True
-        doc.deleted_at = datetime.now(UTC)
+        doc.is_active = False
         self.db.flush()
 
     def get_expiring_documents(
@@ -270,7 +270,7 @@ class EmployeeDocumentService:
             select(EmployeeDocument)
             .where(
                 EmployeeDocument.organization_id == self.organization_id,
-                EmployeeDocument.is_deleted == False,
+                EmployeeDocument.is_active.is_(True),
                 EmployeeDocument.expiry_date != None,
                 EmployeeDocument.expiry_date >= cutoff,
                 EmployeeDocument.expiry_date <= end_date,
@@ -304,7 +304,7 @@ class EmployeeQualificationService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:
@@ -320,7 +320,7 @@ class EmployeeQualificationService:
         query = select(EmployeeQualification).where(
             EmployeeQualification.organization_id == self.organization_id,
             EmployeeQualification.employee_id == employee_id,
-            EmployeeQualification.is_deleted == False,
+            EmployeeQualification.is_active.is_(True),
         )
 
         if qualification_type:
@@ -340,7 +340,7 @@ class EmployeeQualificationService:
             select(EmployeeQualification).where(
                 EmployeeQualification.qualification_id == qualification_id,
                 EmployeeQualification.organization_id == self.organization_id,
-                EmployeeQualification.is_deleted == False,
+                EmployeeQualification.is_active.is_(True),
             )
         )
         if not qual:
@@ -430,8 +430,7 @@ class EmployeeQualificationService:
     def delete_qualification(self, qualification_id: uuid.UUID) -> None:
         """Soft delete a qualification."""
         qual = self.get_qualification(qualification_id)
-        qual.is_deleted = True
-        qual.deleted_at = datetime.now(UTC)
+        qual.is_active = False
         self.db.flush()
 
 
@@ -458,7 +457,7 @@ class EmployeeCertificationService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:
@@ -474,7 +473,7 @@ class EmployeeCertificationService:
         query = select(EmployeeCertification).where(
             EmployeeCertification.organization_id == self.organization_id,
             EmployeeCertification.employee_id == employee_id,
-            EmployeeCertification.is_deleted == False,
+            EmployeeCertification.is_active.is_(True),
         )
 
         if not include_expired:
@@ -496,7 +495,7 @@ class EmployeeCertificationService:
             select(EmployeeCertification).where(
                 EmployeeCertification.certification_id == certification_id,
                 EmployeeCertification.organization_id == self.organization_id,
-                EmployeeCertification.is_deleted == False,
+                EmployeeCertification.is_active.is_(True),
             )
         )
         if not cert:
@@ -577,8 +576,7 @@ class EmployeeCertificationService:
     def delete_certification(self, certification_id: uuid.UUID) -> None:
         """Soft delete a certification."""
         cert = self.get_certification(certification_id)
-        cert.is_deleted = True
-        cert.deleted_at = datetime.now(UTC)
+        cert.is_active = False
         self.db.flush()
 
     def get_expiring_certifications(
@@ -595,7 +593,7 @@ class EmployeeCertificationService:
             select(EmployeeCertification)
             .where(
                 EmployeeCertification.organization_id == self.organization_id,
-                EmployeeCertification.is_deleted == False,
+                EmployeeCertification.is_active.is_(True),
                 EmployeeCertification.does_not_expire == False,
                 EmployeeCertification.expiry_date != None,
                 EmployeeCertification.expiry_date >= cutoff,
@@ -612,7 +610,7 @@ class EmployeeCertificationService:
             select(EmployeeCertification)
             .where(
                 EmployeeCertification.organization_id == self.organization_id,
-                EmployeeCertification.is_deleted == False,
+                EmployeeCertification.is_active.is_(True),
                 EmployeeCertification.does_not_expire == False,
                 EmployeeCertification.expiry_date != None,
                 EmployeeCertification.expiry_date >= date.today(),
@@ -647,7 +645,7 @@ class EmployeeDependentService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:
@@ -665,7 +663,7 @@ class EmployeeDependentService:
         query = select(EmployeeDependent).where(
             EmployeeDependent.organization_id == self.organization_id,
             EmployeeDependent.employee_id == employee_id,
-            EmployeeDependent.is_deleted == False,
+            EmployeeDependent.is_active.is_(True),
         )
 
         if relationship:
@@ -691,7 +689,7 @@ class EmployeeDependentService:
             select(EmployeeDependent).where(
                 EmployeeDependent.dependent_id == dependent_id,
                 EmployeeDependent.organization_id == self.organization_id,
-                EmployeeDependent.is_deleted == False,
+                EmployeeDependent.is_active.is_(True),
             )
         )
         if not dep:
@@ -774,8 +772,7 @@ class EmployeeDependentService:
     def delete_dependent(self, dependent_id: uuid.UUID) -> None:
         """Soft delete a dependent."""
         dep = self.get_dependent(dependent_id)
-        dep.is_deleted = True
-        dep.deleted_at = datetime.now(UTC)
+        dep.is_active = False
         self.db.flush()
 
     def get_emergency_contacts(
@@ -816,7 +813,7 @@ class SkillService:
         """List skills in the catalog."""
         query = select(Skill).where(
             Skill.organization_id == self.organization_id,
-            Skill.is_deleted == False,
+            Skill.is_active.is_(True),
         )
 
         if category:
@@ -835,7 +832,7 @@ class SkillService:
             select(Skill).where(
                 Skill.skill_id == skill_id,
                 Skill.organization_id == self.organization_id,
-                Skill.is_deleted == False,
+                Skill.is_active.is_(True),
             )
         )
         if not skill:
@@ -885,8 +882,7 @@ class SkillService:
     def delete_skill(self, skill_id: uuid.UUID) -> None:
         """Soft delete a skill."""
         skill = self.get_skill(skill_id)
-        skill.is_deleted = True
-        skill.deleted_at = datetime.now(UTC)
+        skill.is_active = False
         self.db.flush()
 
 
@@ -913,7 +909,7 @@ class EmployeeSkillService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:
@@ -925,7 +921,7 @@ class EmployeeSkillService:
             select(Skill).where(
                 Skill.skill_id == skill_id,
                 Skill.organization_id == self.organization_id,
-                Skill.is_deleted == False,
+                Skill.is_active.is_(True),
             )
         )
         if not skill:

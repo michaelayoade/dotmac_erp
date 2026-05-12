@@ -24,7 +24,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin, SoftDeleteMixin, StatusTrackingMixin
+from app.models.people.base import AuditMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
@@ -76,7 +76,7 @@ class CaseStatus(str, enum.Enum):
     WITHDRAWN = "WITHDRAWN"  # Case withdrawn
 
 
-class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
+class DisciplinaryCase(Base, AuditMixin, StatusTrackingMixin):
     """
     Disciplinary Case Model.
 

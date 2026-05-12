@@ -1601,7 +1601,7 @@ class HRWebService:
                 select(Employee).where(
                     Employee.employee_id == employee.reports_to_id,
                     Employee.organization_id == org_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if manager_emp:
@@ -1616,7 +1616,7 @@ class HRWebService:
                 select(Employee).where(
                     Employee.employee_id == employee.expense_approver_id,
                     Employee.organization_id == org_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if approver_emp:

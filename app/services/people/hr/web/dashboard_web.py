@@ -98,7 +98,7 @@ class PeopleDashboardService:
                 select(func.count(Employee.employee_id)).where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                     )
                 )
             )
@@ -110,7 +110,7 @@ class PeopleDashboardService:
                 select(func.count(Employee.employee_id)).where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                         Employee.status == EmployeeStatus.ACTIVE,
                     )
                 )
@@ -124,7 +124,7 @@ class PeopleDashboardService:
                 select(func.count(Employee.employee_id)).where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                         Employee.date_of_joining >= month_start,
                     )
                 )
@@ -333,7 +333,7 @@ class PeopleDashboardService:
                     select(func.count(Employee.employee_id)).where(
                         and_(
                             Employee.organization_id == org_id,
-                            Employee.is_deleted.is_(False),
+                            Employee.status != EmployeeStatus.TERMINATED,
                             Employee.date_of_joining <= month_end,
                             or_(
                                 Employee.date_of_leaving.is_(None),
@@ -399,7 +399,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                     Employee.status == EmployeeStatus.ACTIVE,
                 )
             )
@@ -417,7 +417,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             .group_by(Employee.status)
@@ -466,7 +466,7 @@ class PeopleDashboardService:
                     select(func.count(Employee.employee_id)).where(
                         and_(
                             Employee.organization_id == org_id,
-                            Employee.is_deleted.is_(False),
+                            Employee.status != EmployeeStatus.TERMINATED,
                             Employee.status == EmployeeStatus.ACTIVE,
                             Employee.date_of_joining > min_date,
                             Employee.date_of_joining <= max_date,
@@ -503,7 +503,7 @@ class PeopleDashboardService:
                     .where(
                         and_(
                             Employee.organization_id == org_id,
-                            Employee.is_deleted.is_(False),
+                            Employee.status != EmployeeStatus.TERMINATED,
                             Employee.status == EmployeeStatus.ACTIVE,
                             Person.date_of_birth.isnot(None),
                             Person.date_of_birth > min_dob,
@@ -562,7 +562,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             .order_by(Employee.date_of_joining.desc())
@@ -600,7 +600,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                     Employee.status == EmployeeStatus.ACTIVE,
                     Person.date_of_birth.isnot(None),
                     extract("month", Person.date_of_birth) == today.month,
@@ -632,7 +632,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                     Employee.status == EmployeeStatus.ACTIVE,
                     Employee.date_of_joining.isnot(None),
                     extract("month", Employee.date_of_joining) == today.month,
@@ -662,7 +662,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                     Employee.status == EmployeeStatus.ACTIVE,
                     Employee.gender.isnot(None),
                 )
@@ -701,7 +701,7 @@ class PeopleDashboardService:
             .where(
                 and_(
                     Employee.organization_id == org_id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                     Employee.status == EmployeeStatus.ACTIVE,
                 )
             )
@@ -776,7 +776,7 @@ class PeopleDashboardService:
                 select(func.count(Employee.employee_id)).where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                         Employee.status == EmployeeStatus.ACTIVE,
                         Employee.probation_end_date.isnot(None),
                         Employee.confirmation_date.is_(None),  # Not yet confirmed
@@ -805,7 +805,7 @@ class PeopleDashboardService:
                 select(func.count(Employee.employee_id)).where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                         Employee.status == EmployeeStatus.RESIGNED,
                         Employee.date_of_leaving.isnot(None),
                         Employee.date_of_leaving >= today,
@@ -834,7 +834,7 @@ class PeopleDashboardService:
                 .where(
                     and_(
                         Employee.organization_id == org_id,
-                        Employee.is_deleted.is_(False),
+                        Employee.status != EmployeeStatus.TERMINATED,
                         Employee.status == EmployeeStatus.ACTIVE,
                         Person.date_of_birth.is_(None),
                     )

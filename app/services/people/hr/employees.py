@@ -146,7 +146,7 @@ class EmployeeService:
             select(Employee).where(
                 Employee.employee_id == manager_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not manager:
@@ -196,7 +196,11 @@ class EmployeeService:
             or getattr(record, "organization_id", None) != self.organization_id
         ):
             raise ValidationError(f"{label} {entity_id} not found")
-        if getattr(record, "is_deleted", False):
+        # Lifecycle check: TERMINATED employee or inactive Department/Designation
+        if (
+            getattr(record, "status", None) == EmployeeStatus.TERMINATED
+            or getattr(record, "is_active", True) is False
+        ):
             raise ValidationError(f"{label} {entity_id} not found")
 
     # =========================================================================
@@ -245,7 +249,7 @@ class EmployeeService:
 
         # Handle soft delete
         if not filters.include_deleted:
-            stmt = stmt.where(Employee.is_deleted == False)
+            stmt = stmt.where(Employee.status != EmployeeStatus.TERMINATED)
 
         # Advanced filters are always additive to base tenant/deletion constraints.
         stmt, joined_person = apply_employee_filter_expression(
@@ -325,7 +329,7 @@ class EmployeeService:
             select(Employee.status, func.count(Employee.employee_id))
             .where(
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .group_by(Employee.status)
         )
@@ -374,7 +378,7 @@ class EmployeeService:
         )
 
         if not include_deleted:
-            stmt = stmt.where(Employee.is_deleted == False)
+            stmt = stmt.where(Employee.status != EmployeeStatus.TERMINATED)
 
         if eager_load:
             stmt = stmt.options(
@@ -405,7 +409,7 @@ class EmployeeService:
             select(Employee).where(
                 Employee.employee_code == employee_code,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
 
@@ -422,7 +426,7 @@ class EmployeeService:
             select(Employee).where(
                 Employee.person_id == person_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
 
@@ -443,7 +447,7 @@ class EmployeeService:
             .join(Person, Employee.person_id == Person.id)
             .where(
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
                 _employee_search_predicate(search_term),
             )
             .order_by(Person.first_name.asc())
@@ -478,7 +482,7 @@ class EmployeeService:
             .where(
                 Employee.reports_to_id == manager_id,
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .order_by(Employee.employee_code.asc())
         )
@@ -534,7 +538,7 @@ class EmployeeService:
                 .where(
                     Employee.employee_id == root_employee_id,
                     Employee.organization_id == self.organization_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
                 .options(
                     selectinload(Employee.person),
@@ -556,7 +560,7 @@ class EmployeeService:
                     .where(
                         Employee.reports_to_id.in_(current_level),
                         Employee.organization_id == self.organization_id,
-                        Employee.is_deleted == False,
+                        Employee.status != EmployeeStatus.TERMINATED,
                     )
                     .options(
                         selectinload(Employee.person),
@@ -581,7 +585,7 @@ class EmployeeService:
             .where(
                 Employee.reports_to_id.is_(None),
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .options(
                 selectinload(Employee.person),
@@ -604,7 +608,7 @@ class EmployeeService:
                 .where(
                     Employee.reports_to_id.in_(current_level),
                     Employee.organization_id == self.organization_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
                 .options(
                     selectinload(Employee.person),
@@ -693,7 +697,7 @@ class EmployeeService:
                 select(Employee).where(
                     Employee.employee_id == data.reports_to_id,
                     Employee.organization_id == self.organization_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if not manager:
@@ -704,7 +708,7 @@ class EmployeeService:
                 select(Employee).where(
                     Employee.employee_id == data.expense_approver_id,
                     Employee.organization_id == self.organization_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if not approver:
@@ -921,7 +925,7 @@ class EmployeeService:
                     select(Employee).where(
                         Employee.employee_id == data.reports_to_id,
                         Employee.organization_id == self.organization_id,
-                        Employee.is_deleted == False,
+                        Employee.status != EmployeeStatus.TERMINATED,
                     )
                 )
                 if not manager:
@@ -945,7 +949,7 @@ class EmployeeService:
                     select(Employee).where(
                         Employee.employee_id == data.expense_approver_id,
                         Employee.organization_id == self.organization_id,
-                        Employee.is_deleted == False,
+                        Employee.status != EmployeeStatus.TERMINATED,
                     )
                 )
                 if not approver:
@@ -1215,10 +1219,9 @@ class EmployeeService:
         """
         employee = self.get_employee(employee_id)
 
-        employee.is_deleted = True
-        employee.deleted_at = datetime.now(UTC)
-        employee.deleted_by_id = self.principal.id if self.principal else None
+        employee.status = EmployeeStatus.TERMINATED
         employee.updated_at = datetime.now(UTC)
+        employee.updated_by_id = self.principal.id if self.principal else None
 
     # =========================================================================
     # Status Management
@@ -1487,7 +1490,7 @@ class EmployeeService:
                 select(Employee).where(
                     Employee.employee_id == data.reports_to_id,
                     Employee.organization_id == self.organization_id,
-                    Employee.is_deleted == False,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if not manager:
@@ -1513,7 +1516,7 @@ class EmployeeService:
             .where(
                 Employee.employee_id.in_(data.ids),
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .values(**updates)
         )
@@ -1543,13 +1546,12 @@ class EmployeeService:
             .where(
                 Employee.employee_id.in_(ids),
                 Employee.organization_id == self.organization_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
             .values(
-                is_deleted=True,
-                deleted_at=now,
-                deleted_by_id=user_id,
+                status=EmployeeStatus.TERMINATED,
                 updated_at=now,
+                updated_by_id=user_id,
             )
         )
         result_proxy = cast(CursorResult[Any], self.db.execute(stmt))

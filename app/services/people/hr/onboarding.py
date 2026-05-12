@@ -26,7 +26,7 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.hr.checklist_template import (
     ChecklistTemplate,
     ChecklistTemplateType,
@@ -173,7 +173,7 @@ class OnboardingService:
             select(Employee).where(
                 Employee.employee_id == employee_id,
                 Employee.organization_id == org_id,
-                Employee.is_deleted == False,
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if not employee:

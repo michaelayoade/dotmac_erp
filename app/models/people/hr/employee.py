@@ -30,7 +30,6 @@ from app.db import Base
 from app.models.people.base import (
     AuditMixin,
     ERPNextSyncMixin,
-    SoftDeleteMixin,
     VersionMixin,
 )
 
@@ -119,7 +118,7 @@ class SalaryMode(str, enum.Enum):
     CHEQUE = "CHEQUE"
 
 
-class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin):
+class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
     """
     Employee entity - links Person to HR functionality.
 
