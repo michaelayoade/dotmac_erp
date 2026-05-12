@@ -39,7 +39,7 @@
         show_apply_button=true
     ) %}
     <div>
-            <select name="return_type" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by return type" name="return_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for rt in return_types %}
                 <option value="{{ rt.value }}" {{ 'selected' if return_type == rt.value else '' }}>
@@ -49,7 +49,7 @@
             </select>
     </div>
     <div>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by status" name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
                 <option value="PREPARED" {{ 'selected' if status == 'PREPARED' else '' }}>Prepared</option>
@@ -59,7 +59,7 @@
             </select>
     </div>
     <div>
-            <select name="period_id" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by period" name="period_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Periods</option>
                 {% for period in periods %}
                 <option value="{{ period.period_id }}"

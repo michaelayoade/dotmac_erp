@@ -48,7 +48,7 @@
         active_filters=active_filters | default([])
     ) %}
     <div>
-        <select name="project_id"
+        <select aria-label="Filter by project" name="project_id"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Projects</option>
             {% for p in projects %}
@@ -59,7 +59,7 @@
         </select>
     </div>
     <div>
-        <select name="status"
+        <select aria-label="Status" name="status"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Statuses</option>
             {% for s in statuses %}
@@ -68,7 +68,7 @@
         </select>
     </div>
     <div>
-        <select name="priority"
+        <select aria-label="Priority" name="priority"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Priorities</option>
             {% for p in priorities %}

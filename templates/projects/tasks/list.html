@@ -163,7 +163,7 @@
                                 <div class="flex items-center gap-2">
                                     {% set subtask_count = task.subtask_count | default(0) %}
                                     {% if subtask_count > 0 %}
-                                    <button type="button"
+                                    <button type="button" aria-label="Toggle subtasks"
                                             @click="expandedTasks['{{ task.task_id }}'] = !expandedTasks['{{ task.task_id }}']"
                                             class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
                                         <svg class="h-4 w-4 transition-transform" :class="expandedTasks['{{ task.task_id }}'] && 'rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24">

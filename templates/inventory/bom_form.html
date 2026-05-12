@@ -71,7 +71,7 @@
             <div class="grid gap-6 sm:grid-cols-2">
                 <div>
                     <label for="warehouse_id" class="form-label">Default Warehouse</label>
-                    <select id="warehouse_id" name="warehouse_id" class="form-select">
+                    <select aria-label="Warehouse" id="warehouse_id" name="warehouse_id" class="form-select">
                         <option value="">Select Warehouse</option>
                         {% for wh in warehouses | default([]) %}
                         <option value="{{ wh.warehouse_id }}" {{ 'selected' if bom and bom.warehouse_id == wh.warehouse_id else '' }}>
@@ -120,7 +120,7 @@
                         <template x-for="(comp, index) in components" :key="index">
                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td class="py-3 pr-3">
-                                    <select x-model="comp.item_id" :name="'components[' + index + '][item_id]'" class="form-select w-full" required>
+                                    <select aria-label="Item" x-model="comp.item_id" :name="'components[' + index + '][item_id]'" class="form-select w-full" required>
                                         <option value="">Select Item</option>
                                         {% for item in items | default([]) %}
                                         <option value="{{ item.item_id }}">{{ item.item_code }} - {{ item.item_name }}</option>
@@ -134,7 +134,7 @@
                                     </select>
                                 </td>
                                 <td class="py-3 px-2">
-                                    <input type="number" x-model="comp.quantity" :name="'components[' + index + '][quantity]'"
+                                    <input aria-label="Quantity" type="number" x-model="comp.quantity" :name="'components[' + index + '][quantity]'"
                                            step="0.0001" min="0.0001" class="form-input text-right" required>
                                 </td>
                                 <td class="py-3 px-2">
@@ -142,7 +142,7 @@
                                            class="form-input" placeholder="EACH">
                                 </td>
                                 <td class="py-3 px-2">
-                                    <input type="number" x-model="comp.scrap_percentage" :name="'components[' + index + '][scrap_percentage]'"
+                                    <input aria-label="Scrap percentage" type="number" x-model="comp.scrap_percentage" :name="'components[' + index + '][scrap_percentage]'"
                                            step="0.01" min="0" max="100" class="form-input text-right">
                                 </td>
                                 <td class="py-3 pl-2">

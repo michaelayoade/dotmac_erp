@@ -270,7 +270,7 @@
                             <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Select the fiscal period to post this expense.</p>
                             <div class="mb-4">
                                 <label class="form-label">Fiscal Period <span class="text-rose-500">*</span></label>
-                                <select name="fiscal_period_id" required class="form-input form-select">
+                                <select aria-label="Fiscal Period" name="fiscal_period_id" required class="form-input form-select">
                                     {% for period in fiscal_periods %}
                                     <option value="{{ period.period_id }}">{{ period.period_name }}</option>
                                     {% endfor %}

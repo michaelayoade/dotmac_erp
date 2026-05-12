@@ -19,7 +19,7 @@
     name        — form field name (required)
     label       — heading text above the drop zone
     hint        — help text below the drop zone
-    accept      — HTML accept attribute for <input type="file">
+    accept      — HTML accept attribute for <input aria-label="Choose file to upload" type="file">
     max_size_mb — client-side max file size in MB (default 10)
     preview     — "image" / "icon" / "none" (default "none")
     current_url — URL of existing file to show as preview
@@ -112,7 +112,7 @@
        class="mt-1.5 text-xs text-red-600 dark:text-red-400"></p>
 
     {# Hidden file input #}
-    <input type="file"
+    <input aria-label="Choose file to upload" type="file"
            x-ref="fileInput"
            x-on:change="onInputChange($event)"
            name="{{ name }}"

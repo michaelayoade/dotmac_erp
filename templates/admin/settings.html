@@ -46,7 +46,7 @@
         base_url="/admin/settings",
         placeholder="Search settings..."
     ) %}
-        <select name="domain" class="form-select" {{ search_attrs }}>
+        <select aria-label="Filter by domain" name="domain" class="form-select" {{ search_attrs }}>
             <option value="">All Domains</option>
             {% for domain in domain_options %}
             <option value="{{ domain }}" {{ 'selected' if domain_filter == domain else '' }}>{{ domain | upper }}</option>

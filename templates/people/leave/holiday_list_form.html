@@ -66,7 +66,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="from_date" class="form-label">From Date <span class="text-rose-500">*</span></label>
-                        <input type="date" name="from_date" id="from_date"
+                        <input aria-label="From date" type="date" name="from_date" id="from_date"
                             value="{{ form_data.from_date if form_data else (holiday_list.from_date.isoformat() if holiday_list else '') }}"
                             class="form-input w-full {% if errors and errors.from_date %}border-red-500{% endif %}"
                             required>
@@ -76,7 +76,7 @@
                     </div>
                     <div>
                         <label for="to_date" class="form-label">To Date <span class="text-rose-500">*</span></label>
-                        <input type="date" name="to_date" id="to_date"
+                        <input aria-label="To date" type="date" name="to_date" id="to_date"
                             value="{{ form_data.to_date if form_data else (holiday_list.to_date.isoformat() if holiday_list else '') }}"
                             class="form-input w-full {% if errors and errors.to_date %}border-red-500{% endif %}"
                             required>
@@ -133,7 +133,7 @@
                         <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                             <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
                                 <div>
-                                    <input type="date" :name="'holidays[' + index + '][holiday_date]'"
+                                    <input aria-label="Holiday date" type="date" :name="'holidays[' + index + '][holiday_date]'"
                                         x-model="holiday.holiday_date"
                                         class="form-input w-full text-sm"
                                         required>
@@ -147,7 +147,7 @@
                                 </div>
                                 <div class="flex items-center gap-3">
                                     <label class="flex items-center gap-2 cursor-pointer text-sm">
-                                        <input type="checkbox" :name="'holidays[' + index + '][is_optional]'"
+                                        <input aria-label="Is optional" type="checkbox" :name="'holidays[' + index + '][is_optional]'"
                                             x-model="holiday.is_optional"
                                             class="rounded border-slate-300 text-violet-600 focus:ring-violet-500">
                                         <span class="text-slate-600 dark:text-slate-300">Optional</span>

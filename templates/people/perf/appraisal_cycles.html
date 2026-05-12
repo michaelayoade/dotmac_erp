@@ -41,7 +41,7 @@
         search=search,
         search_placeholder="Search appraisal cycles..."
     ) %}
-        <select name="status" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Status</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>

@@ -171,7 +171,7 @@
                                     {% endif %}
                                 </div>
                             </div>
-                            <select name="kra_rating_{{ score.appraisal_kra_score_id }}" class="form-input w-24 text-center">
+                            <select aria-label="Kra rating" name="kra_rating_{{ score.appraisal_kra_score_id }}" class="form-input w-24 text-center">
                                 <option value="">-</option>
                                 {% for i in range(1, 6) %}
                                 <option value="{{ i }}" {{ 'selected' if score.manager_rating == i }}>{{ i }}</option>
@@ -183,7 +183,7 @@
                             <strong>Employee's comment:</strong> {{ score.self_comment }}
                         </div>
                         {% endif %}
-                        <textarea name="kra_comment_{{ score.appraisal_kra_score_id }}" rows="2"
+                        <textarea aria-label="Kra comment" name="kra_comment_{{ score.appraisal_kra_score_id }}" rows="2"
                                   class="form-input w-full text-sm"
                                   placeholder="Manager's comments for this KRA...">{{ score.manager_comment or '' }}</textarea>
                     </div>

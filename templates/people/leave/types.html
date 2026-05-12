@@ -38,7 +38,7 @@
         search=search,
         search_placeholder="Search leave types..."
     ) %}
-        <select name="is_active" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by is active" name="is_active" class="form-select" {{ filter_attrs }}>
             <option value="" {% if is_active is none %}selected{% endif %}>All</option>
             <option value="true" {% if is_active is sameas true %}selected{% endif %}>Active</option>
             <option value="false" {% if is_active is sameas false %}selected{% endif %}>Inactive</option>

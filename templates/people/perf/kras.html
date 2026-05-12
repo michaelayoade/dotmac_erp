@@ -41,13 +41,13 @@
         search=search,
         search_placeholder="Search KRAs..."
     ) %}
-        <select name="category" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by category" name="category" class="form-select" {{ filter_attrs }}>
             <option value="">All Categories</option>
             {% for cat in categories %}
             <option value="{{ cat }}" {{ 'selected' if category == cat else '' }}>{{ cat | title }}</option>
             {% endfor %}
         </select>
-        <select name="department_id" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by department" name="department_id" class="form-select" {{ filter_attrs }}>
             <option value="">All Departments</option>
             {% for dept in departments %}
             <option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string else '' }}>{{ dept.department_name }}</option>

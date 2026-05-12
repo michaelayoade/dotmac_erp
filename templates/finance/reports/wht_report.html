@@ -22,9 +22,9 @@
             <p class="mt-1 text-sm text-slate-500">WHT withheld and deducted for the selected period.</p>
         </div>
         <form method="GET" class="flex items-center gap-2">
-            <input type="date" name="start_date" value="{{ start_date }}" class="form-input text-sm">
+            <input aria-label="Start date" type="date" name="start_date" value="{{ start_date }}" class="form-input text-sm">
             <span class="text-slate-400">to</span>
-            <input type="date" name="end_date" value="{{ end_date }}" class="form-input text-sm">
+            <input aria-label="End date" type="date" name="end_date" value="{{ end_date }}" class="form-input text-sm">
             <button type="submit" class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
                 Update
             </button>

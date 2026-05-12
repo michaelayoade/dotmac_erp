@@ -182,7 +182,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="department_id" class="form-label">Department</label>
-                        <select name="department_id" id="department_id" class="form-select w-full">
+                        <select aria-label="Department" name="department_id" id="department_id" class="form-select w-full">
                             <option value="">Organization-wide</option>
                             {% for dept in departments %}
                             <option value="{{ dept.department_id }}" {% if form_data.department_id == dept.department_id | string or (template and template.department_id == dept.department_id) %}selected{% endif %}>
@@ -193,7 +193,7 @@
                     </div>
                     <div>
                         <label for="designation_id" class="form-label">Designation</label>
-                        <select name="designation_id" id="designation_id" class="form-select w-full">
+                        <select aria-label="Designation" name="designation_id" id="designation_id" class="form-select w-full">
                             <option value="">All Designations</option>
                             {% for desig in designations %}
                             <option value="{{ desig.designation_id }}" {% if form_data.designation_id == desig.designation_id | string or (template and template.designation_id == desig.designation_id) %}selected{% endif %}>
@@ -225,7 +225,7 @@
                 <template x-for="(kra, index) in selectedKras" :key="index">
                     <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
                         <div class="flex-1">
-                            <select :name="'kra_ids'" x-model="kra.id" @change="updateKraInfo(index)" class="form-select w-full">
+                            <select aria-label="KRA" :name="'kra_ids'" x-model="kra.id" @change="updateKraInfo(index)" class="form-select w-full">
                                 <option value="">Select KRA...</option>
                                 {% for k in kras %}
                                 <option value="{{ k.kra_id }}">{{ k.kra_code }} - {{ k.kra_name }}</option>

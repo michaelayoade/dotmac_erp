@@ -285,11 +285,11 @@
                             </td>
                             <td>
                                 <template x-if="multiMode">
-                                    <input type="checkbox" :checked="isStmtSelected('{{ line.line_id }}')"
+                                    <input aria-label="Select statement line for matching" type="checkbox" :checked="isStmtSelected('{{ line.line_id }}')"
                                            class="h-3 w-3 rounded border-slate-300 text-teal-600">
                                 </template>
                                 <template x-if="!multiMode">
-                                    <input type="radio" name="statement_line" :checked="isStmtSelected('{{ line.line_id }}')"
+                                    <input aria-label="Select statement line as single match" type="radio" name="statement_line" :checked="isStmtSelected('{{ line.line_id }}')"
                                            class="h-3 w-3 text-teal-600">
                                 </template>
                             </td>
@@ -357,11 +357,11 @@
                             </td>
                             <td>
                                 <template x-if="multiMode">
-                                    <input type="checkbox" :checked="isGLSelected('{{ line.line_id }}')"
+                                    <input aria-label="Select GL line for matching" type="checkbox" :checked="isGLSelected('{{ line.line_id }}')"
                                            class="h-3 w-3 rounded border-slate-300 text-teal-600">
                                 </template>
                                 <template x-if="!multiMode">
-                                    <input type="radio" name="gl_line" :checked="isGLSelected('{{ line.line_id }}')"
+                                    <input aria-label="Select GL line as single match" type="radio" name="gl_line" :checked="isGLSelected('{{ line.line_id }}')"
                                            class="h-3 w-3 text-teal-600">
                                 </template>
                             </td>

@@ -146,7 +146,7 @@
                                 <h4 class="font-medium text-slate-900 dark:text-white">{{ score.kra.kra_name if score.kra else 'Unknown KRA' }}</h4>
                                 <span class="text-xs text-slate-500 dark:text-slate-400">Weight: {{ score.weightage }}%</span>
                             </div>
-                            <select name="kra_rating_{{ score.appraisal_kra_score_id }}" class="form-input w-24 text-center">
+                            <select aria-label="Kra rating" name="kra_rating_{{ score.appraisal_kra_score_id }}" class="form-input w-24 text-center">
                                 <option value="">-</option>
                                 {% for i in range(1, 6) %}
                                 <option value="{{ i }}" {{ 'selected' if score.self_rating == i }}>{{ i }}</option>

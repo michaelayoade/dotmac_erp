@@ -180,7 +180,7 @@
             {% if available_employees %}
             <form method="post" action="/support/teams/{{ team.team_id }}/members" class="flex items-center gap-2">
                 {{ request.state.csrf_form | safe }}
-                <select name="employee_id" class="form-input text-sm py-1.5" required>
+                <select aria-label="Employee" name="employee_id" class="form-input text-sm py-1.5" required>
                     <option value="">Add member...</option>
                     {% for emp in available_employees %}
                     <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>

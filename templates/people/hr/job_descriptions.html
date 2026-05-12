@@ -47,7 +47,7 @@
         search=search,
         search_placeholder="Search job descriptions..."
     ) %}
-    <select name="status" class="form-select" {{ filter_attrs }}>
+    <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
         <option value="">All Statuses</option>
         {% for st in statuses %}
         <option value="{{ st.value }}" {{ 'selected' if selected_status == st.value }}>
@@ -55,7 +55,7 @@
         </option>
         {% endfor %}
     </select>
-    <select name="department_id" class="form-select" {{ filter_attrs }}>
+    <select aria-label="Filter by department" name="department_id" class="form-select" {{ filter_attrs }}>
         <option value="">All Departments</option>
         {% for dept in departments %}
         <option value="{{ dept.department_id }}" {{ 'selected' if selected_department_id == dept.department_id | string }}>

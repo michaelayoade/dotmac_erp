@@ -52,7 +52,7 @@
                 </div>
                 <div>
                     <label for="currency_code" class="form-label">Currency <span class="text-rose-500">*</span></label>
-                    <select id="currency_code" name="currency_code" class="form-select" required>
+                    <select aria-label="Currency" id="currency_code" name="currency_code" class="form-select" required>
                         {% for currency in currencies | default([]) %}
                         <option value="{{ currency.currency_code }}" {{ 'selected' if price_list and price_list.currency_code == currency.currency_code else ('selected' if loop.first else '') }}>
                             {{ currency.currency_code }} - {{ currency.currency_name }}
@@ -125,7 +125,7 @@
                         <template x-for="(item, index) in items" :key="index">
                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                                 <td class="py-3 pr-3">
-                                    <select x-model="item.item_id" :name="'items[' + index + '][item_id]'" class="form-select w-full" required>
+                                    <select aria-label="Item" x-model="item.item_id" :name="'items[' + index + '][item_id]'" class="form-select w-full" required>
                                         <option value="">Select Item</option>
                                         {% for itm in inventory_items | default([]) %}
                                         <option value="{{ itm.item_id }}">{{ itm.item_code }} - {{ itm.item_name }}</option>
@@ -139,15 +139,15 @@
                                     </select>
                                 </td>
                                 <td class="py-3 px-2">
-                                    <input type="number" x-model="item.price" :name="'items[' + index + '][price]'"
+                                    <input aria-label="Price" type="number" x-model="item.price" :name="'items[' + index + '][price]'"
                                            step="0.01" min="0" class="form-input text-right" required>
                                 </td>
                                 <td class="py-3 px-2">
-                                    <input type="number" x-model="item.min_quantity" :name="'items[' + index + '][min_quantity]'"
+                                    <input aria-label="Minimum quantity" type="number" x-model="item.min_quantity" :name="'items[' + index + '][min_quantity]'"
                                            step="1" min="1" class="form-input text-right">
                                 </td>
                                 <td class="py-3 px-2">
-                                    <input type="number" x-model="item.discount_percent" :name="'items[' + index + '][discount_percent]'"
+                                    <input aria-label="Discount percent" type="number" x-model="item.discount_percent" :name="'items[' + index + '][discount_percent]'"
                                            step="0.01" min="0" max="100" class="form-input text-right">
                                 </td>
                                 <td class="py-3 pl-2">

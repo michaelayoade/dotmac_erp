@@ -72,7 +72,7 @@
                     </div>
                     <div class="p-6">
                         <div id="editor-container">
-                            <textarea id="template_content" name="template_content" rows="20"
+                            <textarea aria-label="Template content" id="template_content" name="template_content" rows="20"
                                       class="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ template.template_content if template else form_data.template_content | default('<!DOCTYPE html>
 <html>
 <head>

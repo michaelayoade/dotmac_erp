@@ -27,12 +27,12 @@
 {% block content %}
 <div class="space-y-6">
     {% call(search_attrs) live_search(search=search, base_url="/help/admin/articles", placeholder="Search articles...") %}
-    <select name="status" class="form-select" {{ search_attrs }}>
+    <select aria-label="Filter by status" name="status" class="form-select" {{ search_attrs }}>
         {% for val, label in status_choices %}
         <option value="{{ val }}" {{ 'selected' if status_filter == val else '' }}>{{ label }}</option>
         {% endfor %}
     </select>
-    <select name="module" class="form-select" {{ search_attrs }}>
+    <select aria-label="Filter by module" name="module" class="form-select" {{ search_attrs }}>
         <option value="">All Modules</option>
         {% for val, label in module_choices %}
         <option value="{{ val }}" {{ 'selected' if module_filter == val else '' }}>{{ label }}</option>

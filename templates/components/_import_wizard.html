@@ -125,7 +125,7 @@
                         <p class="text-sm font-medium text-slate-700 dark:text-slate-300" x-text="fileName"></p>
                         <p class="text-xs text-slate-400" x-text="fileSize"></p>
                     </div>
-                    <input x-ref="fileInput" type="file" class="hidden" accept=".csv,.xls,.xlsx,.xlsm" @change="handleFileInput($event)" />
+                    <input aria-label="Choose file to upload" x-ref="fileInput" type="file" class="hidden" accept=".csv,.xls,.xlsx,.xlsm" @change="handleFileInput($event)" />
                 </label>
             </div>
 
@@ -220,7 +220,7 @@
                         <svg class="h-4 w-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
                         </svg>
-                        <select class="form-select text-sm min-w-[160px]"
+                        <select aria-label="Column mapping" class="form-select text-sm min-w-[160px]"
                                 x-model="mapping[header]">
                             <option value="">-- Skip --</option>
                             <template x-for="tf in availableTargets(header)" :key="tf.name">

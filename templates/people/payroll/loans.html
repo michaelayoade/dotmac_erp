@@ -35,7 +35,7 @@
         search=search,
         search_placeholder="Search loans..."
     ) %}
-        <select name="status" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for val, label in statuses %}
             <option value="{{ val }}" {{ 'selected' if status == val else '' }}>{{ label }}</option>

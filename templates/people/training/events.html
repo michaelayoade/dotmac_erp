@@ -29,7 +29,7 @@
         search=search,
         search_placeholder="Search training events..."
     ) %}
-        <select name="program_id" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by program" name="program_id" class="form-select" {{ filter_attrs }}>
             <option value="">All Programs</option>
             {% for program in programs %}
             <option value="{{ program.program_id }}" {{ 'selected' if program_id == program.program_id|string else '' }}>
@@ -37,15 +37,15 @@
             </option>
             {% endfor %}
         </select>
-        <select name="status" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Status</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
+        <input aria-label="Start date" type="date" name="start_date" value="{{ start_date if start_date else '' }}"
                class="form-input" {{ filter_attrs }}>
-        <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
+        <input aria-label="End date" type="date" name="end_date" value="{{ end_date if end_date else '' }}"
                class="form-input" {{ filter_attrs }}>
     {% endcall %}
 

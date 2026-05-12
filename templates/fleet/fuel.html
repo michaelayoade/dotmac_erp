@@ -33,7 +33,7 @@
         end_date=to_date | default('', true)
     ) %}
     <div>
-            <select name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by vehicle" name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Vehicles</option>
                 {% for v in vehicles %}
                 <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>

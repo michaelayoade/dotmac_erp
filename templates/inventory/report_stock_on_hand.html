@@ -74,7 +74,7 @@
         active_filters=active_filters | default([])
     ) %}
     <div>
-            <select name="warehouse" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by warehouse" name="warehouse" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Warehouses</option>
                 {% for wh in warehouses | default([]) %}
                 <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
@@ -84,7 +84,7 @@
             </select>
     </div>
     <div>
-            <select name="category" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by category" name="category" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Categories</option>
                 {% for cat in categories | default([]) %}
                 <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>

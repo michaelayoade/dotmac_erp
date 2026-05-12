@@ -32,7 +32,7 @@
                 </select>
             </div>
             <div class="flex items-center gap-2">
-                <input type="checkbox" name="include_resolved" value="true"
+                <input aria-label="Include resolved tickets" type="checkbox" name="include_resolved" value="true"
                     class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
                     {{ filter_attrs }}
                     {{ 'checked' if include_resolved }}>

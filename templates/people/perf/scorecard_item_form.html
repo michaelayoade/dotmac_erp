@@ -120,7 +120,7 @@
                             <p class="text-xl font-bold text-slate-900 dark:text-white" x-text="weightedScore.toFixed(2)">-</p>
                         </div>
                     </div>
-                    <input type="number" step="0.01" x-model="actual" @input="actual = parseFloat($event.target.value) || 0" class="hidden">
+                    <input aria-label="Actual value" type="number" step="0.01" x-model="actual" @input="actual = parseFloat($event.target.value) || 0" class="hidden">
                 </div>
             </div>
         </div>

@@ -57,7 +57,7 @@
         end_date=end_date | default('', true)
     ) %}
     <div>
-        <select name="billable"
+        <select aria-label="Filter by billable status" name="billable"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Types</option>
             <option value="true" {{ 'selected' if billable_filter == 'true' else '' }}>Billable Only</option>
@@ -65,7 +65,7 @@
         </select>
     </div>
     <div>
-        <select name="billing_status"
+        <select aria-label="Filter by billing status" name="billing_status"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Statuses</option>
             <option value="NOT_BILLED" {{ 'selected' if billing_status_filter == 'NOT_BILLED' else '' }}>Not Billed</option>
@@ -104,7 +104,7 @@
             <thead class="bg-slate-50 dark:bg-slate-800/50">
                 <tr>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                        <input type="checkbox" x-model="selectAll"
+                        <input aria-label="Select all entries" type="checkbox" x-model="selectAll"
                                @change="selectedEntries = selectAll ? [{% for entry in entries %}'{{ entry.entry_id }}'{% if not loop.last %},{% endif %}{% endfor %}] : []"
                                class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
                     </th>
@@ -122,7 +122,7 @@
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td class="px-4 py-4">
                         {% if not entry.billing_status or entry.billing_status.value != 'BILLED' %}
-                        <input type="checkbox" :value="'{{ entry.entry_id }}'"
+                        <input aria-label="Select time entry" type="checkbox" :value="'{{ entry.entry_id }}'"
                                x-model="selectedEntries"
                                class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
                         {% endif %}

@@ -176,7 +176,7 @@
                         {% if count.status.value == 'IN_PROGRESS' %}
                         <td class="px-4 py-3 text-center align-middle">
                             {% if line.counted_quantity is none %}
-                            <input type="checkbox"
+                            <input aria-label="Select selected line" type="checkbox"
                                    name="selected_line_ids"
                                    value="{{ line.line_id }}"
                                    class="form-checkbox count-line-checkbox">
