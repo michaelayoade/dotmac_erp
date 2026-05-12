@@ -1016,22 +1016,22 @@
                 {# Text search row #}
                 <div class="relative">
                     {{ icon_svg("search", "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400") }}
-                    <input x-model="matchSearch" @input="debouncedFetch()" type="text" placeholder="Search by description, reference, counterparty, or amount..."
+                    <input aria-label="Search by description, reference, counterparty, or amount..." x-model="matchSearch" @input="debouncedFetch()" type="text" placeholder="Search by description, reference, counterparty, or amount..."
                            class="form-input pl-9 w-full text-sm" autofocus>
                 </div>
                 {# Filter row #}
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="flex-1 min-w-[120px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">From</label>
-                        <input x-model="matchDateFrom" @change="fetchCandidates(true)" type="date" class="form-input text-sm mt-1 w-full">
+                        <input aria-label="From" x-model="matchDateFrom" @change="fetchCandidates(true)" type="date" class="form-input text-sm mt-1 w-full">
                     </div>
                     <div class="flex-1 min-w-[120px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">To</label>
-                        <input x-model="matchDateTo" @change="fetchCandidates(true)" type="date" class="form-input text-sm mt-1 w-full">
+                        <input aria-label="To" x-model="matchDateTo" @change="fetchCandidates(true)" type="date" class="form-input text-sm mt-1 w-full">
                     </div>
                     <div class="flex-1 min-w-[130px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Source Type</label>
-                        <select x-model="matchSourceType" @change="fetchCandidates(true)" class="form-select text-sm mt-1 w-full">
+                        <select aria-label="Source Type" x-model="matchSourceType" @change="fetchCandidates(true)" class="form-select text-sm mt-1 w-full">
                             <option value="">All Types</option>
                             <template x-for="st in glSourceTypes" :key="st">
                                 <option :value="st" x-text="st.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())"></option>
@@ -1040,7 +1040,7 @@
                     </div>
                     <div class="flex-1 min-w-[120px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Direction</label>
-                        <select x-model="matchAmountDir" @change="fetchCandidates(true)" class="form-select text-sm mt-1 w-full">
+                        <select aria-label="Direction" x-model="matchAmountDir" @change="fetchCandidates(true)" class="form-select text-sm mt-1 w-full">
                             <option value="">All</option>
                             <option value="debit">Debits (In)</option>
                             <option value="credit">Credits (Out)</option>
@@ -1087,7 +1087,7 @@
                               x-text="glTotal + ' result' + (glTotal !== 1 ? 's' : '')"></span>
                         <div class="flex items-center gap-1.5">
                             <label class="text-xs text-slate-500 dark:text-slate-400">Per page</label>
-                            <select x-model.number="glPerPage" @change="fetchCandidates(true)"
+                            <select aria-label="Per page" x-model.number="glPerPage" @change="fetchCandidates(true)"
                                     class="form-select text-xs py-1 pl-2 pr-6 w-auto">
                                 <option value="10">10</option>
                                 <option value="25">25</option>
@@ -1149,7 +1149,7 @@
                                     {# Checkbox column for multi-match #}
                                     <td x-show="multiMatchMode" class="text-center">
                                         <template x-if="!candidate.is_already_matched">
-                                            <input type="checkbox"
+                                            <input aria-label="Select journal line as match" type="checkbox"
                                                    :checked="isCandidateSelected(candidate.journal_line_id)"
                                                    @change="toggleCandidate(candidate.journal_line_id, candidate.amount)"
                                                    class="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 h-4 w-4">
@@ -1316,7 +1316,7 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label class="text-xs font-medium text-slate-600 dark:text-slate-300 uppercase tracking-wider">Counterparty GL Account <span class="text-rose-500">*</span></label>
-                            <select x-model="createJournalAccount" class="form-select text-sm mt-1 w-full">
+                            <select aria-label="Counterparty GL Account" x-model="createJournalAccount" class="form-select text-sm mt-1 w-full">
                                 <option value="">Select account...</option>
                                 <template x-for="acct in filteredGlAccounts" :key="acct.id">
                                     <option :value="acct.id" x-text="acct.label"></option>
@@ -1325,7 +1325,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-medium text-slate-600 dark:text-slate-300 uppercase tracking-wider">Description (optional)</label>
-                            <input x-model="createJournalDesc" type="text" class="form-input text-sm mt-1 w-full"
+                            <input aria-label="Auto-generated if blank" x-model="createJournalDesc" type="text" class="form-input text-sm mt-1 w-full"
                                    placeholder="Auto-generated if blank">
                         </div>
                     </div>

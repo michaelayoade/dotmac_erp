@@ -61,7 +61,7 @@
                     </label>
                     <div class="relative" @click.outside="supplierOpen = false">
                         <div class="relative">
-                            <input
+                            <input aria-label="Supplier"
                                 type="text"
                                 x-model="supplierSearch"
                                 @input="onSupplierSearch"
@@ -106,7 +106,7 @@
                     <label class="form-label">
                         Currency <span class="text-rose-500">*</span>
                     </label>
-                    <select x-model="formData.currency_code"
+                    <select aria-label="Currency" x-model="formData.currency_code"
                             @change="FXRateLookup.onCurrencyChange($data, 'formData.currency_code', 'formData.exchange_rate', 'formData.po_date', functionalCurrency)"
                             required class="form-select">
                         {% set selected_currency = order.currency_code if order else default_currency_code %}
@@ -120,7 +120,7 @@
 
                 <div>
                     <label class="form-label">Exchange Rate</label>
-                    <input type="text" name="exchange_rate" x-model="formData.exchange_rate"
+                    <input aria-label="Exchange Rate" type="text" name="exchange_rate" x-model="formData.exchange_rate"
                            class="form-input font-mono tabular-nums" placeholder="1.0">
                     <p class="form-hint" x-show="formData.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
@@ -129,17 +129,17 @@
                     <label class="form-label">
                         PO Date <span class="text-rose-500">*</span>
                     </label>
-                    <input type="date" x-model="formData.po_date" required class="form-input">
+                    <input aria-label="PO Date" type="date" x-model="formData.po_date" required class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">Expected Delivery Date</label>
-                    <input type="date" x-model="formData.expected_delivery_date" class="form-input">
+                    <input aria-label="Expected Delivery Date" type="date" x-model="formData.expected_delivery_date" class="form-input">
                 </div>
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Terms & Conditions</label>
-                    <textarea x-model="formData.terms_and_conditions" rows="3" class="form-input resize-none" placeholder="Payment terms, delivery instructions, etc."></textarea>
+                    <textarea aria-label="Terms &amp; Conditions" x-model="formData.terms_and_conditions" rows="3" class="form-input resize-none" placeholder="Payment terms, delivery instructions, etc."></textarea>
                 </div>
             </div>
         </div>
@@ -182,7 +182,7 @@
                                 <td>
                                     <div class="relative" @click.outside="line.item_open = false">
                                         <div class="relative">
-                                            <input
+                                            <input aria-label="Search item"
                                                 type="text"
                                                 x-model="line.item_search"
                                                 @input="onItemSearch(line)"
@@ -223,13 +223,13 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <input type="text" x-model="line.description" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" placeholder="Description">
+                                    <input aria-label="Description" type="text" x-model="line.description" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white" placeholder="Description">
                                 </td>
                                 <td>
-                                    <input type="number" x-model.number="line.quantity" @input="calculateLineAmount(index)" min="0" step="0.01" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                    <input aria-label="Quantity" type="number" x-model.number="line.quantity" @input="calculateLineAmount(index)" min="0" step="0.01" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 </td>
                                 <td>
-                                    <input type="number" x-model.number="line.unit_price" @input="calculateLineAmount(index)" min="0" step="0.01" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                                    <input aria-label="Unit price" type="number" x-model.number="line.unit_price" @input="calculateLineAmount(index)" min="0" step="0.01" required class="w-full rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 </td>
                                 <td class="text-right text-sm font-medium text-slate-900 dark:text-white" x-text="formatCurrency(line.quantity * line.unit_price)">
                                 </td>

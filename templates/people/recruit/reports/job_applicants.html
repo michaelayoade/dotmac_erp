@@ -70,7 +70,7 @@
     ) %}
         <div>
             <label class="form-label text-xs">Status</label>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Statuses</option>
                 {% for s in statuses %}
                 <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
@@ -79,11 +79,11 @@
         </div>
         <div>
             <label class="form-label text-xs">Source</label>
-            <input type="text" name="source" value="{{ source if source else '' }}" placeholder="e.g. Website" class="form-input w-full" {{ filter_attrs }}>
+            <input aria-label="e.g. Website" type="text" name="source" value="{{ source if source else '' }}" placeholder="e.g. Website" class="form-input w-full" {{ filter_attrs }}>
         </div>
         <div>
             <label class="form-label text-xs">Sort</label>
-            <select name="sort" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Sort" name="sort" class="form-select w-full" {{ filter_attrs }}>
                 <option value="applied_on" {{ 'selected' if sort == 'applied_on' else '' }}>Applied Date</option>
                 <option value="applicant" {{ 'selected' if sort == 'applicant' else '' }}>Applicant</option>
                 <option value="status" {{ 'selected' if sort == 'status' else '' }}>Status</option>
@@ -95,7 +95,7 @@
         </div>
         <div>
             <label class="form-label text-xs">Direction</label>
-            <select name="direction" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Direction" name="direction" class="form-select w-full" {{ filter_attrs }}>
                 <option value="desc" {{ 'selected' if direction == 'desc' else '' }}>Descending</option>
                 <option value="asc" {{ 'selected' if direction == 'asc' else '' }}>Ascending</option>
             </select>
@@ -107,15 +107,15 @@
             <label class="form-label text-xs">{{ field.label }}</label>
             {% if field.field_type.value in ['NUMBER', 'RATING', 'DATE'] %}
             <div class="grid grid-cols-2 gap-2">
-                <select name="op_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="{{ field.label }}" name="op_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
                     <option value="equals" {{ 'selected' if field_operator == 'equals' else '' }}>Equals</option>
                     <option value="gte" {{ 'selected' if field_operator == 'gte' else '' }}>From</option>
                     <option value="lte" {{ 'selected' if field_operator == 'lte' else '' }}>To</option>
                 </select>
-                <input type="{{ 'date' if field.field_type.value == 'DATE' else 'number' }}" name="df_{{ field.field_key }}" value="{{ field_value }}" class="form-input w-full" {{ filter_attrs }}>
+                <input aria-label="{{ field.field_label }}" type="{{ 'date' if field.field_type.value == 'DATE' else 'number' }}" name="df_{{ field.field_key }}" value="{{ field_value }}" class="form-input w-full" {{ filter_attrs }}>
             </div>
             {% elif field.field_type.value in ['SINGLE_CHOICE', 'DROPDOWN', 'MULTI_CHOICE'] and field.options %}
-            <select name="df_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="{{ field.field_label }}" name="df_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">Any</option>
                 {% for option in field.options if option.is_active %}
                 <option value="{{ option.label }}" {{ 'selected' if field_value == option.label else '' }}>{{ option.label }}</option>
@@ -123,20 +123,20 @@
             </select>
             <input type="hidden" name="op_{{ field.field_key }}" value="contains">
             {% elif field.field_type.value in ['CHECKBOX', 'YES_NO', 'CONSENT'] %}
-            <select name="df_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="{{ field.field_label }}" name="df_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">Any</option>
                 <option value="yes" {{ 'selected' if field_value == 'yes' else '' }}>Yes</option>
                 <option value="no" {{ 'selected' if field_value == 'no' else '' }}>No</option>
             </select>
             <input type="hidden" name="op_{{ field.field_key }}" value="equals">
             {% elif field.field_type.value in ['FILE', 'IMAGE', 'PDF'] %}
-            <select name="op_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="{{ field.field_label }} operator" name="op_{{ field.field_key }}" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">Any</option>
                 <option value="has_value" {{ 'selected' if field_operator == 'has_value' else '' }}>Has File</option>
                 <option value="is_empty" {{ 'selected' if field_operator == 'is_empty' else '' }}>No File</option>
             </select>
             {% else %}
-            <input type="text" name="df_{{ field.field_key }}" value="{{ field_value }}" class="form-input w-full" {{ filter_attrs }}>
+            <input aria-label="{{ field.field_label }}" type="text" name="df_{{ field.field_key }}" value="{{ field_value }}" class="form-input w-full" {{ filter_attrs }}>
             <input type="hidden" name="op_{{ field.field_key }}" value="contains">
             {% endif %}
         </div>

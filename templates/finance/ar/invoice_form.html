@@ -201,7 +201,7 @@
                 <!-- Exchange Rate (hidden when same as functional currency) -->
                 <div x-show="form.currency_code !== functionalCurrency" x-cloak>
                     <label for="exchange_rate" class="form-label">Exchange Rate</label>
-                    <input type="text"
+                    <input aria-label="1.0" type="text"
                            id="exchange_rate"
                            name="exchange_rate"
                            x-model="form.exchange_rate"
@@ -255,7 +255,7 @@
                     <label for="purpose" class="form-label">
                         Purpose
                     </label>
-                    <textarea id="purpose"
+                    <textarea aria-label="What is this invoice for overall?" id="purpose"
                               name="purpose"
                               x-model="form.purpose"
                               rows="3"
@@ -282,7 +282,7 @@
             {# Bulk apply tax to all lines #}
             <div class="mt-4 flex items-center gap-3">
                 <label class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Apply tax to all lines:</label>
-                <select @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[200px]">
+                <select aria-label="Apply tax to all lines:" @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[200px]">
                     <option value="">Select tax code...</option>
                     {% for tax in tax_codes %}
                     <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.tax_rate }}%)</option>
@@ -310,7 +310,7 @@
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr>
                                 <td>
-                                    <select x-model="line.item_id"
+                                    <select aria-label="Item" x-model="line.item_id"
                                             @change="applyItemDefaults(index)"
                                             class="table-input">
                                         <option value="">Select item</option>
@@ -326,7 +326,7 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <select x-model="line.revenue_account_id"
+                                    <select aria-label="Revenue account" x-model="line.revenue_account_id"
                                             required
                                             class="table-input">
                                         <option value="">Select account</option>
@@ -342,14 +342,14 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <input type="text"
+                                    <input aria-label="Product or service" type="text"
                                            x-model="line.description"
                                            required
                                            placeholder="Product or service"
                                            class="table-input">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Quantity" type="number"
                                            x-model.number="line.quantity"
                                            @input="calculateLineAmount(index)"
                                            required
@@ -358,7 +358,7 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Unit price" type="number"
                                            x-model.number="line.unit_price"
                                            @input="calculateLineAmount(index)"
                                            required
@@ -495,7 +495,7 @@
                         <div class="total-row">
                             <span class="total-label">
                                 <label class="text-xs font-medium text-slate-600 dark:text-slate-400">WHT</label>
-                                <select name="wht_code_id" x-model="form.wht_code_id"
+                                <select aria-label="WHT" name="wht_code_id" x-model="form.wht_code_id"
                                         class="form-select form-select-sm ml-2 max-w-[160px] inline-block">
                                     <option value="">None</option>
                                     {% for wht in wht_codes %}
@@ -528,14 +528,14 @@
                         <div class="total-row">
                             <span class="total-label">
                                 <label class="text-xs font-medium text-slate-600 dark:text-slate-400">Stamp Duty</label>
-                                <select name="stamp_duty_code_id" x-model="form.stamp_duty_code_id"
+                                <select aria-label="Stamp Duty" name="stamp_duty_code_id" x-model="form.stamp_duty_code_id"
                                         class="form-select form-select-sm ml-2 max-w-[120px] inline-block">
                                     <option value="">None</option>
                                     {% for sd in stamp_duty_codes %}
                                     <option value="{{ sd.tax_code_id }}">{{ sd.tax_code }} ({{ sd.rate_display }}%)</option>
                                     {% endfor %}
                                 </select>
-                                <select name="stamp_duty_treatment" x-model="form.stamp_duty_treatment"
+                                <select aria-label="Stamp duty treatment" name="stamp_duty_treatment" x-model="form.stamp_duty_treatment"
                                         x-show="form.stamp_duty_code_id"
                                         class="form-select form-select-sm ml-1 max-w-[120px] inline-block">
                                     <option value="DEDUCTED">Deducted</option>
@@ -611,7 +611,7 @@
                     <label for="terms" class="form-label">
                         Terms & Conditions
                     </label>
-                    <textarea id="terms"
+                    <textarea aria-label="Payment terms and conditions visible to the customer" id="terms"
                               x-model="form.terms"
                               rows="3"
                               placeholder="Payment terms and conditions visible to the customer"
@@ -623,7 +623,7 @@
                     <label for="notes" class="form-label">
                         Internal Notes
                     </label>
-                    <textarea id="notes"
+                    <textarea aria-label="Notes (not visible to customer)" id="notes"
                               x-model="form.notes"
                               rows="2"
                               placeholder="Notes (not visible to customer)"

@@ -27,7 +27,7 @@
             <div>
                 <label class="form-label">Account Code <span class="text-rose-500">*</span></label>
                 <div class="relative">
-                    <input type="text" name="account_code" id="account_code" class="form-input {% if not account %}pr-20{% endif %}"
+                    <input aria-label="Account Code" type="text" name="account_code" id="account_code" class="form-input {% if not account %}pr-20{% endif %}"
                            value="{{ form_data.account_code if form_data else (account.account_code if account else '') }}"
                            placeholder="Select category first"
                            {% if account %}readonly{% endif %} required>
@@ -42,12 +42,12 @@
                 <p id="code_hint" class="mt-1 hidden text-xs text-slate-500 dark:text-slate-400"></p>
             </div>
             <div>
-                <label class="form-label">Account Name <span class="text-rose-500">*</span></label>
+                <label for="account_name" class="form-label">Account Name <span class="text-rose-500">*</span></label>
                 <input type="text" name="account_name" id="account_name" class="form-input"
                        value="{{ form_data.account_name if form_data else (account.account_name if account else '') }}" required>
             </div>
             <div>
-                <label class="form-label">Category <span class="text-rose-500">*</span></label>
+                <label for="category_id" class="form-label">Category <span class="text-rose-500">*</span></label>
                 <select name="category_id" id="category_id" class="form-select form-input" required>
                     <option value="">Select category</option>
                     {% set selected_category = form_data.category_id if form_data else (account.category_id|string if account else '') %}
@@ -61,7 +61,7 @@
                 </select>
             </div>
             <div>
-                <label class="form-label">Account Type <span class="text-rose-500">*</span></label>
+                <label for="account_type" class="form-label">Account Type <span class="text-rose-500">*</span></label>
                 <select name="account_type" id="account_type" class="form-select form-input" required>
                     <option value="">Select type</option>
                     {% set selected_type = form_data.account_type if form_data else (account.account_type.value if account else '') %}
@@ -71,7 +71,7 @@
                 </select>
             </div>
             <div>
-                <label class="form-label">Normal Balance <span class="text-rose-500">*</span></label>
+                <label for="normal_balance" class="form-label">Normal Balance <span class="text-rose-500">*</span></label>
                 <select name="normal_balance" id="normal_balance" class="form-select form-input" required>
                     <option value="">Select balance</option>
                     {% set selected_balance = form_data.normal_balance if form_data else (account.normal_balance.value if account else '') %}
@@ -83,13 +83,13 @@
             </div>
             <div class="sm:col-span-2">
                 <label class="form-label">Description</label>
-                <textarea name="description" class="form-input" rows="3">{{ form_data.description if form_data else (account.description if account else '') }}</textarea>
+                <textarea aria-label="Description" name="description" class="form-input" rows="3">{{ form_data.description if form_data else (account.description if account else '') }}</textarea>
             </div>
             <div class="sm:col-span-2">
                 <label class="form-label">Search Terms <span class="font-normal text-slate-400">(auto-generated)</span></label>
-                <input type="text" name="search_terms" id="search_terms" class="form-input"
+                <input aria-label="Search Terms" type="text" name="search_terms" id="search_terms" class="form-input"
                        value="{{ form_data.search_terms if form_data else (account.search_terms if account else '') }}"
-                       placeholder="Auto-generated from account name" />
+                       placeholder="Auto-generated from account name" >
             </div>
         </div>
 
@@ -139,12 +139,12 @@
                 </label>
                 <div>
                     <label class="form-label">Default Currency</label>
-                    <input type="text" name="default_currency_code" id="default_currency_code" class="form-input"
+                    <input aria-label="Default Currency" type="text" name="default_currency_code" id="default_currency_code" class="form-input"
                            value="{{ form_data.default_currency_code if form_data else (account.default_currency_code if account else default_currency_code) }}"
                            placeholder="{{ default_currency_code }}">
                 </div>
                 <div>
-                    <label class="form-label">Subledger Link <span class="font-normal text-slate-400">(auto-detected)</span></label>
+                    <label for="subledger_type" class="form-label">Subledger Link <span class="font-normal text-slate-400">(auto-detected)</span></label>
                     <select name="subledger_type" id="subledger_type" class="form-select form-input">
                         <option value="">None</option>
                         {% set selected_subledger = form_data.subledger_type if form_data else (account.subledger_type if account else '') %}

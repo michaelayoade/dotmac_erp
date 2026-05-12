@@ -123,17 +123,9 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/finance/ap/purchase_order_form.html": {
-    "nameless": 0,
-    "unlabeled": 10
-  },
   "templates/finance/ar/credit_note_form.html": {
     "nameless": 0,
     "unlabeled": 5
-  },
-  "templates/finance/ar/invoice_form.html": {
-    "nameless": 0,
-    "unlabeled": 9
   },
   "templates/finance/ar/quote_detail.html": {
     "nameless": 0,
@@ -191,10 +183,6 @@
     "nameless": 0,
     "unlabeled": 3
   },
-  "templates/finance/banking/statement_detail.html": {
-    "nameless": 0,
-    "unlabeled": 9
-  },
   "templates/finance/banking/statement_import.html": {
     "nameless": 0,
     "unlabeled": 4
@@ -210,10 +198,6 @@
   "templates/finance/exp/list.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/finance/gl/_account_form_inner.html": {
-    "nameless": 0,
-    "unlabeled": 9
   },
   "templates/finance/lease/contract_form.html": {
     "nameless": 0,
@@ -678,10 +662,6 @@
   "templates/people/recruit/offers.html": {
     "nameless": 0,
     "unlabeled": 3
-  },
-  "templates/people/recruit/reports/job_applicants.html": {
-    "nameless": 0,
-    "unlabeled": 10
   },
   "templates/people/recruit/reports/pipeline.html": {
     "nameless": 0,
