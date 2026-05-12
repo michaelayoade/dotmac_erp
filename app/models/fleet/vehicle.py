@@ -36,7 +36,7 @@ from app.models.fleet.enums import (
     VehicleStatus,
     VehicleType,
 )
-from app.models.people.base import AuditMixin, SoftDeleteMixin
+from app.models.people.base import AuditMixin
 
 if TYPE_CHECKING:
     from app.models.fleet.fuel_log import FuelLogEntry
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
 
 
-class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
+class Vehicle(Base, FleetBaseMixin, AuditMixin):
     """
     Organization vehicle registry.
 

@@ -5,7 +5,7 @@ Handles incident reporting, investigation, and resolution.
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -76,7 +76,7 @@ class IncidentService:
         incident = self.get_by_id(incident_id)
         if not incident or incident.organization_id != self.organization_id:
             raise NotFoundError(f"Incident {incident_id} not found")
-        if incident.is_deleted:
+        if not incident.is_active:
             raise NotFoundError(f"Incident {incident_id} has been deleted")
         return incident
 
@@ -97,7 +97,7 @@ class IncidentService:
             select(VehicleIncident)
             .where(
                 VehicleIncident.organization_id == self.organization_id,
-                VehicleIncident.is_deleted == False,  # noqa: E712
+                VehicleIncident.is_active.is_(True),
             )
             .options(
                 selectinload(VehicleIncident.vehicle),
@@ -136,7 +136,7 @@ class IncidentService:
             select(VehicleIncident)
             .where(
                 VehicleIncident.organization_id == self.organization_id,
-                VehicleIncident.is_deleted == False,  # noqa: E712
+                VehicleIncident.is_active.is_(True),
                 VehicleIncident.status != IncidentStatus.CLOSED,
             )
             .options(selectinload(VehicleIncident.vehicle))
@@ -324,10 +324,9 @@ class IncidentService:
         return incident
 
     def soft_delete(self, incident_id: UUID) -> VehicleIncident:
-        """Soft delete an incident."""
+        """Soft delete an incident by marking it inactive."""
         incident = self.get_or_raise(incident_id)
-        incident.is_deleted = True
-        incident.deleted_at = datetime.now(UTC)
+        incident.is_active = False
 
         fire_audit_event(
             self.db,
@@ -346,7 +345,7 @@ class IncidentService:
         """Get incident cost summary using SQL aggregation."""
         base_filter = (
             VehicleIncident.organization_id == self.organization_id,
-            VehicleIncident.is_deleted == False,  # noqa: E712
+            VehicleIncident.is_active.is_(True),
         )
 
         stmt = select(

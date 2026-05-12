@@ -5,7 +5,7 @@ Handles vehicle CRUD, status transitions, odometer updates, and fleet statistics
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -86,7 +86,7 @@ class VehicleService:
         vehicle = self.get_by_id(vehicle_id)
         if not vehicle or vehicle.organization_id != self.organization_id:
             raise NotFoundError(f"Vehicle {vehicle_id} not found")
-        if vehicle.is_deleted:
+        if vehicle.status == VehicleStatus.DISPOSED:
             raise NotFoundError(f"Vehicle {vehicle_id} has been deleted")
         return vehicle
 
@@ -95,7 +95,7 @@ class VehicleService:
         stmt = select(Vehicle).where(
             Vehicle.organization_id == self.organization_id,
             Vehicle.registration_number == registration_number,
-            Vehicle.is_deleted == False,  # noqa: E712
+            Vehicle.status != VehicleStatus.DISPOSED,
         )
         return self.db.scalar(stmt)
 
@@ -104,7 +104,7 @@ class VehicleService:
         stmt = select(Vehicle).where(
             Vehicle.organization_id == self.organization_id,
             Vehicle.vehicle_code == vehicle_code,
-            Vehicle.is_deleted == False,  # noqa: E712
+            Vehicle.status != VehicleStatus.DISPOSED,
         )
         return self.db.scalar(stmt)
 
@@ -137,7 +137,7 @@ class VehicleService:
             select(Vehicle)
             .where(
                 Vehicle.organization_id == self.organization_id,
-                Vehicle.is_deleted == False,  # noqa: E712
+                Vehicle.status != VehicleStatus.DISPOSED,
             )
             .options(
                 selectinload(Vehicle.documents),
@@ -183,7 +183,7 @@ class VehicleService:
             select(Vehicle.status, func.count(Vehicle.vehicle_id))
             .where(
                 Vehicle.organization_id == self.organization_id,
-                Vehicle.is_deleted == False,  # noqa: E712
+                Vehicle.status != VehicleStatus.DISPOSED,
             )
             .group_by(Vehicle.status)
         )
@@ -219,7 +219,7 @@ class VehicleService:
             select(Vehicle)
             .where(
                 Vehicle.organization_id == self.organization_id,
-                Vehicle.is_deleted == False,  # noqa: E712
+                Vehicle.status != VehicleStatus.DISPOSED,
                 Vehicle.status == VehicleStatus.ACTIVE,
                 Vehicle.assignment_type == AssignmentType.POOL,
                 ~Vehicle.vehicle_id.in_(select(conflicting.c.vehicle_id)),
@@ -385,10 +385,9 @@ class VehicleService:
         return vehicle
 
     def soft_delete(self, vehicle_id: UUID) -> Vehicle:
-        """Soft delete a vehicle."""
+        """Soft delete a vehicle by marking it as DISPOSED."""
         vehicle = self.get_or_raise(vehicle_id)
-        vehicle.is_deleted = True
-        vehicle.deleted_at = datetime.now(UTC)
+        vehicle.status = VehicleStatus.DISPOSED
 
         logger.info("Soft deleted vehicle %s", vehicle.vehicle_code)
         return vehicle
@@ -402,7 +401,7 @@ class VehicleService:
         not_disposed = Vehicle.status != VehicleStatus.DISPOSED
         base_filter = (
             Vehicle.organization_id == self.organization_id,
-            Vehicle.is_deleted == False,  # noqa: E712
+            Vehicle.status != VehicleStatus.DISPOSED,
         )
 
         stmt = select(

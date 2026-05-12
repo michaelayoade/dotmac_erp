@@ -95,7 +95,6 @@ class FleetWebService:
             .where(
                 Employee.organization_id == organization_id,
                 Employee.status == EmployeeStatus.ACTIVE,
-                Employee.is_deleted == False,  # noqa: E712
             )
             .order_by(Employee.employee_code.asc())
         )

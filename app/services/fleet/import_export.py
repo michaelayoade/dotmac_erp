@@ -33,7 +33,7 @@ from app.models.fleet.vehicle import Vehicle
 from app.models.fleet.vehicle_assignment import VehicleAssignment
 from app.models.fleet.vehicle_document import VehicleDocument
 from app.models.people.hr.department import Department
-from app.models.people.hr.employee import Employee
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.finance.import_export.base import (
     BaseImporter,
     FieldMapping,
@@ -119,7 +119,7 @@ class FleetImportBase(BaseImporter):
             select(Employee).where(
                 Employee.organization_id == self.config.organization_id,
                 Employee.employee_code == employee_code,
-                Employee.is_deleted == False,  # noqa: E712
+                Employee.status != EmployeeStatus.TERMINATED,
             )
         )
         if employee:
@@ -138,7 +138,7 @@ class FleetImportBase(BaseImporter):
             select(Department).where(
                 Department.organization_id == self.config.organization_id,
                 Department.department_code == department_code,
-                Department.is_deleted == False,  # noqa: E712
+                Department.is_active.is_(True),
             )
         )
         if department:

@@ -9,21 +9,21 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.fleet.base import FleetBaseMixin
 from app.models.fleet.enums import IncidentSeverity, IncidentStatus, IncidentType
-from app.models.people.base import AuditMixin, SoftDeleteMixin
+from app.models.people.base import AuditMixin
 
 if TYPE_CHECKING:
     from app.models.fleet.vehicle import Vehicle
     from app.models.people.hr.employee import Employee
 
 
-class VehicleIncident(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
+class VehicleIncident(Base, FleetBaseMixin, AuditMixin):
     """
     Vehicle incident record.
 
@@ -174,6 +174,14 @@ class VehicleIncident(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    # Lifecycle (replaces former SoftDeleteMixin)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=text("true"),
     )
 
     # Relationships

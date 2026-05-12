@@ -98,7 +98,6 @@ class AssignmentService:
             .where(
                 Vehicle.organization_id == self.organization_id,
                 Vehicle.assigned_employee_id == employee_id,
-                Vehicle.is_deleted == False,  # noqa: E712
                 Vehicle.status != VehicleStatus.DISPOSED,
             )
             .order_by(Vehicle.vehicle_code)
