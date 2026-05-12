@@ -1129,7 +1129,8 @@
                 </template>
                 <template x-if="!glLoading && glCandidates.length > 0">
                     <div>
-                    <table class="table w-full">
+                    <div class="table-container">
+<table class="table w-full">
                         <thead>
                             <tr>
                                 <th x-show="multiMatchMode" scope="col" class="w-8"></th>
@@ -1223,6 +1224,7 @@
                             </template>
                         </tbody>
                     </table>
+</div>
                     {# Pagination controls #}
                     <template x-if="glTotalPages > 1">
                         <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">

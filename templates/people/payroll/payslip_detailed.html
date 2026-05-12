@@ -482,7 +482,8 @@
             <!-- Earnings -->
             <div class="table-section">
                 <div class="section-title earnings-title">Earnings</div>
-                <table>
+                <div class="table-container">
+<table>
                     <thead>
                         <tr>
                             <th scope="col">Component</th>
@@ -504,12 +505,14 @@
                         </tr>
                     </tbody>
                 </table>
+</div>
             </div>
 
             <!-- Deductions -->
             <div class="table-section">
                 <div class="section-title deductions-title">Deductions</div>
-                <table>
+                <div class="table-container">
+<table>
                     <thead>
                         <tr>
                             <th scope="col">Component</th>
@@ -531,6 +534,7 @@
                         </tr>
                     </tbody>
                 </table>
+</div>
             </div>
 
             <!-- YTD Summary (if enabled) -->
@@ -600,7 +604,7 @@
                     </div>
                 </div>
                 {% if paye.bands %}
-                <div class="tax-bands">
+                <div class="tax-bands overflow-x-auto">
                     <table>
                         <thead>
                             <tr>
