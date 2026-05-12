@@ -110,7 +110,7 @@
                     <label class="form-label">Item <span class="text-rose-500">*</span></label>
                     <div class="relative" @click.outside="itemDropdownOpen = false">
                         <input type="hidden" name="item_id" :value="selectedItemId" required>
-                        <input type="search"
+                        <input aria-label="Item" type="search"
                                class="form-input pr-10"
                                placeholder="Search or select item..."
                                x-model="itemSearch"
@@ -143,7 +143,7 @@
 
                 <div>
                     <label class="form-label">Warehouse <span class="text-rose-500">*</span></label>
-                    <select name="warehouse_id" required class="form-select" x-model="selectedWarehouseId" @change="resetSerials()">
+                    <select aria-label="Warehouse" name="warehouse_id" required class="form-select" x-model="selectedWarehouseId" @change="resetSerials()">
                         <option value="">Select warehouse</option>
                         {% for wh in warehouses_list %}
                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
@@ -153,38 +153,38 @@
 
                 <div>
                     <label class="form-label">Quantity <span class="text-rose-500">*</span></label>
-                    <input type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input" x-model="quantity">
+                    <input aria-label="Quantity" type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input" x-model="quantity">
                 </div>
 
                 <div>
                     <label class="form-label">Unit Cost <span class="text-rose-500">*</span></label>
-                    <input type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
+                    <input aria-label="Unit Cost" type="number" name="unit_cost" required min="0" step="any" placeholder="0.00" class="form-input">
                     <p class="form-hint">Usually average or last cost of item</p>
                 </div>
 
                 <div>
                     <label class="form-label">Transaction Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="transaction_date" value="{{ today }}" required class="form-input">
+                    <input aria-label="Transaction Date" type="date" name="transaction_date" value="{{ today }}" required class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">Reference</label>
-                    <input type="text" name="reference" placeholder="Work order, requisition, etc." class="form-input">
+                    <input aria-label="Reference" type="text" name="reference" placeholder="Work order, requisition, etc." class="form-input">
                 </div>
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Notes</label>
-                    <textarea name="notes" rows="2" placeholder="Reason for issue" class="form-input resize-none"></textarea>
+                    <textarea aria-label="Notes" name="notes" rows="2" placeholder="Reason for issue" class="form-input resize-none"></textarea>
                 </div>
 
                 <div>
                     <label class="form-label">Lot Number</label>
-                    <input type="text" name="lot_number" placeholder="Specific lot to issue from" class="form-input">
+                    <input aria-label="Lot Number" type="text" name="lot_number" placeholder="Specific lot to issue from" class="form-input">
                 </div>
 
                 <div class="sm:col-span-2" x-show="tracksSerials" x-cloak>
                     <label class="form-label">Serial Numbers</label>
-                    <textarea name="serial_numbers" rows="3" placeholder="Choose available serials below, or enter one serial per line." class="form-input resize-none" x-model="serialNumbersText"></textarea>
+                    <textarea aria-label="Serial Numbers" name="serial_numbers" rows="3" placeholder="Choose available serials below, or enter one serial per line." class="form-input resize-none" x-model="serialNumbersText"></textarea>
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Only available serials in the selected warehouse can be issued.</p>
                 </div>
 

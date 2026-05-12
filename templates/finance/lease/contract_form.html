@@ -21,19 +21,19 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Lease Number</label>
-                    <input type="text" class="form-input" placeholder="LEASE-001">
+                    <input aria-label="Lease Number" type="text" class="form-input" placeholder="LEASE-001">
                 </div>
                 <div>
                     <label class="form-label">Lease Name</label>
-                    <input type="text" class="form-input" placeholder="Office Space">
+                    <input aria-label="Lease Name" type="text" class="form-input" placeholder="Office Space">
                 </div>
                 <div>
                     <label class="form-label">Lessor Name</label>
-                    <input type="text" class="form-input" placeholder="Lessor Company">
+                    <input aria-label="Lessor Name" type="text" class="form-input" placeholder="Lessor Company">
                 </div>
                 <div>
                     <label class="form-label">Classification</label>
-                    <select class="form-select form-input">
+                    <select aria-label="Classification" class="form-select form-input">
                         <option value="">Select type</option>
                         <option value="FINANCE">Finance</option>
                         <option value="OPERATING">Operating</option>
@@ -43,24 +43,24 @@
                 </div>
                 <div>
                     <label class="form-label">Commencement Date</label>
-                    <input type="date" class="form-input">
+                    <input aria-label="Commencement Date" type="date" class="form-input">
                 </div>
                 <div>
                     <label class="form-label">End Date</label>
-                    <input type="date" class="form-input">
+                    <input aria-label="End Date" type="date" class="form-input">
                 </div>
                 <div>
                     <label class="form-label">Currency</label>
-                    <input type="text" class="form-input" placeholder="{{ default_currency_code }}">
+                    <input aria-label="Currency" type="text" class="form-input" placeholder="{{ default_currency_code }}">
                 </div>
                 <div>
                     <label class="form-label">Base Payment Amount</label>
-                    <input type="text" class="form-input" placeholder="0.00">
+                    <input aria-label="Base Payment Amount" type="text" class="form-input" placeholder="0.00">
                 </div>
             </div>
             <div>
                 <label class="form-label">Description</label>
-                <textarea class="form-input" rows="3" placeholder="Describe the leased asset"></textarea>
+                <textarea aria-label="Description" class="form-input" rows="3" placeholder="Describe the leased asset"></textarea>
             </div>
             <div class="flex items-center justify-between">
                 <p class="text-xs text-slate-500">Submission wiring is handled via API in a later step.</p>

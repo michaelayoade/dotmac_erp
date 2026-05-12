@@ -561,7 +561,7 @@
                         Supplier <span class="required">*</span>
                     </label>
                     <div class="relative" data-typeahead-url="/finance/ap/suppliers/search" data-typeahead-min="2" data-typeahead-limit="8">
-                        <input type="text"
+                        <input aria-label="Search supplier..." type="text"
                                id="supplier_name"
                                name="supplier_name"
                                x-model="form.supplier_name"
@@ -585,7 +585,7 @@
                     <label for="invoice_number" class="form-label">
                         Supplier Invoice # (Optional)
                     </label>
-                    <input type="text"
+                    <input aria-label="e.g., INV-2024-001" type="text"
                            id="invoice_number"
                            name="invoice_number"
                            x-model="form.invoice_number"
@@ -615,7 +615,7 @@
                 <!-- Exchange Rate -->
                 <div>
                     <label for="exchange_rate" class="form-label">Exchange Rate</label>
-                    <input type="text"
+                    <input aria-label="1.0" type="text"
                            id="exchange_rate"
                            name="exchange_rate"
                            x-model="form.exchange_rate"
@@ -681,7 +681,7 @@
 
                 <div class="sm:col-span-2 lg:col-span-3">
                     <label for="purpose" class="form-label">Purpose</label>
-                    <textarea id="purpose"
+                    <textarea aria-label="What is this invoice for overall?" id="purpose"
                               name="purpose"
                               x-model="form.purpose"
                               rows="3"
@@ -720,7 +720,7 @@
             {# Bulk apply tax to all lines #}
             <div class="mt-4 flex items-center gap-3">
                 <label class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Apply tax to all lines:</label>
-                <select @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[240px]">
+                <select aria-label="Apply tax to all lines:" @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm max-w-[240px]">
                     <option value="">Select tax code...</option>
                     {% for tax in tax_codes %}
                     <option value="{{ tax.tax_code_id }}">{{ tax.tax_code }} ({{ tax.rate_display }}%){% if tax.is_inclusive %} — Price Inclusive{% endif %}</option>
@@ -750,7 +750,7 @@
                                 <td class="line-item-cell" :data-open="line.item_open ? 'true' : 'false'">
                                     <div class="relative" @click.outside="line.item_open = false">
                                         <div class="relative">
-                                            <input type="text"
+                                            <input aria-label="Search item..." type="text"
                                                    x-model="line.item_search"
                                                    @input="onItemSearch(line)"
                                                    @focus="line.item_open = true"
@@ -788,7 +788,7 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <select x-model="line.expense_account_id"
+                                    <select aria-label="Expense account" x-model="line.expense_account_id"
                                             required
                                             class="table-input">
                                         <option value="">Select account</option>
@@ -800,14 +800,14 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <input type="text"
+                                    <input aria-label="Line description" type="text"
                                            x-model="line.description"
                                            required
                                            placeholder="Line description"
                                            class="table-input">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Quantity" type="number"
                                            x-model.number="line.quantity"
                                            @input="calculateLineAmount(index)"
                                            required
@@ -816,7 +816,7 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <input type="number"
+                                    <input aria-label="Unit price" type="number"
                                            x-model.number="line.unit_price"
                                            @input="calculateLineAmount(index)"
                                            required
@@ -825,7 +825,7 @@
                                            class="table-input text-right">
                                 </td>
                                 <td>
-                                    <select x-model="line.tax_code_id"
+                                    <select aria-label="Tax code" x-model="line.tax_code_id"
                                             @change="calculateLineAmount(index)"
                                             class="table-input">
                                         <option value="">No Tax</option>
@@ -881,7 +881,7 @@
                     <div class="total-row">
                         <span class="total-label">
                             <label class="text-xs font-medium text-slate-600 dark:text-slate-400">WHT</label>
-                            <select name="wht_code_id" x-model="form.wht_code_id"
+                            <select aria-label="WHT" name="wht_code_id" x-model="form.wht_code_id"
                                     @change="calculateWht()"
                                     class="form-select form-select-sm ml-2 max-w-[160px] inline-block">
                                 <option value="">None</option>
@@ -928,7 +928,7 @@
                 {{ request.state.csrf_form | safe }}
                 <div>
                     <label for="comment" class="form-label">Add Comment</label>
-                    <textarea id="comment"
+                    <textarea aria-label="Add internal comment..." id="comment"
                               name="comment"
                               rows="3"
                               required

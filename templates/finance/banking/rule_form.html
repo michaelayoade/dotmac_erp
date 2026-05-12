@@ -49,14 +49,14 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label for="rule_name" class="form-label">Rule Name <span class="text-rose-500">*</span></label>
-                    <input type="text" id="rule_name" name="rule_name" required
+                    <input aria-label="e.g., Categorize Amazon Purchases" type="text" id="rule_name" name="rule_name" required
                            value="{{ (form_data.rule_name if form_data else rule.rule_name) if (form_data or rule) else '' }}"
                            placeholder="e.g., Categorize Amazon Purchases"
                            class="form-input mt-1">
                 </div>
                 <div class="sm:col-span-2">
                     <label for="description" class="form-label">Description</label>
-                    <input type="text" id="description" name="description"
+                    <input aria-label="Describe what this rule does..." type="text" id="description" name="description"
                            value="{{ (form_data.description if form_data else rule.description) if (form_data or rule) else '' }}"
                            placeholder="Describe what this rule does..."
                            class="form-input mt-1">
@@ -125,7 +125,7 @@
                             <div class="min-w-0 flex-1 space-y-4">
                                 <div>
                                     <label class="form-label text-xs" x-bind:for="'cond_type_' + cond.id">Condition Type</label>
-                                    <select x-model="cond.type"
+                                    <select aria-label="Condition Type" x-model="cond.type"
                                             @change="resetConditionParams(cond)"
                                             x-bind:id="'cond_type_' + cond.id"
                                             class="form-select mt-1 text-sm">
@@ -140,7 +140,7 @@
                                 {# ── DESCRIPTION_CONTAINS params ── #}
                                 <div x-show="cond.type === 'DESCRIPTION_CONTAINS'">
                                     <label class="form-label text-xs">Keywords (comma separated)</label>
-                                    <input type="text" x-model="cond.params.keywords"
+                                    <input aria-label="e.g., AMAZON, AMZN, AWS" type="text" x-model="cond.params.keywords"
                                            placeholder="e.g., AMAZON, AMZN, AWS"
                                            class="form-input mt-1 text-sm">
                                     <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Case-insensitive. Match if description contains any keyword.</p>
@@ -149,7 +149,7 @@
                                 {# ── PAYEE_MATCH params ── #}
                                 <div x-show="cond.type === 'PAYEE_MATCH'">
                                     <label class="form-label text-xs">Payee Name Pattern</label>
-                                    <input type="text" x-model="cond.params.payee_name"
+                                    <input aria-label="e.g., Amazon or AMZN*" type="text" x-model="cond.params.payee_name"
                                            placeholder="e.g., Amazon or AMZN*"
                                            class="form-input mt-1 text-sm">
                                     <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Match payee/payer field on the transaction.</p>
@@ -159,7 +159,7 @@
                                 <div x-show="cond.type === 'AMOUNT_RANGE'" class="grid gap-3 sm:grid-cols-3">
                                     <div>
                                         <label class="form-label text-xs">Direction</label>
-                                        <select x-model="cond.params.direction" class="form-select mt-1 text-sm">
+                                        <select aria-label="Direction" x-model="cond.params.direction" class="form-select mt-1 text-sm">
                                             <option value="">Any</option>
                                             <option value="credit">Inflow (Credit)</option>
                                             <option value="debit">Outflow (Debit)</option>
@@ -167,12 +167,12 @@
                                     </div>
                                     <div>
                                         <label class="form-label text-xs">Min Amount</label>
-                                        <input type="number" x-model="cond.params.min_amount" step="0.01" min="0"
+                                        <input aria-label="0.00" type="number" x-model="cond.params.min_amount" step="0.01" min="0"
                                                placeholder="0.00" class="form-input mt-1 text-sm font-mono">
                                     </div>
                                     <div>
                                         <label class="form-label text-xs">Max Amount</label>
-                                        <input type="number" x-model="cond.params.max_amount" step="0.01" min="0"
+                                        <input aria-label="No limit" type="number" x-model="cond.params.max_amount" step="0.01" min="0"
                                                placeholder="No limit" class="form-input mt-1 text-sm font-mono">
                                     </div>
                                 </div>
@@ -180,7 +180,7 @@
                                 {# ── DESCRIPTION_REGEX params ── #}
                                 <div x-show="cond.type === 'DESCRIPTION_REGEX'">
                                     <label class="form-label text-xs">Regex Pattern</label>
-                                    <input type="text" x-model="cond.params.pattern"
+                                    <input aria-label="e.g., ^PAYROLL.*CORP$" type="text" x-model="cond.params.pattern"
                                            placeholder="e.g., ^PAYROLL.*CORP$"
                                            class="form-input mt-1 text-sm font-mono">
                                     <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Case-insensitive regular expression.</p>
@@ -189,7 +189,7 @@
                                 {# ── REFERENCE_MATCH params ── #}
                                 <div x-show="cond.type === 'REFERENCE_MATCH'">
                                     <label class="form-label text-xs">Reference Pattern</label>
-                                    <input type="text" x-model="cond.params.pattern"
+                                    <input aria-label="e.g., INV-\\d+ or TRF.*" type="text" x-model="cond.params.pattern"
                                            placeholder="e.g., INV-\\d+ or TRF.*"
                                            class="form-input mt-1 text-sm font-mono">
                                     <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Regex matched against reference, bank reference, and check number.</p>

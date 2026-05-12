@@ -115,10 +115,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/finance/ap/invoice_form.html": {
-    "nameless": 0,
-    "unlabeled": 8
-  },
   "templates/finance/ap/payment_batches.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -175,10 +171,6 @@
     "nameless": 0,
     "unlabeled": 4
   },
-  "templates/finance/banking/rule_form.html": {
-    "nameless": 0,
-    "unlabeled": 8
-  },
   "templates/finance/banking/rules/match_rule_form.html": {
     "nameless": 0,
     "unlabeled": 3
@@ -198,10 +190,6 @@
   "templates/finance/exp/list.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/finance/lease/contract_form.html": {
-    "nameless": 0,
-    "unlabeled": 9
   },
   "templates/finance/lease/contracts.html": {
     "nameless": 0,
@@ -363,10 +351,6 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/inventory/issue_form.html": {
-    "nameless": 0,
-    "unlabeled": 9
-  },
   "templates/inventory/material_request_detail.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -386,10 +370,6 @@
   "templates/inventory/report_stock_on_hand.html": {
     "nameless": 0,
     "unlabeled": 2
-  },
-  "templates/inventory/transfer_form.html": {
-    "nameless": 0,
-    "unlabeled": 9
   },
   "templates/onboarding/portal/base_onboarding.html": {
     "nameless": 1,
