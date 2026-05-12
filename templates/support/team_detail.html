@@ -186,7 +186,7 @@
                     <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
                     {% endfor %}
                 </select>
-                <input type="text" name="role" placeholder="Role (optional)" class="form-input text-sm py-1.5 w-32">
+                <input aria-label="Role (optional)" type="text" name="role" placeholder="Role (optional)" class="form-input text-sm py-1.5 w-32">
                 <button type="submit" class="btn btn-primary btn-sm" aria-label="Add">
                     {{ icon_svg("plus", "h-4 w-4") }}
                 </button>
@@ -250,7 +250,7 @@
                                         Assignment Weight (1-10)
                                     </label>
                                     <div class="flex items-center gap-2">
-                                        <input type="range" name="weight" min="1" max="10" x-model="weight"
+                                        <input aria-label="Assignment Weight (1-10)" type="range" name="weight" min="1" max="10" x-model="weight"
                                             class="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
                                         <span class="w-6 text-center text-sm font-medium text-slate-700 dark:text-slate-300" x-text="weight"></span>
                                     </div>

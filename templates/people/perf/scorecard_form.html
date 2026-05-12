@@ -61,7 +61,7 @@
                     </div>
                     <div>
                         <label for="period_label" class="form-label">Period Label</label>
-                        <input type="text" name="period_label" id="period_label"
+                        <input aria-label="e.g., Q1 2024, FY 2024" type="text" name="period_label" id="period_label"
                                class="form-input w-full"
                                placeholder="e.g., Q1 2024, FY 2024"
                                value="{{ form_data.period_label or '' }}">
@@ -102,19 +102,19 @@
                                 <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
                                     <div class="md:col-span-2">
                                         <label class="text-xs text-slate-500 dark:text-slate-400">Metric Name</label>
-                                        <input type="text" x-model="item.metric_name" required
+                                        <input aria-label="e.g., Revenue Growth" type="text" x-model="item.metric_name" required
                                                class="form-input w-full text-sm"
                                                placeholder="e.g., Revenue Growth">
                                     </div>
                                     <div>
                                         <label class="text-xs text-slate-500 dark:text-slate-400">Target Value</label>
-                                        <input type="number" step="0.01" x-model="item.target_value"
+                                        <input aria-label="100" type="number" step="0.01" x-model="item.target_value"
                                                class="form-input w-full text-sm"
                                                placeholder="100">
                                     </div>
                                     <div>
                                         <label class="text-xs text-slate-500 dark:text-slate-400">Weight (%)</label>
-                                        <input type="number" min="0" max="100" x-model="item.weightage"
+                                        <input aria-label="10" type="number" min="0" max="100" x-model="item.weightage"
                                                @input="recalculateTotal()"
                                                class="form-input w-full text-sm"
                                                placeholder="10">
@@ -128,13 +128,13 @@
                             <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
                                     <label class="text-xs text-slate-500 dark:text-slate-400">Unit of Measure</label>
-                                    <input type="text" x-model="item.unit_of_measure"
+                                    <input aria-label="e.g., %, USD, units" type="text" x-model="item.unit_of_measure"
                                            class="form-input w-full text-sm"
                                            placeholder="e.g., %, USD, units">
                                 </div>
                                 <div>
                                     <label class="text-xs text-slate-500 dark:text-slate-400">Description</label>
-                                    <input type="text" x-model="item.description"
+                                    <input aria-label="Brief description..." type="text" x-model="item.description"
                                            class="form-input w-full text-sm"
                                            placeholder="Brief description...">
                                 </div>

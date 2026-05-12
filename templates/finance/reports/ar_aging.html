@@ -32,7 +32,7 @@
             {{ period_shortcuts(mode="as_of") }}
             <div class="flex-1 min-w-[200px]">
                 <label class="form-label">As of date</label>
-                <input type="date" name="as_of_date" value="{{ as_of_date_iso }}" class="form-input">
+                <input aria-label="As of date" type="date" name="as_of_date" value="{{ as_of_date_iso }}" class="form-input">
             </div>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("refresh", "h-4 w-4 mr-1.5") }}

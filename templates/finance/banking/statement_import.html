@@ -95,7 +95,7 @@
                 <div class="grid gap-4 grid-cols-1 sm:grid-cols-2">
                     <div>
                         <label for="statement_number" class="form-label">Statement Number</label>
-                        <input type="text" id="statement_number" name="statement_number"
+                        <input aria-label="Auto-generated if blank" type="text" id="statement_number" name="statement_number"
                                x-model="formData.statement_number" class="form-input"
                                placeholder="Auto-generated if blank">
                     </div>
@@ -124,12 +124,12 @@
                 <div class="grid gap-4 grid-cols-1 sm:grid-cols-2">
                     <div>
                         <label for="opening_balance" class="form-label">Opening Balance</label>
-                        <input type="number" id="opening_balance" name="opening_balance" step="0.01"
+                        <input aria-label="Leave blank if unavailable" type="number" id="opening_balance" name="opening_balance" step="0.01"
                                x-model="formData.opening_balance" class="form-input form-input-currency" placeholder="Leave blank if unavailable">
                     </div>
                     <div>
                         <label for="closing_balance" class="form-label">Closing Balance</label>
-                        <input type="number" id="closing_balance" name="closing_balance" step="0.01"
+                        <input aria-label="Leave blank if unavailable" type="number" id="closing_balance" name="closing_balance" step="0.01"
                                x-model="formData.closing_balance" class="form-input form-input-currency" placeholder="Leave blank if unavailable">
                     </div>
                 </div>
@@ -228,7 +228,7 @@
                             </div>
                             <div>
                                 <label class="form-label">Description</label>
-                                <input type="text" :name="`lines[${idx}][description]`" x-model="row.description"
+                                <input aria-label="Description" type="text" :name="`lines[${idx}][description]`" x-model="row.description"
                                        :disabled="!!fileName"
                                        class="mt-1 w-full form-input text-sm">
                             </div>

@@ -24,7 +24,7 @@
     <div>
             <div class="min-w-[300px] flex-1">
                 <label class="form-label text-xs">Select Employee</label>
-                <select name="employee_id" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Select Employee" name="employee_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">Choose an employee...</option>
                     {% for emp in employees %}
                     <option value="{{ emp.employee_id }}" {{ 'selected' if selected_employee_id == (emp.employee_id | string) else '' }}>

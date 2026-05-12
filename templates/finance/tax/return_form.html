@@ -33,9 +33,9 @@
                     <label class="form-label">Tax Period</label>
                     {% if is_edit %}
                     <input type="hidden" name="tax_period_id" value="{{ selected_period_id }}">
-                    <select class="form-select form-input" disabled>
+                    <select aria-label="Tax Period" class="form-select form-input" disabled>
                     {% else %}
-                    <select class="form-select form-input" name="tax_period_id" required>
+                    <select aria-label="Tax Period" class="form-select form-input" name="tax_period_id" required>
                     {% endif %}
                         <option value="">Select period</option>
                         {% for period in periods %}
@@ -48,7 +48,7 @@
                 </div>
                 <div>
                     <label class="form-label">Return Type</label>
-                    <select class="form-select form-input" name="return_type" required>
+                    <select aria-label="Return Type" class="form-select form-input" name="return_type" required>
                         <option value="">Select type</option>
                         {% for rt in return_types %}
                         <option value="{{ rt.value }}"
@@ -60,7 +60,7 @@
                 </div>
                 <div>
                     <label class="form-label">Adjustments</label>
-                    <input type="text" name="adjustments" class="form-input" placeholder="0.00"
+                    <input aria-label="Adjustments" type="text" name="adjustments" class="form-input" placeholder="0.00"
                            value="{{ adjustments | default('0', true) }}">
                 </div>
             </div>

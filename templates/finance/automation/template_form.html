@@ -182,7 +182,7 @@
                         <h3 class="font-semibold text-slate-900 dark:text-white">Additional CSS (Optional)</h3>
                     </div>
                     <div class="p-6">
-                        <textarea id="css_styles" name="css_styles" rows="8"
+                        <textarea aria-label="/* Add custom CSS styles here */" id="css_styles" name="css_styles" rows="8"
                                   placeholder="/* Add custom CSS styles here */"
                                   class="w-full rounded-lg border border-slate-300 px-4 py-3 font-mono text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ template.css_styles if template else form_data.css_styles | default('', true) }}</textarea>
                     </div>
@@ -259,7 +259,7 @@
                     <div class="space-y-4">
                         <div>
                             <label for="logo_url" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Logo URL</label>
-                            <input type="url" id="logo_url" name="logo_url"
+                            <input aria-label="https://..." type="url" id="logo_url" name="logo_url"
                                    value="{{ template.header_config.logo_url if template and template.header_config else '' }}"
                                    placeholder="https://..."
                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">

@@ -25,7 +25,7 @@
     <div>
             <div>
                 <label class="form-label text-xs">Breach Type</label>
-                <select name="breach_type" class="form-input" {{ filter_attrs }}>
+                <select aria-label="Breach Type" name="breach_type" class="form-input" {{ filter_attrs }}>
                     <option value="all" {{ 'selected' if breach_type == 'all' }}>All Breaches</option>
                     <option value="response" {{ 'selected' if breach_type == 'response' }}>Response Only</option>
                     <option value="resolution" {{ 'selected' if breach_type == 'resolution' }}>Resolution Only</option>

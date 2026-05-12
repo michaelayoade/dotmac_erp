@@ -83,7 +83,7 @@
                 <form method="post" action="/careers/{{ org_slug }}/offer/{{ offer.candidate_access_token }}/decline" class="flex-1">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div class="flex flex-col gap-3 sm:flex-row">
-                        <input type="text" name="reason" placeholder="Reason for declining (optional)" class="form-input w-full">
+                        <input aria-label="Reason for declining (optional)" type="text" name="reason" placeholder="Reason for declining (optional)" class="form-input w-full">
                         <button type="submit" class="btn btn-danger w-full sm:w-auto">Decline Offer</button>
                     </div>
                 </form>

@@ -111,12 +111,12 @@
     <div class="card p-6">
         <form method="post" action="/people/hr/info-changes/{{ request_item.request_id }}/approve" class="flex flex-col md:flex-row gap-3">
             {{ request.state.csrf_form | safe }}
-            <input type="text" name="reviewer_notes" class="form-input w-full" placeholder="Optional approval note">
+            <input aria-label="Optional approval note" type="text" name="reviewer_notes" class="form-input w-full" placeholder="Optional approval note">
             <button type="submit" class="btn btn-primary">Approve</button>
         </form>
         <form method="post" action="/people/hr/info-changes/{{ request_item.request_id }}/reject" class="flex flex-col md:flex-row gap-3 mt-3">
             {{ request.state.csrf_form | safe }}
-            <input type="text" name="reviewer_notes" class="form-input w-full" placeholder="Optional rejection note">
+            <input aria-label="Optional rejection note" type="text" name="reviewer_notes" class="form-input w-full" placeholder="Optional rejection note">
             <button type="submit" class="btn btn-secondary">Reject</button>
         </form>
     </div>

@@ -70,19 +70,19 @@
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label for="quantity_liters" class="form-label">Quantity (Liters) <span class="text-rose-500">*</span></label>
-                        <input type="number" id="quantity_liters" name="quantity_liters" required
+                        <input aria-label="0.00" type="number" id="quantity_liters" name="quantity_liters" required
                                min="0" step="0.01" placeholder="0.00"
                                class="form-input">
                     </div>
                     <div>
                         <label for="price_per_liter" class="form-label">Price per Liter <span class="text-rose-500">*</span></label>
-                        <input type="number" id="price_per_liter" name="price_per_liter" required
+                        <input aria-label="0.00" type="number" id="price_per_liter" name="price_per_liter" required
                                min="0" step="0.01" placeholder="0.00"
                                class="form-input">
                     </div>
                     <div>
                         <label for="total_cost" class="form-label">Total Cost <span class="text-rose-500">*</span></label>
-                        <input type="number" id="total_cost" name="total_cost" required
+                        <input aria-label="0.00" type="number" id="total_cost" name="total_cost" required
                                min="0" step="0.01" placeholder="0.00"
                                class="form-input">
                     </div>
@@ -91,13 +91,13 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="fuel_station" class="form-label">Fuel Station</label>
-                        <input type="text" id="fuel_station" name="fuel_station"
+                        <input aria-label="Station name" type="text" id="fuel_station" name="fuel_station"
                                placeholder="Station name"
                                class="form-input">
                     </div>
                     <div>
                         <label for="receipt_number" class="form-label">Receipt Number</label>
-                        <input type="text" id="receipt_number" name="receipt_number"
+                        <input aria-label="Receipt/invoice number" type="text" id="receipt_number" name="receipt_number"
                                placeholder="Receipt/invoice number"
                                class="form-input">
                     </div>
@@ -106,7 +106,7 @@
                 <div>
                     <label for="expense_claim_name" class="form-label">Expense Claim</label>
                     <div class="relative" data-typeahead-url="/fleet/expense-claims/search" data-typeahead-min="2" data-typeahead-limit="8">
-                        <input
+                        <input aria-label="Search claim number or purpose..."
                             type="text"
                             id="expense_claim_name"
                             name="expense_claim_name"
@@ -143,7 +143,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
             </div>
             <div class="p-4">
-                <textarea id="notes" name="notes" rows="3"
+                <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes..."
                           class="form-textarea"></textarea>
             </div>

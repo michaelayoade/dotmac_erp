@@ -251,7 +251,7 @@
                     {{ request.state.csrf_form | safe }}
                     <div>
                         <label class="form-label required">Resolution Notes</label>
-                        <textarea name="resolution" required rows="4" class="form-input w-full" placeholder="Describe how this issue was resolved..."></textarea>
+                        <textarea aria-label="Describe how this issue was resolved..." name="resolution" required rows="4" class="form-input w-full" placeholder="Describe how this issue was resolved..."></textarea>
                     </div>
                     <button type="submit" class="btn btn-success">
                         {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
@@ -695,7 +695,7 @@
                 <form method="post" enctype="multipart/form-data" action="/support/tickets/{{ ticket.ticket_number }}/comments" class="space-y-4">
                     {{ request.state.csrf_form | safe }}
                     <div>
-                        <textarea name="content" required rows="2" class="form-input w-full" placeholder="Add a comment..."></textarea>
+                        <textarea aria-label="Add a comment..." name="content" required rows="2" class="form-input w-full" placeholder="Add a comment..."></textarea>
                     </div>
                     <div>
                         <input type="file" name="files" multiple

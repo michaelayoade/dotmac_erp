@@ -18,7 +18,7 @@
         <div class="grid gap-4 lg:grid-cols-3">
             <div class="lg:col-span-1">
                 <label class="form-label">Cube</label>
-                <select class="form-input" x-model="cubeCode" @change="onCubeChange()">
+                <select aria-label="Cube" class="form-input" x-model="cubeCode" @change="onCubeChange()">
                     <template x-for="cube in cubes" :key="cube.code">
                         <option :value="cube.code" x-text="cube.name"></option>
                     </template>

@@ -43,14 +43,14 @@
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="sm:col-span-2">
           <label for="name" class="form-label">Rule Name <span class="text-rose-500">*</span></label>
-          <input type="text" id="name" name="name" required
+          <input aria-label="e.g., Paystack Gateway Payments" type="text" id="name" name="name" required
                  value="{{ fd.name if fd.name is defined else (rule.name if rule else '') }}"
                  placeholder="e.g., Paystack Gateway Payments"
                  class="form-input mt-1">
         </div>
         <div class="sm:col-span-2">
           <label for="description" class="form-label">Description</label>
-          <input type="text" id="description" name="description"
+          <input aria-label="Describe what this rule matches..." type="text" id="description" name="description"
                  value="{{ fd.description if fd.description is defined else (rule.description if rule and rule.description else '') }}"
                  placeholder="Describe what this rule matches..."
                  class="form-input mt-1">
@@ -141,7 +141,7 @@
                 <div class="grid gap-3 sm:grid-cols-3">
                   <div>
                     <label class="form-label text-xs">Field</label>
-                    <select x-model="cond.field" :name="'cond_field_' + idx" class="form-select mt-1 text-sm">
+                    <select aria-label="Field" x-model="cond.field" :name="'cond_field_' + idx" class="form-select mt-1 text-sm">
                       <option value="">Select...</option>
                       {% for val, label in condition_field_choices %}
                       <option value="{{ val }}">{{ label }}</option>
@@ -150,7 +150,7 @@
                   </div>
                   <div>
                     <label class="form-label text-xs">Operator</label>
-                    <select x-model="cond.operator" :name="'cond_operator_' + idx" class="form-select mt-1 text-sm">
+                    <select aria-label="Operator" x-model="cond.operator" :name="'cond_operator_' + idx" class="form-select mt-1 text-sm">
                       <option value="">Select...</option>
                       {% for val, label in condition_operator_choices %}
                       <option value="{{ val }}">{{ label }}</option>
@@ -159,7 +159,7 @@
                   </div>
                   <div>
                     <label class="form-label text-xs">Value</label>
-                    <input type="text" x-model="cond.value" :name="'cond_value_' + idx"
+                    <input aria-label="e.g., PSTK_.* or AMAZON" type="text" x-model="cond.value" :name="'cond_value_' + idx"
                            placeholder="e.g., PSTK_.* or AMAZON"
                            class="form-input mt-1 text-sm font-mono">
                   </div>
@@ -212,7 +212,7 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label for="amount_tolerance_cents" class="form-label">Amount Tolerance (cents)</label>
-            <input type="number" id="amount_tolerance_cents" name="amount_tolerance_cents" min="0"
+            <input aria-label="Use global setting" type="number" id="amount_tolerance_cents" name="amount_tolerance_cents" min="0"
                    value="{{ fd.amount_tolerance_cents if fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents else (rule.amount_tolerance_cents if rule and rule.amount_tolerance_cents is not none else '') }}"
                    placeholder="Use global setting"
                    class="form-input mt-1">
@@ -220,7 +220,7 @@
           </div>
           <div>
             <label for="date_window_days" class="form-label">Date Window (days)</label>
-            <input type="number" id="date_window_days" name="date_window_days" min="0"
+            <input aria-label="Use global setting" type="number" id="date_window_days" name="date_window_days" min="0"
                    value="{{ fd.date_window_days if fd.date_window_days is defined and fd.date_window_days else (rule.date_window_days if rule and rule.date_window_days is not none else '') }}"
                    placeholder="Use global setting"
                    class="form-input mt-1">
@@ -230,7 +230,7 @@
 
         <div>
           <label for="journal_label_template" class="form-label">Journal Label Template</label>
-          <input type="text" id="journal_label_template" name="journal_label_template"
+          <input aria-label="e.g., Bank fee - {date} - {description}" type="text" id="journal_label_template" name="journal_label_template"
                  value="{{ fd.journal_label_template if fd.journal_label_template is defined and fd.journal_label_template else (rule.journal_label_template if rule and rule.journal_label_template else '') }}"
                  placeholder="e.g., Bank fee - {date} - {description}"
                  class="form-input mt-1 font-mono text-sm">

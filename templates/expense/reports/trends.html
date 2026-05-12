@@ -29,7 +29,7 @@
     <div>
                 <div class="w-44">
                     <label class="form-label text-xs">Period</label>
-                    <select name="months" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Period" name="months" class="form-select w-full" {{ filter_attrs }}>
                         <option value="3" {% if months == 3 %}selected{% endif %}>Last 3 months</option>
                         <option value="6" {% if months == 6 %}selected{% endif %}>Last 6 months</option>
                         <option value="12" {% if months == 12 %}selected{% endif %}>Last 12 months</option>

@@ -78,7 +78,7 @@
                 {% if can_reject and can_act %}
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/reject" class="flex items-center gap-2" x-show="!reviewMode">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <input type="text" name="reason" class="form-input w-48" placeholder="Rejection reason" required>
+                    <input aria-label="Rejection reason" type="text" name="reason" class="form-input w-48" placeholder="Rejection reason" required>
                     <button type="submit" class="btn btn-secondary">Reject</button>
                 </form>
                 {% endif %}
@@ -289,7 +289,7 @@
         <div class="card p-5 space-y-4">
             <div>
                 <label for="approval-notes" class="form-label">Approval Notes</label>
-                <textarea id="approval-notes" name="approval_notes" rows="3" maxlength="2000" placeholder="Optional: explain corrections or conditions..." class="form-input w-full"></textarea>
+                <textarea aria-label="Optional: explain corrections or conditions..." id="approval-notes" name="approval_notes" rows="3" maxlength="2000" placeholder="Optional: explain corrections or conditions..." class="form-input w-full"></textarea>
                 <span class="form-hint">These notes will be visible to the claimant.</span>
             </div>
 
@@ -310,7 +310,7 @@
         <form method="post" action="/expense/claims/{{ claim.claim_id }}/comments" class="space-y-3">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="comment-content" class="text-sm font-medium text-slate-700 dark:text-slate-300">Add comment</label>
-            <textarea
+            <textarea aria-label="Write a comment..."
                 id="comment-content"
                 name="content"
                 rows="3"

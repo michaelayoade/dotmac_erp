@@ -366,7 +366,7 @@
                     <label for="reason" class="form-label">
                         Reason for Credit Note <span class="required">*</span>
                     </label>
-                    <textarea id="reason"
+                    <textarea aria-label="Explain the reason for issuing this credit note" id="reason"
                               name="reason"
                               x-model="form.reason"
                               required
@@ -423,7 +423,7 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <input type="text"
+                                    <input aria-label="Description" type="text"
                                            x-model="line.description"
                                            required
                                            placeholder="Description"
@@ -540,7 +540,7 @@
                     <label for="notes" class="form-label">
                         Internal Notes
                     </label>
-                    <textarea id="notes"
+                    <textarea aria-label="Notes (not visible to customer)" id="notes"
                               x-model="form.notes"
                               rows="2"
                               placeholder="Notes (not visible to customer)"

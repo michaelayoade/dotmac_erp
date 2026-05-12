@@ -45,23 +45,23 @@
                     <label class="form-label">
                         Plan Number <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text" name="plan_number" required class="form-input" placeholder="PP-2025-001">
+                    <input aria-label="Plan Number" type="text" name="plan_number" required class="form-input" placeholder="PP-2025-001">
                 </div>
                 <div>
                     <label class="form-label">
                         Fiscal Year <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text" name="fiscal_year" required class="form-input" placeholder="2025/2026">
+                    <input aria-label="Fiscal Year" type="text" name="fiscal_year" required class="form-input" placeholder="2025/2026">
                 </div>
                 <div class="sm:col-span-2">
                     <label class="form-label">
                         Title <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text" name="title" required class="form-input" placeholder="Annual Procurement Plan">
+                    <input aria-label="Title" type="text" name="title" required class="form-input" placeholder="Annual Procurement Plan">
                 </div>
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description" rows="3" class="form-input" placeholder="Optional summary of the procurement plan..."></textarea>
+                    <textarea aria-label="Description" name="description" rows="3" class="form-input" placeholder="Optional summary of the procurement plan..."></textarea>
                 </div>
                 <div class="sm:col-span-2">
                     {{ file_upload_zone(

@@ -53,7 +53,7 @@
                          data-typeahead-url="/expense/limits/approvers/employees/search"
                          data-typeahead-min="2"
                          data-typeahead-limit="8">
-                        <input type="text"
+                        <input aria-label="Scope Target" type="text"
                                class="form-input w-full"
                                placeholder="Search employees..."
                                autocomplete="off"
@@ -117,7 +117,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Maximum Approval Amount (per claim) <span class="text-rose-500">*</span></label>
-                    <input type="number" name="max_approval_amount" step="0.01" min="0"
+                    <input aria-label="Maximum Approval Amount (per claim)" type="number" name="max_approval_amount" step="0.01" min="0"
                            value="{{ approver_limit.max_approval_amount if approver_limit else '' }}"
                            class="form-input{% if errors.max_approval_amount %} border-red-300{% endif %}"
                            placeholder="0.00">
@@ -128,7 +128,7 @@
                 </div>
                 <div>
                     <label class="form-label">Weekly Approval Budget</label>
-                    <input type="number" name="weekly_approval_budget" step="0.01" min="0"
+                    <input aria-label="Weekly Approval Budget" type="number" name="weekly_approval_budget" step="0.01" min="0"
                            value="{{ approver_limit.weekly_approval_budget if approver_limit and approver_limit.weekly_approval_budget else '' }}"
                            class="form-input{% if errors.weekly_approval_budget %} border-red-300{% endif %}"
                            placeholder="Leave empty for unlimited">

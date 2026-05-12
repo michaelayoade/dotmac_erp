@@ -40,7 +40,7 @@
     <div>
             <div class="min-w-[150px]">
                 <label class="form-label text-xs">Status</label>
-                <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
@@ -51,7 +51,7 @@
     <div>
             <div class="min-w-[150px]">
                 <label class="form-label text-xs">Request Type</label>
-                <select name="request_type" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Request Type" name="request_type" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Types</option>
                     {% for t in request_types %}
                     <option value="{{ t }}" {% if filter_request_type == t %}selected{% endif %}>{{ t | title }}</option>

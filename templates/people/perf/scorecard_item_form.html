@@ -85,7 +85,7 @@
                         <span class="font-normal text-slate-500">({{ item.unit_of_measure }})</span>
                         {% endif %}
                     </label>
-                    <input type="number" step="0.01" name="actual_value" id="actual_value" required
+                    <input aria-label="Enter achieved value..." type="number" step="0.01" name="actual_value" id="actual_value" required
                            class="form-input w-full"
                            value="{{ form_data.actual_value or '' }}"
                            placeholder="Enter achieved value...">

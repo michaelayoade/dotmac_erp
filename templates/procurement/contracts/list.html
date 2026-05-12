@@ -131,7 +131,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Format</label>
-                    <select name="format" id="proc-contract-import-format" class="form-select text-sm" onchange="document.getElementById('proc-contract-template-link').href = '/procurement/contracts/template?format=' + this.value;">
+                    <select aria-label="Format" name="format" id="proc-contract-import-format" class="form-select text-sm" onchange="document.getElementById('proc-contract-template-link').href = '/procurement/contracts/template?format=' + this.value;">
                         <option value="csv">CSV</option>
                         {% if xlsx_available %}
                         <option value="xlsx">XLSX</option>
@@ -176,7 +176,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Format</label>
-                    <select name="format" class="form-select text-sm">
+                    <select aria-label="Format" name="format" class="form-select text-sm">
                         <option value="csv">CSV</option>
                         {% if xlsx_available %}
                         <option value="xlsx">XLSX</option>

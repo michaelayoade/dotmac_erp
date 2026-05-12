@@ -74,7 +74,7 @@
             <label class="form-label text-xs">Search</label>
             <div class="relative">
                 {{ icon_svg("search", "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400") }}
-                <input type="text"
+                <input aria-label="Search by reference, recipient, account..." type="text"
                        name="search"
                        value="{{ search | default('', true) }}"
                        placeholder="Search by reference, recipient, account..."
@@ -84,7 +84,7 @@
         </div>
         <div>
             <label class="form-label text-xs">Status</label>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Statuses</option>
                 <option value="PENDING" {{ 'selected' if status_filter == 'PENDING' else '' }}>Pending</option>
                 <option value="PROCESSING" {{ 'selected' if status_filter == 'PROCESSING' else '' }}>Processing</option>

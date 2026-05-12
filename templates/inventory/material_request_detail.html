@@ -259,9 +259,9 @@
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <div class="flex items-center gap-3">
-                    <input type="text" name="cancel_reason" required
+                    <input aria-label="Cancellation reason" type="text" name="cancel_reason" required
                            placeholder="Cancellation reason"
-                           class="form-input w-72" />
+                           class="form-input w-72" >
                     <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     {{ icon_svg("x-mark", "h-4 w-4 mr-1.5") }}
                     Cancel Request

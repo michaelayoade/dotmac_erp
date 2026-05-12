@@ -19,11 +19,11 @@
         <form method="get" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
                 <label class="form-label">From</label>
-                <input type="date" name="from_date" value="{{ filters.from_date }}" class="form-input">
+                <input aria-label="From" type="date" name="from_date" value="{{ filters.from_date }}" class="form-input">
             </div>
             <div>
                 <label class="form-label">To</label>
-                <input type="date" name="to_date" value="{{ filters.to_date }}" class="form-input">
+                <input aria-label="To" type="date" name="to_date" value="{{ filters.to_date }}" class="form-input">
             </div>
             <div class="flex items-end">
                 <button type="submit" class="btn btn-secondary">Apply</button>
@@ -55,15 +55,15 @@
             {{ request.state.csrf_form | safe }}
             <div>
                 <label class="form-label">Reviewed From</label>
-                <input type="date" name="reviewed_from" value="{{ filters.from_date }}" class="form-input">
+                <input aria-label="Reviewed From" type="date" name="reviewed_from" value="{{ filters.from_date }}" class="form-input">
             </div>
             <div>
                 <label class="form-label">Reviewed To</label>
-                <input type="date" name="reviewed_to" value="{{ filters.to_date }}" class="form-input">
+                <input aria-label="Reviewed To" type="date" name="reviewed_to" value="{{ filters.to_date }}" class="form-input">
             </div>
             <div class="sm:col-span-3">
                 <label class="form-label">Reset Reason <span class="text-rose-500">*</span></label>
-                <textarea name="reset_reason" rows="3" class="form-input" required placeholder="State why this reset is justified after review"></textarea>
+                <textarea aria-label="Reset Reason" name="reset_reason" rows="3" class="form-input" required placeholder="State why this reset is justified after review"></textarea>
             </div>
             <div class="sm:col-span-3 flex justify-end">
                 <button type="submit" class="btn btn-primary">Reset Consumed Budget To Zero</button>

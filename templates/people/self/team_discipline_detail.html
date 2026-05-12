@@ -94,11 +94,11 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div>
                 <label class="label required">Query Text</label>
-                <textarea name="query_text" rows="5" class="input" required minlength="10" placeholder="Formal query text to employee"></textarea>
+                <textarea aria-label="Formal query text to employee" name="query_text" rows="5" class="input" required minlength="10" placeholder="Formal query text to employee"></textarea>
             </div>
             <div>
                 <label class="label required">Response Due Date</label>
-                <input type="date" name="response_due_date" class="input" required>
+                <input aria-label="Response Due Date" type="date" name="response_due_date" class="input" required>
             </div>
             <div class="flex justify-end">
                 <button type="submit" class="btn btn-primary">Issue Query</button>

@@ -85,7 +85,7 @@
             </div>
 
             <div class="flex items-center gap-3 mb-4">
-                <input type="search" placeholder="Search accounts..."
+                <input aria-label="Search accounts..." type="search" placeholder="Search accounts..."
                        x-model="search" @input="filterAccounts()"
                        class="form-input flex-1 text-sm">
                 <button type="button" @click="toggleAll(true)" class="btn btn-ghost btn-sm text-xs">Select All</button>

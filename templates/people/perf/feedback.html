@@ -48,7 +48,7 @@
     <div>
                 <div class="w-40">
                     <label class="form-label text-xs">Type</label>
-                    <select name="feedback_type" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Type" name="feedback_type" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Types</option>
                         {% for ft in feedback_types %}
                         <option value="{{ ft }}" {% if feedback_type == ft %}selected{% endif %}>{{ ft | title }}</option>
@@ -59,7 +59,7 @@
     <div>
                 <div class="w-40">
                     <label class="form-label text-xs">Status</label>
-                    <select name="submitted" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Status" name="submitted" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         <option value="false" {% if submitted == 'false' %}selected{% endif %}>Pending</option>
                         <option value="true" {% if submitted == 'true' %}selected{% endif %}>Submitted</option>

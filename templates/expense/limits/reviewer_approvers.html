@@ -9,7 +9,7 @@
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review approver decisions and reset weekly consumed budgets</p>
         </div>
         <form method="get" class="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search approver">
+            <input aria-label="Search approver" type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search approver">
             <button class="btn btn-secondary" type="submit">Filter</button>
         </form>
     </div>

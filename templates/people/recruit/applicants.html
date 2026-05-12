@@ -47,7 +47,7 @@
             </option>
             {% endfor %}
         </select>
-        <input type="text" name="source" value="{{ source | default('', true) }}"
+        <input aria-label="e.g. LinkedIn" type="text" name="source" value="{{ source | default('', true) }}"
             placeholder="e.g. LinkedIn" class="form-input w-40" {{ filter_attrs }}>
     {% endcall %}
 

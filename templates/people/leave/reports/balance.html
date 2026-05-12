@@ -37,7 +37,7 @@
     <div>
                 <div class="w-36">
                     <label class="form-label text-xs">Year</label>
-                    <select name="year" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Year" name="year" class="form-select w-full" {{ filter_attrs }}>
                         {% for y in range(year - 2, year + 2) %}
                         <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
                         {% endfor %}
@@ -47,7 +47,7 @@
     <div>
                 <div class="w-56">
                     <label class="form-label text-xs">Department</label>
-                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>

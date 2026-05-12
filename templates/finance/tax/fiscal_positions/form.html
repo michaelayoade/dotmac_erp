@@ -60,14 +60,14 @@
                 <div class="grid gap-6 sm:grid-cols-2">
                     <div class="sm:col-span-2">
                         <label for="name" class="form-label">Name <span class="text-rose-500">*</span></label>
-                        <input type="text" id="name" name="name" required maxlength="120"
+                        <input aria-label="e.g., Government Customer - VAT Exempt" type="text" id="name" name="name" required maxlength="120"
                                value="{{ form_data.name if form_data else (fp.name if fp else '') }}"
                                placeholder="e.g., Government Customer - VAT Exempt"
                                class="form-input">
                     </div>
                     <div class="sm:col-span-2">
                         <label for="description" class="form-label">Description</label>
-                        <textarea id="description" name="description" rows="2"
+                        <textarea aria-label="When this fiscal position should apply..." id="description" name="description" rows="2"
                                   placeholder="When this fiscal position should apply..."
                                   class="form-input resize-none">{{ form_data.description if form_data else (fp.description if fp and fp.description else '') }}</textarea>
                     </div>
@@ -118,7 +118,7 @@
                     </div>
                     <div>
                         <label for="country_code" class="form-label">Country Code</label>
-                        <input type="text" id="country_code" name="country_code" maxlength="3"
+                        <input aria-label="e.g., NGA" type="text" id="country_code" name="country_code" maxlength="3"
                                value="{{ form_data.country_code if form_data else (fp.country_code if fp and fp.country_code else '') }}"
                                placeholder="e.g., NGA"
                                class="form-input">
@@ -126,7 +126,7 @@
                     </div>
                     <div>
                         <label for="state_code" class="form-label">State Code</label>
-                        <input type="text" id="state_code" name="state_code" maxlength="10"
+                        <input aria-label="e.g., LA" type="text" id="state_code" name="state_code" maxlength="10"
                                value="{{ form_data.state_code if form_data else (fp.state_code if fp and fp.state_code else '') }}"
                                placeholder="e.g., LA"
                                class="form-input">
@@ -153,7 +153,7 @@
                     <div class="flex items-end gap-3">
                         <div class="flex-1">
                             <label class="form-label text-xs" x-show="index === 0">Source Tax</label>
-                            <select :name="'tax_source_id'" x-model="tm.tax_source_id" class="form-select">
+                            <select aria-label="Source Tax" :name="'tax_source_id'" x-model="tm.tax_source_id" class="form-select">
                                 <option value="">Select source tax...</option>
                                 {% for tc in tax_codes %}
                                 <option value="{{ tc.tax_code_id }}">{{ tc.tax_code }} - {{ tc.tax_name }}</option>
@@ -165,7 +165,7 @@
                         </div>
                         <div class="flex-1">
                             <label class="form-label text-xs" x-show="index === 0">Destination Tax</label>
-                            <select :name="'tax_dest_id'" x-model="tm.tax_dest_id" class="form-select">
+                            <select aria-label="Destination Tax" :name="'tax_dest_id'" x-model="tm.tax_dest_id" class="form-select">
                                 <option value="">(Exempt - remove tax)</option>
                                 {% for tc in tax_codes %}
                                 <option value="{{ tc.tax_code_id }}">{{ tc.tax_code }} - {{ tc.tax_name }}</option>
@@ -198,7 +198,7 @@
                     <div class="flex items-end gap-3">
                         <div class="flex-1">
                             <label class="form-label text-xs" x-show="index === 0">Source Account</label>
-                            <select :name="'account_source_id'" x-model="am.account_source_id" class="form-select">
+                            <select aria-label="Source Account" :name="'account_source_id'" x-model="am.account_source_id" class="form-select">
                                 <option value="">Select source account...</option>
                                 {% for acct in accounts %}
                                 <option value="{{ acct.account_id }}">{{ acct.account_code }} - {{ acct.account_name }}</option>
@@ -210,7 +210,7 @@
                         </div>
                         <div class="flex-1">
                             <label class="form-label text-xs" x-show="index === 0">Destination Account</label>
-                            <select :name="'account_dest_id'" x-model="am.account_dest_id" class="form-select">
+                            <select aria-label="Destination Account" :name="'account_dest_id'" x-model="am.account_dest_id" class="form-select">
                                 <option value="">Select destination account...</option>
                                 {% for acct in accounts %}
                                 <option value="{{ acct.account_id }}">{{ acct.account_code }} - {{ acct.account_name }}</option>

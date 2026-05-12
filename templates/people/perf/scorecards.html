@@ -53,7 +53,7 @@
     <div>
                 <div class="w-48">
                     <label class="form-label text-xs">Employee</label>
-                    <select name="employee_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Employee" name="employee_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Employees</option>
                         {% for emp in employees %}
                         <option value="{{ emp.employee_id }}" {% if employee_id == emp.employee_id | string %}selected{% endif %}>
@@ -66,7 +66,7 @@
     <div>
                 <div class="w-48">
                     <label class="form-label text-xs">Department</label>
-                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id | string %}selected{% endif %}>
@@ -79,7 +79,7 @@
     <div>
                 <div class="w-40">
                     <label class="form-label text-xs">Status</label>
-                    <select name="is_finalized" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Status" name="is_finalized" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         <option value="false" {% if is_finalized == 'false' %}selected{% endif %}>In Progress</option>
                         <option value="true" {% if is_finalized == 'true' %}selected{% endif %}>Finalized</option>

@@ -37,7 +37,7 @@
     <div>
                 <div class="w-72">
                     <label class="form-label text-xs">Job Opening</label>
-                    <select name="job_opening_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Job Opening" name="job_opening_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Openings</option>
                         {% for opening in report.openings %}
                         <option value="{{ opening.job_opening_id }}" {% if job_opening_id == opening.job_opening_id|string %}selected{% endif %}>{{ opening.job_title }}</option>

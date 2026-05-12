@@ -27,17 +27,17 @@
     <form method="GET" class="flex flex-wrap items-end gap-4">
         <div class="flex-1 min-w-[150px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Start Date</label>
-            <input type="date" name="start_date" value="{{ start_date }}"
+            <input aria-label="Start Date" type="date" name="start_date" value="{{ start_date }}"
                    class="form-input w-full">
         </div>
         <div class="flex-1 min-w-[150px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">End Date</label>
-            <input type="date" name="end_date" value="{{ end_date }}"
+            <input aria-label="End Date" type="date" name="end_date" value="{{ end_date }}"
                    class="form-input w-full">
         </div>
         <div class="flex-1 min-w-[150px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Group By</label>
-            <select name="group_by"
+            <select aria-label="Group By" name="group_by"
                     class="form-select w-full">
                 {% for opt in group_options %}
                 <option value="{{ opt.value }}" {% if group_by == opt.value %}selected{% endif %}>{{ opt.label }}</option>

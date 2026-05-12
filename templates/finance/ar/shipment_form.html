@@ -53,21 +53,21 @@
                 <!-- Carrier -->
                 <div>
                     <label for="carrier" class="form-label">Carrier</label>
-                    <input type="text" id="carrier" name="carrier" x-model="form.carrier"
+                    <input aria-label="e.g., FedEx, UPS, DHL" type="text" id="carrier" name="carrier" x-model="form.carrier"
                            maxlength="100" placeholder="e.g., FedEx, UPS, DHL" class="form-input">
                 </div>
 
                 <!-- Tracking Number -->
                 <div>
                     <label for="tracking_number" class="form-label">Tracking Number</label>
-                    <input type="text" id="tracking_number" name="tracking_number" x-model="form.tracking_number"
+                    <input aria-label="Tracking number" type="text" id="tracking_number" name="tracking_number" x-model="form.tracking_number"
                            maxlength="100" placeholder="Tracking number" class="form-input">
                 </div>
 
                 <!-- Notes -->
                 <div class="sm:col-span-2">
                     <label for="notes" class="form-label">Notes</label>
-                    <textarea id="notes" name="notes" x-model="form.notes" rows="2"
+                    <textarea aria-label="Shipment notes" id="notes" name="notes" x-model="form.notes" rows="2"
                               placeholder="Shipment notes" class="form-input resize-none"></textarea>
                 </div>
             </div>
@@ -113,7 +113,7 @@
                         <td class="table-cell-amount text-slate-500">{{ line.quantity_shipped }}</td>
                         <td class="table-cell-amount text-emerald-600 dark:text-emerald-400 font-medium">{{ line.remaining }}</td>
                         <td class="text-right">
-                            <input type="number"
+                            <input aria-label="0" type="number"
                                    x-model.number="quantities['{{ line.line_id }}']"
                                    min="0"
                                    max="{{ line.remaining }}"

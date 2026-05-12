@@ -33,7 +33,7 @@
     ) %}
         <div>
             <label class="form-label text-xs">Status</label>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
                 <option value="ACTIVE" {{ 'selected' if status == 'ACTIVE' else '' }}>Active</option>
@@ -44,7 +44,7 @@
         </div>
         <div>
             <label class="form-label text-xs">Type</label>
-            <select name="lease_type" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Type" name="lease_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 <option value="FINANCE" {{ 'selected' if lease_type == 'FINANCE' else '' }}>Finance</option>
                 <option value="OPERATING" {{ 'selected' if lease_type == 'OPERATING' else '' }}>Operating</option>

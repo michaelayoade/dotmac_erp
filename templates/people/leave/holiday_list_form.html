@@ -40,7 +40,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="list_code" class="form-label">List Code <span class="text-rose-500">*</span></label>
-                        <input type="text" name="list_code" id="list_code"
+                        <input aria-label="e.g., NG-2025, US-2025" type="text" name="list_code" id="list_code"
                             value="{{ form_data.list_code if form_data else (holiday_list.list_code if holiday_list else '') }}"
                             class="form-input w-full {% if errors and errors.list_code %}border-red-500{% endif %}"
                             placeholder="e.g., NG-2025, US-2025"
@@ -52,7 +52,7 @@
                     </div>
                     <div>
                         <label for="list_name" class="form-label">List Name <span class="text-rose-500">*</span></label>
-                        <input type="text" name="list_name" id="list_name"
+                        <input aria-label="e.g., Nigeria Holidays 2025" type="text" name="list_name" id="list_name"
                             value="{{ form_data.list_name if form_data else (holiday_list.list_name if holiday_list else '') }}"
                             class="form-input w-full {% if errors and errors.list_name %}border-red-500{% endif %}"
                             placeholder="e.g., Nigeria Holidays 2025"
@@ -100,7 +100,7 @@
 
                 <div>
                     <label for="description" class="form-label">Description</label>
-                    <textarea name="description" id="description" rows="2"
+                    <textarea aria-label="Optional description" name="description" id="description" rows="2"
                         class="form-input w-full"
                         placeholder="Optional description">{{ form_data.description if form_data else (holiday_list.description if holiday_list else '') }}</textarea>
                 </div>
@@ -139,7 +139,7 @@
                                         required>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <input type="text" :name="'holidays[' + index + '][holiday_name]'"
+                                    <input aria-label="Holiday Name" type="text" :name="'holidays[' + index + '][holiday_name]'"
                                         x-model="holiday.holiday_name"
                                         class="form-input w-full text-sm"
                                         placeholder="Holiday Name"

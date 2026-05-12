@@ -50,13 +50,13 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="document_number" class="form-label">Document Number</label>
-                        <input type="text" id="document_number" name="document_number"
+                        <input aria-label="Policy/certificate number" type="text" id="document_number" name="document_number"
                                placeholder="Policy/certificate number"
                                class="form-input font-mono">
                     </div>
                     <div>
                         <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
-                        <input type="text" id="description" name="description" required
+                        <input aria-label="Brief description" type="text" id="description" name="description" required
                                placeholder="Brief description"
                                class="form-input">
                     </div>
@@ -84,13 +84,13 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="provider_name" class="form-label">Provider / Issuing Authority</label>
-                        <input type="text" id="provider_name" name="provider_name"
+                        <input aria-label="Insurance company, authority name" type="text" id="provider_name" name="provider_name"
                                placeholder="Insurance company, authority name"
                                class="form-input">
                     </div>
                     <div>
                         <label for="policy_number" class="form-label">Policy Number</label>
-                        <input type="text" id="policy_number" name="policy_number"
+                        <input aria-label="Insurance policy number" type="text" id="policy_number" name="policy_number"
                                placeholder="Insurance policy number"
                                class="form-input font-mono">
                     </div>
@@ -99,13 +99,13 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="coverage_amount" class="form-label">Coverage Amount</label>
-                        <input type="number" id="coverage_amount" name="coverage_amount"
+                        <input aria-label="0.00" type="number" id="coverage_amount" name="coverage_amount"
                                min="0" step="0.01" placeholder="0.00"
                                class="form-input">
                     </div>
                     <div>
                         <label for="premium_amount" class="form-label">Premium Amount</label>
-                        <input type="number" id="premium_amount" name="premium_amount"
+                        <input aria-label="0.00" type="number" id="premium_amount" name="premium_amount"
                                min="0" step="0.01" placeholder="0.00"
                                class="form-input">
                     </div>
@@ -126,7 +126,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
             </div>
             <div class="p-4">
-                <textarea id="notes" name="notes" rows="3"
+                <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes..."
                           class="form-textarea"></textarea>
             </div>

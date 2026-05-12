@@ -31,7 +31,7 @@
         ) %}
         <div>
             <label class="form-label text-xs">Year:</label>
-            <select name="year" onchange="this.form.submit()" class="form-select w-full text-sm py-1.5" {{ filter_attrs }}>
+            <select aria-label="Year:" name="year" onchange="this.form.submit()" class="form-select w-full text-sm py-1.5" {{ filter_attrs }}>
                 <option value="">All Years</option>
                 {% for y in available_years %}
                 <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>

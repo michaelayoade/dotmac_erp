@@ -194,7 +194,7 @@
                         <td class="px-4 py-3 text-right align-top font-mono">
                             {% if count.status.value == 'IN_PROGRESS' and line.counted_quantity is none %}
                             <div class="flex items-center gap-2 justify-end">
-                                <input type="number"
+                                <input aria-label="0.00" type="number"
                                        name="counted_quantity_{{ line.line_id }}"
                                        step="0.01"
                                        class="form-input h-9 w-28 text-right" placeholder="0.00">

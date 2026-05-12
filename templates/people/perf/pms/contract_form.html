@@ -61,7 +61,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="contract_code" class="form-label">Contract Code <span class="text-rose-500" aria-hidden="true">*</span></label>
-                        <input type="text" name="contract_code" id="contract_code"
+                        <input aria-label="e.g. PC-2026-001" type="text" name="contract_code" id="contract_code"
                                class="form-input w-full font-mono"
                                placeholder="e.g. PC-2026-001"
                                value="{{ form_data.contract_code if form_data and form_data.contract_code else '' }}"
@@ -167,23 +167,23 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label class="form-label text-xs">KRA / Objective <span class="text-rose-500">*</span></label>
-                                <input type="text" x-model="obj.kra" class="form-input w-full"
+                                <input aria-label="Key result area" type="text" x-model="obj.kra" class="form-input w-full"
                                        placeholder="Key result area" @change="recalc()">
                             </div>
                             <div>
                                 <label class="form-label text-xs">KPI</label>
-                                <input type="text" x-model="obj.kpi" class="form-input w-full"
+                                <input aria-label="Key performance indicator" type="text" x-model="obj.kpi" class="form-input w-full"
                                        placeholder="Key performance indicator">
                             </div>
                             <div>
                                 <label class="form-label text-xs">Weight (%) <span class="text-rose-500">*</span></label>
-                                <input type="number" x-model.number="obj.weight" min="0" max="70"
+                                <input aria-label="e.g. 20" type="number" x-model.number="obj.weight" min="0" max="70"
                                        class="form-input w-full font-mono tabular-nums"
                                        placeholder="e.g. 20" @input="recalc()">
                             </div>
                             <div>
                                 <label class="form-label text-xs">Target</label>
-                                <input type="text" x-model="obj.target" class="form-input w-full"
+                                <input aria-label="Measurable target" type="text" x-model="obj.target" class="form-input w-full"
                                        placeholder="Measurable target">
                             </div>
                         </div>
@@ -208,7 +208,7 @@
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Optional — outline training and development goals</p>
             </div>
             <div class="card-body px-6 py-5">
-                <textarea name="development_plan" id="development_plan" rows="4"
+                <textarea aria-label="Describe development activities, training needs, and goals..." name="development_plan" id="development_plan" rows="4"
                           class="form-input w-full"
                           placeholder="Describe development activities, training needs, and goals...">{{ form_data.development_plan if form_data and form_data.development_plan else '' }}</textarea>
             </div>

@@ -36,7 +36,7 @@
             </div>
             <form method="get" action="/people/training/events/{{ event.event_id }}/invite" class="flex w-full gap-2 md:max-w-md">
                 <label for="search" class="sr-only">Search employees</label>
-                <input id="search" type="search" name="search" value="{{ search }}" placeholder="Search by name or employee code"
+                <input aria-label="Search by name or employee code" id="search" type="search" name="search" value="{{ search }}" placeholder="Search by name or employee code"
                        class="form-input w-full">
                 <button type="submit" class="btn btn-secondary">Search</button>
             </form>

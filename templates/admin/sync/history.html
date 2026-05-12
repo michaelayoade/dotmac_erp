@@ -24,7 +24,7 @@
         <div>
             <div class="flex-1 min-w-[200px]">
                 <label class="form-label text-xs">Status</label>
-                <select name="status" class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500" {{ filter_attrs }}>
+                <select aria-label="Status" name="status" class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
                     <option value="PENDING" {{ 'selected' if filter_status == 'PENDING' }}>Pending</option>
                     <option value="IN_PROGRESS" {{ 'selected' if filter_status == 'IN_PROGRESS' }}>In Progress</option>

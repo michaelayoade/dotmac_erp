@@ -31,7 +31,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="structure_code" class="form-label">Code <span class="text-red-500">*</span></label>
-                    <input type="text" name="structure_code" id="structure_code" required
+                    <input aria-label="STRUCT-001" type="text" name="structure_code" id="structure_code" required
                         value="{{ structure.structure_code if structure else form_data.get('structure_code', '') }}"
                         placeholder="STRUCT-001"
                         class="form-input w-full font-mono uppercase">
@@ -49,7 +49,7 @@
 
             <div>
                 <label for="structure_name" class="form-label">Name <span class="text-red-500">*</span></label>
-                <input type="text" name="structure_name" id="structure_name" required
+                <input aria-label="Standard Monthly Salary" type="text" name="structure_name" id="structure_name" required
                     value="{{ structure.structure_name if structure else form_data.get('structure_name', '') }}"
                     placeholder="Standard Monthly Salary"
                     class="form-input w-full">
@@ -57,7 +57,7 @@
 
             <div>
                 <label for="description" class="form-label">Description</label>
-                <textarea name="description" id="description" rows="2" class="form-input w-full"
+                <textarea aria-label="Optional description..." name="description" id="description" rows="2" class="form-input w-full"
                     placeholder="Optional description...">{{ structure.description if structure else form_data.get('description', '') }}</textarea>
             </div>
 
@@ -84,7 +84,7 @@
                                 {% endif %}
                                 {% endfor %}
                             </select>
-                            <input type="text" x-model="earning.formula" name="earning_formula[]"
+                            <input aria-label="Formula or amount" type="text" x-model="earning.formula" name="earning_formula[]"
                                 placeholder="Formula or amount"
                                 class="form-input w-40 text-sm font-mono">
                             <button type="button" @click="removeEarning(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" aria-label="Close">
@@ -122,7 +122,7 @@
                                 {% endif %}
                                 {% endfor %}
                             </select>
-                            <input type="text" x-model="deduction.formula" name="deduction_formula[]"
+                            <input aria-label="Formula or amount" type="text" x-model="deduction.formula" name="deduction_formula[]"
                                 placeholder="Formula or amount"
                                 class="form-input w-40 text-sm font-mono">
                             <button type="button" @click="removeDeduction(index)" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" aria-label="Close">

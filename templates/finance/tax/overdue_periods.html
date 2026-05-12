@@ -18,7 +18,7 @@
         <form method="get" class="flex flex-wrap items-center gap-4">
             <div class="flex items-center gap-2">
                 <label class="text-sm text-slate-500 dark:text-slate-400">As of</label>
-                <input type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}" data-testid="tax-overdue-date"
+                <input aria-label="As of" type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}" data-testid="tax-overdue-date"
                        class="form-input">
             </div>
             <button type="submit" class="btn btn-secondary">Refresh</button>

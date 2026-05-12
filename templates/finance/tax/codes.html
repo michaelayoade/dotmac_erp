@@ -38,7 +38,7 @@
     ) %}
         <div>
             <label class="form-label text-xs">Type</label>
-            <select name="tax_type" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Type" name="tax_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for option in tax_type_options | default([]) %}
                 <option value="{{ option.value }}" {{ 'selected' if tax_type == option.value|string else '' }}>{{ option.label }}</option>
@@ -47,7 +47,7 @@
         </div>
         <div>
             <label class="form-label text-xs">Status</label>
-            <select name="is_active" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Status" name="is_active" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 <option value="true" {{ 'selected' if is_active == 'true' else '' }}>Active</option>
                 <option value="false" {{ 'selected' if is_active == 'false' else '' }}>Inactive</option>

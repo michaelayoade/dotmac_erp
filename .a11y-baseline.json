@@ -15,22 +15,6 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/admin/sync/dashboard.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/admin/sync/entities.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/admin/sync/history.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/base.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/careers/base_careers.html": {
     "nameless": 1,
     "unlabeled": 0
@@ -38,10 +22,6 @@
   "templates/careers/job_list.html": {
     "nameless": 0,
     "unlabeled": 3
-  },
-  "templates/careers/offer_portal.html": {
-    "nameless": 0,
-    "unlabeled": 1
   },
   "templates/components/_file_upload.html": {
     "nameless": 0,
@@ -55,13 +35,9 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/expense/advances/list.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/expense/claim_detail.html": {
     "nameless": 0,
-    "unlabeled": 4
+    "unlabeled": 3
   },
   "templates/expense/detail.html": {
     "nameless": 0,
@@ -69,39 +45,7 @@
   },
   "templates/expense/limits/approver_form.html": {
     "nameless": 0,
-    "unlabeled": 5
-  },
-  "templates/expense/limits/approvers.html": {
-    "nameless": 0,
     "unlabeled": 2
-  },
-  "templates/expense/limits/evaluations.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/expense/limits/reviewer_approver_detail.html": {
-    "nameless": 0,
-    "unlabeled": 5
-  },
-  "templates/expense/limits/reviewer_approvers.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/expense/limits/usage.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/expense/reports/by_employee.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/expense/reports/trends.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/ap/invoice_detail.html": {
-    "nameless": 0,
-    "unlabeled": 1
   },
   "templates/finance/ap/payment_batches.html": {
     "nameless": 0,
@@ -109,19 +53,7 @@
   },
   "templates/finance/ar/credit_note_form.html": {
     "nameless": 0,
-    "unlabeled": 5
-  },
-  "templates/finance/ar/quote_detail.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/finance/ar/sales_order_detail.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/ar/shipment_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
+    "unlabeled": 4
   },
   "templates/finance/automation/fields_list.html": {
     "nameless": 0,
@@ -133,7 +65,7 @@
   },
   "templates/finance/automation/template_form.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/finance/automation/templates_list.html": {
     "nameless": 0,
@@ -151,15 +83,7 @@
     "nameless": 0,
     "unlabeled": 4
   },
-  "templates/finance/banking/rules/match_rule_form.html": {
-    "nameless": 0,
-    "unlabeled": 3
-  },
   "templates/finance/banking/statement_import.html": {
-    "nameless": 0,
-    "unlabeled": 4
-  },
-  "templates/finance/change_password.html": {
     "nameless": 0,
     "unlabeled": 3
   },
@@ -167,49 +91,13 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/finance/exp/list.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/lease/contracts.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/finance/lease/overdue.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/partials/_attachments.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/finance/payments/history.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/payments/transfers.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/finance/remita/generate.html": {
     "nameless": 0,
     "unlabeled": 1
   },
   "templates/finance/remita/index.html": {
     "nameless": 0,
     "unlabeled": 2
-  },
-  "templates/finance/reports/analysis.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/reports/ar_aging.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/reports/general_ledger.html": {
-    "nameless": 0,
-    "unlabeled": 1
   },
   "templates/finance/reports/stamp_duty_report.html": {
     "nameless": 0,
@@ -227,55 +115,15 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/finance/tax/codes.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/finance/tax/fiscal_positions/form.html": {
-    "nameless": 0,
-    "unlabeled": 4
-  },
-  "templates/finance/tax/liability_summary.html": {
-    "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/finance/tax/overdue_periods.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/finance/tax/return_form.html": {
-    "nameless": 0,
-    "unlabeled": 4
-  },
   "templates/finance/tax/returns.html": {
     "nameless": 0,
     "unlabeled": 3
-  },
-  "templates/finance/tax/vat_register.html": {
-    "nameless": 0,
-    "unlabeled": 4
-  },
-  "templates/finance/two_factor.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/fleet/document_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
   },
   "templates/fleet/documents.html": {
     "nameless": 0,
     "unlabeled": 2
   },
   "templates/fleet/fuel.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/fleet/fuel_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/fleet/incident_form.html": {
     "nameless": 0,
     "unlabeled": 1
   },
@@ -287,49 +135,21 @@
     "nameless": 0,
     "unlabeled": 3
   },
-  "templates/fleet/maintenance_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/fleet/reservation_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/fleet/reservations.html": {
     "nameless": 0,
     "unlabeled": 2
-  },
-  "templates/fleet/vehicle_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
   },
   "templates/help/admin/article_list.html": {
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/help/glossary.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/inventory/bom_form.html": {
     "nameless": 0,
-    "unlabeled": 4
+    "unlabeled": 3
   },
   "templates/inventory/count_detail.html": {
     "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/inventory/material_request_detail.html": {
-    "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/inventory/material_request_report.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/inventory/material_requests.html": {
-    "nameless": 0,
-    "unlabeled": 2
   },
   "templates/inventory/price_list_form.html": {
     "nameless": 0,
@@ -343,59 +163,19 @@
     "nameless": 1,
     "unlabeled": 0
   },
-  "templates/people/attendance/records.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/attendance/reports/by_employee.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/attendance/reports/late_early.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/attendance/reports/summary.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/attendance/reports/trends.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/people/attendance/requests.html": {
     "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 2
   },
   "templates/people/hr/competencies.html": {
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/people/hr/discipline/cases.html": {
-    "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/people/hr/employee/documents.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/people/hr/employees.html": {
     "nameless": 0,
-    "unlabeled": 4
-  },
-  "templates/people/hr/geofence_editor.html": {
-    "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 2
   },
   "templates/people/hr/handbook/documents.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/hr/info_change_request_detail.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/hr/info_change_requests.html": {
     "nameless": 0,
     "unlabeled": 2
   },
@@ -403,35 +183,11 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/people/leave/allocations.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/leave/application_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/people/leave/applications.html": {
     "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 2
   },
   "templates/people/leave/holiday_list_form.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/leave/holidays.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/leave/reports/balance.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/leave/reports/calendar.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/leave/reports/trends.html": {
     "nameless": 0,
     "unlabeled": 1
   },
@@ -440,14 +196,6 @@
     "unlabeled": 1
   },
   "templates/people/payroll/loans.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/payroll/reports/data_completeness.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/payroll/reports/trends.html": {
     "nameless": 0,
     "unlabeled": 1
   },
@@ -461,35 +209,23 @@
   },
   "templates/people/payroll/structure_form.html": {
     "nameless": 0,
-    "unlabeled": 4
+    "unlabeled": 2
   },
   "templates/people/perf/appraisal_cycles.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/people/perf/appraisal_template_form.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/people/perf/appraisal_templates.html": {
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/people/perf/appraisals.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/feedback.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/perf/kpi_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/people/perf/kpis.html": {
     "nameless": 0,
-    "unlabeled": 4
+    "unlabeled": 3
   },
   "templates/people/perf/kras.html": {
     "nameless": 0,
@@ -499,123 +235,35 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/people/perf/pms/appeals.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/pms/contract_detail.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/pms/contract_form.html": {
-    "nameless": 0,
-    "unlabeled": 5
-  },
-  "templates/people/perf/pms/contracts.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
   "templates/people/perf/pms/grievances.html": {
     "nameless": 0,
-    "unlabeled": 4
-  },
-  "templates/people/perf/pms/institutional.html": {
-    "nameless": 0,
     "unlabeled": 2
-  },
-  "templates/people/perf/pms/objectives.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/pms/pips.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/pms/review_detail.html": {
-    "nameless": 0,
-    "unlabeled": 4
-  },
-  "templates/people/perf/pms/reviews.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/reports/by_department.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/reports/kpi_achievement.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/reports/ratings.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/perf/scorecard_form.html": {
-    "nameless": 0,
-    "unlabeled": 5
   },
   "templates/people/perf/scorecard_item_form.html": {
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/people/perf/scorecards.html": {
-    "nameless": 0,
-    "unlabeled": 3
-  },
   "templates/people/perf/self_assessment_form.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/people/perf/template_form.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/people/recruit/applicants.html": {
     "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/people/recruit/interviews.html": {
-    "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 2
   },
   "templates/people/recruit/job_openings.html": {
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/people/recruit/offer_detail.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/recruit/offers.html": {
-    "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/people/recruit/reports/pipeline.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/scheduling/assignments.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/people/scheduling/pattern_form.html": {
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/people/scheduling/schedules.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/scheduling/swap_requests.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
   "templates/people/self/attendance.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/self/payslips.html": {
     "nameless": 0,
     "unlabeled": 1
   },
@@ -624,18 +272,6 @@
     "unlabeled": 1
   },
   "templates/people/self/scheduling_swaps.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/self/team_discipline_detail.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/people/self/team_expenses.html": {
-    "nameless": 0,
-    "unlabeled": 1
-  },
-  "templates/people/self/team_leave.html": {
     "nameless": 0,
     "unlabeled": 1
   },
@@ -649,55 +285,35 @@
   },
   "templates/people/training/programs.html": {
     "nameless": 0,
-    "unlabeled": 2
+    "unlabeled": 1
   },
   "templates/procurement/contracts/list.html": {
     "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/procurement/plans/form.html": {
-    "nameless": 0,
-    "unlabeled": 4
+    "unlabeled": 1
   },
   "templates/procurement/plans/list.html": {
     "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 1
   },
   "templates/procurement/requisitions/list.html": {
     "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/procurement/rfqs/list.html": {
-    "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/procurement/vendors/list.html": {
-    "nameless": 0,
     "unlabeled": 1
   },
-  "templates/projects/attachments.html": {
+  "templates/procurement/rfqs/list.html": {
     "nameless": 0,
     "unlabeled": 1
   },
   "templates/projects/detail.html": {
     "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/projects/form.html": {
-    "nameless": 0,
     "unlabeled": 1
   },
   "templates/projects/tasks/detail.html": {
     "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 2
   },
   "templates/projects/tasks/form.html": {
     "nameless": 0,
-    "unlabeled": 3
-  },
-  "templates/projects/tasks/global_form.html": {
-    "nameless": 0,
-    "unlabeled": 1
+    "unlabeled": 2
   },
   "templates/projects/tasks/global_list.html": {
     "nameless": 0,
@@ -709,30 +325,22 @@
   },
   "templates/projects/templates/form.html": {
     "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 1
   },
   "templates/projects/time/list.html": {
     "nameless": 0,
     "unlabeled": 4
   },
-  "templates/public_sector/budget_comparison.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
-  "templates/settings/expense.html": {
+  "templates/support/breached_tickets.html": {
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/support/breached_tickets.html": {
-    "nameless": 0,
-    "unlabeled": 2
-  },
   "templates/support/team_detail.html": {
     "nameless": 0,
-    "unlabeled": 3
+    "unlabeled": 1
   },
   "templates/support/ticket_detail.html": {
     "nameless": 0,
-    "unlabeled": 4
+    "unlabeled": 2
   }
 }

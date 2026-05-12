@@ -98,7 +98,7 @@
             <div class="card-body space-y-4">
                 <div>
                     <label for="self_summary" class="form-label">Performance Summary</label>
-                    <textarea name="self_summary" id="self_summary" rows="4"
+                    <textarea aria-label="Provide an overall summary of your performance during this review period..." name="self_summary" id="self_summary" rows="4"
                               class="form-input w-full"
                               placeholder="Provide an overall summary of your performance during this review period...">{{ form_data.self_summary or '' }}</textarea>
                     <p class="text-xs text-slate-500 mt-1">Summarize your overall contributions and performance.</p>
@@ -106,7 +106,7 @@
 
                 <div>
                     <label for="achievements" class="form-label">Key Achievements</label>
-                    <textarea name="achievements" id="achievements" rows="4"
+                    <textarea aria-label="List your key accomplishments, successful projects, and goals met..." name="achievements" id="achievements" rows="4"
                               class="form-input w-full"
                               placeholder="List your key accomplishments, successful projects, and goals met...">{{ form_data.achievements or '' }}</textarea>
                     <p class="text-xs text-slate-500 mt-1">Highlight specific accomplishments, metrics achieved, and successful outcomes.</p>
@@ -114,7 +114,7 @@
 
                 <div>
                     <label for="challenges" class="form-label">Challenges Faced</label>
-                    <textarea name="challenges" id="challenges" rows="3"
+                    <textarea aria-label="Describe any significant challenges or obstacles you encountered..." name="challenges" id="challenges" rows="3"
                               class="form-input w-full"
                               placeholder="Describe any significant challenges or obstacles you encountered...">{{ form_data.challenges or '' }}</textarea>
                     <p class="text-xs text-slate-500 mt-1">Describe obstacles you faced and how you addressed them.</p>
@@ -122,7 +122,7 @@
 
                 <div>
                     <label for="development_needs" class="form-label">Development Needs</label>
-                    <textarea name="development_needs" id="development_needs" rows="3"
+                    <textarea aria-label="Identify areas where you would like to grow or improve..." name="development_needs" id="development_needs" rows="3"
                               class="form-input w-full"
                               placeholder="Identify areas where you would like to grow or improve...">{{ form_data.development_needs or '' }}</textarea>
                     <p class="text-xs text-slate-500 mt-1">Identify skills, knowledge, or competencies you want to develop.</p>
@@ -153,7 +153,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <textarea name="kra_comment_{{ score.appraisal_kra_score_id }}" rows="2"
+                        <textarea aria-label="Comments for this KRA..." name="kra_comment_{{ score.appraisal_kra_score_id }}" rows="2"
                                   class="form-input w-full text-sm"
                                   placeholder="Comments for this KRA...">{{ score.self_comment or '' }}</textarea>
                     </div>

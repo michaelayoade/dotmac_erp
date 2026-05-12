@@ -47,7 +47,7 @@
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <input type="number" name="year" value="{{ year if year else '' }}"
+        <input aria-label="Year" type="number" name="year" value="{{ year if year else '' }}"
                class="form-input w-32" placeholder="Year" min="2000" max="2100" {{ filter_attrs }}>
     {% endcall %}
 

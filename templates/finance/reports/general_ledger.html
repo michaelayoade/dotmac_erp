@@ -37,7 +37,7 @@
     <div>
             <div class="flex-1 min-w-[200px]">
                 <label class="form-label text-xs">Account</label>
-                <select name="account_id" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Account" name="account_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">Select an account...</option>
                     <option value="all" {% if account_id == 'all' %}selected{% endif %}>All accounts</option>
                     {% for acct in accounts %}

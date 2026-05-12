@@ -48,7 +48,7 @@
             </div>
             <div class="md:col-span-2">
                 <label class="form-label" for="reason">Reason</label>
-                <textarea id="reason" name="reason" rows="2" class="form-input w-full" placeholder="Optional"></textarea>
+                <textarea aria-label="Reason" id="reason" name="reason" rows="2" class="form-input w-full" placeholder="Optional"></textarea>
             </div>
             <div class="md:col-span-2 flex justify-end">
                 <button type="submit" class="btn btn-primary">Submit Request</button>
@@ -73,7 +73,7 @@
                     </form>
                     <form method="post" action="/people/self/scheduling/swaps/{{ req.swap_request_id }}/decline" class="flex items-center gap-2">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <input type="text" name="reason" class="form-input" placeholder="Decline reason (optional)">
+                        <input aria-label="Decline reason (optional)" type="text" name="reason" class="form-input" placeholder="Decline reason (optional)">
                         <button type="submit" class="btn btn-secondary">Decline</button>
                     </form>
                 </div>

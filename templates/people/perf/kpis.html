@@ -42,7 +42,7 @@
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <input type="text" name="employee_id" value="{{ employee_id if employee_id else '' }}"
+        <input aria-label="Employee ID" type="text" name="employee_id" value="{{ employee_id if employee_id else '' }}"
                class="form-input" placeholder="Employee ID" {{ filter_attrs }}>
         <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
                class="form-input" {{ filter_attrs }}>

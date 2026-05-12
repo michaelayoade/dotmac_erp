@@ -61,7 +61,7 @@
     <div>
                 <div class="w-44">
                     <label class="form-label text-xs">Status</label>
-                    <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Statuses</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
@@ -131,7 +131,7 @@
                     </div>
                     <div class="mb-4">
                         <label for="rejection_reason" class="form-label">Rejection Reason</label>
-                        <textarea name="rejection_reason" id="rejection_reason" rows="3" class="form-input w-full" placeholder="Enter reason for rejection..."></textarea>
+                        <textarea aria-label="Enter reason for rejection..." name="rejection_reason" id="rejection_reason" rows="3" class="form-input w-full" placeholder="Enter reason for rejection..."></textarea>
                     </div>
                     <p class="text-sm text-slate-600 dark:text-slate-300 mb-6">
                         Are you sure you want to reject <span class="font-semibold" x-text="selectedCount"></span> selected application<span x-show="selectedCount !== 1">s</span>?

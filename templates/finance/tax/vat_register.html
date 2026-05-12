@@ -27,17 +27,17 @@
     <form method="GET" class="flex flex-wrap items-end gap-4">
         <div class="flex-1 min-w-[150px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Start Date</label>
-            <input type="date" name="start_date" value="{{ start_date }}"
+            <input aria-label="Start Date" type="date" name="start_date" value="{{ start_date }}"
                    class="form-input w-full">
         </div>
         <div class="flex-1 min-w-[150px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">End Date</label>
-            <input type="date" name="end_date" value="{{ end_date }}"
+            <input aria-label="End Date" type="date" name="end_date" value="{{ end_date }}"
                    class="form-input w-full">
         </div>
         <div class="flex-1 min-w-[150px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Transaction Type</label>
-            <select name="transaction_type"
+            <select aria-label="Transaction Type" name="transaction_type"
                     class="form-select w-full">
                 <option value="">All Types</option>
                 {% for type in transaction_types %}
@@ -47,7 +47,7 @@
         </div>
         <div class="flex-1 min-w-[180px]">
             <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Tax Code</label>
-            <select name="tax_code_id" class="form-select w-full">
+            <select aria-label="Tax Code" name="tax_code_id" class="form-select w-full">
                 <option value="">All Codes</option>
                 {% for code in tax_codes %}
                 <option value="{{ code.tax_code_id }}" {% if tax_code_id == code.tax_code_id|string %}selected{% endif %}>

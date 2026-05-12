@@ -212,7 +212,7 @@
                         </button>
                         <form x-show="showDecline" method="post" action="/people/recruit/offers/{{ offer.offer_id }}/decline" class="mt-3 space-y-2">
                             {{ request.state.csrf_form | safe }}
-                            <textarea name="reason" rows="2" class="form-input w-full text-sm" placeholder="Reason for declining (optional)"></textarea>
+                            <textarea aria-label="Reason for declining (optional)" name="reason" rows="2" class="form-input w-full text-sm" placeholder="Reason for declining (optional)"></textarea>
                             <button type="submit" class="btn btn-danger btn-sm w-full justify-center">Confirm Decline</button>
                         </form>
                     </div>

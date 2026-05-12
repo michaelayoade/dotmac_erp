@@ -291,7 +291,7 @@
                             <h3 id="reject-quote-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Reject Quote</h3>
                             <div class="mb-4">
                                 <label class="form-label">Reason (optional)</label>
-                                <textarea name="reason" rows="3" class="form-input" placeholder="Why is this quote being rejected?"></textarea>
+                                <textarea aria-label="Reason (optional)" name="reason" rows="3" class="form-input" placeholder="Why is this quote being rejected?"></textarea>
                             </div>
                             <div class="flex justify-end gap-3">
                                 <button type="button" @click="showReject = false" class="btn btn-secondary">Cancel</button>
@@ -325,7 +325,7 @@
                             <h3 id="create-so-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Sales Order</h3>
                             <div class="mb-4">
                                 <label class="form-label">Customer PO Number (optional)</label>
-                                <input type="text" name="customer_po_number" class="form-input" placeholder="Customer's purchase order number">
+                                <input aria-label="Customer PO Number (optional)" type="text" name="customer_po_number" class="form-input" placeholder="Customer's purchase order number">
                             </div>
                             <div class="flex justify-end gap-3">
                                 <button type="button" @click="showSO = false" class="btn btn-secondary">Cancel</button>

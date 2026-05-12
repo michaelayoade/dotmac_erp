@@ -27,7 +27,7 @@
     <div>
             <div class="min-w-[150px]">
                 <label class="form-label text-xs">Result</label>
-                <select name="result" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Result" name="result" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Results</option>
                     {% for rt in result_types %}
                     <option value="{{ rt }}" {{ 'selected' if filters.result == rt else '' }}>{{ rt | replace('_', ' ') | title }}</option>

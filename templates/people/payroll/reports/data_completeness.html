@@ -163,7 +163,7 @@
     <div>
                 <div class="w-48">
                     <label class="form-label text-xs">Department</label>
-                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if selected_department_id == dept.department_id|string %}selected{% endif %}>{{ dept.department_name }}</option>
@@ -174,7 +174,7 @@
     <div>
                 <div class="w-48">
                     <label class="form-label text-xs">Designation</label>
-                    <select name="designation_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Designation" name="designation_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Designations</option>
                         {% for desig in designations %}
                         <option value="{{ desig.designation_id }}" {% if selected_designation_id == desig.designation_id|string %}selected{% endif %}>{{ desig.designation_name }}</option>

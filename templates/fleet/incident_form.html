@@ -69,14 +69,14 @@
 
                 <div>
                     <label for="location" class="form-label">Location</label>
-                    <input type="text" id="location" name="location"
+                    <input aria-label="Where the incident occurred" type="text" id="location" name="location"
                            placeholder="Where the incident occurred"
                            class="form-input">
                 </div>
 
                 <div>
                     <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
-                    <textarea id="description" name="description" required rows="4"
+                    <textarea aria-label="Describe what happened..." id="description" name="description" required rows="4"
                               placeholder="Describe what happened..."
                               class="form-textarea"></textarea>
                 </div>
@@ -98,7 +98,7 @@
 
                 <div>
                     <label for="third_party_details" class="form-label">Third Party Details</label>
-                    <textarea id="third_party_details" name="third_party_details" rows="2"
+                    <textarea aria-label="Name, vehicle, contact details of third party..." id="third_party_details" name="third_party_details" rows="2"
                               placeholder="Name, vehicle, contact details of third party..."
                               class="form-textarea"></textarea>
                 </div>
@@ -106,13 +106,13 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="police_report_number" class="form-label">Police Report Number</label>
-                        <input type="text" id="police_report_number" name="police_report_number"
+                        <input aria-label="If applicable" type="text" id="police_report_number" name="police_report_number"
                                placeholder="If applicable"
                                class="form-input">
                     </div>
                     <div>
                         <label for="estimated_repair_cost" class="form-label">Estimated Repair Cost</label>
-                        <input type="number" id="estimated_repair_cost" name="estimated_repair_cost"
+                        <input aria-label="0.00" type="number" id="estimated_repair_cost" name="estimated_repair_cost"
                                min="0" step="0.01" placeholder="0.00"
                                class="form-input">
                     </div>
@@ -121,7 +121,7 @@
                 <div>
                     <label for="expense_claim_name" class="form-label">Expense Claim</label>
                     <div class="relative" data-typeahead-url="/fleet/expense-claims/search" data-typeahead-min="2" data-typeahead-limit="8">
-                        <input
+                        <input aria-label="Search claim number or purpose..."
                             type="text"
                             id="expense_claim_name"
                             name="expense_claim_name"
@@ -151,7 +151,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
             </div>
             <div class="p-4">
-                <textarea id="notes" name="notes" rows="3"
+                <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes..."
                           class="form-textarea"></textarea>
             </div>

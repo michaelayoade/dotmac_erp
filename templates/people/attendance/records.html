@@ -165,7 +165,7 @@
         ) %}
             <div>
                 <label class="form-label text-xs">Employee</label>
-                <select name="employee_id" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Employee" name="employee_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Employees</option>
                     {% for emp in employees %}
                     <option value="{{ emp.employee_id }}" {% if employee_id == emp.employee_id|string %}selected{% endif %}>
@@ -176,7 +176,7 @@
             </div>
             <div>
                 <label class="form-label text-xs">Status</label>
-                <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>

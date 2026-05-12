@@ -37,7 +37,7 @@
     <div>
                 <div class="w-64">
                     <label class="form-label text-xs">Department</label>
-                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for d in departments %}
                         <option value="{{ d.department_id }}" {% if department_id == d.department_id|string %}selected{% endif %}>{{ d.department_name }}</option>

@@ -38,7 +38,7 @@
     <div>
                 <div class="w-44">
                     <label class="form-label text-xs">Status</label>
-                    <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
@@ -49,7 +49,7 @@
     <div>
                 <div class="w-56">
                     <label class="form-label text-xs">Job Opening</label>
-                    <select name="job_opening_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Job Opening" name="job_opening_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         {% for opening in job_openings %}
                         <option value="{{ opening.job_opening_id }}" {% if job_opening_id == opening.job_opening_id|string %}selected{% endif %}>
@@ -62,7 +62,7 @@
     <div>
                 <div class="w-56">
                     <label class="form-label text-xs">Applicant</label>
-                    <select name="applicant_id" class="form-select w-full" {{ filter_attrs }}>
+                    <select aria-label="Applicant" name="applicant_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         {% for applicant in applicants %}
                         <option value="{{ applicant.applicant_id }}" {% if applicant_id == applicant.applicant_id|string %}selected{% endif %}>

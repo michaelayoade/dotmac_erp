@@ -82,12 +82,12 @@
                                 </form>
                                 <form method="post" action="/people/perf/pms/grievances/{{ record.grievance_id }}/resolve" class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                     {{ request.state.csrf_form | safe }}
-                                    <input name="resolution_notes" class="form-input text-xs" placeholder="Resolution notes" required>
+                                    <input aria-label="Resolution notes" name="resolution_notes" class="form-input text-xs" placeholder="Resolution notes" required>
                                     <button type="submit" class="btn btn-primary btn-sm">Resolve</button>
                                 </form>
                                 <form method="post" action="/people/perf/pms/grievances/{{ record.grievance_id }}/escalate" class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                     {{ request.state.csrf_form | safe }}
-                                    <input name="escalation_notes" class="form-input text-xs" placeholder="Escalation note (optional)">
+                                    <input aria-label="Escalation note (optional)" name="escalation_notes" class="form-input text-xs" placeholder="Escalation note (optional)">
                                     <button type="submit" class="btn btn-danger btn-sm">Escalate to FCSC</button>
                                 </form>
                             </div>

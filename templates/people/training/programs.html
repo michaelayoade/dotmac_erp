@@ -53,7 +53,7 @@
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <input type="text" name="category" value="{{ category if category else '' }}"
+        <input aria-label="Category" type="text" name="category" value="{{ category if category else '' }}"
                class="form-input" placeholder="Category" {{ filter_attrs }}>
     {% endcall %}
 

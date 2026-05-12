@@ -35,7 +35,7 @@
     <div class="flex flex-wrap gap-3">
         <div class="w-44">
             <label class="form-label text-xs">Status</label>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Statuses</option>
                 {% for s in statuses %}
                 <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>

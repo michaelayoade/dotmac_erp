@@ -51,7 +51,7 @@
         <div>
                 <div>
                     <label class="form-label text-xs">Status</label>
-                    <select name="status" class="input" {{ filter_attrs }}>
+                    <select aria-label="Status" name="status" class="input" {{ filter_attrs }}>
                         <option value="">All Statuses</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
@@ -62,7 +62,7 @@
         <div>
                 <div>
                     <label class="form-label text-xs">Violation Type</label>
-                    <select name="violation_type" class="input" {{ filter_attrs }}>
+                    <select aria-label="Violation Type" name="violation_type" class="input" {{ filter_attrs }}>
                         <option value="">All Types</option>
                         {% for v in violation_types %}
                         <option value="{{ v }}" {% if violation_type == v %}selected{% endif %}>{{ v | replace('_', ' ') | title }}</option>
@@ -73,7 +73,7 @@
         <div>
                 <div>
                     <label class="form-label text-xs">Severity</label>
-                    <select name="severity" class="input" {{ filter_attrs }}>
+                    <select aria-label="Severity" name="severity" class="input" {{ filter_attrs }}>
                         <option value="">All Severities</option>
                         {% for s in severities %}
                         <option value="{{ s }}" {% if severity == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>

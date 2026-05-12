@@ -28,7 +28,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="registration_number" class="form-label">Registration Number <span class="text-rose-500">*</span></label>
-                        <input type="text" id="registration_number" name="registration_number" required
+                        <input aria-label="ABC-123-XY" type="text" id="registration_number" name="registration_number" required
                                value="{{ vehicle.registration_number if vehicle else '' }}"
                                placeholder="ABC-123-XY"
                                class="form-input">
@@ -49,14 +49,14 @@
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div>
                         <label for="make" class="form-label">Make <span class="text-rose-500">*</span></label>
-                        <input type="text" id="make" name="make" required
+                        <input aria-label="Toyota" type="text" id="make" name="make" required
                                value="{{ vehicle.make if vehicle else '' }}"
                                placeholder="Toyota"
                                class="form-input">
                     </div>
                     <div>
                         <label for="model" class="form-label">Model <span class="text-rose-500">*</span></label>
-                        <input type="text" id="model" name="model" required
+                        <input aria-label="Camry" type="text" id="model" name="model" required
                                value="{{ vehicle.model if vehicle else '' }}"
                                placeholder="Camry"
                                class="form-input">
@@ -73,7 +73,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="color" class="form-label">Color</label>
-                        <input type="text" id="color" name="color"
+                        <input aria-label="Silver" type="text" id="color" name="color"
                                value="{{ vehicle.color if vehicle else '' }}"
                                placeholder="Silver"
                                class="form-input">
@@ -101,7 +101,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="vin_number" class="form-label">VIN/Chassis Number</label>
-                        <input type="text" id="vin_number" name="vin_number"
+                        <input aria-label="1HGBH41JXMN109186" type="text" id="vin_number" name="vin_number"
                                value="{{ vehicle.vin_number if vehicle else '' }}"
                                placeholder="1HGBH41JXMN109186"
                                class="form-input font-mono">
@@ -229,7 +229,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Notes</h3>
             </div>
             <div class="p-4">
-                <textarea id="notes" name="notes" rows="3"
+                <textarea aria-label="Additional notes about this vehicle..." id="notes" name="notes" rows="3"
                           placeholder="Additional notes about this vehicle..."
                           class="form-textarea">{{ vehicle.notes if vehicle else '' }}</textarea>
             </div>

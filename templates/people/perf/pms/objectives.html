@@ -32,7 +32,7 @@
     ) %}
     <div class="w-56">
         <label class="form-label text-xs">Cycle</label>
-        <select name="cycle_id" class="form-select w-full" {{ filter_attrs }}>
+        <select aria-label="Cycle" name="cycle_id" class="form-select w-full" {{ filter_attrs }}>
             <option value="">All Cycles</option>
             {% for cycle in cycles %}
             <option value="{{ cycle.cycle_id }}" {% if cycle_id == cycle.cycle_id | string %}selected{% endif %}>

@@ -35,7 +35,7 @@
     <div>
             <div class="min-w-[150px]">
                 <label class="form-label text-xs">Group By</label>
-                <select name="group_by" class="form-select w-full" {{ filter_attrs }}>
+                <select aria-label="Group By" name="group_by" class="form-select w-full" {{ filter_attrs }}>
                     <option value="status" {% if filter_group_by == 'status' %}selected{% endif %}>Status</option>
                     <option value="type" {% if filter_group_by == 'type' %}selected{% endif %}>Request Type</option>
                 </select>

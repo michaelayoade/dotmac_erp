@@ -576,7 +576,7 @@
          class="command-palette-overlay"
          @click.self="open = false">
         <div class="command-palette" @click.stop>
-            <input type="text"
+            <input aria-label="Search or type a command..." type="text"
                    x-ref="searchInput"
                    x-model="query"
                    @keydown.arrow-down.prevent="moveDown()"
