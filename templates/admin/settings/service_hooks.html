@@ -99,11 +99,11 @@
             {{ request.state.csrf_form | safe }}
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
-                <input name="name" type="text" required class="form-input" placeholder="Notify CRM on SO confirm">
+                <input aria-label="Notify CRM on SO confirm" name="name" type="text" required class="form-input" placeholder="Notify CRM on SO confirm">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Event</label>
-                <select name="event_name" class="form-input" required>
+                <select aria-label="Event" name="event_name" class="form-input" required>
                     <option value="">Select event</option>
                     {% for event_name in available_events %}
                     <option value="{{ event_name }}">{{ event_name }}</option>
@@ -112,7 +112,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Handler Type</label>
-                <select name="handler_type" class="form-input" required>
+                <select aria-label="Handler Type" name="handler_type" class="form-input" required>
                     {% for handler_type in handler_types %}
                     <option value="{{ handler_type }}">{{ handler_type|replace('_', ' ')|title }}</option>
                     {% endfor %}
@@ -120,7 +120,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Execution Mode</label>
-                <select name="execution_mode" class="form-input" required>
+                <select aria-label="Execution Mode" name="execution_mode" class="form-input" required>
                     {% for execution_mode in execution_modes %}
                     <option value="{{ execution_mode }}" {{ 'selected' if execution_mode == 'ASYNC' else '' }}>
                         {{ execution_mode }}
@@ -130,31 +130,31 @@
             </div>
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Webhook URL (for WEBHOOK)</label>
-                <input name="webhook_url" type="url" class="form-input" placeholder="https://example.com/webhooks/dotmac">
+                <input aria-label="https://example.com/webhooks/dotmac" name="webhook_url" type="url" class="form-input" placeholder="https://example.com/webhooks/dotmac">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Webhook Timeout (seconds)</label>
-                <input name="webhook_timeout_seconds" type="number" min="1" value="15" class="form-input">
+                <input aria-label="Webhook Timeout (seconds)" name="webhook_timeout_seconds" type="number" min="1" value="15" class="form-input">
             </div>
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Outbox Event Override (for EVENT_OUTBOX)</label>
-                <input name="event_name_override" type="text" class="form-input" placeholder="custom.domain.event">
+                <input aria-label="custom.domain.event" name="event_name_override" type="text" class="form-input" placeholder="custom.domain.event">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Priority</label>
-                <input name="priority" type="number" min="0" value="10" class="form-input">
+                <input aria-label="Priority" name="priority" type="number" min="0" value="10" class="form-input">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Max Retries</label>
-                <input name="max_retries" type="number" min="0" value="3" class="form-input">
+                <input aria-label="Max Retries" name="max_retries" type="number" min="0" value="3" class="form-input">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Retry Backoff (seconds)</label>
-                <input name="retry_backoff_seconds" type="number" min="1" value="60" class="form-input">
+                <input aria-label="Retry Backoff (seconds)" name="retry_backoff_seconds" type="number" min="1" value="60" class="form-input">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Circuit Breaker (failures)</label>
-                <input name="circuit_breaker_failures" type="number" min="0" value="0" class="form-input">
+                <input aria-label="Circuit Breaker (failures)" name="circuit_breaker_failures" type="number" min="0" value="0" class="form-input">
             </div>
             <div class="flex items-end">
                 <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
@@ -164,7 +164,7 @@
             </div>
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
-                <textarea name="description" rows="2" class="form-input" placeholder="Optional notes"></textarea>
+                <textarea aria-label="Optional notes" name="description" rows="2" class="form-input" placeholder="Optional notes"></textarea>
             </div>
             <div class="md:col-span-2">
                 <button type="submit" class="btn btn-primary">Create Hook</button>
@@ -177,11 +177,11 @@
             <form method="get" action="/admin/settings/service-hooks" class="grid gap-3 md:grid-cols-4">
                 <div class="md:col-span-2">
                     <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Search name</label>
-                    <input type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search hooks">
+                    <input aria-label="Search hooks" type="text" name="q" value="{{ filters.q }}" class="form-input" placeholder="Search hooks">
                 </div>
                 <div>
                     <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Handler</label>
-                    <select name="handler_type" class="form-input">
+                    <select aria-label="Handler" name="handler_type" class="form-input">
                         <option value="">All</option>
                         {% for handler_type in handler_types %}
                         <option value="{{ handler_type }}" {{ 'selected' if filters.handler_type == handler_type else '' }}>
@@ -192,7 +192,7 @@
                 </div>
                 <div>
                     <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Status</label>
-                    <select name="is_active" class="form-input">
+                    <select aria-label="Status" name="is_active" class="form-input">
                         <option value="" {{ 'selected' if not filters.is_active else '' }}>All</option>
                         <option value="true" {{ 'selected' if filters.is_active == 'true' else '' }}>Enabled</option>
                         <option value="false" {{ 'selected' if filters.is_active == 'false' else '' }}>Disabled</option>
@@ -215,7 +215,7 @@
                     Select all visible
                 </label>
                 <label class="text-xs font-medium text-slate-600 dark:text-slate-300">Bulk action</label>
-                <select name="bulk_action" class="form-input w-auto">
+                <select aria-label="Bulk action" name="bulk_action" class="form-input w-auto">
                     <option value="enable">Enable selected</option>
                     <option value="disable">Disable selected</option>
                     <option value="delete">Delete selected</option>
@@ -229,7 +229,7 @@
             <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
                 <div class="flex items-center gap-2 flex-wrap">
-                    <input type="checkbox" name="hook_ids" value="{{ hook.hook_id }}" form="bulk-hooks-form" class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">
+                    <input type="checkbox" aria-label="Select {{ hook.name }} for bulk actions" name="hook_ids" value="{{ hook.hook_id }}" form="bulk-hooks-form" class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">
                     <p class="font-semibold text-slate-900 dark:text-white">{{ hook.name }}</p>
                     {{ status_badge(hook.handler_type, 'sm') }}
                     {{ status_badge(hook.execution_mode, 'sm') }}
@@ -286,11 +286,11 @@
                             {{ request.state.csrf_form | safe }}
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Name</label>
-                                <input name="name" type="text" required class="form-input" value="{{ hook.name }}">
+                                <input aria-label="Name" name="name" type="text" required class="form-input" value="{{ hook.name }}">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Event</label>
-                                <select name="event_name" class="form-input" required>
+                                <select aria-label="Event" name="event_name" class="form-input" required>
                                     {% for event_name in available_events %}
                                     <option value="{{ event_name }}" {{ 'selected' if event_name == hook.event_name else '' }}>{{ event_name }}</option>
                                     {% endfor %}
@@ -299,7 +299,7 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Handler</label>
-                                    <select name="handler_type" class="form-input" required>
+                                    <select aria-label="Handler" name="handler_type" class="form-input" required>
                                         {% for handler_type in handler_types %}
                                         <option value="{{ handler_type }}" {{ 'selected' if handler_type == hook.handler_type else '' }}>
                                             {{ handler_type|replace('_', ' ')|title }}
@@ -309,7 +309,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Mode</label>
-                                    <select name="execution_mode" class="form-input" required>
+                                    <select aria-label="Mode" name="execution_mode" class="form-input" required>
                                         {% for execution_mode in execution_modes %}
                                         <option value="{{ execution_mode }}" {{ 'selected' if execution_mode == hook.execution_mode else '' }}>{{ execution_mode }}</option>
                                         {% endfor %}
@@ -318,37 +318,37 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Webhook URL</label>
-                                <input name="webhook_url" type="url" class="form-input" value="{{ hook.webhook_url or '' }}">
+                                <input aria-label="Webhook URL" name="webhook_url" type="url" class="form-input" value="{{ hook.webhook_url or '' }}">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Webhook Timeout (seconds)</label>
-                                <input name="webhook_timeout_seconds" type="number" min="1" class="form-input" value="{{ hook.webhook_timeout_seconds or 15 }}">
+                                <input aria-label="Webhook Timeout (seconds)" name="webhook_timeout_seconds" type="number" min="1" class="form-input" value="{{ hook.webhook_timeout_seconds or 15 }}">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Outbox Event Override</label>
-                                <input name="event_name_override" type="text" class="form-input" value="{{ hook.event_name_override or '' }}">
+                                <input aria-label="Outbox Event Override" name="event_name_override" type="text" class="form-input" value="{{ hook.event_name_override or '' }}">
                             </div>
                             <div class="grid grid-cols-4 gap-2">
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Priority</label>
-                                    <input name="priority" type="number" min="0" class="form-input" value="{{ hook.priority }}">
+                                    <input aria-label="Priority" name="priority" type="number" min="0" class="form-input" value="{{ hook.priority }}">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Retries</label>
-                                    <input name="max_retries" type="number" min="0" class="form-input" value="{{ hook.max_retries }}">
+                                    <input aria-label="Retries" name="max_retries" type="number" min="0" class="form-input" value="{{ hook.max_retries }}">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Backoff</label>
-                                    <input name="retry_backoff_seconds" type="number" min="1" class="form-input" value="{{ hook.retry_backoff_seconds }}">
+                                    <input aria-label="Backoff" name="retry_backoff_seconds" type="number" min="1" class="form-input" value="{{ hook.retry_backoff_seconds }}">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Circuit</label>
-                                    <input name="circuit_breaker_failures" type="number" min="0" class="form-input" value="{{ hook.circuit_breaker_failures or 0 }}">
+                                    <input aria-label="Circuit" name="circuit_breaker_failures" type="number" min="0" class="form-input" value="{{ hook.circuit_breaker_failures or 0 }}">
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Description</label>
-                                <textarea name="description" rows="2" class="form-input">{{ hook.description or '' }}</textarea>
+                                <textarea aria-label="Description" name="description" rows="2" class="form-input">{{ hook.description or '' }}</textarea>
                             </div>
                             <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                                 <input type="checkbox" name="is_active" value="true" {{ 'checked' if hook.is_active else '' }} class="rounded border-slate-300 text-accent-600 focus:ring-accent-500">

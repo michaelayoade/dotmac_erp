@@ -81,7 +81,7 @@
                     <label class="form-label">
                         Item Code <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="ITEM-001" type="text"
                            name="item_code"
                            value="{{ item.item_code if item else (item_code_preview or '') }}"
                            {% if item %}readonly{% endif %}
@@ -96,7 +96,7 @@
                     <label class="form-label">
                         Item Name <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Widget A" type="text"
                            name="item_name"
                            value="{{ item.item_name if item else '' }}"
                            required
@@ -110,7 +110,7 @@
                         Category <span class="text-rose-500">*</span>
                     </label>
                     <div class="flex gap-2">
-                        <select name="category_id" x-ref="categorySelect" required class="form-select flex-1">
+                        <select aria-label="Category" name="category_id" x-ref="categorySelect" required class="form-select flex-1">
                             <option value="">Select category</option>
                             {% for category in categories %}
                             <option value="{{ category.category_id }}" {{ 'selected' if item and item.category_id == category.category_id else '' }}>
@@ -153,17 +153,17 @@
                                 <div class="grid gap-4 sm:grid-cols-2">
                                     <div>
                                         <label class="form-label">Category Code <span class="text-rose-500">*</span></label>
-                                        <input type="text" x-model="newCategory.category_code" maxlength="30" placeholder="RAW-MAT" class="form-input">
+                                        <input aria-label="RAW-MAT" type="text" x-model="newCategory.category_code" maxlength="30" placeholder="RAW-MAT" class="form-input">
                                     </div>
                                     <div>
                                         <label class="form-label">Category Name <span class="text-rose-500">*</span></label>
-                                        <input type="text" x-model="newCategory.category_name" maxlength="100" placeholder="Raw Materials" class="form-input">
+                                        <input aria-label="Raw Materials" type="text" x-model="newCategory.category_name" maxlength="100" placeholder="Raw Materials" class="form-input">
                                     </div>
                                 </div>
 
                                 <div>
                                     <label class="form-label">Inventory Account <span class="text-rose-500">*</span></label>
-                                    <select x-model="newCategory.inventory_account_id" class="form-select">
+                                    <select aria-label="Inventory Account" x-model="newCategory.inventory_account_id" class="form-select">
                                         <option value="">Select account</option>
                                         {% for account in accounts %}
                                         <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
@@ -173,7 +173,7 @@
 
                                 <div>
                                     <label class="form-label">COGS Account <span class="text-rose-500">*</span></label>
-                                    <select x-model="newCategory.cogs_account_id" class="form-select">
+                                    <select aria-label="COGS Account" x-model="newCategory.cogs_account_id" class="form-select">
                                         <option value="">Select account</option>
                                         {% for account in accounts %}
                                         <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
@@ -183,7 +183,7 @@
 
                                 <div>
                                     <label class="form-label">Revenue Account <span class="text-rose-500">*</span></label>
-                                    <select x-model="newCategory.revenue_account_id" class="form-select">
+                                    <select aria-label="Revenue Account" x-model="newCategory.revenue_account_id" class="form-select">
                                         <option value="">Select account</option>
                                         {% for account in accounts %}
                                         <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
@@ -193,7 +193,7 @@
 
                                 <div>
                                     <label class="form-label">Inventory Adjustment Account <span class="text-rose-500">*</span></label>
-                                    <select x-model="newCategory.inventory_adjustment_account_id" class="form-select">
+                                    <select aria-label="Inventory Adjustment Account" x-model="newCategory.inventory_adjustment_account_id" class="form-select">
                                         <option value="">Select account</option>
                                         {% for account in accounts %}
                                         <option value="{{ account.account_id }}">{{ account.account_code }} - {{ account.account_name }}</option>
@@ -220,7 +220,7 @@
 
                 <div>
                     <label class="form-label">Item Type</label>
-                    <select name="item_type" class="form-select" id="item_type">
+                    <select aria-label="Item Type" name="item_type" class="form-select" id="item_type">
                         {% for type in item_types %}
                         <option value="{{ type.value }}" {{ 'selected' if item and item.item_type.value == type.value else ('selected' if not item and type.value == 'INVENTORY' else '') }}>
                             {{ type.label }}
@@ -231,7 +231,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description"
+                    <textarea aria-label="Enter item description" name="description"
                               rows="3"
                               placeholder="Enter item description"
                               class="form-input resize-none">{{ item.description if item else '' }}</textarea>
@@ -258,7 +258,7 @@
                     <label class="form-label">
                         Base Unit of Measure <span class="text-rose-500">*</span>
                     </label>
-                    <select name="base_uom" required class="form-select">
+                    <select aria-label="Base Unit of Measure" name="base_uom" required class="form-select">
                         <option value="EACH" {{ 'selected' if not item or item.base_uom == 'EACH' else '' }}>Each</option>
                         <option value="PCS" {{ 'selected' if item and item.base_uom == 'PCS' else '' }}>Pieces</option>
                         <option value="KG" {{ 'selected' if item and item.base_uom == 'KG' else '' }}>Kilogram</option>
@@ -274,7 +274,7 @@
 
                 <div>
                     <label class="form-label">Purchase Unit of Measure</label>
-                    <select name="purchase_uom" class="form-select">
+                    <select aria-label="Purchase Unit of Measure" name="purchase_uom" class="form-select">
                         <option value="">Use base unit of measure</option>
                         <option value="EACH" {{ 'selected' if item and item.purchase_uom == 'EACH' else '' }}>Each</option>
                         <option value="PCS" {{ 'selected' if item and item.purchase_uom == 'PCS' else '' }}>Pieces</option>
@@ -291,7 +291,7 @@
 
                 <div>
                     <label class="form-label">Sales Unit of Measure</label>
-                    <select name="sales_uom" class="form-select">
+                    <select aria-label="Sales Unit of Measure" name="sales_uom" class="form-select">
                         <option value="">Use base unit of measure</option>
                         <option value="EACH" {{ 'selected' if item and item.sales_uom == 'EACH' else '' }}>Each</option>
                         <option value="PCS" {{ 'selected' if item and item.sales_uom == 'PCS' else '' }}>Pieces</option>
@@ -308,7 +308,7 @@
 
                 <div>
                     <label class="form-label">Costing Method</label>
-                    <select name="costing_method" class="form-select" id="costing_method">
+                    <select aria-label="Costing Method" name="costing_method" class="form-select" id="costing_method">
                         {% for method in costing_methods %}
                         <option value="{{ method.value }}" {{ 'selected' if item and item.costing_method.value == method.value else ('selected' if not item and method.value == 'WEIGHTED_AVERAGE' else '') }}>
                             {{ method.label }}
@@ -321,7 +321,7 @@
                     <label class="form-label">
                         Currency <span class="text-rose-500">*</span>
                     </label>
-                    <select name="currency_code" required class="form-select">
+                    <select aria-label="Currency" name="currency_code" required class="form-select">
                         {% set selected_currency = item.currency_code if item else default_currency_code %}
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>
@@ -333,7 +333,7 @@
 
                 <div id="standard_cost_field">
                     <label class="form-label">Standard Cost</label>
-                    <input type="number"
+                    <input aria-label="0.00" type="number"
                            name="standard_cost"
                            value="{{ item.standard_cost if item and item.standard_cost else '' }}"
                            step="0.01"
@@ -344,7 +344,7 @@
 
                 <div>
                     <label class="form-label">List Price</label>
-                    <input type="number"
+                    <input aria-label="0.00" type="number"
                            name="list_price"
                            value="{{ item.list_price if item and item.list_price else '' }}"
                            step="0.01"
@@ -372,7 +372,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div id="reorder_point_field">
                     <label class="form-label">Reorder Point</label>
-                    <input type="number"
+                    <input aria-label="0.00" type="number"
                            name="reorder_point"
                            value="{{ item.reorder_point if item and item.reorder_point else '' }}"
                            step="0.01"
@@ -384,7 +384,7 @@
 
                 <div id="reorder_quantity_field">
                     <label class="form-label">Reorder Quantity</label>
-                    <input type="number"
+                    <input aria-label="0.00" type="number"
                            name="reorder_quantity"
                            value="{{ item.reorder_quantity if item and item.reorder_quantity else '' }}"
                            step="0.01"
@@ -396,7 +396,7 @@
 
                 <div id="stock_limits_field">
                     <label class="form-label">Minimum Stock</label>
-                    <input type="number"
+                    <input aria-label="0.00" type="number"
                            name="minimum_stock"
                            value="{{ item.minimum_stock if item and item.minimum_stock else '' }}"
                            step="0.01"
@@ -407,7 +407,7 @@
 
                 <div id="max_stock_field">
                     <label class="form-label">Maximum Stock</label>
-                    <input type="number"
+                    <input aria-label="0.00" type="number"
                            name="maximum_stock"
                            value="{{ item.maximum_stock if item and item.maximum_stock else '' }}"
                            step="0.01"
@@ -418,7 +418,7 @@
 
                 <div>
                     <label class="form-label">Lead Time (Days)</label>
-                    <input type="number"
+                    <input aria-label="0" type="number"
                            name="lead_time_days"
                            value="{{ item.lead_time_days if item and item.lead_time_days else '' }}"
                            min="0"

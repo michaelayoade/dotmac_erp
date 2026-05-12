@@ -99,11 +99,11 @@
                     <template x-for="(cond, index) in fieldConditions" :key="index">
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-4">
-                                <input type="text" placeholder="Field name" x-model="cond.field"
+                                <input aria-label="Field name" type="text" placeholder="Field name" x-model="cond.field"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-4">
-                                <select x-model="cond.operator"
+                                <select aria-label="Operator" x-model="cond.operator"
                                         class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                     <option value="equals">Equals</option>
                                     <option value="not_equals">Not equals</option>
@@ -122,7 +122,7 @@
                                 </select>
                             </div>
                             <div class="sm:col-span-3">
-                                <input type="text" placeholder="Value" x-model="cond.value"
+                                <input aria-label="Value" type="text" placeholder="Value" x-model="cond.value"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-1 flex items-center justify-end">
@@ -144,12 +144,12 @@
                 <div x-show="useStatusChange" x-cloak class="grid gap-3 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm text-slate-600 dark:text-slate-300">From status</label>
-                        <input type="text" placeholder="e.g., PENDING" x-model="statusFrom"
+                        <input aria-label="e.g., PENDING" type="text" placeholder="e.g., PENDING" x-model="statusFrom"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm text-slate-600 dark:text-slate-300">To status</label>
-                        <input type="text" placeholder="e.g., APPROVED" x-model="statusTo"
+                        <input aria-label="e.g., APPROVED" type="text" placeholder="e.g., APPROVED" x-model="statusTo"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                 </div>
@@ -160,7 +160,7 @@
                     <label for="use_changed_fields" class="text-sm font-medium text-slate-700 dark:text-slate-300">Match changed fields</label>
                 </div>
                 <div x-show="useChangedFields" x-cloak>
-                    <input type="text" placeholder="status, total_amount, due_date" x-model="changedFieldsInput"
+                    <input aria-label="status, total_amount, due_date" type="text" placeholder="status, total_amount, due_date" x-model="changedFieldsInput"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Comma-separated list of fields to watch.</p>
                 </div>
@@ -173,12 +173,12 @@
                 <div x-show="useAmountThreshold" x-cloak class="grid gap-3 sm:grid-cols-3">
                     <div>
                         <label class="block text-sm text-slate-600 dark:text-slate-300">Amount field</label>
-                        <input type="text" placeholder="total_amount" x-model="amountField"
+                        <input aria-label="total_amount" type="text" placeholder="total_amount" x-model="amountField"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm text-slate-600 dark:text-slate-300">Operator</label>
-                        <select x-model="amountOperator"
+                        <select aria-label="Operator" x-model="amountOperator"
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="greater_than">Greater than</option>
                             <option value="greater_than_or_equal">Greater than or equal</option>
@@ -188,14 +188,14 @@
                     </div>
                     <div>
                         <label class="block text-sm text-slate-600 dark:text-slate-300">Value</label>
-                        <input type="number" step="0.01" placeholder="0.00" x-model="amountValue"
+                        <input aria-label="0.00" type="number" step="0.01" placeholder="0.00" x-model="amountValue"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                 </div>
 
                 <div x-show="advancedConditionsEnabled" x-cloak class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
                     <p class="text-sm text-amber-700 dark:text-amber-300">This rule uses advanced condition groups. Edit the JSON below to avoid losing logic.</p>
-                    <textarea rows="5" x-model="advancedConditionsJson"
+                    <textarea aria-label="Advanced conditions JSON" rows="5" x-model="advancedConditionsJson"
                               class="mt-3 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-mono focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 dark:border-amber-700 dark:bg-slate-900 dark:text-white"></textarea>
                 </div>
             </div>
@@ -211,12 +211,12 @@
             <div class="p-6 space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Interval (minutes) *</label>
-                    <input type="number" min="1" x-model.number="scheduleInterval" :required="triggerEvent === 'ON_SCHEDULE'"
+                    <input aria-label="Interval (minutes)" type="number" min="1" x-model.number="scheduleInterval" :required="triggerEvent === 'ON_SCHEDULE'"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity status filter</label>
-                    <input type="text" placeholder="e.g., OVERDUE" x-model="scheduleStatus"
+                    <input aria-label="e.g., OVERDUE" type="text" placeholder="e.g., OVERDUE" x-model="scheduleStatus"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div class="space-y-4">
@@ -229,11 +229,11 @@
                     <template x-for="(filter, index) in scheduleFilters" :key="index">
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-4">
-                                <input type="text" placeholder="Field name" x-model="filter.field"
+                                <input aria-label="Field name" type="text" placeholder="Field name" x-model="filter.field"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-4">
-                                <select x-model="filter.operator"
+                                <select aria-label="Operator" x-model="filter.operator"
                                         class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                     <option value="equals">Equals</option>
                                     <option value="not_equals">Not equals</option>
@@ -244,7 +244,7 @@
                                 </select>
                             </div>
                             <div class="sm:col-span-3">
-                                <input type="text" placeholder="Value" x-model="filter.value"
+                                <input aria-label="Value" type="text" placeholder="Value" x-model="filter.value"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-1 flex items-center justify-end">
@@ -297,26 +297,26 @@
                 <div x-show="actionType === 'SEND_EMAIL'" x-cloak class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Recipients *</label>
-                        <input type="text" placeholder="email1@company.com, email2@company.com" x-model="emailRecipients"
+                        <input aria-label="email1@company.com, email2@company.com" type="text" placeholder="email1@company.com, email2@company.com" x-model="emailRecipients"
                                value="{{ (rule.action_config.recipients | join(', ')) if rule and rule.action_config else '' }}"
                                :required="actionType === 'SEND_EMAIL'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Subject *</label>
-                        <input type="text" placeholder="Workflow Notification" x-model="emailSubject"
+                        <input aria-label="Workflow Notification" type="text" placeholder="Workflow Notification" x-model="emailSubject"
                                value="{{ (rule.action_config.subject) if rule and rule.action_config else '' }}"
                                :required="actionType === 'SEND_EMAIL'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">HTML Body *</label>
-                        <textarea rows="4" x-model="emailBodyHtml" :required="actionType === 'SEND_EMAIL'"
+                        <textarea aria-label="HTML Body" rows="4" x-model="emailBodyHtml" :required="actionType === 'SEND_EMAIL'"
                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{% if rule and rule.action_config %}{{ rule.action_config.body_html | default('') }}{% endif %}</textarea>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Text Body (optional)</label>
-                        <textarea rows="3" x-model="emailBodyText"
+                        <textarea aria-label="Text Body (optional)" rows="3" x-model="emailBodyText"
                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{% if rule and rule.action_config %}{{ rule.action_config.body_text | default('') }}{% endif %}</textarea>
                     </div>
                 </div>
@@ -324,20 +324,20 @@
                 <div x-show="actionType === 'SEND_NOTIFICATION'" x-cloak class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Recipient IDs *</label>
-                        <input type="text" placeholder="UUIDs separated by commas" x-model="notificationRecipients"
+                        <input aria-label="UUIDs separated by commas" type="text" placeholder="UUIDs separated by commas" x-model="notificationRecipients"
                                :required="actionType === 'SEND_NOTIFICATION'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Title *</label>
-                            <input type="text" placeholder="Workflow Notification" x-model="notificationTitle"
+                            <input aria-label="Workflow Notification" type="text" placeholder="Workflow Notification" x-model="notificationTitle"
                                    :required="actionType === 'SEND_NOTIFICATION'"
                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Channel</label>
-                            <select x-model="notificationChannel"
+                            <select aria-label="Channel" x-model="notificationChannel"
                                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 <option value="IN_APP">In-app</option>
                                 <option value="EMAIL">Email</option>
@@ -347,12 +347,12 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Message *</label>
-                        <textarea rows="3" x-model="notificationMessage" :required="actionType === 'SEND_NOTIFICATION'"
+                        <textarea aria-label="Message" rows="3" x-model="notificationMessage" :required="actionType === 'SEND_NOTIFICATION'"
                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action URL (optional)</label>
-                        <input type="text" placeholder="/finance/invoices/123" x-model="notificationActionUrl"
+                        <input aria-label="/finance/invoices/123" type="text" placeholder="/finance/invoices/123" x-model="notificationActionUrl"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                 </div>
@@ -367,11 +367,11 @@
                     <template x-for="(rule, index) in validationRules" :key="index">
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-3">
-                                <input type="text" placeholder="Field name" x-model="rule.field"
+                                <input aria-label="Field name" type="text" placeholder="Field name" x-model="rule.field"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-3">
-                                <select x-model="rule.operator"
+                                <select aria-label="Operator" x-model="rule.operator"
                                         class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                     <option value="equals">Equals</option>
                                     <option value="not_equals">Not equals</option>
@@ -390,11 +390,11 @@
                                 </select>
                             </div>
                             <div class="sm:col-span-3">
-                                <input type="text" placeholder="Expected value" x-model="rule.value"
+                                <input aria-label="Expected value" type="text" placeholder="Expected value" x-model="rule.value"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-2">
-                                <input type="text" placeholder="Error message" x-model="rule.message"
+                                <input aria-label="Error message" type="text" placeholder="Error message" x-model="rule.message"
                                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             </div>
                             <div class="sm:col-span-1 flex items-center justify-end">
@@ -409,13 +409,13 @@
                 <div x-show="actionType === 'UPDATE_FIELD'" x-cloak class="grid gap-3 sm:grid-cols-2">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field *</label>
-                        <input type="text" placeholder="status" x-model="updateFieldName"
+                        <input aria-label="status" type="text" placeholder="status" x-model="updateFieldName"
                                :required="actionType === 'UPDATE_FIELD'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Value *</label>
-                        <input type="text" placeholder="APPROVED" x-model="updateFieldValue"
+                        <input aria-label="APPROVED" type="text" placeholder="APPROVED" x-model="updateFieldValue"
                                :required="actionType === 'UPDATE_FIELD'"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
@@ -425,20 +425,20 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Project ID *</label>
-                            <input type="text" placeholder="Project UUID" x-model="taskProjectId"
+                            <input aria-label="Project UUID" type="text" placeholder="Project UUID" x-model="taskProjectId"
                                    :required="actionType === 'CREATE_TASK'"
                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Assignee ID (optional)</label>
-                            <input type="text" placeholder="User UUID" x-model="taskAssigneeId"
+                            <input aria-label="User UUID" type="text" placeholder="User UUID" x-model="taskAssigneeId"
                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         </div>
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Priority</label>
-                            <select x-model="taskPriority"
+                            <select aria-label="Priority" x-model="taskPriority"
                                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 <option value="LOW">Low</option>
                                 <option value="MEDIUM">Medium</option>
@@ -448,14 +448,14 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Title *</label>
-                            <input type="text" placeholder="Workflow Task" x-model="taskTitle"
+                            <input aria-label="Workflow Task" type="text" placeholder="Workflow Task" x-model="taskTitle"
                                    :required="actionType === 'CREATE_TASK'"
                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         </div>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
-                        <textarea rows="3" x-model="taskDescription"
+                        <textarea aria-label="Description" rows="3" x-model="taskDescription"
                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
                     </div>
                 </div>
@@ -464,13 +464,13 @@
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Webhook URL *</label>
-                            <input type="text" placeholder="https://example.com/webhook" x-model="webhookUrl"
+                            <input aria-label="https://example.com/webhook" type="text" placeholder="https://example.com/webhook" x-model="webhookUrl"
                                    :required="actionType === 'WEBHOOK'"
                                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Method</label>
-                            <select x-model="webhookMethod"
+                            <select aria-label="Method" x-model="webhookMethod"
                                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 <option value="POST">POST</option>
                                 <option value="GET">GET</option>
@@ -490,11 +490,11 @@
                         <template x-for="(header, index) in webhookHeaders" :key="index">
                             <div class="grid gap-3 sm:grid-cols-12">
                                 <div class="sm:col-span-5">
-                                    <input type="text" placeholder="Header name" x-model="header.key"
+                                    <input aria-label="Header name" type="text" placeholder="Header name" x-model="header.key"
                                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 </div>
                                 <div class="sm:col-span-6">
-                                    <input type="text" placeholder="Header value" x-model="header.value"
+                                    <input aria-label="Header value" type="text" placeholder="Header value" x-model="header.value"
                                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                 </div>
                                 <div class="sm:col-span-1 flex items-center justify-end">
@@ -509,14 +509,14 @@
 
                 <div x-show="actionType === 'BLOCK'" x-cloak>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Block message *</label>
-                    <input type="text" placeholder="Operation blocked by workflow rule" x-model="blockMessage"
+                    <input aria-label="Operation blocked by workflow rule" type="text" placeholder="Operation blocked by workflow rule" x-model="blockMessage"
                            :required="actionType === 'BLOCK'"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
 
                 <div x-show="actionType === 'TRIGGER_RULE'" x-cloak>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Target Rule ID *</label>
-                    <input type="text" placeholder="Rule UUID" x-model="triggerRuleId"
+                    <input aria-label="Rule UUID" type="text" placeholder="Rule UUID" x-model="triggerRuleId"
                            :required="actionType === 'TRIGGER_RULE'"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>

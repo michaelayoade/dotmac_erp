@@ -390,11 +390,11 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div class="space-y-2">
                             <label class="form-label required">Query Text</label>
-                            <textarea name="query_text" class="form-input min-h-[112px]" rows="4" required minlength="10" placeholder="Formal query to the employee..."></textarea>
+                            <textarea aria-label="Formal query to the employee..." name="query_text" class="form-input min-h-[112px]" rows="4" required minlength="10" placeholder="Formal query to the employee..."></textarea>
                         </div>
                         <div class="space-y-2">
                             <label class="form-label required">Response Due</label>
-                            <input type="date" name="response_due_date" class="form-input" min="{{ today_iso }}" required>
+                            <input aria-label="Response Due" type="date" name="response_due_date" class="form-input" min="{{ today_iso }}" required>
                         </div>
                         <button type="submit" class="btn btn-primary w-full">Issue Query</button>
                     </form>
@@ -406,15 +406,15 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div class="space-y-2">
                             <label class="form-label required">Hearing Date & Time</label>
-                            <input type="datetime-local" name="hearing_date" class="form-input" required>
+                            <input aria-label="Hearing Date & Time" type="datetime-local" name="hearing_date" class="form-input" required>
                         </div>
                         <div class="space-y-2">
                             <label class="form-label">Location</label>
-                            <input type="text" name="hearing_location" class="form-input" placeholder="Meeting room, etc.">
+                            <input aria-label="Meeting room, etc." type="text" name="hearing_location" class="form-input" placeholder="Meeting room, etc.">
                         </div>
                         <div class="space-y-2">
                             <label class="form-label">Panel Chair</label>
-                            <select name="panel_chair_id" class="form-select">
+                            <select aria-label="Panel Chair" name="panel_chair_id" class="form-select">
                                 <option value="">Select Chair</option>
                                 {% for emp in employees %}
                                 <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
@@ -431,7 +431,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Hearing Notes</label>
-                            <textarea name="hearing_notes" class="input" rows="4" required placeholder="Summary of the hearing..."></textarea>
+                            <textarea aria-label="Summary of the hearing..." name="hearing_notes" class="input" rows="4" required placeholder="Summary of the hearing..."></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary w-full">Record Hearing</button>
                     </form>
@@ -443,11 +443,11 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Decision Summary</label>
-                            <textarea name="decision_summary" class="input" rows="3" required placeholder="Decision and reasoning..."></textarea>
+                            <textarea aria-label="Decision and reasoning..." name="decision_summary" class="input" rows="3" required placeholder="Decision and reasoning..."></textarea>
                         </div>
                         <div>
                             <label class="label">Action Type</label>
-                            <select name="action_type" class="input">
+                            <select aria-label="Action Type" name="action_type" class="input">
                                 <option value="">No Action</option>
                                 {% for a in action_types %}
                                 <option value="{{ a }}">{{ a | replace('_', ' ') | title }}</option>
@@ -456,16 +456,16 @@
                         </div>
                         <div>
                             <label class="label">Action Description</label>
-                            <textarea name="action_description" class="input" rows="2" placeholder="Details of the action..."></textarea>
+                            <textarea aria-label="Details of the action..." name="action_description" class="input" rows="2" placeholder="Details of the action..."></textarea>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div>
                                 <label class="label">Effective Date</label>
-                                <input type="date" name="effective_date" class="input">
+                                <input aria-label="Effective Date" type="date" name="effective_date" class="input">
                             </div>
                             <div>
                                 <label class="label">End Date</label>
-                                <input type="date" name="end_date" class="input">
+                                <input aria-label="End Date" type="date" name="end_date" class="input">
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary w-full">Record Decision</button>
@@ -495,7 +495,7 @@
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                             <div class="space-y-2">
                                 <label class="form-label">Employee Witness</label>
-                                <select name="employee_id" class="form-select" onchange="const form=this.form; const employee=this.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); this.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError);">
+                                <select aria-label="Employee Witness" name="employee_id" class="form-select" onchange="const form=this.form; const employee=this.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); this.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError);">
                                     <option value="">Select Employee</option>
                                     {% for emp in employees %}
                                     <option value="{{ emp.employee_id }}">{{ emp.full_name }}</option>
@@ -506,12 +506,12 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400 text-center">- OR -</p>
                             <div class="space-y-2">
                                 <label class="form-label">External Name</label>
-                                <input type="text" name="external_name" class="form-input" placeholder="External witness name" oninput="const form=this.form; const employee=form.employee_id.value.trim(); const external=(this.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); this.classList.toggle('border-rose-500', showSourceError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError);">
+                                <input aria-label="External witness name" type="text" name="external_name" class="form-input" placeholder="External witness name" oninput="const form=this.form; const employee=form.employee_id.value.trim(); const external=(this.value || '').trim(); const contact=(form.external_contact.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); this.classList.toggle('border-rose-500', showSourceError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_contact.classList.toggle('border-rose-500', showContactError);">
                                 <p data-witness-external-error class="hidden text-xs text-rose-600 dark:text-rose-400">Enter an external witness name or select an employee witness.</p>
                             </div>
                             <div class="space-y-2">
                                 <label class="form-label">Contact</label>
-                                <input type="text" name="external_contact" class="form-input" placeholder="Phone or email" oninput="const form=this.form; const employee=form.employee_id.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(this.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); this.classList.toggle('border-rose-500', showContactError);">
+                                <input aria-label="Phone or email" type="text" name="external_contact" class="form-input" placeholder="Phone or email" oninput="const form=this.form; const employee=form.employee_id.value.trim(); const external=(form.external_name.value || '').trim(); const contact=(this.value || '').trim(); const showSourceError=!employee && !external; const showContactError=!employee && !!external && !contact; form.querySelector('[data-witness-employee-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-external-error]').classList.toggle('hidden', !showSourceError); form.querySelector('[data-witness-contact-error]').classList.toggle('hidden', !showContactError); form.employee_id.classList.toggle('border-rose-500', showSourceError); form.external_name.classList.toggle('border-rose-500', showSourceError); this.classList.toggle('border-rose-500', showContactError);">
                                 <p data-witness-contact-error class="hidden text-xs text-rose-600 dark:text-rose-400">Contact is required when adding an external witness.</p>
                             </div>
                             <button type="submit" class="btn btn-secondary w-full">Add Witness</button>
@@ -588,7 +588,7 @@
                     <div class="space-y-5">
                         <div class="space-y-2">
                             <label class="form-label required">Document Type</label>
-                            <select name="document_type" class="form-select" required>
+                            <select aria-label="Document Type" name="document_type" class="form-select" required>
                                 <option value="">Select Type...</option>
                                 <option value="EVIDENCE">Evidence</option>
                                 <option value="QUERY_LETTER">Query Letter</option>
@@ -617,12 +617,12 @@
 
                         <div class="space-y-2">
                             <label class="form-label">Title</label>
-                            <input type="text" name="title" class="form-input" placeholder="Document title (optional)">
+                            <input aria-label="Document title (optional)" type="text" name="title" class="form-input" placeholder="Document title (optional)">
                         </div>
 
                         <div class="space-y-2">
                             <label class="form-label">Description</label>
-                            <textarea name="description" class="form-input min-h-[96px]" rows="4" placeholder="Brief description, context, or what this document supports"></textarea>
+                            <textarea aria-label="Brief description, context, or what this document supports" name="description" class="form-input min-h-[96px]" rows="4" placeholder="Brief description, context, or what this document supports"></textarea>
                         </div>
                     </div>
                 </div>
