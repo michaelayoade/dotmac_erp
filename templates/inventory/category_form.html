@@ -87,7 +87,7 @@
                     <label class="form-label">
                         Category Code <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Category Code" type="text"
                            name="category_code"
                            value="{{ category.category_code if category else '' }}"
                            {% if category %}readonly{% endif %}
@@ -102,7 +102,7 @@
                     <label class="form-label">
                         Category Name <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Category Name" type="text"
                            name="category_name"
                            value="{{ category.category_name if category else '' }}"
                            required
@@ -113,7 +113,7 @@
 
                 <div>
                     <label class="form-label">Parent Category</label>
-                    <select name="parent_category_id" class="form-select">
+                    <select aria-label="Parent Category" name="parent_category_id" class="form-select">
                         <option value="">None (Top Level)</option>
                         {% for parent in parent_categories %}
                         <option value="{{ parent.category_id }}" {{ 'selected' if category and category.parent_category_id == parent.category_id else '' }}>
@@ -126,7 +126,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description"
+                    <textarea aria-label="Description" name="description"
                               rows="3"
                               placeholder="Enter category description"
                               class="form-input resize-none">{{ category.description if category else '' }}</textarea>
@@ -153,7 +153,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Reorder Point</label>
-                    <input type="number"
+                    <input aria-label="Reorder Point" type="number"
                            name="reorder_point"
                            value="{{ category.reorder_point if category and category.reorder_point else '' }}"
                            step="0.000001"
@@ -165,7 +165,7 @@
 
                 <div>
                     <label class="form-label">Minimum Stock</label>
-                    <input type="number"
+                    <input aria-label="Minimum Stock" type="number"
                            name="minimum_stock"
                            value="{{ category.minimum_stock if category and category.minimum_stock else '' }}"
                            step="0.000001"
@@ -196,7 +196,7 @@
                     <label class="form-label">
                         Inventory Account <span class="text-rose-500">*</span>
                     </label>
-                    <select name="inventory_account_id" required class="form-select">
+                    <select aria-label="Inventory Account" name="inventory_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.inventory_account_id == account.account_id else '' }}>
@@ -211,7 +211,7 @@
                     <label class="form-label">
                         COGS Account <span class="text-rose-500">*</span>
                     </label>
-                    <select name="cogs_account_id" required class="form-select">
+                    <select aria-label="COGS Account" name="cogs_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.cogs_account_id == account.account_id else '' }}>
@@ -226,7 +226,7 @@
                     <label class="form-label">
                         Revenue Account <span class="text-rose-500">*</span>
                     </label>
-                    <select name="revenue_account_id" required class="form-select">
+                    <select aria-label="Revenue Account" name="revenue_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.revenue_account_id == account.account_id else '' }}>
@@ -241,7 +241,7 @@
                     <label class="form-label">
                         Inventory Adjustment Account <span class="text-rose-500">*</span>
                     </label>
-                    <select name="inventory_adjustment_account_id" required class="form-select">
+                    <select aria-label="Inventory Adjustment Account" name="inventory_adjustment_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.inventory_adjustment_account_id == account.account_id else '' }}>
@@ -254,7 +254,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Purchase Variance Account</label>
-                    <select name="purchase_variance_account_id" class="form-select">
+                    <select aria-label="Purchase Variance Account" name="purchase_variance_account_id" class="form-select">
                         <option value="">None</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.purchase_variance_account_id == account.account_id else '' }}>

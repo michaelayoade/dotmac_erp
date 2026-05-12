@@ -65,7 +65,7 @@
                     <label class="form-label">
                         Supplier Code <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Supplier Code" type="text"
                            name="supplier_code"
                            value="{{ supplier.supplier_code if supplier else '' }}"
                            required
@@ -79,7 +79,7 @@
                     <label class="form-label">
                         Supplier Name <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Supplier Name" type="text"
                            name="supplier_name"
                            value="{{ supplier.supplier_name if supplier else '' }}"
                            required
@@ -90,7 +90,7 @@
 
                 <div>
                     <label class="form-label">Tax ID</label>
-                    <input type="text"
+                    <input aria-label="Tax ID" type="text"
                            name="tax_id"
                            value="{{ supplier.tax_id if supplier else '' }}"
                            maxlength="50"
@@ -102,7 +102,7 @@
                     <label class="form-label">
                         Currency <span class="text-rose-500">*</span>
                     </label>
-                    <select name="currency_code" required class="form-select">
+                    <select aria-label="Currency" name="currency_code" required class="form-select">
                         <option value="">Select currency</option>
                         {% set selected_currency = supplier.currency_code if supplier else default_currency_code %}
                         {% for currency in currencies %}
@@ -132,7 +132,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Payment Terms (Days)</label>
-                    <input type="number"
+                    <input aria-label="Payment Terms (Days)" type="number"
                            name="payment_terms_days"
                            value="{{ supplier.payment_terms_days if supplier else 30 }}"
                            min="0"
@@ -143,7 +143,7 @@
 
                 <div>
                     <label class="form-label">Preferred Payment Method</label>
-                    <select name="payment_method" class="form-select">
+                    <select aria-label="Preferred Payment Method" name="payment_method" class="form-select">
                         <option value="">Select method</option>
                         <option value="BANK_TRANSFER" {{ 'selected' if supplier and supplier.payment_method == 'BANK_TRANSFER' else '' }}>Bank Transfer</option>
                         <option value="CHECK" {{ 'selected' if supplier and supplier.payment_method == 'CHECK' else '' }}>Check</option>
@@ -171,7 +171,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Default Expense Account</label>
-                    <select name="default_expense_account_id" class="form-select">
+                    <select aria-label="Default Expense Account" name="default_expense_account_id" class="form-select">
                         <option value="">Select account</option>
                         {% for account in expense_accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_expense_account_id == account.account_id else '' }}>
@@ -183,7 +183,7 @@
 
                 <div>
                     <label class="form-label">Default Payable Account</label>
-                    <select name="default_payable_account_id" class="form-select">
+                    <select aria-label="Default Payable Account" name="default_payable_account_id" class="form-select">
                         <option value="">Select account</option>
                         {% for account in payable_accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if supplier and supplier.default_payable_account_id == account.account_id else '' }}>
@@ -212,7 +212,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Email Address</label>
-                    <input type="email"
+                    <input aria-label="Email Address" type="email"
                            name="email"
                            value="{{ supplier.email if supplier else '' }}"
                            placeholder="accounts@supplier.com"
@@ -221,7 +221,7 @@
 
                 <div>
                     <label class="form-label">Phone Number</label>
-                    <input type="tel"
+                    <input aria-label="Phone Number" type="tel"
                            name="phone"
                            value="{{ supplier.phone if supplier else '' }}"
                            placeholder="+1 (555) 123-4567"
@@ -230,7 +230,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Business Address</label>
-                    <textarea name="address"
+                    <textarea aria-label="Business Address" name="address"
                               rows="3"
                               placeholder="Enter complete business address"
                               class="form-input resize-none">{{ supplier.address if supplier else '' }}</textarea>

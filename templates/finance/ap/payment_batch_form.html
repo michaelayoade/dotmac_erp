@@ -52,12 +52,12 @@
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
                     <label class="form-label">Batch Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="batch_date" value="{{ form_data.get('batch_date', '') }}"
+                    <input aria-label="Batch Date" type="date" name="batch_date" value="{{ form_data.get('batch_date', '') }}"
                            class="form-input" required>
                 </div>
                 <div>
                     <label class="form-label">Payment Method</label>
-                    <select name="payment_method" class="form-select">
+                    <select aria-label="Payment Method" name="payment_method" class="form-select">
                         {% for method in payment_methods %}
                         <option value="{{ method }}" {{ 'selected' if form_data.get('payment_method', payment_methods[0] if payment_methods else '') == method else '' }}>{{ method | replace('_', ' ') | title }}</option>
                         {% endfor %}
@@ -65,7 +65,7 @@
                 </div>
                 <div>
                     <label class="form-label">Bank Account <span class="text-rose-500">*</span></label>
-                    <select name="bank_account_id" class="form-select" required>
+                    <select aria-label="Bank Account" name="bank_account_id" class="form-select" required>
                         <option value="">Select bank account</option>
                         {% for account in bank_accounts %}
                         <option value="{{ account.bank_account_id }}" {{ 'selected' if form_data.get('bank_account_id', '') == (account.bank_account_id | string) else '' }}>
@@ -76,7 +76,7 @@
                 </div>
                 <div>
                     <label class="form-label">Currency</label>
-                    <input type="text" name="currency_code" value="{{ form_data.get('currency_code', default_currency_code) }}"
+                    <input aria-label="Currency" type="text" name="currency_code" value="{{ form_data.get('currency_code', default_currency_code) }}"
                            class="form-input">
                 </div>
             </div>
@@ -98,7 +98,7 @@
             <div class="border-b border-slate-200 px-6 py-3 dark:border-slate-700">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div class="flex-1">
-                        <input type="search" name="search" value="{{ search }}"
+                        <input aria-label="Search invoice #, supplier name, reference..." type="search" name="search" value="{{ search }}"
                                placeholder="Search invoice #, supplier name, reference..."
                                class="form-input w-full"
                                hx-get="/finance/ap/payment-batches/new"
@@ -109,7 +109,7 @@
                                hx-push-url="true">
                     </div>
                     <div class="flex-shrink-0">
-                        <select name="supplier_id" class="form-select"
+                        <select aria-label="Supplier" name="supplier_id" class="form-select"
                                 hx-get="/finance/ap/payment-batches/new"
                                 hx-trigger="change"
                                 hx-target="#invoice-table-body"
@@ -132,7 +132,7 @@
                     <thead>
                         <tr>
                             <th scope="col" class="w-10">
-                                <input type="checkbox"
+                                <input aria-label="Select all invoices for this batch" type="checkbox"
                                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600"
                                        @change="
                                            const cbs = $el.closest('table').querySelectorAll('tbody input[type=checkbox]');
@@ -154,7 +154,7 @@
                         {% for invoice in invoices %}
                         <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50">
                             <td>
-                                <input type="checkbox" name="invoice_ids" value="{{ invoice.invoice_id }}"
+                                <input aria-label="Select invoice {{ invoice.invoice_number }}" type="checkbox" name="invoice_ids" value="{{ invoice.invoice_id }}"
                                        {{ 'checked' if (invoice.invoice_id | string) in form_data.get('invoice_ids', []) else '' }}
                                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600"
                                        @change="recalcTotals()">
@@ -173,7 +173,7 @@
                                 <span class="text-xs text-slate-500">{{ invoice.currency_code }}</span>
                             </td>
                             <td class="text-right">
-                                <input type="number" step="0.01" min="0"
+                                <input aria-label="Amount to pay for invoice {{ invoice.invoice_number }}" type="number" step="0.01" min="0"
                                        max="{{ invoice.amount if invoice.amount else 0 }}"
                                        name="amount_{{ invoice.invoice_id }}"
                                        data-field="amount"
@@ -182,7 +182,7 @@
                                        @change="recalcTotals()">
                             </td>
                             <td class="text-right hidden sm:table-cell">
-                                <input type="number" step="0.01" min="0"
+                                <input aria-label="WHT amount for invoice {{ invoice.invoice_number }}" type="number" step="0.01" min="0"
                                        name="wht_{{ invoice.invoice_id }}"
                                        data-field="wht"
                                        value="0.00"

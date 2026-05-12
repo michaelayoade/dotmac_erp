@@ -32,7 +32,7 @@
                     <label for="supplier_search" class="form-label">Supplier <span class="text-red-500">*</span></label>
                     <div class="relative" @click.outside="supplierOpen = false">
                         <div class="relative">
-                            <input type="text"
+                            <input aria-label="Search supplier..." type="text"
                                    id="supplier_search"
                                    class="form-input pr-10"
                                    x-model="supplierSearch"
@@ -74,7 +74,7 @@
                 </div>
                 <div>
                     <label class="form-label">Payment Date <span class="text-red-500">*</span></label>
-                    <input type="date" class="form-input" name="payment_date" required
+                    <input aria-label="Payment Date" type="date" class="form-input" name="payment_date" required
                            x-model="paymentDate">
                 </div>
             </div>
@@ -83,7 +83,7 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Bank Account <span class="text-red-500">*</span></label>
-                    <select class="form-select form-input" name="bank_account_id" required x-model="bankAccountId">
+                    <select aria-label="Bank Account" class="form-select form-input" name="bank_account_id" required x-model="bankAccountId">
                         <option value="">Select bank account</option>
                         {% for acct in bank_accounts %}
                         <option value="{{ acct.id }}">{{ acct.code }} - {{ acct.name }}</option>
@@ -92,7 +92,7 @@
                 </div>
                 <div>
                     <label class="form-label">Payment Method <span class="text-red-500">*</span></label>
-                    <select class="form-select form-input" name="payment_method" required x-model="paymentMethod">
+                    <select aria-label="Payment Method" class="form-select form-input" name="payment_method" required x-model="paymentMethod">
                         <option value="BANK_TRANSFER">Bank Transfer</option>
                         <option value="CHECK">Check</option>
                         <option value="WIRE">Wire</option>
@@ -106,12 +106,12 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Reference</label>
-                    <input type="text" class="form-input" name="reference" placeholder="Check number, transfer ref, etc."
+                    <input aria-label="Reference" type="text" class="form-input" name="reference" placeholder="Check number, transfer ref, etc."
                            x-model="reference">
                 </div>
                 <div>
                     <label class="form-label">Currency</label>
-                    <input type="text" class="form-input" name="currency_code"
+                    <input aria-label="Currency" type="text" class="form-input" name="currency_code"
                            x-model="currencyCode" readonly>
                 </div>
             </div>
@@ -119,7 +119,7 @@
             <!-- Description -->
             <div>
                 <label class="form-label">Description</label>
-                <input type="text" class="form-input" name="description" placeholder="Payment description"
+                <input aria-label="Description" type="text" class="form-input" name="description" placeholder="Payment description"
                        x-model="description">
             </div>
 
@@ -142,7 +142,7 @@
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label class="form-label">WHT Code <span class="text-red-500">*</span></label>
-                            <select class="form-select form-input" name="wht_code_id" x-model="whtCodeId"
+                            <select aria-label="WHT Code" class="form-select form-input" name="wht_code_id" x-model="whtCodeId"
                                     @change="calculateAmounts()" :required="hasWht">
                                 <option value="">Select WHT rate</option>
                                 {% for code in wht_codes %}
@@ -168,7 +168,7 @@
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <label class="form-label">Invoice Amount (Gross) <span class="text-red-500">*</span></label>
-                            <input type="number" step="0.01" class="form-input" name="gross_amount" required
+                            <input aria-label="Invoice Amount (Gross)" type="number" step="0.01" class="form-input" name="gross_amount" required
                                    x-model.number="grossAmount" @input="calculateAmounts()"
                                    placeholder="0.00">
                             <p class="mt-1 text-xs text-slate-500">Full invoice amount being paid</p>
@@ -188,7 +188,7 @@
                         </div>
                         <div>
                             <label class="form-label">WHT Amount</label>
-                            <input type="number" step="0.01" class="form-input bg-amber-50 dark:bg-amber-900/20 font-mono tabular-nums text-right"
+                            <input aria-label="WHT Amount" type="number" step="0.01" class="form-input bg-amber-50 dark:bg-amber-900/20 font-mono tabular-nums text-right"
                                    name="wht_amount" x-model.number="whtAmount" readonly>
                             <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">Withheld and remitted to tax authority</p>
                         </div>
@@ -280,7 +280,7 @@
                     <tr
                         :class="{ 'bg-primary-50 dark:bg-primary-900/20': selectedInvoices.includes('{{ inv.invoice_id }}') }">
                         <td>
-                            <input type="checkbox"
+                            <input aria-label="Select invoice {{ invoice.invoice_number }} for allocation" type="checkbox"
                                    x-model="selectedInvoices"
                                    value="{{ inv.invoice_id }}"
                                    @change="updateAllocation('{{ inv.invoice_id }}', {{ inv.balance_raw }})"
@@ -292,7 +292,7 @@
                         <td class="table-cell-amount">{{ inv.total_amount }}</td>
                         <td class="table-cell-amount font-medium text-slate-900 dark:text-white">{{ inv.balance }}</td>
                         <td class="text-right">
-                            <input type="number" step="0.01"
+                            <input aria-label="0.00" type="number" step="0.01"
                                    x-model.number="allocationAmounts['{{ inv.invoice_id }}']"
                                    @input="recalculateGrossFromAllocations()"
                                    :disabled="!selectedInvoices.includes('{{ inv.invoice_id }}')"

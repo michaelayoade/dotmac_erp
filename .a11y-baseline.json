@@ -123,25 +123,13 @@
     "nameless": 0,
     "unlabeled": 8
   },
-  "templates/finance/ap/payment_batch_form.html": {
-    "nameless": 0,
-    "unlabeled": 10
-  },
   "templates/finance/ap/payment_batches.html": {
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/finance/ap/payment_form.html": {
-    "nameless": 0,
-    "unlabeled": 11
-  },
   "templates/finance/ap/purchase_order_form.html": {
     "nameless": 0,
     "unlabeled": 10
-  },
-  "templates/finance/ap/supplier_form.html": {
-    "nameless": 0,
-    "unlabeled": 11
   },
   "templates/finance/ar/credit_note_form.html": {
     "nameless": 0,
@@ -395,10 +383,6 @@
     "nameless": 0,
     "unlabeled": 4
   },
-  "templates/inventory/category_form.html": {
-    "nameless": 0,
-    "unlabeled": 11
-  },
   "templates/inventory/count_detail.html": {
     "nameless": 0,
     "unlabeled": 2
@@ -474,10 +458,6 @@
   "templates/people/attendance/requests.html": {
     "nameless": 0,
     "unlabeled": 3
-  },
-  "templates/people/attendance/shift_form.html": {
-    "nameless": 0,
-    "unlabeled": 11
   },
   "templates/people/hr/competencies.html": {
     "nameless": 0,
