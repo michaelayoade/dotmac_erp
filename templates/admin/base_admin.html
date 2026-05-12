@@ -304,9 +304,9 @@
             {% set back_fallback_url %}{% block back_fallback %}/admin{% endblock %}{% endset %}
             <!-- Top Header -->
             <header class="sticky top-0 z-40 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-                <div class="app-header flex h-16 items-center justify-between">
+                <div class="app-header flex h-16 items-center justify-between gap-2">
                     <!-- Mobile menu button -->
-                    <div class="flex items-center gap-4">
+                    <div class="flex min-w-0 flex-1 items-center gap-4">
                         <button @click="toggleSidebar()"
                                 x-show="!isDesktop || sidebarCollapsed"
                                 x-cloak
@@ -330,11 +330,11 @@
                             <span class="hidden sm:inline">Back</span>
                         </button>
                         {% endif %}
-                        <div>
-                            <h1 class="text-lg font-semibold text-slate-900 dark:text-white font-display">{% block page_title %}Dashboard{% endblock %}</h1>
-                            <nav class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" aria-label="Breadcrumb">
+                        <div class="min-w-0">
+                            <h1 class="truncate text-lg font-semibold text-slate-900 dark:text-white font-display">{% block page_title %}Dashboard{% endblock %}</h1>
+                            <nav class="hidden text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:block" aria-label="Breadcrumb">
                                 {% block admin_breadcrumbs %}
-                                <ol class="flex items-center gap-2">
+                                <ol class="flex flex-wrap items-center gap-2">
                                     <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">Dashboard</a></li>
                                     <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">Admin</span></li>
                                 </ol>
@@ -342,7 +342,7 @@
                             </nav>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3">
+                    <div class="flex shrink-0 items-center gap-3">
                     <!-- Dark mode toggle -->
                     <button @click="darkMode = !darkMode" class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Toggle dark mode" title="Toggle dark mode">
                         <svg x-show="!darkMode" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
