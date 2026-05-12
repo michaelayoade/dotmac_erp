@@ -473,7 +473,8 @@ class AdminIdentityMixin:
         try:
             employee = db.scalar(
                 select(Employee).where(
-                    Employee.person_id == person.id, Employee.status != EmployeeStatus.TERMINATED
+                    Employee.person_id == person.id,
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if employee:
