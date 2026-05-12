@@ -222,7 +222,7 @@
             <a href="{{ '/people/recruit/applicants/' ~ applicant.applicant_id if applicant else '/people/recruit/applicants' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-1") }}
-                {{ "Update Applicant" if applicant else "Add Applicant" }}
+                {{ "Save Applicant" if applicant else "Add Applicant" }}
             </button>
         </div>
     </form>

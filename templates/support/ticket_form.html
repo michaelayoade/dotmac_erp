@@ -183,7 +183,7 @@
             <a href="{{ '/support/tickets/' + ticket.ticket_number if ticket else '/support/tickets' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
-                {{ 'Update Ticket' if ticket else 'Create Ticket' }}
+                {{ 'Save Ticket' if ticket else 'Create Ticket' }}
             </button>
         </div>
     </form>

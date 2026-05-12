@@ -210,7 +210,7 @@
                 <a href="/people/leave/applications" class="btn btn-secondary">Back</a>
                 {% if not application or application.status.value in ['DRAFT', 'SUBMITTED'] %}
                 <button type="submit" class="btn btn-primary">
-                    {% if application %}Update Application{% else %}Submit Application{% endif %}
+                    {% if application %}Save Application{% else %}Submit Application{% endif %}
                 </button>
                 {% endif %}
             </div>
