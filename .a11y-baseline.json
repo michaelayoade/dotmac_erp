@@ -11,10 +11,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/admin/settings/branding.html": {
-    "nameless": 0,
-    "unlabeled": 11
-  },
   "templates/admin/sync/crm/entities.html": {
     "nameless": 0,
     "unlabeled": 2
@@ -82,10 +78,6 @@
   "templates/expense/detail.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/expense/form.html": {
-    "nameless": 0,
-    "unlabeled": 15
   },
   "templates/expense/limits/approver_form.html": {
     "nameless": 0,
@@ -171,10 +163,6 @@
     "nameless": 0,
     "unlabeled": 7
   },
-  "templates/finance/ar/receipt_form.html": {
-    "nameless": 0,
-    "unlabeled": 15
-  },
   "templates/finance/ar/sales_order_detail.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -238,10 +226,6 @@
   "templates/finance/exp/detail.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/finance/exp/form.html": {
-    "nameless": 0,
-    "unlabeled": 15
   },
   "templates/finance/exp/list.html": {
     "nameless": 0,
@@ -356,10 +340,6 @@
     "unlabeled": 1
   },
   "templates/fixed_assets/asset_form.html": {
-    "nameless": 0,
-    "unlabeled": 13
-  },
-  "templates/fixed_assets/category_form.html": {
     "nameless": 0,
     "unlabeled": 13
   },

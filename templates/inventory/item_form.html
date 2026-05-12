@@ -81,7 +81,7 @@
                     <label class="form-label">
                         Item Code <span class="text-rose-500">*</span>
                     </label>
-                    <input aria-label="ITEM-001" type="text"
+                    <input aria-label="Item Code" type="text"
                            name="item_code"
                            value="{{ item.item_code if item else (item_code_preview or '') }}"
                            {% if item %}readonly{% endif %}
@@ -96,7 +96,7 @@
                     <label class="form-label">
                         Item Name <span class="text-rose-500">*</span>
                     </label>
-                    <input aria-label="Widget A" type="text"
+                    <input aria-label="Item Name" type="text"
                            name="item_name"
                            value="{{ item.item_name if item else '' }}"
                            required
@@ -153,11 +153,11 @@
                                 <div class="grid gap-4 sm:grid-cols-2">
                                     <div>
                                         <label class="form-label">Category Code <span class="text-rose-500">*</span></label>
-                                        <input aria-label="RAW-MAT" type="text" x-model="newCategory.category_code" maxlength="30" placeholder="RAW-MAT" class="form-input">
+                                        <input aria-label="Category Code" type="text" x-model="newCategory.category_code" maxlength="30" placeholder="RAW-MAT" class="form-input">
                                     </div>
                                     <div>
                                         <label class="form-label">Category Name <span class="text-rose-500">*</span></label>
-                                        <input aria-label="Raw Materials" type="text" x-model="newCategory.category_name" maxlength="100" placeholder="Raw Materials" class="form-input">
+                                        <input aria-label="Category Name" type="text" x-model="newCategory.category_name" maxlength="100" placeholder="Raw Materials" class="form-input">
                                     </div>
                                 </div>
 
@@ -231,7 +231,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea aria-label="Enter item description" name="description"
+                    <textarea aria-label="Description" name="description"
                               rows="3"
                               placeholder="Enter item description"
                               class="form-input resize-none">{{ item.description if item else '' }}</textarea>
@@ -333,7 +333,7 @@
 
                 <div id="standard_cost_field">
                     <label class="form-label">Standard Cost</label>
-                    <input aria-label="0.00" type="number"
+                    <input aria-label="Standard Cost" type="number"
                            name="standard_cost"
                            value="{{ item.standard_cost if item and item.standard_cost else '' }}"
                            step="0.01"
@@ -344,7 +344,7 @@
 
                 <div>
                     <label class="form-label">List Price</label>
-                    <input aria-label="0.00" type="number"
+                    <input aria-label="List Price" type="number"
                            name="list_price"
                            value="{{ item.list_price if item and item.list_price else '' }}"
                            step="0.01"
@@ -372,7 +372,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div id="reorder_point_field">
                     <label class="form-label">Reorder Point</label>
-                    <input aria-label="0.00" type="number"
+                    <input aria-label="Reorder Point" type="number"
                            name="reorder_point"
                            value="{{ item.reorder_point if item and item.reorder_point else '' }}"
                            step="0.01"
@@ -384,7 +384,7 @@
 
                 <div id="reorder_quantity_field">
                     <label class="form-label">Reorder Quantity</label>
-                    <input aria-label="0.00" type="number"
+                    <input aria-label="Reorder Quantity" type="number"
                            name="reorder_quantity"
                            value="{{ item.reorder_quantity if item and item.reorder_quantity else '' }}"
                            step="0.01"
@@ -396,7 +396,7 @@
 
                 <div id="stock_limits_field">
                     <label class="form-label">Minimum Stock</label>
-                    <input aria-label="0.00" type="number"
+                    <input aria-label="Minimum Stock" type="number"
                            name="minimum_stock"
                            value="{{ item.minimum_stock if item and item.minimum_stock else '' }}"
                            step="0.01"
@@ -407,7 +407,7 @@
 
                 <div id="max_stock_field">
                     <label class="form-label">Maximum Stock</label>
-                    <input aria-label="0.00" type="number"
+                    <input aria-label="Maximum Stock" type="number"
                            name="maximum_stock"
                            value="{{ item.maximum_stock if item and item.maximum_stock else '' }}"
                            step="0.01"
@@ -418,7 +418,7 @@
 
                 <div>
                     <label class="form-label">Lead Time (Days)</label>
-                    <input aria-label="0" type="number"
+                    <input aria-label="Lead Time (Days)" type="number"
                            name="lead_time_days"
                            value="{{ item.lead_time_days if item and item.lead_time_days else '' }}"
                            min="0"
