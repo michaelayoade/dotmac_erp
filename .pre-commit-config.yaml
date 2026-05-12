@@ -43,6 +43,13 @@ repos:
         types: [python]
         exclude: (tests/|alembic/|scripts/)
 
+      - id: template-a11y
+        name: template a11y (no new unlabeled controls / nameless icons)
+        language: system
+        entry: python3 scripts/audit_template_a11y.py
+        pass_filenames: false
+        files: ^templates/.*\.html$
+
   # Security: detect hardcoded secrets
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

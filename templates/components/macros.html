@@ -1472,14 +1472,16 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
     {# Page Navigation #}
     {% if show_navigation and page_count > 1 %}
-    <nav class="flex items-center gap-1">
+    <nav class="flex items-center gap-1" aria-label="Pagination">
       {# Previous Button #}
       {% if current_page > 1 %}
       {% set prev_ns = namespace(params="page=" ~ (current_page - 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ "&limit=" ~ page_limit) %}
       {% for key, val in active_filters.items() if val %}{% set prev_ns.params = prev_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
       <a href="?{{ prev_ns.params }}"
+         rel="prev"
+         aria-label="Previous page"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
       </a>
@@ -1488,14 +1490,15 @@ if (typeof window.searchAutosuggest === 'undefined') {
       {# Page Numbers #}
       {% for p in range(1, page_count + 1) %}
         {% if p == current_page %}
-        <span class="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ p }}</span>
+        <span aria-current="page" aria-label="Page {{ p }}, current page" class="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ p }}</span>
         {% elif p == 1 or p == page_count or (p >= current_page - 1 and p <= current_page + 1) %}
         {% set page_ns = namespace(params="page=" ~ p ~ ("&search=" ~ encoded_search if search_term else "") ~ "&limit=" ~ page_limit) %}
         {% for key, val in active_filters.items() if val %}{% set page_ns.params = page_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
         <a href="?{{ page_ns.params }}"
+           aria-label="Page {{ p }}"
            class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors">{{ p }}</a>
         {% elif p == current_page - 2 or p == current_page + 2 %}
-        <span class="px-1 text-slate-400">...</span>
+        <span aria-hidden="true" class="px-1 text-slate-400">...</span>
         {% endif %}
       {% endfor %}
 
@@ -1504,8 +1507,10 @@ if (typeof window.searchAutosuggest === 'undefined') {
       {% set next_ns = namespace(params="page=" ~ (current_page + 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ "&limit=" ~ page_limit) %}
       {% for key, val in active_filters.items() if val %}{% set next_ns.params = next_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
       <a href="?{{ next_ns.params }}"
+         rel="next"
+         aria-label="Next page"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
         </svg>
       </a>
