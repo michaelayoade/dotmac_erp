@@ -118,7 +118,7 @@ def test_migration_lists_have_consistent_lengths():
 
     # The tables-with-deleted_at set must also be a subset of the full
     # migration list (we only drop deleted_at where it exists).
-    assert module._TABLES_WITH_DELETED_AT <= full_pairs, (
+    assert full_pairs >= module._TABLES_WITH_DELETED_AT, (
         f"_TABLES_WITH_DELETED_AT has entries not in _PER_TABLE_MIGRATION: "
         f"{module._TABLES_WITH_DELETED_AT - full_pairs}"
     )
