@@ -11,7 +11,6 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
-    Boolean,
     Date,
     DateTime,
     Enum,
@@ -208,14 +207,6 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         ForeignKey("support.support_team.team_id"),
         nullable=True,
         comment="Support team assigned to this ticket",
-    )
-
-    # Soft delete
-    is_deleted: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        index=True,
     )
 
     # Resolution details

@@ -98,11 +98,11 @@ class TicketAttachment(Base):
         nullable=True,
     )
 
-    # Soft delete
-    is_deleted: Mapped[bool] = mapped_column(
+    is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=False,
+        default=True,
+        server_default=text("true"),
     )
 
     # Timestamps

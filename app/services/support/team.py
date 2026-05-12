@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.support.team import SupportTeam, SupportTeamMember
-from app.models.support.ticket import Ticket
+from app.models.support.ticket import Ticket, TicketStatus
 
 logger = logging.getLogger(__name__)
 
@@ -358,7 +358,7 @@ class TeamService:
             select(Ticket.status, func.count(Ticket.ticket_id))
             .where(
                 Ticket.team_id == team_id,
-                Ticket.is_deleted == False,  # noqa: E712
+                Ticket.status != TicketStatus.CLOSED,
             )
             .group_by(Ticket.status)
         ).all()

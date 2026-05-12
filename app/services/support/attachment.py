@@ -71,7 +71,7 @@ class AttachmentService:
         query = select(TicketAttachment).where(TicketAttachment.ticket_id == ticket_id)
 
         if not include_deleted:
-            query = query.where(TicketAttachment.is_deleted == False)  # noqa: E712
+            query = query.where(TicketAttachment.is_active.is_(True))
 
         query = query.order_by(TicketAttachment.created_at.desc())
 
@@ -228,7 +228,7 @@ class AttachmentService:
 
             db.delete(attachment)
         else:
-            attachment.is_deleted = True
+            attachment.is_active = False
             db.flush()
 
         logger.info("Deleted attachment %s", attachment_id)
@@ -253,7 +253,7 @@ class AttachmentService:
             File path or None if not found
         """
         attachment = self.get_attachment(db, organization_id, attachment_id)
-        if not attachment or attachment.is_deleted:
+        if not attachment or not attachment.is_active:
             return None
 
         try:

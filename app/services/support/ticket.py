@@ -89,7 +89,7 @@ class TicketService:
 
         # Exclude soft-deleted by default
         if not include_deleted:
-            query = query.where(Ticket.is_deleted == False)  # noqa: E712
+            query = query.where(Ticket.status != TicketStatus.CLOSED)
 
         # Apply filters
         if status:
@@ -167,7 +167,7 @@ class TicketService:
             select(Ticket)
             .where(
                 Ticket.organization_id == org_id,
-                Ticket.is_deleted == True,  # noqa: E712
+                Ticket.status == TicketStatus.CLOSED,
             )
             .options(
                 joinedload(Ticket.raised_by),
@@ -712,7 +712,7 @@ class TicketService:
         org_id = coerce_uuid(organization_id)
 
         # Total tickets (excluding deleted)
-        not_deleted = Ticket.is_deleted == False  # noqa: E712
+        not_deleted = Ticket.status != TicketStatus.CLOSED
 
         total = (
             db.scalar(
@@ -865,7 +865,7 @@ class TicketService:
             db.delete(ticket)
             logger.info(f"Hard deleted ticket {ticket.ticket_number}")
         else:
-            ticket.is_deleted = True
+            ticket.status = TicketStatus.CLOSED
             ticket.updated_by_id = coerce_uuid(user_id)
             db.flush()
             logger.info(f"Soft deleted ticket {ticket.ticket_number}")
@@ -894,7 +894,7 @@ class TicketService:
         if not ticket:
             return None
 
-        ticket.is_deleted = False
+        ticket.status = TicketStatus.OPEN
         ticket.updated_by_id = coerce_uuid(user_id)
         db.flush()
 

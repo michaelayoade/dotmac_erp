@@ -205,7 +205,7 @@ class SLAService:
                 TicketComment.ticket_id == tid,
                 TicketComment.comment_type == CommentType.COMMENT,
                 TicketComment.is_internal == False,  # noqa: E712
-                TicketComment.is_deleted == False,  # noqa: E712
+                TicketComment.is_active.is_(True),
             )
             .order_by(TicketComment.created_at)
             .limit(1)
@@ -282,7 +282,7 @@ class SLAService:
                     TicketComment.ticket_id.in_(remaining),
                     TicketComment.comment_type == CommentType.COMMENT,
                     TicketComment.is_internal == False,  # noqa: E712
-                    TicketComment.is_deleted == False,  # noqa: E712
+                    TicketComment.is_active.is_(True),
                 )
                 .group_by(TicketComment.ticket_id)
             ).all()
@@ -490,7 +490,7 @@ class SLAService:
             select(Ticket)
             .where(
                 Ticket.organization_id == org_id,
-                Ticket.is_deleted == False,  # noqa: E712
+                Ticket.status != TicketStatus.CLOSED,
             )
             .options(
                 joinedload(Ticket.category),
@@ -567,7 +567,7 @@ class SLAService:
             select(Ticket)
             .where(
                 Ticket.organization_id == org_id,
-                Ticket.is_deleted == False,  # noqa: E712
+                Ticket.status != TicketStatus.CLOSED,
             )
             .options(
                 joinedload(Ticket.category),
@@ -678,7 +678,7 @@ class SLAService:
             select(Ticket)
             .where(
                 Ticket.organization_id == org_id,
-                Ticket.is_deleted == False,  # noqa: E712
+                Ticket.status != TicketStatus.CLOSED,
                 Ticket.opening_date >= date_from,
                 Ticket.opening_date <= date_to,
             )

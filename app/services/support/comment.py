@@ -43,7 +43,7 @@ class CommentService:
             query = query.where(TicketComment.is_internal == False)  # noqa: E712
 
         if not include_deleted:
-            query = query.where(TicketComment.is_deleted == False)  # noqa: E712
+            query = query.where(TicketComment.is_active.is_(True))
 
         query = query.order_by(TicketComment.created_at)
 
@@ -157,7 +157,7 @@ class CommentService:
         if hard_delete:
             db.delete(comment)
         else:
-            comment.is_deleted = True
+            comment.is_active = False
             db.flush()
 
         return True
@@ -338,7 +338,7 @@ class CommentService:
             select(TicketComment)
             .where(
                 TicketComment.ticket_id == ticket_id,
-                TicketComment.is_deleted == False,  # noqa: E712
+                TicketComment.is_active.is_(True),
             )
             .order_by(TicketComment.created_at.desc())
             .limit(limit)
