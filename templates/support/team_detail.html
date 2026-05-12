@@ -87,11 +87,11 @@
             </div>
             <div class="mt-4 flex items-center gap-4 text-sm">
                 <div class="flex items-center gap-1.5">
-                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <div class="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true"></div>
                     <span class="text-slate-600 dark:text-slate-300">{{ stats.available_members | default(0) }} available</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+                    <div class="w-2 h-2 rounded-full bg-amber-500" aria-hidden="true"></div>
                     <span class="text-slate-600 dark:text-slate-300">{{ stats.member_count | default(0) - stats.available_members | default(0) }} busy</span>
                 </div>
             </div>
@@ -159,7 +159,7 @@
             {# Legend #}
             <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center gap-6 text-xs text-slate-500 dark:text-slate-400">
                 <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-emerald-500" aria-hidden="true"></div>
                     <span>Available for assignment</span>
                 </div>
                 <div class="flex items-center gap-2">

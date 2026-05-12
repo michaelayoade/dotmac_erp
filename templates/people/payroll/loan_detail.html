@@ -199,7 +199,7 @@
                     </div>
                     {% if loan.approval_date %}
                     <div class="flex gap-3">
-                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-blue-500 rounded-full"></div>
+                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-blue-500 rounded-full" aria-hidden="true"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Approved</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.approval_date | format_date }}</div>
@@ -208,7 +208,7 @@
                     {% endif %}
                     {% if loan.disbursement_date %}
                     <div class="flex gap-3">
-                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-emerald-500 rounded-full"></div>
+                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-emerald-500 rounded-full" aria-hidden="true"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Disbursed</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.disbursement_date | format_date }}</div>
@@ -220,7 +220,7 @@
                     {% endif %}
                     {% if loan.completion_date %}
                     <div class="flex gap-3">
-                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-teal-500 rounded-full"></div>
+                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-teal-500 rounded-full" aria-hidden="true"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Completed</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.completion_date | format_date }}</div>
@@ -229,7 +229,7 @@
                     {% endif %}
                     {% if loan.rejection_reason %}
                     <div class="flex gap-3">
-                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-rose-500 rounded-full"></div>
+                        <div class="flex-shrink-0 w-2 h-2 mt-2 bg-rose-500 rounded-full" aria-hidden="true"></div>
                         <div>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">Rejected</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ loan.rejection_reason }}</div>
