@@ -26,14 +26,14 @@
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label required">Category Code</label>
-                <input type="text" name="category_code" value="{{ category.category_code if category else '' }}" maxlength="30" required class="form-input">
+                <input aria-label="Category Code" type="text" name="category_code" value="{{ category.category_code if category else '' }}" maxlength="30" required class="form-input">
                 {% if errors and errors.get('category_code') %}
                 <p class="mt-1 text-xs text-rose-600">{{ errors.get('category_code') }}</p>
                 {% endif %}
             </div>
             <div>
                 <label class="form-label required">Category Name</label>
-                <input type="text" name="category_name" value="{{ category.category_name if category else '' }}" maxlength="200" required class="form-input">
+                <input aria-label="Category Name" type="text" name="category_name" value="{{ category.category_name if category else '' }}" maxlength="200" required class="form-input">
                 {% if errors and errors.get('category_name') %}
                 <p class="mt-1 text-xs text-rose-600">{{ errors.get('category_name') }}</p>
                 {% endif %}
@@ -42,13 +42,13 @@
 
         <div>
             <label class="form-label">Description</label>
-            <textarea name="description" rows="3" class="form-input resize-none" placeholder="Optional description">{{ category.description if category else '' }}</textarea>
+            <textarea aria-label="Description" name="description" rows="3" class="form-input resize-none" placeholder="Optional description">{{ category.description if category else '' }}</textarea>
         </div>
 
         <div class="grid gap-6 sm:grid-cols-2">
             <div>
                 <label class="form-label">Default Expense Account</label>
-                <select name="expense_account_id" class="form-input form-select">
+                <select aria-label="Default Expense Account" name="expense_account_id" class="form-input form-select">
                     <option value="">No default account</option>
                     {% for account in expense_accounts %}
                     <option value="{{ account.account_id }}" {{ 'selected' if category and category.expense_account_id == account.account_id else '' }}>
@@ -60,7 +60,7 @@
             </div>
             <div>
                 <label class="form-label">Max Amount per Claim</label>
-                <input type="number" name="max_amount_per_claim" value="{{ category.max_amount_per_claim if category and category.max_amount_per_claim is not none else '' }}" step="0.01" min="0" class="form-input font-mono" placeholder="No limit">
+                <input aria-label="Max Amount per Claim" type="number" name="max_amount_per_claim" value="{{ category.max_amount_per_claim if category and category.max_amount_per_claim is not none else '' }}" step="0.01" min="0" class="form-input font-mono" placeholder="No limit">
             </div>
         </div>
 

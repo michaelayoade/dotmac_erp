@@ -120,7 +120,7 @@
                 {% if employee.status.value not in ['SUSPENDED', 'TERMINATED'] %}
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/suspend" class="flex items-center gap-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <input type="text" name="reason" placeholder="Reason (optional)" class="form-input w-56">
+                    <input aria-label="Reason (optional)" type="text" name="reason" placeholder="Reason (optional)" class="form-input w-56">
                     <button type="submit" class="btn btn-secondary">Suspend</button>
                 </form>
                 {% endif %}
@@ -139,7 +139,7 @@
                             <span>Include in final payroll</span>
                         </label>
                         <label class="form-label" for="resign_final_payroll_cutoff_date">Payroll cutoff date</label>
-                        <input type="date" id="resign_final_payroll_cutoff_date" name="final_payroll_cutoff_date" class="form-input w-full" placeholder="Final payroll cutoff date">
+                        <input aria-label="Payroll cutoff date" type="date" id="resign_final_payroll_cutoff_date" name="final_payroll_cutoff_date" class="form-input w-full" placeholder="Final payroll cutoff date">
                         {% endif %}
                         <button type="submit" class="btn btn-secondary">Resign</button>
                     </div>
@@ -152,14 +152,14 @@
                     <label for="terminate_date" class="form-label">Termination Date</label>
                     <div class="flex flex-col gap-2">
                         <input type="date" id="terminate_date" name="date_of_leaving" class="form-input w-full">
-                        <input type="text" name="reason" placeholder="Reason (optional)" class="form-input w-full">
+                        <input aria-label="Reason (optional)" type="text" name="reason" placeholder="Reason (optional)" class="form-input w-full">
                         {% if can_manage_final_payroll %}
                         <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                             <input type="checkbox" name="eligible_for_final_payroll" value="1" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                             <span>Include in final payroll</span>
                         </label>
                         <label class="form-label" for="terminate_final_payroll_cutoff_date">Payroll cutoff date</label>
-                        <input type="date" id="terminate_final_payroll_cutoff_date" name="final_payroll_cutoff_date" class="form-input w-full" placeholder="Final payroll cutoff date">
+                        <input aria-label="Payroll cutoff date" type="date" id="terminate_final_payroll_cutoff_date" name="final_payroll_cutoff_date" class="form-input w-full" placeholder="Final payroll cutoff date">
                         {% endif %}
                         <button type="submit" class="btn btn-danger">Terminate</button>
                     </div>
@@ -172,7 +172,7 @@
                     <label for="rehire_date" class="form-label">Rehire Date</label>
                     <div class="flex flex-col gap-2">
                         <input type="date" id="rehire_date" name="date_of_rejoining" class="form-input w-full">
-                        <input type="text" name="notes" placeholder="Notes (optional)" class="form-input w-full">
+                        <input aria-label="Notes (optional)" type="text" name="notes" placeholder="Notes (optional)" class="form-input w-full">
                         <button type="submit" class="btn btn-primary">Rehire</button>
                     </div>
                 </form>
@@ -271,8 +271,8 @@
                 <form method="post" action="/people/hr/employees/{{ employee.employee_id }}/user-credentials" class="space-y-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <label class="form-label">Create Local Login</label>
-                    <input type="text" name="username" placeholder="Leave blank to use employee email" class="form-input w-full">
-                    <input type="password" name="password" placeholder="Leave blank to use default (Dotmac@123)" class="form-input w-full">
+                    <input aria-label="Create Local Login" type="text" name="username" placeholder="Leave blank to use employee email" class="form-input w-full">
+                    <input aria-label="Leave blank to use default (Dotmac@123)" type="password" name="password" placeholder="Leave blank to use default (Dotmac@123)" class="form-input w-full">
                     <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                         <input type="checkbox" name="must_change_password" checked>
                         Require password change on first login
@@ -285,7 +285,7 @@
                     <input type="hidden" name="person_id" x-model="selectedId">
                     <label class="form-label">Link Existing User</label>
                     <div class="relative">
-                        <input type="text"
+                        <input aria-label="Link Existing User" type="text"
                                placeholder="Search by name or email"
                                class="form-input w-full"
                                x-ref="searchInput"

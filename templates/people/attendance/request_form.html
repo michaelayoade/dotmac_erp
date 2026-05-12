@@ -31,7 +31,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="form-label">Employee <span class="text-rose-500">*</span></label>
-                <select name="employee_id" class="form-select" required>
+                <select aria-label="Employee" name="employee_id" class="form-select" required>
                     <option value="">Select employee</option>
                     {% for emp in employees %}
                     <option value="{{ emp.employee_id }}" {% if form_data.employee_id == emp.employee_id|string %}selected{% endif %}>
@@ -42,13 +42,13 @@
             </div>
             <div>
                 <label class="form-label">From date <span class="text-rose-500">*</span></label>
-                <input type="date" name="from_date" required
+                <input aria-label="From date" type="date" name="from_date" required
                        value="{{ form_data.from_date | default('', true) }}"
                        class="form-input">
             </div>
             <div>
                 <label class="form-label">To date <span class="text-rose-500">*</span></label>
-                <input type="date" name="to_date" required
+                <input aria-label="To date" type="date" name="to_date" required
                        value="{{ form_data.to_date | default('', true) }}"
                        class="form-input">
             </div>
@@ -60,7 +60,7 @@
             </div>
             <div>
                 <label class="form-label">Half-day date</label>
-                <input type="date" name="half_day_date"
+                <input aria-label="Half-day date" type="date" name="half_day_date"
                        value="{{ form_data.half_day_date | default('', true) }}"
                        class="form-input">
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Required when half-day is selected.</p>
@@ -70,14 +70,14 @@
         <div class="grid grid-cols-1 gap-4">
             <div>
                 <label class="form-label">Reason</label>
-                <input type="text" name="reason"
+                <input aria-label="Reason" type="text" name="reason"
                        value="{{ form_data.reason | default('', true) }}"
                        class="form-input"
                        placeholder="e.g., System outage, late approval">
             </div>
             <div>
                 <label class="form-label">Explanation</label>
-                <textarea name="explanation" rows="4" class="form-input"
+                <textarea aria-label="Explanation" name="explanation" rows="4" class="form-input"
                           placeholder="Add details for the request">{{ form_data.explanation | default('', true) }}</textarea>
             </div>
         </div>

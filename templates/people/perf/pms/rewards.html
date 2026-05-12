@@ -38,7 +38,7 @@
         <form method="get" action="/people/perf/pms/rewards" class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
                 <label class="form-label text-xs">Cycle</label>
-                <select name="cycle_id" class="form-select w-full">
+                <select aria-label="Cycle" name="cycle_id" class="form-select w-full">
                     <option value="">All cycles</option>
                     {% for cycle in cycles %}
                     <option value="{{ cycle.cycle_id }}" {% if cycle_id == cycle.cycle_id | string %}selected{% endif %}>
@@ -49,7 +49,7 @@
             </div>
             <div>
                 <label class="form-label text-xs">Reward Status</label>
-                <select name="status" class="form-select w-full">
+                <select aria-label="Reward Status" name="status" class="form-select w-full">
                     <option value="">All statuses</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
@@ -116,8 +116,8 @@
                             <form method="post" action="/people/perf/pms/rewards/nominate" class="grid grid-cols-1 md:grid-cols-3 gap-2">
                                 {{ request.state.csrf_form | safe }}
                                 <input type="hidden" name="appraisal_id" value="{{ appraisal.appraisal_id }}">
-                                <input type="text" name="reward_type" class="form-input text-sm" placeholder="Reward type (e.g. MERIT_AWARD)" required>
-                                <input type="text" name="nomination_notes" class="form-input text-sm" placeholder="Why this nominee?">
+                                <input aria-label="Reward type (e.g. MERIT_AWARD)" type="text" name="reward_type" class="form-input text-sm" placeholder="Reward type (e.g. MERIT_AWARD)" required>
+                                <input aria-label="Why this nominee?" type="text" name="nomination_notes" class="form-input text-sm" placeholder="Why this nominee?">
                                 <button type="submit" class="btn btn-primary btn-sm">Nominate</button>
                             </form>
                             {% else %}
@@ -177,12 +177,12 @@
                             <div class="flex flex-wrap gap-2">
                                 <form method="post" action="/people/perf/pms/rewards/{{ action.action_id }}/approve" class="flex items-center gap-2">
                                     {{ request.state.csrf_form | safe }}
-                                    <input type="text" name="approval_notes" class="form-input text-sm" placeholder="Approval note">
+                                    <input aria-label="Approval note" type="text" name="approval_notes" class="form-input text-sm" placeholder="Approval note">
                                     <button type="submit" class="btn btn-primary btn-sm">Approve</button>
                                 </form>
                                 <form method="post" action="/people/perf/pms/rewards/{{ action.action_id }}/cancel" class="flex items-center gap-2">
                                     {{ request.state.csrf_form | safe }}
-                                    <input type="text" name="cancellation_notes" class="form-input text-sm" placeholder="Cancellation reason">
+                                    <input aria-label="Cancellation reason" type="text" name="cancellation_notes" class="form-input text-sm" placeholder="Cancellation reason">
                                     <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
                                 </form>
                             </div>

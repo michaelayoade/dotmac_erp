@@ -227,7 +227,7 @@
                     <div class="space-y-4">
                         <div>
                             <label class="form-label">Bank Account <span class="text-rose-500">*</span></label>
-                            <select name="bank_account_id" required class="form-input form-select w-full">
+                            <select aria-label="Bank account" name="bank_account_id" required class="form-input form-select w-full">
                                 {% for account in bank_accounts %}
                                 <option value="{{ account.bank_account_id }}">{{ account.account_name }} ({{ account.account_number[-4:] if account.account_number else 'N/A' }})</option>
                                 {% endfor %}
@@ -235,7 +235,7 @@
                         </div>
                         <div>
                             <label class="form-label">Payment Mode</label>
-                            <select name="payment_mode" class="form-input form-select w-full">
+                            <select aria-label="Payment Mode" name="payment_mode" class="form-input form-select w-full">
                                 <option value="BANK_TRANSFER">Bank Transfer</option>
                                 <option value="CASH">Cash</option>
                                 <option value="CHEQUE">Cheque</option>
@@ -243,7 +243,7 @@
                         </div>
                         <div>
                             <label class="form-label">Payment Reference</label>
-                            <input type="text" name="payment_reference" class="form-input w-full" placeholder="Transaction ID or cheque number">
+                            <input aria-label="Payment Reference" type="text" name="payment_reference" class="form-input w-full" placeholder="Transaction ID or cheque number">
                         </div>
                     </div>
                     <div class="flex justify-end gap-3 mt-6">
@@ -271,12 +271,12 @@
                     <div class="space-y-4">
                         <div>
                             <label class="form-label">Expense Claim ID <span class="text-rose-500">*</span></label>
-                            <input type="text" name="claim_id" required class="form-input w-full font-mono" placeholder="Enter claim UUID">
+                            <input aria-label="Expense Claim ID" type="text" name="claim_id" required class="form-input w-full font-mono" placeholder="Enter claim UUID">
                             <p class="text-xs text-slate-400 mt-1">Enter the UUID of an approved expense claim for this employee</p>
                         </div>
                         <div>
                             <label class="form-label">Settlement Amount (Optional)</label>
-                            <input type="number" name="settlement_amount" step="0.01" class="form-input w-full font-mono" placeholder="Auto-calculate from claim">
+                            <input aria-label="Settlement Amount (Optional)" type="number" name="settlement_amount" step="0.01" class="form-input w-full font-mono" placeholder="Auto-calculate from claim">
                             <p class="text-xs text-slate-400 mt-1">Leave empty to use full claim amount</p>
                         </div>
                         <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">

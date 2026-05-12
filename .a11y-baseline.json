@@ -55,17 +55,9 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/expense/advances/detail.html": {
-    "nameless": 0,
-    "unlabeled": 5
-  },
   "templates/expense/advances/list.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/expense/category_form.html": {
-    "nameless": 0,
-    "unlabeled": 5
   },
   "templates/expense/claim_detail.html": {
     "nameless": 0,
@@ -371,10 +363,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/people/attendance/request_form.html": {
-    "nameless": 0,
-    "unlabeled": 6
-  },
   "templates/people/attendance/requests.html": {
     "nameless": 0,
     "unlabeled": 3
@@ -390,10 +378,6 @@
   "templates/people/hr/employee/documents.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/people/hr/employee_detail.html": {
-    "nameless": 0,
-    "unlabeled": 6
   },
   "templates/people/hr/employees.html": {
     "nameless": 0,
@@ -554,10 +538,6 @@
   "templates/people/perf/pms/reviews.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/people/perf/pms/rewards.html": {
-    "nameless": 0,
-    "unlabeled": 6
   },
   "templates/people/perf/reports/by_department.html": {
     "nameless": 0,
