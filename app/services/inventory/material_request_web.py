@@ -31,7 +31,7 @@ from app.models.inventory import (
 )
 from app.models.people.hr import Employee, EmployeeStatus
 from app.models.person import Person
-from app.models.support.ticket import Ticket
+from app.models.support.ticket import Ticket, TicketStatus
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.formatters import format_currency as _format_currency
@@ -377,7 +377,7 @@ class MaterialRequestWebService:
             select(Ticket)
             .where(
                 Ticket.organization_id == org_id,
-                Ticket.is_deleted.is_(False),
+                Ticket.status != TicketStatus.CLOSED,
             )
             .order_by(Ticket.opening_date.desc())
             .limit(200)

@@ -74,7 +74,6 @@ class MockCase:
         self.panel_chair_id = kwargs.get("panel_chair_id")
         self.created_at = kwargs.get("created_at") or datetime.now(UTC)
         self.updated_at = kwargs.get("updated_at")
-        self.is_deleted = False
 
         # Related entities
         self.employee = MockEmployee(employee_id=self.employee_id)

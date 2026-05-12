@@ -18,7 +18,7 @@ from app.models.auth import AuthProvider, SessionStatus, UserCredential
 from app.models.auth import Session as AuthSession
 from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_org.organization import Organization
-from app.models.people.hr.employee import Employee
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.auth_flow import hash_password
@@ -473,7 +473,7 @@ class AdminIdentityMixin:
         try:
             employee = db.scalar(
                 select(Employee).where(
-                    Employee.person_id == person.id, Employee.is_deleted.is_(False)
+                    Employee.person_id == person.id, Employee.status != EmployeeStatus.TERMINATED
                 )
             )
             if employee:

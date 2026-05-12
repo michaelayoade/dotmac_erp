@@ -46,7 +46,6 @@ from app.models.people.base import (
     AuditMixin,
     ERPNextSyncMixin,
     PeopleBaseMixin,
-    SoftDeleteMixin,
     StatusTrackingMixin,
     VersionMixin,
 )
@@ -163,7 +162,6 @@ __all__ = [
     # Base mixins
     "PeopleBaseMixin",
     "AuditMixin",
-    "SoftDeleteMixin",
     "StatusTrackingMixin",
     "ERPNextSyncMixin",
     "VersionMixin",

@@ -9,7 +9,7 @@ extensions.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func, text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -62,31 +62,6 @@ class AuditMixin:
         nullable=True,
     )
     updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("people.id"),
-        nullable=True,
-    )
-
-
-class SoftDeleteMixin:
-    """
-    Soft delete mixin for HR entities.
-
-    Instead of hard deleting, marks records as deleted and tracks when/who.
-    Useful for audit trails and compliance requirements.
-    """
-
-    is_deleted: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        index=True,
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    deleted_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,

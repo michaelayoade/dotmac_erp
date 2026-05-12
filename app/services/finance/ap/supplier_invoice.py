@@ -296,13 +296,14 @@ class SupplierInvoiceService(ListResponseMixin):
             raise ValidationError("Supplier is not active")
 
         if input.vehicle_id is not None:
+            from app.models.fleet.enums import VehicleStatus
             from app.models.fleet.vehicle import Vehicle
 
             vehicle = db.get(Vehicle, coerce_uuid(input.vehicle_id))
             if (
                 not vehicle
                 or getattr(vehicle, "organization_id", None) != org_id
-                or getattr(vehicle, "is_deleted", False)
+                or getattr(vehicle, "status", None) == VehicleStatus.DISPOSED
             ):
                 raise NotFoundError("Fleet vehicle not found")
 
@@ -597,13 +598,14 @@ class SupplierInvoiceService(ListResponseMixin):
             )
 
         if input.vehicle_id is not None:
+            from app.models.fleet.enums import VehicleStatus
             from app.models.fleet.vehicle import Vehicle
 
             vehicle = db.get(Vehicle, coerce_uuid(input.vehicle_id))
             if (
                 not vehicle
                 or getattr(vehicle, "organization_id", None) != org_id
-                or getattr(vehicle, "is_deleted", False)
+                or getattr(vehicle, "status", None) == VehicleStatus.DISPOSED
             ):
                 raise NotFoundError("Fleet vehicle not found")
 

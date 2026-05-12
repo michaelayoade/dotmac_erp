@@ -78,7 +78,6 @@ class IncidentRead(IncidentBase):
     expense_claim_id: UUID | None = None
     resolution_date: date | None = None
     resolution_notes: str | None = None
-    is_deleted: bool = False
     created_at: datetime
     updated_at: datetime | None = None
 

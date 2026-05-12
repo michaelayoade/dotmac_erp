@@ -67,7 +67,6 @@ class TaskRead(TaskBase):
     actual_end_date: date | None = None
     actual_hours: Decimal = Decimal("0.00")
     progress_percent: int = 0
-    is_deleted: bool = False
     created_at: datetime
     updated_at: datetime | None = None
 

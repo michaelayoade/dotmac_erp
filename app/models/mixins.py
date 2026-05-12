@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 from typing import Any, ClassVar
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, select
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -137,76 +137,6 @@ class FullAuditMixin(TimestampMixin, AuditMixin):
     """
 
     pass
-
-
-class SoftDeleteMixin:
-    """
-    Soft delete mixin for entities that need audit trails.
-
-    Instead of hard deleting, marks records as deleted and tracks when/who.
-    Useful for compliance requirements.
-
-    Usage:
-        class MyModel(Base, SoftDeleteMixin):
-            __tablename__ = "my_model"
-            ...
-
-        # In service layer:
-        query = MyModel.query_active(db)  # Excludes deleted records
-        # Or with existing query:
-        query = query.where(MyModel.filter_active())
-    """
-
-    is_deleted: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        index=True,
-    )
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-    deleted_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("people.id"),
-        nullable=True,
-    )
-
-    @classmethod
-    def query_active(cls, db):
-        """Return a query that excludes soft-deleted records.
-
-        Usage:
-            items = MyModel.query_active(db).where(...).all()
-        """
-        return select(cls).where(cls.is_deleted.is_(False))
-
-    @classmethod
-    def filter_active(cls):
-        """Return a filter expression for active (non-deleted) records.
-
-        Usage:
-            query = select(MyModel).where(MyModel.filter_active())
-        """
-        return cls.is_deleted.is_(False)
-
-    def mark_deleted(self, deleted_by_id: uuid.UUID | None = None) -> None:
-        """Mark this record as soft-deleted.
-
-        Args:
-            deleted_by_id: Optional user ID who performed the deletion
-        """
-        self.is_deleted = True
-        self.deleted_at = datetime.now(UTC)
-        if deleted_by_id:
-            self.deleted_by_id = deleted_by_id
-
-    def restore(self) -> None:
-        """Restore a soft-deleted record."""
-        self.is_deleted = False
-        self.deleted_at = None
-        self.deleted_by_id = None
 
 
 class StatusTrackingMixin:

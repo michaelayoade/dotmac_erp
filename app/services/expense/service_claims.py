@@ -128,13 +128,14 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         resolved_currency_code = self._resolve_currency_code(org_id, currency_code)
 
         if vehicle_id is not None:
+            from app.models.fleet.enums import VehicleStatus
             from app.models.fleet.vehicle import Vehicle
 
             valid_vehicle = self.db.scalar(
                 select(Vehicle.vehicle_id).where(
                     Vehicle.organization_id == org_id,
                     Vehicle.vehicle_id == vehicle_id,
-                    Vehicle.is_deleted.is_(False),
+                    Vehicle.status != VehicleStatus.DISPOSED,
                 )
             )
             if valid_vehicle is None:

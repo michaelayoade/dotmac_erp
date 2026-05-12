@@ -33,7 +33,7 @@ from app.models.auth import Session as AuthSession
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
 from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.models.finance.core_org.organization import Organization
-from app.models.people.hr.employee import Employee
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.services.audit_dispatcher import fire_audit_event
@@ -1004,7 +1004,7 @@ class AdminWebService:
             employee = db.scalar(
                 select(Employee).where(
                     Employee.person_id == person.id,
-                    Employee.is_deleted.is_(False),
+                    Employee.status != EmployeeStatus.TERMINATED,
                 )
             )
             if employee:

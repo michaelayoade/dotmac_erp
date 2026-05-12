@@ -123,7 +123,6 @@ class VehicleRead(VehicleBase):
     disposal_date: date | None = None
     disposal_method: DisposalMethod | None = None
     disposal_amount: Decimal | None = None
-    is_deleted: bool = False
     created_at: datetime
     updated_at: datetime | None = None
 

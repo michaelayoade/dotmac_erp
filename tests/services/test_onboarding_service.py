@@ -37,10 +37,12 @@ def template_id():
 @pytest.fixture
 def mock_employee(org_id, employee_id):
     """Create a mock employee."""
+    from app.models.people.hr.employee import EmployeeStatus
+
     employee = MagicMock(spec=Employee)
     employee.employee_id = employee_id
     employee.organization_id = org_id
-    employee.is_deleted = False
+    employee.status = EmployeeStatus.ACTIVE
     employee.person_id = uuid4()
     return employee
 
