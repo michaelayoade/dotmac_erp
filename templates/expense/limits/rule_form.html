@@ -30,7 +30,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Rule Code <span class="text-red-500">*</span></label>
-                    <input type="text" name="rule_code" value="{{ rule.rule_code if rule else '' }}"
+                    <input aria-label="Rule Code" type="text" name="rule_code" value="{{ rule.rule_code if rule else '' }}"
                            class="form-input{% if errors.rule_code %} border-red-300{% endif %}"
                            placeholder="e.g., GRADE-A-MONTHLY"
                            {% if rule and rule.rule_id %}readonly{% endif %}>
@@ -40,7 +40,7 @@
                 </div>
                 <div>
                     <label class="form-label">Rule Name <span class="text-red-500">*</span></label>
-                    <input type="text" name="rule_name" value="{{ rule.rule_name if rule else '' }}"
+                    <input aria-label="Rule Name" type="text" name="rule_name" value="{{ rule.rule_name if rule else '' }}"
                            class="form-input{% if errors.rule_name %} border-red-300{% endif %}"
                            placeholder="e.g., Grade A Monthly Limit">
                     {% if errors.rule_name %}
@@ -49,7 +49,7 @@
                 </div>
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description" rows="2" class="form-input" placeholder="Optional description of this rule">{{ rule.description if rule and rule.description else '' }}</textarea>
+                    <textarea aria-label="Description" name="description" rows="2" class="form-input" placeholder="Optional description of this rule">{{ rule.description if rule and rule.description else '' }}</textarea>
                 </div>
             </div>
         </div>
@@ -61,7 +61,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" x-data="{ scopeType: '{{ rule.scope_type if rule else '' }}' }">
                 <div>
                     <label class="form-label">Scope Type <span class="text-red-500">*</span></label>
-                    <select name="scope_type" x-model="scopeType"
+                    <select aria-label="Scope Type" name="scope_type" x-model="scopeType"
                             class="form-input form-select{% if errors.scope_type %} border-red-300{% endif %}"
                             {% if rule and rule.rule_id %}disabled{% endif %}>
                         <option value="">Select scope type...</option>
@@ -80,7 +80,7 @@
                 </div>
                 <div>
                     <label class="form-label">Scope Target</label>
-                    <select name="scope_id" class="form-input form-select" {% if rule and rule.rule_id %}disabled{% endif %}>
+                    <select aria-label="Scope Target" name="scope_id" class="form-input form-select" {% if rule and rule.rule_id %}disabled{% endif %}>
                         <option value="">All (Organization-wide)</option>
 
                         <!-- Employee options -->
@@ -138,7 +138,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                     <label class="form-label">Period Type <span class="text-red-500">*</span></label>
-                    <select name="period_type" class="form-input form-select{% if errors.period_type %} border-red-300{% endif %}"
+                    <select aria-label="Period Type" name="period_type" class="form-input form-select{% if errors.period_type %} border-red-300{% endif %}"
                             {% if rule and rule.rule_id %}disabled{% endif %}>
                         <option value="">Select period...</option>
                         {% for pt in period_types %}
@@ -156,7 +156,7 @@
                 </div>
                 <div>
                     <label class="form-label">Limit Amount <span class="text-red-500">*</span></label>
-                    <input type="number" name="limit_amount" step="0.01" min="0"
+                    <input aria-label="Limit Amount" type="number" name="limit_amount" step="0.01" min="0"
                            value="{{ rule.limit_amount if rule else '' }}"
                            class="form-input{% if errors.limit_amount %} border-red-300{% endif %}"
                            placeholder="0.00">
@@ -166,7 +166,7 @@
                 </div>
                 <div>
                     <label class="form-label">Action Type <span class="text-red-500">*</span></label>
-                    <select name="action_type" class="form-input form-select{% if errors.action_type %} border-red-300{% endif %}">
+                    <select aria-label="Action Type" name="action_type" class="form-input form-select{% if errors.action_type %} border-red-300{% endif %}">
                         <option value="">Select action...</option>
                         {% for at in action_types %}
                         <option value="{{ at }}" {% if rule and rule.action_type and rule.action_type.value == at %}selected{% endif %}>
@@ -195,7 +195,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
                 <div>
                     <label class="form-label">Effective From <span class="text-red-500">*</span></label>
-                    <input type="date" name="effective_from"
+                    <input aria-label="Effective From" type="date" name="effective_from"
                            value="{{ rule.effective_from if rule and rule.effective_from and rule.effective_from is string else (rule.effective_from.isoformat() if rule and rule.effective_from else '') }}"
                            class="form-input{% if errors.effective_from %} border-red-300{% endif %}"
                            {% if rule and rule.rule_id %}readonly{% endif %}>
@@ -205,7 +205,7 @@
                 </div>
                 <div>
                     <label class="form-label">Effective To</label>
-                    <input type="date" name="effective_to"
+                    <input aria-label="Effective To" type="date" name="effective_to"
                            value="{{ rule.effective_to if rule and rule.effective_to and rule.effective_to is string else (rule.effective_to.isoformat() if rule and rule.effective_to else '') }}"
                            class="form-input{% if errors.effective_to %} border-red-300{% endif %}">
                     {% if errors.effective_to %}
@@ -215,7 +215,7 @@
                 </div>
                 <div>
                     <label class="form-label">Priority</label>
-                    <input type="number" name="priority" min="1" max="1000"
+                    <input aria-label="Priority" type="number" name="priority" min="1" max="1000"
                            value="{{ rule.priority if rule else '100' }}"
                            class="form-input{% if errors.priority %} border-red-300{% endif %}">
                     {% if errors.priority %}

@@ -33,7 +33,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="form-label">Journal Type <span class="text-rose-500">*</span></label>
-                        <select name="journal_type" class="form-select form-input" required>
+                        <select aria-label="Journal Type" name="journal_type" class="form-select form-input" required>
                             <option value="">Select type</option>
                             {% set selected_type = form_data.journal_type if form_data else (entry.journal_type if entry else '') %}
                             {% for value in journal_types %}
@@ -43,7 +43,7 @@
                     </div>
                     <div>
                         <label class="form-label">Fiscal Period <span class="text-rose-500">*</span></label>
-                        <select name="fiscal_period_id" class="form-select form-input" required>
+                        <select aria-label="Fiscal Period" name="fiscal_period_id" class="form-select form-input" required>
                             <option value="">Select period</option>
                             {% set selected_period = form_data.fiscal_period_id if form_data else '' %}
                             {% for period in fiscal_periods %}
@@ -55,37 +55,37 @@
                     </div>
                     <div>
                         <label class="form-label">Entry Date <span class="text-rose-500">*</span></label>
-                        <input type="date" name="entry_date" class="form-input"
+                        <input aria-label="Entry Date" type="date" name="entry_date" class="form-input"
                                x-model="journalDate"
                                required>
                     </div>
                     <div>
                         <label class="form-label">Posting Date <span class="text-rose-500">*</span></label>
-                        <input type="date" name="posting_date" class="form-input"
+                        <input aria-label="Posting Date" type="date" name="posting_date" class="form-input"
                                value="{{ form_data.posting_date if form_data else (entry.posting_date if entry else '') }}" required>
                     </div>
                     <div class="sm:col-span-2">
                         <label class="form-label">Description <span class="text-rose-500">*</span></label>
-                        <input type="text" name="description" class="form-input"
+                        <input aria-label="Description" type="text" name="description" class="form-input"
                                value="{{ form_data.description if form_data else (entry.description if entry else '') }}"
                                placeholder="Describe the journal entry" required>
                     </div>
                     <div>
                         <label class="form-label">Reference</label>
-                        <input type="text" name="reference" class="form-input"
+                        <input aria-label="Reference" type="text" name="reference" class="form-input"
                                value="{{ form_data.reference if form_data else (entry.reference if entry else '') }}"
                                placeholder="Reference number">
                     </div>
                     <div>
                         <label class="form-label">Currency</label>
-                        <input type="text" name="currency_code" class="form-input"
+                        <input aria-label="Currency" type="text" name="currency_code" class="form-input"
                                x-model="currencyCode"
                                @change="FXRateLookup.onCurrencyChange($data, 'currencyCode', 'exchangeRate', 'journalDate', functionalCurrency)"
                                placeholder="{{ default_currency_code }}">
                     </div>
                     <div>
                         <label class="form-label">Exchange Rate</label>
-                        <input type="text" name="exchange_rate" class="form-input font-mono tabular-nums"
+                        <input aria-label="Exchange Rate" type="text" name="exchange_rate" class="form-input font-mono tabular-nums"
                                x-model="exchangeRate">
                     </div>
                 </div>
@@ -116,7 +116,7 @@
                         <template x-for="(line, index) in lines" :key="index">
                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                 <td class="px-4 py-3">
-                                    <select x-model="line.account_id"
+                                    <select aria-label="Account" x-model="line.account_id"
                                             class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                                         <option value="">Select account</option>
                                         {% for account in accounts %}
@@ -131,18 +131,18 @@
                                     </select>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <input type="text" x-model="line.description"
+                                    <input aria-label="Line description" type="text" x-model="line.description"
                                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                                            placeholder="Line description">
                                 </td>
                                 <td class="px-4 py-3">
-                                    <input type="number" x-model="line.debit" step="0.01" min="0"
+                                    <input aria-label="Debit amount" type="number" x-model="line.debit" step="0.01" min="0"
                                            @input="if(line.debit > 0) line.credit = 0"
                                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                                            placeholder="0.00">
                                 </td>
                                 <td class="px-4 py-3">
-                                    <input type="number" x-model="line.credit" step="0.01" min="0"
+                                    <input aria-label="Credit amount" type="number" x-model="line.credit" step="0.01" min="0"
                                            @input="if(line.credit > 0) line.debit = 0"
                                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-right focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                                            placeholder="0.00">

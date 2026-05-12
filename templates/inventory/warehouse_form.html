@@ -81,7 +81,7 @@
                     <label class="form-label">
                         Warehouse Code <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Warehouse Code" type="text"
                            name="warehouse_code"
                            value="{{ warehouse.warehouse_code if warehouse else '' }}"
                            {% if warehouse %}readonly{% endif %}
@@ -96,7 +96,7 @@
                     <label class="form-label">
                         Warehouse Name <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Warehouse Name" type="text"
                            name="warehouse_name"
                            value="{{ warehouse.warehouse_name if warehouse else '' }}"
                            required
@@ -107,7 +107,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description"
+                    <textarea aria-label="Description" name="description"
                               rows="3"
                               placeholder="Enter warehouse description"
                               class="form-input resize-none">{{ warehouse.description if warehouse else '' }}</textarea>
@@ -132,7 +132,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-3">
                 <div>
                     <label class="form-label">Contact Name</label>
-                    <input type="text"
+                    <input aria-label="Contact Name" type="text"
                            name="contact_name"
                            value="{{ warehouse.contact_name if warehouse else '' }}"
                            maxlength="100"
@@ -142,7 +142,7 @@
 
                 <div>
                     <label class="form-label">Phone</label>
-                    <input type="tel"
+                    <input aria-label="Phone" type="tel"
                            name="contact_phone"
                            value="{{ warehouse.contact_phone if warehouse else '' }}"
                            maxlength="30"
@@ -152,7 +152,7 @@
 
                 <div>
                     <label class="form-label">Email</label>
-                    <input type="email"
+                    <input aria-label="Email" type="email"
                            name="contact_email"
                            value="{{ warehouse.contact_email if warehouse else '' }}"
                            maxlength="100"
@@ -179,7 +179,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label class="form-label">Address Line 1</label>
-                    <input type="text"
+                    <input aria-label="Address Line 1" type="text"
                            name="address_line1"
                            value="{{ warehouse.address.line1 if warehouse and warehouse.address else '' }}"
                            maxlength="200"
@@ -189,7 +189,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Address Line 2</label>
-                    <input type="text"
+                    <input aria-label="Address Line 2" type="text"
                            name="address_line2"
                            value="{{ warehouse.address.line2 if warehouse and warehouse.address else '' }}"
                            maxlength="200"
@@ -199,7 +199,7 @@
 
                 <div>
                     <label class="form-label">City</label>
-                    <input type="text"
+                    <input aria-label="City" type="text"
                            name="address_city"
                            value="{{ warehouse.address.city if warehouse and warehouse.address else '' }}"
                            maxlength="100"
@@ -209,7 +209,7 @@
 
                 <div>
                     <label class="form-label">State/Province</label>
-                    <input type="text"
+                    <input aria-label="State/Province" type="text"
                            name="address_state"
                            value="{{ warehouse.address.state if warehouse and warehouse.address else '' }}"
                            maxlength="100"
@@ -219,7 +219,7 @@
 
                 <div>
                     <label class="form-label">Postal Code</label>
-                    <input type="text"
+                    <input aria-label="Postal Code" type="text"
                            name="address_postal_code"
                            value="{{ warehouse.address.postal_code if warehouse and warehouse.address else '' }}"
                            maxlength="20"
@@ -229,7 +229,7 @@
 
                 <div>
                     <label class="form-label">Country</label>
-                    <input type="text"
+                    <input aria-label="Country" type="text"
                            name="address_country"
                            value="{{ warehouse.address.country if warehouse and warehouse.address else 'Nigeria' }}"
                            maxlength="100"

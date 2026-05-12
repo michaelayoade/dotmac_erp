@@ -70,7 +70,7 @@
                 <div class="sm:col-span-2">
                     <label class="form-label">Material Request</label>
                     <div class="relative" data-typeahead-url="/inventory/returns/material-requests/search" data-typeahead-min="2" data-typeahead-limit="8">
-                        <input
+                        <input aria-label="Material Request"
                             type="text"
                             name="material_request_name"
                             placeholder="Optional. Search request number or requester..."
@@ -92,7 +92,7 @@
                 <div class="sm:col-span-2">
                     <label class="form-label required">Item</label>
                     <div class="relative" data-typeahead-url="/inventory/returns/items/search" data-typeahead-min="2" data-typeahead-limit="8">
-                        <input
+                        <input aria-label="Search item code, name, or barcode..."
                             type="text"
                             name="item_name"
                             placeholder="Search item code, name, or barcode..."
@@ -114,7 +114,7 @@
 
                 <div>
                     <label class="form-label required">Source Warehouse</label>
-                    <select name="source_warehouse_id" required class="form-select">
+                    <select aria-label="Source Warehouse" name="source_warehouse_id" required class="form-select">
                         <option value="">Select warehouse</option>
                         {% for wh in warehouses %}
                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
@@ -125,7 +125,7 @@
 
                 <div>
                     <label class="form-label required">Destination Warehouse</label>
-                    <select name="destination_warehouse_id" required class="form-select">
+                    <select aria-label="Destination Warehouse" name="destination_warehouse_id" required class="form-select">
                         <option value="">Select warehouse</option>
                         {% for wh in warehouses %}
                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_code }} - {{ wh.warehouse_name }}</option>
@@ -136,27 +136,27 @@
 
                 <div>
                     <label class="form-label required">Quantity</label>
-                    <input type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input">
+                    <input aria-label="0" type="number" name="quantity" required min="0.0001" step="any" placeholder="0" class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label required">Return Date</label>
-                    <input type="date" name="return_date" value="{{ today }}" required class="form-input">
+                    <input aria-label="Return Date" type="date" name="return_date" value="{{ today }}" required class="form-input">
                 </div>
 
                 <div class="sm:col-span-2">
                     <label class="form-label required">Reason</label>
-                    <textarea name="reason" rows="2" required placeholder="Why is this item being returned?" class="form-input resize-none"></textarea>
+                    <textarea aria-label="Why is this item being returned?" name="reason" rows="2" required placeholder="Why is this item being returned?" class="form-input resize-none"></textarea>
                 </div>
 
                 <div>
                     <label class="form-label">Reference</label>
-                    <input type="text" name="reference" placeholder="Gate pass, note number, etc." class="form-input">
+                    <input aria-label="Reference" type="text" name="reference" placeholder="Gate pass, note number, etc." class="form-input">
                 </div>
 
                 <div>
                     <label class="form-label">Remarks</label>
-                    <input type="text" name="remarks" placeholder="Optional remarks" class="form-input">
+                    <input aria-label="Remarks" type="text" name="remarks" placeholder="Optional remarks" class="form-input">
                 </div>
             </div>
         </div>
@@ -168,11 +168,11 @@
             <div class="grid gap-6 p-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label" :class="{ 'required': selectedItem.track_lots }">Lot Number</label>
-                    <input type="text" name="lot_number" :required="selectedItem.track_lots" placeholder="Optional unless item requires lots" class="form-input">
+                    <input aria-label="Lot Number" type="text" name="lot_number" :required="selectedItem.track_lots" placeholder="Optional unless item requires lots" class="form-input">
                 </div>
                 <div class="sm:col-span-2">
                     <label class="form-label" :class="{ 'required': selectedItem.track_serial_numbers }">Serial Numbers</label>
-                    <textarea
+                    <textarea aria-label="Serial Numbers"
                         name="serial_numbers"
                         rows="4"
                         :required="selectedItem.track_serial_numbers"
@@ -189,7 +189,7 @@
             </div>
             <div class="p-6">
                 <label class="form-label">Attach Images</label>
-                <input
+                <input aria-label="Attach Images"
                     type="file"
                     name="images"
                     accept="image/jpeg,image/png,image/gif,image/webp"

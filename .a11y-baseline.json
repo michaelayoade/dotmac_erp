@@ -95,10 +95,6 @@
     "nameless": 0,
     "unlabeled": 1
   },
-  "templates/expense/limits/rule_form.html": {
-    "nameless": 0,
-    "unlabeled": 11
-  },
   "templates/expense/limits/usage.html": {
     "nameless": 0,
     "unlabeled": 1
@@ -230,10 +226,6 @@
   "templates/finance/gl/_account_form_inner.html": {
     "nameless": 0,
     "unlabeled": 9
-  },
-  "templates/finance/gl/journal_form.html": {
-    "nameless": 0,
-    "unlabeled": 12
   },
   "templates/finance/lease/contract_form.html": {
     "nameless": 0,
@@ -427,17 +419,9 @@
     "nameless": 0,
     "unlabeled": 2
   },
-  "templates/inventory/return_form.html": {
-    "nameless": 0,
-    "unlabeled": 12
-  },
   "templates/inventory/transfer_form.html": {
     "nameless": 0,
     "unlabeled": 9
-  },
-  "templates/inventory/warehouse_form.html": {
-    "nameless": 0,
-    "unlabeled": 12
   },
   "templates/onboarding/portal/base_onboarding.html": {
     "nameless": 1,
@@ -742,10 +726,6 @@
   "templates/people/self/attendance.html": {
     "nameless": 0,
     "unlabeled": 1
-  },
-  "templates/people/self/expense_claim_edit.html": {
-    "nameless": 0,
-    "unlabeled": 13
   },
   "templates/people/self/payslips.html": {
     "nameless": 0,
