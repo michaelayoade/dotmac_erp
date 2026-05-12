@@ -78,7 +78,7 @@
                     <label class="form-label">
                         Category Code <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Category Code" type="text"
                            name="category_code"
                            value="{{ category.category_code if category else '' }}"
                            required
@@ -91,7 +91,7 @@
                     <label class="form-label">
                         Category Name <span class="text-rose-500">*</span>
                     </label>
-                    <input type="text"
+                    <input aria-label="Category Name" type="text"
                            name="category_name"
                            value="{{ category.category_name if category else '' }}"
                            required
@@ -102,7 +102,7 @@
 
                 <div class="sm:col-span-2">
                     <label class="form-label">Description</label>
-                    <textarea name="description"
+                    <textarea aria-label="Description" name="description"
                               rows="3"
                               placeholder="Optional description"
                               class="form-input resize-none">{{ category.description if category else '' }}</textarea>
@@ -135,7 +135,7 @@
             <div class="p-6 grid gap-6 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Depreciation Method</label>
-                    <select name="depreciation_method" class="form-select">
+                    <select aria-label="Depreciation Method" name="depreciation_method" class="form-select">
                         {% for method in depreciation_methods %}
                         <option value="{{ method.value }}" {{ 'selected' if category and category.depreciation_method == method else ('selected' if not category and method.value == 'STRAIGHT_LINE' else '') }}>
                             {{ method.value | replace('_', ' ') | title }}
@@ -148,7 +148,7 @@
                     <label class="form-label">
                         Useful Life (Months) <span class="text-rose-500">*</span>
                     </label>
-                    <input type="number"
+                    <input aria-label="Useful Life (Months)" type="number"
                            name="useful_life_months"
                            value="{{ category.useful_life_months if category else '' }}"
                            min="1"
@@ -158,7 +158,7 @@
 
                 <div>
                     <label class="form-label">Residual Value (%)</label>
-                    <input type="number"
+                    <input aria-label="Residual Value (%)" type="number"
                            name="residual_value_percent"
                            value="{{ category.residual_value_percent if category else '0' }}"
                            step="0.01"
@@ -168,7 +168,7 @@
 
                 <div>
                     <label class="form-label">Capitalization Threshold</label>
-                    <input type="number"
+                    <input aria-label="Capitalization Threshold" type="number"
                            name="capitalization_threshold"
                            value="{{ category.capitalization_threshold if category else '0' }}"
                            step="0.01"
@@ -203,7 +203,7 @@
                     <label class="form-label">
                         Asset Account <span class="text-rose-500">*</span>
                     </label>
-                    <select name="asset_account_id" required class="form-select">
+                    <select aria-label="Asset Account" name="asset_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.asset_account_id == account.account_id else '' }}>
@@ -217,7 +217,7 @@
                     <label class="form-label">
                         Accumulated Depreciation <span class="text-rose-500">*</span>
                     </label>
-                    <select name="accumulated_depreciation_account_id" required class="form-select">
+                    <select aria-label="Accumulated Depreciation Account" name="accumulated_depreciation_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.accumulated_depreciation_account_id == account.account_id else '' }}>
@@ -231,7 +231,7 @@
                     <label class="form-label">
                         Depreciation Expense <span class="text-rose-500">*</span>
                     </label>
-                    <select name="depreciation_expense_account_id" required class="form-select">
+                    <select aria-label="Depreciation Expense Account" name="depreciation_expense_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.depreciation_expense_account_id == account.account_id else '' }}>
@@ -245,7 +245,7 @@
                     <label class="form-label">
                         Gain/Loss Disposal <span class="text-rose-500">*</span>
                     </label>
-                    <select name="gain_loss_disposal_account_id" required class="form-select">
+                    <select aria-label="Gain/Loss Disposal Account" name="gain_loss_disposal_account_id" required class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.gain_loss_disposal_account_id == account.account_id else '' }}>
@@ -257,7 +257,7 @@
 
                 <div>
                     <label class="form-label">Revaluation Surplus</label>
-                    <select name="revaluation_surplus_account_id" class="form-select">
+                    <select aria-label="Revaluation Surplus" name="revaluation_surplus_account_id" class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.revaluation_surplus_account_id == account.account_id else '' }}>
@@ -269,7 +269,7 @@
 
                 <div>
                     <label class="form-label">Impairment Loss</label>
-                    <select name="impairment_loss_account_id" class="form-select">
+                    <select aria-label="Impairment Loss" name="impairment_loss_account_id" class="form-select">
                         <option value="">Select account</option>
                         {% for account in accounts %}
                         <option value="{{ account.account_id }}" {{ 'selected' if category and category.impairment_loss_account_id == account.account_id else '' }}>

@@ -146,7 +146,7 @@
                     </label>
                     <div>
                         <label class="form-label">Default Currency</label>
-                        <input aria-label="{{ default_currency_code }}" type="text" name="default_currency_code" id="default_currency_code" class="form-input"
+                        <input aria-label="Default Currency" type="text" name="default_currency_code" id="default_currency_code" class="form-input"
                                value="{{ form_data.default_currency_code if form_data else (account.default_currency_code if account else default_currency_code) }}"
                                placeholder="{{ default_currency_code }}">
                     </div>
