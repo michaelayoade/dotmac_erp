@@ -678,6 +678,66 @@ def test_webhook_sync_status_failed_with_data_status_available_records_error() -
     db.flush.assert_called()
 
 
+def test_webhook_sync_status_reauthorisation_required_records_actionable_error() -> (
+    None
+):
+    """``sync_status=REAUTHORISATION_REQUIRED`` with ``data_status=AVAILABLE``
+    is what Mono sends once bank-side OAuth has expired — the cache is still
+    served but no fresh transactions can be fetched. Earlier handler logic
+    only deny-listed ``sync_status == "FAILED"`` and let reauth-required
+    fall through to the AVAILABLE branch, queuing a sync that dedupe-pulled
+    the stale cache, succeeded with zero new lines, and race-wiped any
+    prior error banner. Users then saw "up to date" for weeks while their
+    bank link was dead. The fix allow-lists known-success values so any
+    non-success sync_status (incl. future Mono states) is treated as a
+    failure that must not be silently synced past.
+    """
+    db = MagicMock()
+    linked_account = _account(
+        mono_account_id="mono-zenith-reauth",
+        mono_last_sync_error=None,
+    )
+    db.scalar.return_value = linked_account
+    payload = {
+        "event": "mono.events.account_updated",
+        "data": {
+            "account": {"_id": "mono-zenith-reauth"},
+            "meta": {
+                "data_status": "AVAILABLE",
+                "sync_status": "REAUTHORISATION_REQUIRED",
+                "job_id": "job-reauth-7",
+                "has_new_data": False,
+                "retrieved_data": ["balance", "transactions"],
+                "data_request_id": "REQ-REAUTH-7",
+            },
+        },
+    }
+
+    with (
+        patch(
+            "app.services.finance.banking.mono_sync.resolve_value",
+            return_value="webhook-secret",
+        ),
+        patch("app.services.finance.banking.mono_sync.MonoClient") as mono_client,
+        patch("app.tasks.finance.sync_mono_account.delay") as enqueue,
+    ):
+        mono_client.return_value.verify_webhook.return_value = True
+        result = MonoSyncService(db).process_webhook(
+            "webhook-secret",
+            json.dumps(payload).encode(),
+        )
+
+    assert result["status"] == "success"
+    enqueue.assert_not_called()
+    assert linked_account.mono_last_sync_error is not None
+    # Actionable copy: the user can fix this themselves by reauthorising
+    # in the Mono Connect widget. The message must say so plainly.
+    assert "Reauthorise" in linked_account.mono_last_sync_error
+    assert "Mono Connect widget" in linked_account.mono_last_sync_error
+    assert "REQ-REAUTH-7" in linked_account.mono_last_sync_error
+    db.flush.assert_called()
+
+
 def test_webhook_failed_status_with_balance_only_retrieval_reports_partner_limit() -> (
     None
 ):
@@ -1971,3 +2031,17 @@ def test_get_account_info_rejects_missing_or_invalid_balance() -> None:
         account_info = client.get_account_info("mono-account-1")
 
     assert account_info.balance == 0
+
+
+def test_verify_webhook_rejects_empty_secrets() -> None:
+    # compare_digest("", "") returns True; the guard inside verify_webhook
+    # must fail closed before that match can leak through to a caller that
+    # forgot to check ``is_configured()``.
+    configured = MonoClient(MonoConfig(webhook_secret="real-secret"))
+    assert configured.verify_webhook("") is False
+
+    unconfigured = MonoClient(MonoConfig(webhook_secret=""))
+    assert unconfigured.verify_webhook("") is False
+    assert unconfigured.verify_webhook("anything") is False
+
+    assert configured.verify_webhook("real-secret") is True

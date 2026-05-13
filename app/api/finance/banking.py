@@ -31,6 +31,7 @@ from app.schemas.finance.banking import (
     BankStatementImport,
     BankStatementRead,
     BankStatementWithLines,
+    MonoLinkRequest,
     ReconciliationAdjustmentCreate,
     ReconciliationApproval,
     ReconciliationCreate,
@@ -822,7 +823,7 @@ def get_reconciliation_report(
 @router.post("/accounts/{account_id}/link-mono")
 def link_mono_account(
     account_id: UUID,
-    payload: dict,
+    payload: MonoLinkRequest,
     auth: dict = Depends(require_tenant_permission("banking:account:update")),
     db: Session = Depends(get_db),
 ):
@@ -840,7 +841,7 @@ def link_mono_account(
         return MonoSyncService(db).link_account(
             _get_org_id(auth),
             account_id,
-            str(payload.get("code", "")),
+            payload.code,
         )
     except (LookupError, PermissionError, RuntimeError, ValueError) as exc:
         _raise_mono_http_error(exc)

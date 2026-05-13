@@ -604,4 +604,11 @@ class MonoClient:
         """
         import hmac
 
+        # Fail closed when either side is empty. compare_digest("", "") returns
+        # True, so without this guard a misconfigured deployment (or any future
+        # caller that forgets to check ``is_configured()`` first) would accept
+        # any webhook whose header is also empty.
+        if not header_secret or not self.config.webhook_secret:
+            return False
+
         return hmac.compare_digest(header_secret, self.config.webhook_secret)

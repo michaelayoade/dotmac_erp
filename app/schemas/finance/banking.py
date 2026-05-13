@@ -437,3 +437,14 @@ class ReconciliationReport(BaseModel):
     adjustments: ReconciliationReportSection
     outstanding_deposits: ReconciliationReportSection
     outstanding_payments: ReconciliationReportSection
+
+
+# =============================================================================
+# Mono Connect
+# =============================================================================
+
+
+class MonoLinkRequest(BaseModel):
+    """Body for POST /banking/accounts/{account_id}/link-mono."""
+
+    code: str = Field(min_length=1, max_length=512)

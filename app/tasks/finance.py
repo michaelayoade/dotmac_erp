@@ -18,6 +18,7 @@ from uuid import UUID
 
 from celery import shared_task
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -1095,7 +1096,13 @@ def sync_mono_transactions(**_legacy_kwargs: Any) -> dict[str, Any]:
     return results
 
 
-@shared_task
+@shared_task(
+    autoretry_for=(OperationalError,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=3,
+)
 def sync_mono_account(mono_account_id: str, **_legacy_kwargs: Any) -> dict[str, Any]:
     """Incremental sync for a single Mono-linked account.
 
@@ -1103,6 +1110,12 @@ def sync_mono_account(mono_account_id: str, **_legacy_kwargs: Any) -> dict[str, 
     ``data_status=AVAILABLE``, so freshly linked accounts get their first
     transaction pull without waiting for the next beat cycle.
     ``**_legacy_kwargs`` swallows any pre-refactor ``days_back`` kwarg.
+
+    Mono only fires ``account_updated`` once per scrape, so transient DB
+    blips during webhook handling would otherwise lose the signal until the
+    next beat cycle. ``OperationalError`` covers connection drops and
+    deadlocks; persistent failures fall through to the next scheduled
+    ``sync_mono_transactions`` run.
     """
     logger.info("Syncing Mono account %s", mono_account_id)
 

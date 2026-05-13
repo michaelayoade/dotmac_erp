@@ -382,15 +382,21 @@ class MonoSyncService:
                 retrieved_data,
                 meta.get("data_request_id"),
             )
-            # sync_status=FAILED means Mono's upstream bank scrape failed
-            # even when data_status=AVAILABLE (Mono can still serve cached
-            # data from a prior successful scrape). Record the error before
-            # the AVAILABLE branch so the banner appears — and *don't* queue
-            # a sync, because the direct-pull path clears mono_last_sync_error
-            # on success and would race-wipe the banner we just set. Any
-            # undrained cache will be picked up by the next successful
-            # scrape's account_updated event.
-            if sync_status == "FAILED" and mono_account_id:
+            # Allow-list the sync_status values that mean "bank-side scrape
+            # was healthy." Anything else — FAILED, REAUTHORISATION_REQUIRED,
+            # and any future state Mono ships — means the indexer is serving
+            # cached data only, and queuing a sync would dedupe-pull the same
+            # stale lines and race-wipe ``mono_last_sync_error`` on success,
+            # which would falsely show "up to date" while the user is blind
+            # to weeks of missing transactions. The empty-string case covers
+            # older event versions that omit the field. The branch fires
+            # before AVAILABLE so the banner persists; undrained cache will
+            # be picked up by the next genuinely-successful account_updated.
+            # Mono's v2 docs say "SUCCESS" but older payloads have shown
+            # "SUCCESSFUL" in the wild — allow-list both so a doc/emit drift
+            # doesn't classify real successes as failures.
+            bank_fetch_ok = sync_status in ("", "SUCCESS", "SUCCESSFUL")
+            if not bank_fetch_ok and mono_account_id:
                 self._record_webhook_failure(mono_account_id, meta)
             elif data_status == "AVAILABLE" and mono_account_id:
                 from app.tasks.finance import sync_mono_account
@@ -540,12 +546,24 @@ class MonoSyncService:
 
         data_request_id_display = data_request_id or "unknown"
 
+        # Reauth-required is the most common failure in practice and the
+        # only one the user can fix themselves. Give them the exact action
+        # to take rather than a generic "data refresh failed" message that
+        # leaves them looking at Mono internals.
+        if sync_status == "REAUTHORISATION_REQUIRED":
+            error_message = (
+                "Bank connection expired. Reauthorise this account via the "
+                "Mono Connect widget — the bank is no longer accepting "
+                "Mono's stored credentials, and only cached transactions "
+                "are being served. "
+                f"Reference Mono data_request_id={data_request_id_display}."
+            )
         # Distinguish "indexer fetched balance but not transactions" from a
         # blanket failure. The first pattern is usually a partner-bank
         # limitation for the account type (e.g. USD domiciliary accounts on
         # some Nigerian banks). Tell the operator exactly that so they know
         # reauth won't help and manual upload is the fallback.
-        if retrieved_data and "transactions" not in retrieved_data:
+        elif retrieved_data and "transactions" not in retrieved_data:
             error_message = (
                 f"Mono retrieved {retrieved_data} but not transactions "
                 f"for this account. This is usually a partner-bank limitation "
