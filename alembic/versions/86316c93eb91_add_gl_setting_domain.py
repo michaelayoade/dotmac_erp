@@ -5,7 +5,7 @@ period-close prerequisites, etc.) under the existing domain_settings
 infrastructure.
 
 Revision ID: 86316c93eb91
-Revises: 20260506_dynamic_forms
+Revises: 20260506_mono_txn_status
 Create Date: 2026-05-10 11:12:27.611279
 """
 
@@ -15,7 +15,7 @@ from alembic import op
 
 
 revision = "86316c93eb91"
-down_revision = "20260506_dynamic_forms"
+down_revision = "20260506_mono_txn_status"
 branch_labels = None
 depends_on = None
 
