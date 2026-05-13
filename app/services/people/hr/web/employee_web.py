@@ -207,9 +207,9 @@ class HRWebService:
         ).all()
 
         titles: dict[UUID, str] = {}
-        for row in designation_rows:
-            for emp_id in position_to_employees.get(row.position_id, ()):
-                titles[emp_id] = row.designation_name
+        for desig_row in designation_rows:
+            for emp_id in position_to_employees.get(desig_row.position_id, ()):
+                titles[emp_id] = desig_row.designation_name
         return titles
 
     @staticmethod
@@ -1715,8 +1715,16 @@ class HRWebService:
         )
         position_chain = []
         for position, incumbent in chain_entries:
-            chain_designation = designations_by_id.get(position.designation_id)
-            chain_department = departments_by_id.get(position.department_id)
+            chain_designation = (
+                designations_by_id.get(position.designation_id)
+                if position.designation_id
+                else None
+            )
+            chain_department = (
+                departments_by_id.get(position.department_id)
+                if position.department_id
+                else None
+            )
             incumbent_name = ""
             incumbent_id = None
             if incumbent:

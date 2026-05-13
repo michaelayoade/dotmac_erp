@@ -167,7 +167,9 @@ def fa_count_sheets_report(
             category=category,
         )
     )
-    return templates.TemplateResponse(request, "fixed_assets/count_sheets.html", context)
+    return templates.TemplateResponse(
+        request, "fixed_assets/count_sheets.html", context
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -275,7 +277,9 @@ def new_count_plan_form(
 ):
     """New fixed asset physical count plan form."""
     context = base_context(request, auth, "New Asset Count Plan", "count_plans", db=db)
-    context.update(fa_web_service.count_plan_form_context(db, str(auth.organization_id)))
+    context.update(
+        fa_web_service.count_plan_form_context(db, str(auth.organization_id))
+    )
     return templates.TemplateResponse(
         request, "fixed_assets/count_plan_form.html", context
     )

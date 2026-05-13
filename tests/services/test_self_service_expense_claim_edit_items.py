@@ -283,9 +283,7 @@ def test_expense_approver_options_include_all_active_expense_approvers_and_defau
         ]
     )
     db_session.flush()
-    _wire_manager_via_position(
-        db_session, org_id, employee=requester, manager=manager
-    )
+    _wire_manager_via_position(db_session, org_id, employee=requester, manager=manager)
     db_session.commit()
 
     options = SelfServiceWebService._get_expense_approver_options(

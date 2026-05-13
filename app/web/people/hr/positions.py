@@ -50,7 +50,8 @@ def _form_uuid(form: Any, key: str) -> UUID | None:
     value = _form_str(form, key)
     if not value:
         return None
-    return coerce_uuid(value, raise_http=False)
+    result: UUID | None = coerce_uuid(value, raise_http=False)
+    return result
 
 
 def _position_payload(form: Any) -> PositionCreateData:
@@ -154,9 +155,7 @@ def positions_tree(
         **base_context(request, auth, "Organization Chart", "positions", db=db),
         "roots": roots,
     }
-    return templates.TemplateResponse(
-        request, "people/hr/positions_tree.html", context
-    )
+    return templates.TemplateResponse(request, "people/hr/positions_tree.html", context)
 
 
 @router.get("/positions/new", response_class=HTMLResponse)

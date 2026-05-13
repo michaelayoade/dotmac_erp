@@ -713,8 +713,8 @@ class PositionService:
 
     def _would_create_cycle(self, position_id: UUID, parent: Position) -> bool:
         visited = {position_id}
-        current = parent
-        while current.parent_position_id:
+        current: Position | None = parent
+        while current and current.parent_position_id:
             if current.parent_position_id in visited:
                 return True
             visited.add(current.parent_position_id)

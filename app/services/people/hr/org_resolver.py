@@ -38,6 +38,8 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
+from typing import Any
+
 from sqlalchemy import case, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -371,7 +373,7 @@ class OrgResolver:
         return list(self.db.scalars(stmt).all())
 
     @staticmethod
-    def _assignment_type_priority() -> object:
+    def _assignment_type_priority() -> Any:
         return case(
             (PositionAssignment.assignment_type == PositionAssignmentType.PRIMARY, 0),
             (PositionAssignment.assignment_type == PositionAssignmentType.ACTING, 1),

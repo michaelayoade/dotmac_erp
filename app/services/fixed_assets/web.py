@@ -12,7 +12,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from io import StringIO
 from urllib.parse import quote
-from typing import TypedDict
+from typing import Any, TypedDict
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -683,7 +683,9 @@ class FixedAssetWebService:
     def _gl_reconciliation_filename(context: dict) -> str:
         """Build a stable fixed asset GL reconciliation export filename stem."""
         as_of = str(context.get("as_of") or "").replace("-", "")
-        return f"asset_gl_reconciliation_{as_of}" if as_of else "asset_gl_reconciliation"
+        return (
+            f"asset_gl_reconciliation_{as_of}" if as_of else "asset_gl_reconciliation"
+        )
 
     @staticmethod
     def _build_depreciation_posting_preview(
@@ -1302,7 +1304,9 @@ class FixedAssetWebService:
         audit_plans = db.scalars(
             select(AssetAuditPlan)
             .where(AssetAuditPlan.organization_id == org_id)
-            .order_by(AssetAuditPlan.planned_date.desc(), AssetAuditPlan.created_at.desc())
+            .order_by(
+                AssetAuditPlan.planned_date.desc(), AssetAuditPlan.created_at.desc()
+            )
         ).all()
         if selected_plan_id is None and audit_plans:
             selected_plan_id = audit_plans[0].audit_plan_id
@@ -1311,7 +1315,9 @@ class FixedAssetWebService:
         if selected_plan_id is not None:
             selected_plan = db.get(AssetAuditPlan, selected_plan_id)
             if not selected_plan or selected_plan.organization_id != org_id:
-                raise HTTPException(status_code=404, detail="Asset count plan not found")
+                raise HTTPException(
+                    status_code=404, detail="Asset count plan not found"
+                )
 
         categories = db.scalars(
             select(AssetCategory)
@@ -1330,7 +1336,7 @@ class FixedAssetWebService:
             .order_by(Location.location_name)
         ).all()
 
-        line_rows = []
+        line_rows: list[Any] = []
         if selected_plan_id is not None:
             line_query = (
                 select(
@@ -1362,16 +1368,18 @@ class FixedAssetWebService:
                 line_query = line_query.where(Asset.location_id == selected_location_id)
             if selected_category_id is not None:
                 line_query = line_query.where(Asset.category_id == selected_category_id)
-            line_rows = db.execute(
-                line_query.order_by(
-                    Location.location_name.asc().nulls_last(),
-                    AssetCategory.category_code.asc(),
-                    Asset.asset_number.asc(),
-                )
-            ).all()
+            line_rows = list(
+                db.execute(
+                    line_query.order_by(
+                        Location.location_name.asc().nulls_last(),
+                        AssetCategory.category_code.asc(),
+                        Asset.asset_number.asc(),
+                    )
+                ).all()
+            )
 
-        detail_rows: list[dict[str, object]] = []
-        group_map: dict[tuple[str, str], dict[str, object]] = {}
+        detail_rows: list[dict[str, Any]] = []
+        group_map: dict[tuple[str, str], dict[str, Any]] = {}
         totals = {
             "system_qty": 0,
             "physical_qty": 0,
@@ -1618,8 +1626,7 @@ class FixedAssetWebService:
         if not plan_number:
             return "asset_count_sheets"
         safe_plan = "".join(
-            char.lower() if char.isalnum() else "_"
-            for char in str(plan_number).strip()
+            char.lower() if char.isalnum() else "_" for char in str(plan_number).strip()
         ).strip("_")
         return f"asset_count_sheets_{safe_plan}" if safe_plan else "asset_count_sheets"
 
@@ -1640,7 +1647,9 @@ class FixedAssetWebService:
 
         query = (
             select(AssetAuditPlan, Location)
-            .outerjoin(Location, AssetAuditPlan.scope_location_id == Location.location_id)
+            .outerjoin(
+                Location, AssetAuditPlan.scope_location_id == Location.location_id
+            )
             .where(AssetAuditPlan.organization_id == org_id)
         )
         if status_value:
@@ -1660,7 +1669,9 @@ class FixedAssetWebService:
                     "plan_number": plan.plan_number,
                     "title": plan.title,
                     "planned_date": _format_date(plan.planned_date),
-                    "scope": location_row.location_name if location_row else "All locations",
+                    "scope": location_row.location_name
+                    if location_row
+                    else "All locations",
                     "status": plan.status.value
                     if hasattr(plan.status, "value")
                     else str(plan.status),
@@ -1744,8 +1755,9 @@ class FixedAssetWebService:
         rows = db.execute(
             line_query.order_by(Asset.asset_number.asc(), Asset.asset_name.asc())
         ).all()
-        counts_by_status = dict(
-            db.execute(
+        counts_by_status: dict[Any, int] = {
+            row[0]: row[1]
+            for row in db.execute(
                 select(AssetAuditLine.status, func.count(AssetAuditLine.audit_line_id))
                 .where(
                     AssetAuditLine.organization_id == org_id,
@@ -1753,7 +1765,7 @@ class FixedAssetWebService:
                 )
                 .group_by(AssetAuditLine.status)
             ).all()
-        )
+        }
         locations = db.scalars(
             select(Location)
             .where(
@@ -1771,7 +1783,9 @@ class FixedAssetWebService:
                 counts_by_status.get(AssetAuditLineStatus.DISCREPANCY, 0) or 0
             ),
             "pending": int(counts_by_status.get(AssetAuditLineStatus.PENDING, 0) or 0),
-            "resolved": int(counts_by_status.get(AssetAuditLineStatus.RESOLVED, 0) or 0),
+            "resolved": int(
+                counts_by_status.get(AssetAuditLineStatus.RESOLVED, 0) or 0
+            ),
         }
 
         lines = []

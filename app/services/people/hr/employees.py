@@ -152,7 +152,7 @@ class EmployeeService:
         if not employee_assignment or not manager_assignment:
             return True
 
-        current_position_id = manager_assignment.position_id
+        current_position_id: uuid.UUID | None = manager_assignment.position_id
         visited_positions = {employee_assignment.position_id}
         while current_position_id:
             if current_position_id in visited_positions:
