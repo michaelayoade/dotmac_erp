@@ -47,6 +47,7 @@ from app.services.common_filters import build_active_filters
 from app.services.finance.banking import (
     bank_statement_service,
 )
+from app.services.htmx import htmx_response, is_htmx_request
 from app.services.finance.banking.payment_metadata import (
     PaymentMetadata,
     resolve_payment_metadata,

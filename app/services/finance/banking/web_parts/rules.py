@@ -18,6 +18,7 @@ from app.services.finance.banking.web_parts.base import (
     build_active_filters,
     coerce_uuid,
     func,
+    is_htmx_request,
     json,
     select,
     templates,
@@ -847,7 +848,7 @@ class BankingRuleWebService:
         db.commit()
 
         # Check if this is an HTMX request — return partial
-        if request.headers.get("HX-Request"):
+        if is_htmx_request(request):
             context = base_context(request, auth, "Transaction Rules", "banking", db=db)
             context.update(self.list_rules_context(db, str(org_id)))
             return templates.TemplateResponse(

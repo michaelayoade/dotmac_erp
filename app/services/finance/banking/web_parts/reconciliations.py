@@ -24,6 +24,8 @@ from app.services.finance.banking.web_parts.base import (
     Response,
     Session,
     UUID,
+    htmx_response,
+    is_htmx_request,
     WebAuthContext,
     _account_view,
     _build_active_filters,
@@ -624,12 +626,8 @@ class BankingReconciliationWebService:
             raise HTTPException(status_code=400, detail=str(e))
 
         # HTMX requests get a 200 + HX-Refresh header
-        if request.headers.get("HX-Request"):
-            return Response(
-                content="",
-                status_code=200,
-                headers={"HX-Refresh": "true"},
-            )
+        if is_htmx_request(request):
+            return htmx_response(refresh=True)
         return RedirectResponse(
             url=f"/finance/banking/reconciliations/{reconciliation_id}",
             status_code=303,

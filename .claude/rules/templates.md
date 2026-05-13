@@ -39,6 +39,11 @@ Or add to `safelist` in `tailwind.config.js`.
 Use `{% from "components/_badges.html" import status_badge %}` for consistent status display.
 Supported statuses include: ACTIVE, INACTIVE, DRAFT, PENDING, APPROVED, REJECTED, OPEN, CLOSED, SUBMITTED, PROCESSING, RECEIVED, QUARANTINED, EXPIRED, DEPLETED, AVAILABLE, IN_PROGRESS.
 
+## HTMX target wrapper (CRITICAL)
+Any template whose HTMX attribute targets an element ID — `hx-target="#foo"` or `hx-select="#foo"` — must include that element somewhere on the page, or the swap silently does nothing. The `live_search` macro defaults to `#results-container`; pages that use it must wrap their table + pagination in `<div id="results-container">`. Pages using a custom target (e.g. `#run-content`, `#form-result`) must include that ID themselves.
+
+Backend routes that return a partial in response to an HTMX request should use `app.services.htmx.is_htmx_request(request)` and `htmx_response(...)` rather than reading the `HX-Request` header directly.
+
 ## File Upload Component
 Use the reusable upload macro:
 ```html

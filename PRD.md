@@ -1,44 +1,82 @@
-# HTMX Macro Implementation Plan for Dotmac ERP
+# HTMX Implementation — Status & Remaining Work
 
-## Overview
-Implement a comprehensive HTMX macro system to enable partial page updates across the application, improving UX by eliminating full-page reloads for common operations like search, filter, pagination, and delete actions.
-
-## Current State
-- **HTMX v2.0.8** is loaded in `base.html` but underutilized
-- **30+ Jinja2 macros** exist in `templates/components/macros.html`
-- Admin pages (users.html, organizations.html) already use HTMX for search/filter
-- No HX-Request detection exists in backend routes
-- Alpine.js bulk actions already support HTMX via htmx:afterSwap listener
-
-## Implementation Phases
+> **Note on filename.** This file is misnamed `PRD.md` but is not a product requirements document. It is an HTMX implementation plan. Originally filed 2026-04-24. Suggested rename: `docs/plans/htmx-implementation.md`. Kept at root for now to preserve the single existing commit reference; safe to move once the team agrees.
+>
+> **Last reviewed:** 2026-05-13. Original plan superseded by the as-built `live_search` pattern (see §2). This doc now tracks what was built, what was decided against, and what remains.
 
 ---
-### Phase 1: Backend Infrastructure
 
-#### 1.1 Create HTMX Response Helpers
-**File:** `app/services/htmx.py` (NEW)
+## 1. Why this exists
+
+The original plan (preserved in §5 for history) proposed converting list pages to HTMX partial swaps via:
+
+- A central `app/services/htmx.py` helper module
+- A new `templates/components/htmx_macros.html` with 9 macros
+- Dedicated `_*_table.html` / `_*_row.html` partials per entity (8+ entities)
+- Per-entity HTMX delete endpoints
+- A global `htmx:responseError` handler
+
+Between filing and review, the team shipped equivalent user-visible behaviour (no full reloads on search/filter/paginate) using a different pattern (§2). The structural pieces of the original plan were never built. The relevant question is no longer "execute the plan" but "given what shipped, what's left worth doing?"
+
+---
+
+## 2. As-built pattern (the one we actually use)
+
+### 2.1 List pages
+
+`templates/components/macros.html::live_search` (lines 931+) does all search/filter/pagination via HTMX:
+
+- `hx-get` to the same page URL
+- `hx-trigger="input changed delay:300ms, search"` (or `change` for filters)
+- `hx-target="#results-container"` + `hx-select="#results-container"` — server renders the *whole page*, HTMX swaps only the matched fragment client-side
+- `hx-push-url="true"` keeps the URL in sync so browser back/forward works
+- `hx-include="closest form"` carries all sibling filter values
+- `hx-indicator="closest [data-live-search]"` drives a small spinner inside the search input
+
+Templates wrap their table + pagination in `<div id="results-container">`. No dedicated partial templates required.
+
+**Trade-off being made:** server renders the full page on every keystroke (wasteful), but template count stays flat (one file per page, not three). The team accepted this for maintenance simplicity. Revisit only if a benchmark proves the full render is materially slow.
+
+### 2.2 Inline action endpoints (workflow tasks, banking rules, AP payments)
+
+Where a small piece of UI updates without a list refresh (e.g. "Mark task complete"), routes check `request.headers.get("HX-Request")` and return a snippet of HTML with an `HX-Trigger` header for toast/event signalling. See:
+
+- `app/web/workflow_tasks.py:203-235` — task complete/snooze
+- `app/services/finance/ap/web/payment_web.py:755-772` — payment actions
+- `app/services/finance/banking/web_parts/reconciliations.py:627` — reconciliation actions
+- `app/services/finance/banking/web_parts/rules.py:850` — bank rule edits
+
+These are ad-hoc — there's no central helper. See §3.1 for whether to centralise.
+
+### 2.3 CSRF on HTMX state-changing requests
+
+`app/main.py:257` wires `csrf_middleware` globally. HTMX forms render `{{ request.state.csrf_form | safe }}` exactly like non-HTMX forms; nothing HTMX-specific is required. For HTMX DELETE buttons that don't submit a form, the CSRF token must be added via `hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'` — but no such endpoints exist today (see §3.2).
+
+---
+
+## 3. Remaining work (decided)
+
+### 3.1 Central HTMX helper module — **DO** (small scope)
+
+Six places duplicate `request.headers.get("HX-Request")` and ad-hoc snippet construction. Add a thin helper module to remove the duplication.
+
+**File:** `app/services/htmx.py`
 
 ```python
-"""HTMX response helpers for partial template rendering."""
-from typing import Any, Optional
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 import json
 
-
 def is_htmx_request(request: Request) -> bool:
-    """Check if the current request is an HTMX request."""
-    return request.headers.get("HX-Request") == "true"
-
+    return request.headers.get("HX-Request", "").lower() == "true"
 
 def htmx_response(
-    content: str,
-    trigger: Optional[dict] = None,
-    push_url: Optional[str] = None,
-    redirect: Optional[str] = None,
+    content: str = "",
+    trigger: dict | None = None,
+    push_url: str | None = None,
+    redirect: str | None = None,
 ) -> HTMLResponse:
-    """Create an HTMX-aware HTML response with optional HX-* headers."""
-    headers = {}
+    headers: dict[str, str] = {}
     if trigger:
         headers["HX-Trigger"] = json.dumps(trigger)
     if push_url:
@@ -47,300 +85,95 @@ def htmx_response(
         headers["HX-Redirect"] = redirect
     return HTMLResponse(content=content, headers=headers)
 
-
-def htmx_toast(message: str, type: str = "success") -> dict:
-    """Helper to create a toast trigger dict."""
-    return {"showToast": {"message": message, "type": type}}
+def htmx_toast(message: str, level: str = "success") -> dict:
+    return {"showToast": {"message": message, "type": level}}
 ```
 
-#### 1.2 Add Context Helper
-**File:** `app/web/deps.py` (MODIFY)
+**Acceptance criteria:**
+- All six existing `HX-Request` call sites migrated to `is_htmx_request(request)`.
+- Migration done in one PR (not staged) to keep the pattern unambiguous.
+- `app/services/finance/ap/web/payment_web.py`, `app/services/finance/banking/web_parts/{reconciliations,rules}.py`, `app/web/workflow_tasks.py`, `app/main.py:381` all use the helper.
+- No new direct `request.headers.get("HX-Request")` reads survive the PR (enforced by grep in CI or a one-time audit).
 
-```python
-def partial_context(request: Request, auth: WebAuthContext, **kwargs) -> dict:
-    """Context for partial template renders (HTMX responses)."""
-    return {
-        "csrf_token": getattr(request.state, "csrf_token", ""),
-        "user": {"name": auth.user_name, "initials": auth.user_initials},
-        **kwargs,
-    }
-```
+**Explicitly out of scope:**
+- Dedicated `*_table.html` / `*_row.html` partials per entity (rejected — see §4.1).
+- `htmx_macros.html` as a separate macros file (rejected — see §4.2).
 
----
-## Checklist
+### 3.2 HTMX error handler — **DO**
 
-### Milestone 1: Foundation
-- [ ] Create `app/services/htmx.py`
-- [ ] Add `partial_context` to `app/web/deps.py`
-- [ ] Create `templates/components/htmx_macros.html`
-- [ ] Add HTMX CSS to `src/css/input.css`
-- [ ] Add HTMX error handling to `templates/base.html`
+`templates/base.html` listens for `htmx:configRequest`, `htmx:afterSwap`, `htmx:afterRequest` — but not `htmx:responseError`. When an HTMX request 4xx/5xxs today, the user sees no feedback.
 
-### Milestone 2: First Module (AR Customers)
-- [ ] Create `templates/finance/partials/_customer_table.html`
-- [ ] Create `templates/finance/partials/_customer_row.html`
-- [ ] Modify `app/services/finance/ar/web.py` for HTMX partials
-- [ ] Update `templates/finance/ar/customers.html` to use HTMX macros
-- [ ] Add HTMX delete route in `app/web/finance/ar.py`
+Add to `base.html` (near the other listeners around line 672):
 
-### Milestone 3: Expand to Core Modules
-- [ ] AP Suppliers: partials + HTMX list handling + delete route
-- [ ] GL Accounts: partials + HTMX list handling + delete route
-- [ ] AR Invoices: partials + HTMX list handling + delete route
-- [ ] AP Invoices: partials + HTMX list handling + delete route
-
-### Milestone 4: Secondary Modules
-- [ ] Inventory Items: partials + HTMX list handling + delete route
-- [ ] Fixed Assets: partials + HTMX list handling + delete route
-- [ ] People/Employees: partials + HTMX list handling + delete route
-- [ ] Banking Accounts: partials + HTMX list handling + delete route
-
----
-### Phase 2: HTMX Macros
-
-**File:** `templates/components/htmx_macros.html` (NEW)
-
-Create the following macros:
-- `htmx_search_input` — Search with debounce
-- `htmx_filter_select` — Filter dropdown
-- `htmx_table_container` — Wrapper for HTMX targeting
-- `htmx_pagination` — Page navigation
-- `htmx_delete_button` — Delete with confirmation
-- `htmx_action_button` — Generic action button
-- `htmx_form` — Form with HTMX submission
-- `htmx_search_filter_bar` — Complete search/filter bar
-- `htmx_loading_indicator` — Spinner for loading states
-
-Key macro excerpt:
-```jinja
-{% macro htmx_search_input(search="", target="", url="", placeholder="Search...",
-                           name="search", include="", debounce_ms=300, push_url=true) %}
-<div class="relative flex-1 min-w-[200px]">
-    <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400">...</svg>
-    <input type="text" name="{{ name }}" value="{{ search }}" placeholder="{{ placeholder }}"
-           class="form-input pl-10 w-full"
-           hx-get="{{ url }}"
-           hx-trigger="keyup changed delay:{{ debounce_ms }}ms, search"
-           hx-target="{{ target }}"
-           hx-select="{{ target }}"
-           {% if push_url %}hx-push-url="true"{% endif %}
-           {% if include %}hx-include="{{ include }}"{% endif %}
-           autocomplete="off" />
-</div>
-{% endmacro %}
-```
-
----
-### Phase 3: Partial Templates
-
-Create partials directory structure and extract table/row templates:
-```
-templates/finance/partials/
-├── _customer_table.html
-├── _customer_row.html
-├── _supplier_table.html
-├── _supplier_row.html
-├── _invoice_table.html
-├── _invoice_row.html
-├── _account_table.html
-└── _account_row.html
-
-templates/people/partials/
-├── _employee_table.html
-├── _employee_row.html
-
-templates/operations/partials/
-├── _item_table.html
-├── _item_row.html
-```
-
-Example `_customer_table.html`:
-```jinja
-{# Required context: customers, page, total_pages, total_count, limit, search, status #}
-{% from "components/macros.html" import status_badge, bulk_select_header, bulk_select_cell, empty_state %}
-{% from "components/htmx_macros.html" import htmx_pagination, htmx_delete_button %}
-
-<div class="table-container">
-    <table class="table">
-        <thead>
-            <tr>
-                {{ bulk_select_header() }}
-                <th>Code</th>
-                <th>Name</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for customer in customers %}
-            {% include "finance/partials/_customer_row.html" %}
-            {% else %}
-            <tr><td colspan="10">{{ empty_state('No customers found', ...) }}</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-{{ htmx_pagination(page=page, total_pages=total_pages, total_count=total_count,
-                   target="#customers-table-container", url="/finance/ar/customers",
-                   params={"search": search, "status": status}, limit=limit) }}
-```
-
----
-### Phase 4: Backend Route Modifications
-
-#### 4.1 Update Web Services for HTMX Support
-Pattern for each list view:
-```python
-from app.services.htmx import is_htmx_request, htmx_response, htmx_toast
-
-def list_customers_response(self, request, auth, db, search, status, page):
-    # Fetch data (existing code)
-    context = {"customers": customers, "search": search, "status": status,
-               "page": page, "total_pages": total_pages, ...}
-
-    if is_htmx_request(request):
-        return templates.TemplateResponse(request,
-            "finance/partials/_customer_table.html", context)
-
-    full_context = base_context(request, auth, "Customers", "ar")
-    full_context.update(context)
-    return templates.TemplateResponse(request, "finance/ar/customers.html", full_context)
-```
-
-#### 4.2 Add HTMX Delete Endpoints
-**File:** `app/web/finance/ar.py` (MODIFY)
-
-```python
-@router.delete("/customers/{customer_id}/htmx-delete")
-def htmx_delete_customer(request: Request, customer_id: str,
-                         auth: WebAuthContext = Depends(require_finance_access),
-                         db: Session = Depends(get_db)):
-    """HTMX delete - returns empty response with toast trigger."""
-    # Delete logic...
-    return htmx_response(content="", trigger=htmx_toast("Customer deleted", "success"))
-```
-
----
-### Phase 5: CSS for Loading States
-**File:** `src/css/input.css` (MODIFY)
-
-```css
-/* HTMX Loading States */
-.htmx-indicator { display: none; }
-.htmx-request .htmx-indicator { display: inline-flex; }
-.htmx-request.htmx-indicator { display: inline-flex; }
-
-/* Fade out deleted rows */
-tr.htmx-swapping {
-    opacity: 0;
-    transition: opacity 0.3s ease-out;
-}
-
-/* Button loading state */
-button[data-loading-disable].htmx-request {
-    pointer-events: none;
-    opacity: 0.7;
-}
-```
-
----
-### Phase 6: Error Handling
-**File:** `templates/base.html` (MODIFY)
-
-```js
-document.body.addEventListener('htmx:responseError', function(evt) {
+```javascript
+document.body.addEventListener('htmx:responseError', function (evt) {
     const status = evt.detail.xhr.status;
-    let message = 'An error occurred';
     if (status === 401) { window.location.href = '/login'; return; }
-    if (status === 403) message = 'Permission denied';
-    if (status === 404) message = 'Not found';
-    if (status >= 500) message = 'Server error';
-    window.dispatchEvent(new CustomEvent('show-toast', {
-        detail: { message, type: 'error' }
-    }));
+    const message =
+        status === 403 ? 'Permission denied'
+      : status === 404 ? 'Not found'
+      : status >= 500 ? 'Server error — try again'
+      : 'Request failed';
+    if (typeof window.showToast === 'function') {
+        window.showToast(message, 'error');
+    }
 });
 ```
 
----
-## Files to Create/Modify
+**Acceptance criteria:**
+- Triggering a 500 from any HTMX endpoint shows the toast within 1s.
+- 401 redirects to `/login` without showing a toast.
+- Existing `htmx-loading-states.js` indicators continue to work (no CSS conflict).
 
-### New Files
-- `app/services/htmx.py`
-- `templates/components/htmx_macros.html`
-- `templates/finance/partials/_customer_table.html`
-- `templates/finance/partials/_customer_row.html`
-- `templates/finance/partials/_supplier_table.html`
-- `templates/finance/partials/_supplier_row.html`
-- `templates/finance/partials/_invoice_table.html`
-- `templates/finance/partials/_invoice_row.html`
-- `templates/finance/partials/_account_table.html`
-- `templates/finance/partials/_account_row.html`
+### 3.3 Audit `live_search` callers for `#results-container` correctness — **DO**
 
-### Modified Files
-- `app/web/deps.py` (add `partial_context`)
-- `app/web/finance/ar.py` (HTMX delete endpoints)
-- `app/web/finance/ap.py` (HTMX delete endpoints)
-- `app/web/finance/gl.py` (HTMX delete endpoints)
-- `app/services/finance/ar/web.py` (HTMX response handling)
-- `app/services/finance/ap/web.py` (HTMX response handling)
-- `app/services/finance/gl/web.py` (HTMX response handling)
-- `templates/finance/ar/customers.html` (use HTMX macros)
-- `templates/finance/ap/suppliers.html` (use HTMX macros)
-- `templates/finance/gl/accounts.html` (use HTMX macros)
-- `src/css/input.css` (HTMX loading styles)
-- `templates/base.html` (HTMX error handling JS)
+`live_search` requires the calling template to wrap its results in `<div id="results-container">`. Forgetting this silently breaks HTMX (the swap target doesn't exist). Verify the 11 templates currently using HTMX attributes all have the wrapper.
+
+**Acceptance criteria:**
+- Each of the 11 `hx-get`-using templates either (a) wraps its results in `#results-container` or (b) explicitly opts out by setting `target_id="…"`.
+- A short note added to `.claude/rules/templates.md` codifying the wrapper requirement (it's already in CLAUDE.md but worth a more findable home).
 
 ---
-## Implementation Order
 
-### Milestone 1: Foundation
-1. Create `app/services/htmx.py`
-2. Add `partial_context` to `app/web/deps.py`
-3. Create `templates/components/htmx_macros.html`
-4. Add HTMX CSS to `src/css/input.css`
-5. Add error handling to `templates/base.html`
+## 4. Remaining work (decided against)
 
-### Milestone 2: First Module (AR Customers)
-1. Create `templates/finance/partials/_customer_table.html`
-2. Create `templates/finance/partials/_customer_row.html`
-3. Modify `app/services/finance/ar/web.py`
-4. Update `templates/finance/ar/customers.html`
-5. Add HTMX routes to `app/web/finance/ar.py`
+### 4.1 Dedicated `_*_table.html` / `_*_row.html` partials — **NO**
 
-### Milestone 3: Expand to Core Modules
-1. AP Suppliers (same pattern)
-2. GL Accounts (same pattern)
-3. AR Invoices (same pattern)
-4. AP Invoices (same pattern)
+The original plan proposed 8+ pairs of partial templates so the server could return just the table fragment on HTMX requests. The `hx-select="#results-container"` approach gets the same client-side outcome at the cost of one extra server-side full render per HTMX request.
 
-### Milestone 4: Secondary Modules
-1. Inventory Items
-2. Fixed Assets
-3. People/Employees
-4. Banking Accounts
+**Reverse if:** a list page's full render exceeds 200ms p50 *and* HTMX latency budget is the bottleneck (measure first — likely the DB query, not the template). Until then, keep the template count flat.
+
+### 4.2 Standalone `htmx_macros.html` file — **NO**
+
+`macros.html::live_search` already covers search, filter, pagination, debounce, push-url, autosuggest, loading indicator. The plan's nine proposed macros either duplicate this or are one-line wrappers around stock HTMX attributes. A separate file would fragment the macro catalogue without adding capability.
+
+**Reverse if:** the `live_search` macro becomes a maintenance burden (>1000 lines, too many flags) — at that point splitting *might* help, but the split should be by *function* (search vs delete vs form-submit), not by tech-tag.
+
+### 4.3 Phase 5 CSS (`.htmx-indicator`, `.htmx-swapping`) — **NO**
+
+`htmx-loading-states.js` is already loaded in `base.html:62` and uses `data-loading-*` attribute conventions. Adding the plan's class-based rules would create two parallel systems for the same job. Stick with `htmx-loading-states.js` conventions; if a list page needs a loading state, use `data-loading-class` rather than `.htmx-indicator`.
 
 ---
-## Verification
 
-Manual Testing Checklist (per converted page):
-- Full page load works (non-HTMX fallback)
-- Search triggers partial update (no full reload)
-- Filter changes trigger partial update
-- Pagination updates table only
-- Browser back/forward preserves state
-- Delete removes row with animation
-- Bulk selection persists after updates
-- Toast notifications appear
-- Loading indicators show during requests
-- Dark mode styling correct
+## 5. Original plan (preserved for context)
 
-Commands:
-- `npm run build:css`
-- `uvicorn app.main:app --reload`
-- `curl -H "HX-Request: true" http://localhost:8000/finance/ar/customers`
+The original 6-phase plan with milestones (AR Customers → AP Suppliers → GL Accounts → Inventory → Fixed Assets → People → Banking) is preserved in git history at commit `4436fce0` if needed. Summary of which items shipped via the as-built path:
+
+| Original plan item | Status | Notes |
+|---|---|---|
+| Phase 1: `app/services/htmx.py` | Not built | Now scheduled in §3.1 |
+| Phase 1: `partial_context` in `app/web/deps.py` | Not built, **rejected** | `base_context` already covers the need |
+| Phase 1: `templates/components/htmx_macros.html` | Not built, **rejected** | See §4.2 |
+| Phase 2: 9 HTMX macros | **Replaced** | `live_search` covers equivalent capability |
+| Phase 3: per-entity partial templates | Not built, **rejected** | See §4.1 |
+| Phase 4: HTMX-aware web services | **Shipped (different shape)** | Ad-hoc per route; centralisation in §3.1 |
+| Phase 4: HTMX delete endpoints | Not built | No demand to date — list pages reload on delete via plain form POST + redirect, which is fine |
+| Phase 5: HTMX loading-state CSS | Not built, **rejected** | See §4.3 |
+| Phase 6: `htmx:responseError` handler | Not built | Now scheduled in §3.2 |
 
 ---
-## Notes
-- Alpine.js compatibility: Existing bulkActions component already handles htmx:afterSwap events
-- CSRF tokens: Existing meta tag pattern continues to work with HTMX
-- Progressive enhancement: All pages will continue to work without JavaScript
-- No breaking changes: Existing functionality preserved; HTMX is additive
+
+## 6. Decisions log
+
+- **2026-04-24** — Original plan filed (commit `4436fce0`).
+- **2026-05-13** — Reviewed. Plan declared superseded by as-built `live_search` pattern. Scoped remaining work to: central HTMX helper module, missing error handler, `#results-container` audit. Three plan phases formally rejected.

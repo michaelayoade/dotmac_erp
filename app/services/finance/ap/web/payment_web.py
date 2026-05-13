@@ -32,6 +32,7 @@ from app.models.finance.banking.bank_account import BankAccountStatus
 from app.models.finance.common.attachment import AttachmentCategory
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.htmx import htmx_response, is_htmx_request
 from app.services.finance.ap.ap_aging import ap_aging_service
 from app.services.finance.ap.payment_batch import payment_batch_service
 from app.services.finance.ap.supplier import supplier_service
@@ -752,11 +753,8 @@ class PaymentWebService:
                 return {"success": True, "payment_id": str(payment.payment_id)}
 
             redirect_url = "/finance/ap/payments?success=Payment+created+successfully"
-            if request.headers.get("HX-Request"):
-                return HTMLResponse(
-                    content="",
-                    headers={"HX-Redirect": redirect_url},
-                )
+            if is_htmx_request(request):
+                return htmx_response(redirect=redirect_url)
             return RedirectResponse(url=redirect_url, status_code=303)
 
         except Exception as e:
@@ -769,8 +767,8 @@ class PaymentWebService:
                     status_code=400,
                     content={"detail": str(e)},
                 )
-            if request.headers.get("HX-Request"):
-                return HTMLResponse(
+            if is_htmx_request(request):
+                return htmx_response(
                     content=(
                         '<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 '
                         'dark:bg-rose-900/20 dark:border-rose-800">'

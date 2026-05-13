@@ -71,6 +71,7 @@ from app.monitoring import setup_monitoring
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.observability import ObservabilityMiddleware
 from app.services import audit as audit_service
+from app.services.htmx import is_htmx_request
 from app.services.settings_seed import seed_all_settings
 from app.startup import log_startup_info, validate_startup
 from app.telemetry import setup_otel
@@ -378,7 +379,7 @@ async def redirect_error_template_middleware(request: Request, call_next):
 
     if not _is_html_request(request):
         return response
-    if request.headers.get("HX-Request", "").lower() == "true":
+    if is_htmx_request(request):
         return response
     if response.status_code not in {301, 302, 303, 307, 308}:
         return response

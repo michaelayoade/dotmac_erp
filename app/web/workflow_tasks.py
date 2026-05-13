@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.workflow_task import WorkflowTaskPriority, WorkflowTaskStatus
 from app.services.common import PaginationParams
+from app.services.htmx import htmx_response, is_htmx_request
 from app.services.people.hr.employees import EmployeeService
 from app.services.workflow_task_service import WorkflowTaskService
 from app.templates import templates
@@ -200,10 +201,10 @@ async def complete_task(
     except (ValueError, RuntimeError):
         pass
     # Return to list or HTMX response
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(
+    if is_htmx_request(request):
+        return htmx_response(
             content='<span class="text-emerald-600">Completed</span>',
-            headers={"HX-Trigger": "taskCompleted"},
+            trigger="taskCompleted",
         )
     return RedirectResponse(url="/tasks", status_code=302)
 
@@ -226,10 +227,10 @@ async def snooze_task(
     except (ValueError, RuntimeError):
         pass
     # Return to list or HTMX response
-    if request.headers.get("HX-Request"):
-        return HTMLResponse(
+    if is_htmx_request(request):
+        return htmx_response(
             content=f'<span class="text-amber-600">Snoozed {days} days</span>',
-            headers={"HX-Trigger": "taskSnoozed"},
+            trigger="taskSnoozed",
         )
     return RedirectResponse(url="/tasks", status_code=302)
 
