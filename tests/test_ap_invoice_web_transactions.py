@@ -17,6 +17,19 @@ async def test_create_invoice_response_commits_on_success(monkeypatch):
     request.json = AsyncMock(return_value={"supplier_id": str(uuid4()), "lines": []})
     auth = SimpleNamespace(organization_id=uuid4(), person_id=uuid4())
     db = MagicMock()
+    invoice_id = uuid4()
+
+    class ExpiringInvoice:
+        expired = False
+
+        @property
+        def invoice_id(self):
+            if self.expired:
+                raise AssertionError("invoice_id was read after commit")
+            return invoice_id
+
+    invoice = ExpiringInvoice()
+    db.commit.side_effect = lambda: setattr(invoice, "expired", True)
 
     monkeypatch.setattr(
         InvoiceWebService,
@@ -25,12 +38,13 @@ async def test_create_invoice_response_commits_on_success(monkeypatch):
     )
     monkeypatch.setattr(
         "app.services.finance.ap.web.invoice_web.supplier_invoice_service.create_invoice",
-        lambda **_kwargs: SimpleNamespace(invoice_id=uuid4()),
+        lambda **_kwargs: invoice,
     )
 
     response = await InvoiceWebService().create_invoice_response(request, auth, db)
 
     assert response["success"] is True
+    assert response["invoice_id"] == str(invoice_id)
     assert response["redirect_url"].startswith("/finance/ap/invoices/")
     db.commit.assert_called_once()
     db.rollback.assert_not_called()

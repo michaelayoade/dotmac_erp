@@ -955,12 +955,12 @@
                 <a href="/finance/ap/invoices" class="btn-secondary">
                     Cancel
                 </a>
-                <button type="button" @click="saveAsDraft" class="btn-secondary">
+                <button type="button" @click="saveAsDraft" class="btn-secondary" :disabled="isSubmitting" :class="{ 'opacity-60 cursor-not-allowed': isSubmitting }">
                     Save as Draft
                 </button>
-                <button type="submit" class="btn-primary">
+                <button type="submit" class="btn-primary" :disabled="isSubmitting" :class="{ 'opacity-60 cursor-not-allowed': isSubmitting }">
                     {{ icon_svg("check", "w-4 h-4") }}
-                    {{ "Update Invoice" if invoice else "Create Invoice" }}
+                    <span x-text="isSubmitting ? 'Saving...' : '{{ "Update Invoice" if invoice else "Create Invoice" }}'"></span>
                 </button>
             </div>
         </div>
@@ -993,6 +993,7 @@ function invoiceForm() {
 
     return {
         items,
+        isSubmitting: false,
         form: {
             invoice_id: '{{ invoice.invoice_id if invoice else "" }}',
             supplier_id: '{{ invoice.supplier_id if invoice else "" }}' || (selectedSupplier?.supplier_id || ''),
@@ -1281,11 +1282,13 @@ function invoiceForm() {
         },
 
         async saveAsDraft() {
+            if (this.isSubmitting) return;
             this.form.status = 'DRAFT';
             await this.submitForm();
         },
 
         async submitForm() {
+            if (this.isSubmitting) return;
             // Ensure Alpine state is synced with DOM values (typeahead sets hidden inputs).
             // This makes validation reliable even if the browser cached an older typeahead.js.
             const supplierIdEl = document.getElementById('supplier_id');
@@ -1311,7 +1314,11 @@ function invoiceForm() {
                 return;
             }
 
+            // True by default so error/non-2xx/exception paths re-enable the button via finally;
+            // the redirect path flips it false to keep the button disabled through the 1s setTimeout.
+            let shouldResetSubmitting = true;
             try {
+                this.isSubmitting = true;
                 const endpoint = this.form.invoice_id
                     ? `/finance/ap/invoices/${this.form.invoice_id}/edit`
                     : '/finance/ap/invoices/new';
@@ -1334,6 +1341,7 @@ function invoiceForm() {
                     window.dispatchEvent(new CustomEvent('show-toast', {
                         detail: { message: 'Invoice saved successfully', type: 'success' }
                     }));
+                    shouldResetSubmitting = false;
                     setTimeout(() => {
                         window.location.href = redirectUrl;
                     }, 1000);
@@ -1347,6 +1355,10 @@ function invoiceForm() {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Error saving invoice', type: 'error' }
                 }));
+            } finally {
+                if (shouldResetSubmitting) {
+                    this.isSubmitting = false;
+                }
             }
         },
 

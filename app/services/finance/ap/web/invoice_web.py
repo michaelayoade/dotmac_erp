@@ -981,17 +981,18 @@ class InvoiceWebService:
                 input=input_data,
                 created_by_user_id=user_id,
             )
+            invoice_id = invoice.invoice_id
             db.commit()
 
             if "application/json" in content_type:
                 return {
                     "success": True,
-                    "invoice_id": str(invoice.invoice_id),
-                    "redirect_url": f"/finance/ap/invoices/{invoice.invoice_id}",
+                    "invoice_id": str(invoice_id),
+                    "redirect_url": f"/finance/ap/invoices/{invoice_id}",
                 }
 
             return RedirectResponse(
-                url=f"/finance/ap/invoices/{invoice.invoice_id}?success=Invoice+created+successfully",
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+created+successfully",
                 status_code=303,
             )
 

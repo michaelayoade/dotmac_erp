@@ -641,12 +641,12 @@
                 <a href="/finance/ar/invoices" class="btn btn-secondary">
                     Cancel
                 </a>
-                <button type="button" @click="saveAsDraft" class="btn btn-secondary">
+                <button type="button" @click="saveAsDraft" class="btn btn-secondary" :disabled="isSubmitting" :class="{ 'opacity-60 cursor-not-allowed': isSubmitting }">
                     Save as Draft
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" :disabled="isSubmitting" :class="{ 'opacity-60 cursor-not-allowed': isSubmitting }">
                     {{ icon_svg("check", "w-4 h-4") }}
-                    {{ "Update Invoice" if invoice else "Create Invoice" }}
+                    <span x-text="isSubmitting ? 'Saving...' : '{{ "Update Invoice" if invoice else "Create Invoice" }}'"></span>
                 </button>
             </div>
         </div>
@@ -717,6 +717,7 @@ function customerSearch() {
 function invoiceForm() {
     const _invoiceId = '{{ invoice.invoice_id if invoice else "" }}';
     return {
+        isSubmitting: false,
         form: {
             customer_id: '{{ invoice.customer_id if invoice else selected_customer_id }}',
             invoice_date: '{{ invoice.invoice_date if invoice else "" }}',
@@ -1138,11 +1139,13 @@ function invoiceForm() {
         },
 
         async saveAsDraft() {
+            if (this.isSubmitting) return;
             this.form.status = 'DRAFT';
             await this.submitForm();
         },
 
         async submitForm() {
+            if (this.isSubmitting) return;
             if (!this.form.customer_id || !this.form.invoice_date) {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Please fill in all required fields', type: 'error' }
@@ -1164,7 +1167,11 @@ function invoiceForm() {
                 }));
             }
 
+            // True by default so error/non-2xx/exception paths re-enable the button via finally;
+            // the redirect path flips it false to keep the button disabled through the 1s setTimeout.
+            let shouldResetSubmitting = true;
             try {
+                this.isSubmitting = true;
                 const submitUrl = _invoiceId
                     ? `/finance/ar/invoices/${_invoiceId}/edit`
                     : '/finance/ar/invoices/new';
@@ -1186,6 +1193,7 @@ function invoiceForm() {
                     window.dispatchEvent(new CustomEvent('show-toast', {
                         detail: { message: successMsg, type: 'success' }
                     }));
+                    shouldResetSubmitting = false;
                     setTimeout(() => {
                         window.location.href = redirectUrl;
                     }, 1000);
@@ -1199,6 +1207,10 @@ function invoiceForm() {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Error saving invoice', type: 'error' }
                 }));
+            } finally {
+                if (shouldResetSubmitting) {
+                    this.isSubmitting = false;
+                }
             }
         }
     }
