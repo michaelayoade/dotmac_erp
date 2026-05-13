@@ -19,6 +19,7 @@ from app.models.people.leave import LeaveApplicationStatus
 from app.models.person import Person
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.leave import LeaveAllocationExistsError, LeaveService
 from app.services.people.leave.leave_service import (
     HolidayListNotFoundError,
@@ -1050,9 +1051,12 @@ class LeaveWebService:
             half_day_date_str = LeaveWebService._get_form_str(form, "half_day_date")
 
             employee = db.get(Employee, coerce_uuid(employee_id))
-            leave_approver_id = None
-            if employee and employee.reports_to_id:
-                leave_approver_id = employee.reports_to_id
+            manager = (
+                OrgResolver(db).get_manager(employee.employee_id, org_id)
+                if employee
+                else None
+            )
+            leave_approver_id = manager.employee_id if manager else None
 
             application = svc.create_application(
                 org_id,

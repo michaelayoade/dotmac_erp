@@ -374,6 +374,10 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         self._grade_sync_cache: dict[str, uuid.UUID] = {}
         self._location_cache: dict[str, uuid.UUID | None] = {}
 
+        # Tracks every employee touched by this sync so reconcile_positions()
+        # can provision/refresh hr.position rows after the batch completes.
+        self._touched_employee_ids: list[uuid.UUID] = []
+
     def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
@@ -608,6 +612,9 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             except ValueError:
                 salary_mode = SalaryMode.BANK
 
+        # ERPNext sync writes Employee.reports_to_id directly; position rows
+        # are provisioned by reconcile_positions() which the orchestrator
+        # invokes automatically after this batch completes.
         employee = Employee(
             organization_id=self.organization_id,
             person_id=person_id,
@@ -639,6 +646,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             salary_mode=salary_mode,
             # created_by_id not set for synced records
         )
+        self._touched_employee_ids.append(employee.employee_id)
         return employee
 
     def update_entity(self, entity: Employee, data: dict[str, Any]) -> Employee:
@@ -746,7 +754,31 @@ class EmployeeSyncService(BaseSyncService[Employee]):
                 entity.salary_mode = SalaryMode.BANK
 
         # updated_by_id not set for synced records
+        self._touched_employee_ids.append(entity.employee_id)
         return entity
+
+    def reconcile_positions(self):
+        """
+        Provision and sync hr.position rows for every employee touched by
+        this sync batch.
+
+        Invoked automatically by the ERPNext orchestrator's per-entity
+        post-sync hook (``_sync_entity_type``) right after the service
+        returns, inside the same transaction. Exposed publicly so tests
+        and ad-hoc callers can invoke it directly. Safe on empty batches
+        and partial-success state.
+        """
+        from app.services.people.hr.positions import (
+            PositionService,
+            ReconcileResult,
+        )
+
+        ids = [eid for eid in self._touched_employee_ids if eid is not None]
+        if not ids:
+            return ReconcileResult()
+        return PositionService(
+            self.db, self.organization_id
+        ).reconcile_from_reports_to_id(employee_ids=ids)
 
     def _resolve_or_create_location_id(
         self, branch_name: str | None

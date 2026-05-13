@@ -61,6 +61,7 @@ from app.services.careers.candidate_notifications import CandidateNotificationSe
 from app.services.common import PaginatedResult, PaginationParams, ValidationError
 from app.services.finance.platform.org_context import org_context_service
 from app.services.people.hr import EmployeeCreateData
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.recruit.notifications import send_new_applicant_notification
 from app.services.state_machine import StateMachine
 
@@ -1608,8 +1609,15 @@ class RecruitmentService:
 
             onboarding_service = OnboardingService(self.db)
 
-            # Use manager_id from parameter, or fall back to reports_to
-            effective_manager_id = manager_id or employee.reports_to_id
+            # Use explicit manager, otherwise resolve through position hierarchy.
+            resolved_manager = (
+                OrgResolver(self.db).get_manager(employee.employee_id, org_id)
+                if not manager_id
+                else None
+            )
+            effective_manager_id = manager_id or (
+                resolved_manager.employee_id if resolved_manager else None
+            )
 
             onboarding = onboarding_service.create_onboarding_from_template(
                 org_id,

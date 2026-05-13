@@ -36,6 +36,9 @@ from app.models.people.hr import (
     EmployeeGrade,
     EmployeeStatus,
     EmploymentType,
+    Position,
+    PositionAssignment,
+    PositionAssignmentType,
 )
 from app.models.people.hr.employee import SalaryMode
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
@@ -63,6 +66,7 @@ from app.services.people.hr import (
 from app.services.people.hr.employee_filter_engine import (
     parse_employee_filter_payload_json,
 )
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.recent_activity import get_recent_activity_for_record
 from app.templates import templates
@@ -153,6 +157,60 @@ class HRWebService:
         if not cleaned or cleaned.lower() in {"none", "null"}:
             return None
         return cleaned
+
+    @staticmethod
+    def _load_manager_position_titles(
+        db: Session,
+        org_id: UUID,
+        employee_ids: list[UUID],
+    ) -> dict[UUID, str]:
+        """
+        Return a ``{employee_id: designation_name}`` map for the active PRIMARY
+        position of each given employee.
+
+        Used to enrich manager-picker dropdowns so users see "Sarah Adeyemi -
+        Field Operations Manager" rather than a bare name. Employees without
+        an active PRIMARY position assignment, or whose position lacks a
+        designation, are omitted from the map. Two queries regardless of
+        input size — safe to call on full dropdown sets.
+        """
+        if not employee_ids:
+            return {}
+
+        assignment_rows = db.execute(
+            select(
+                PositionAssignment.employee_id,
+                PositionAssignment.position_id,
+            ).where(
+                PositionAssignment.organization_id == org_id,
+                PositionAssignment.employee_id.in_(employee_ids),
+                PositionAssignment.assignment_type == PositionAssignmentType.PRIMARY,
+                PositionAssignment.end_date.is_(None),
+            )
+        ).all()
+        if not assignment_rows:
+            return {}
+
+        position_to_employees: dict[UUID, list[UUID]] = {}
+        for row in assignment_rows:
+            position_to_employees.setdefault(row.position_id, []).append(
+                row.employee_id
+            )
+
+        designation_rows = db.execute(
+            select(
+                Position.position_id,
+                Designation.designation_name,
+            )
+            .join(Designation, Position.designation_id == Designation.designation_id)
+            .where(Position.position_id.in_(position_to_employees.keys()))
+        ).all()
+
+        titles: dict[UUID, str] = {}
+        for row in designation_rows:
+            for emp_id in position_to_employees.get(row.position_id, ()):
+                titles[emp_id] = row.designation_name
+        return titles
 
     @staticmethod
     def _designation_is_nysc(designation_name: str | None) -> bool:
@@ -1595,21 +1653,94 @@ class HRWebService:
             if employee.employment_type_id
             else None
         )
+        resolver = OrgResolver(db)
         manager = None
-        if employee.reports_to_id:
-            manager_emp = db.scalar(
-                select(Employee).where(
-                    Employee.employee_id == employee.reports_to_id,
-                    Employee.organization_id == org_id,
-                    Employee.status != EmployeeStatus.TERMINATED,
-                )
-            )
-            if manager_emp:
-                manager_person = db.get(Person, manager_emp.person_id)
-                manager = {
-                    "employee_id": manager_emp.employee_id,
-                    "name": manager_person.name if manager_person else "",
+        manager_emp = resolver.get_manager(employee.employee_id, org_id)
+        if manager_emp:
+            manager_person = db.get(Person, manager_emp.person_id)
+            manager = {
+                "employee_id": manager_emp.employee_id,
+                "name": manager_person.name if manager_person else "",
+            }
+
+        chain_entries = resolver.get_position_chain(employee.employee_id, org_id)
+        designation_ids = {
+            position.designation_id
+            for position, _ in chain_entries
+            if position.designation_id
+        }
+        department_ids = {
+            position.department_id
+            for position, _ in chain_entries
+            if position.department_id
+        }
+        person_ids = {
+            incumbent.person_id
+            for _, incumbent in chain_entries
+            if incumbent and incumbent.person_id
+        }
+        designations_by_id = (
+            {
+                d.designation_id: d
+                for d in db.scalars(
+                    select(Designation).where(
+                        Designation.designation_id.in_(designation_ids)
+                    )
+                ).all()
+            }
+            if designation_ids
+            else {}
+        )
+        departments_by_id = (
+            {
+                d.department_id: d
+                for d in db.scalars(
+                    select(Department).where(
+                        Department.department_id.in_(department_ids)
+                    )
+                ).all()
+            }
+            if department_ids
+            else {}
+        )
+        persons_by_id = (
+            {
+                p.id: p
+                for p in db.scalars(
+                    select(Person).where(Person.id.in_(person_ids))
+                ).all()
+            }
+            if person_ids
+            else {}
+        )
+        position_chain = []
+        for position, incumbent in chain_entries:
+            chain_designation = designations_by_id.get(position.designation_id)
+            chain_department = departments_by_id.get(position.department_id)
+            incumbent_name = ""
+            incumbent_id = None
+            if incumbent:
+                incumbent_id = incumbent.employee_id
+                incumbent_person = persons_by_id.get(incumbent.person_id)
+                if incumbent_person:
+                    incumbent_name = incumbent_person.name
+            position_chain.append(
+                {
+                    "position_id": position.position_id,
+                    "designation_name": chain_designation.designation_name
+                    if chain_designation
+                    else "",
+                    "department_name": chain_department.department_name
+                    if chain_department
+                    else "",
+                    "incumbent_name": incumbent_name,
+                    "incumbent_employee_id": incumbent_id,
+                    "is_self": incumbent_id == employee.employee_id
+                    if incumbent_id
+                    else False,
+                    "is_vacant": incumbent is None,
                 }
+            )
         expense_approver = None
         if employee.expense_approver_id:
             approver_emp = db.scalar(
@@ -1680,6 +1811,7 @@ class HRWebService:
             "employment_type": emp_type,
             "manager": manager,
             "expense_approver": expense_approver,
+            "position_chain": position_chain,
             "credentials": credentials,
             "salary_assignments": salary_assignments,
             "tax_profile": tax_profile,
@@ -1788,6 +1920,13 @@ class HRWebService:
             )
             .items
         )
+        manager_position_titles = {
+            str(emp_id): title
+            for emp_id, title in self._load_manager_position_titles(
+                db, org_id, [m.employee_id for m in managers]
+            ).items()
+        }
+        current_manager_id: UUID | None = None
         cost_centers = db.scalars(
             select(CostCenter)
             .where(
@@ -1840,6 +1979,8 @@ class HRWebService:
             "employment_types": employment_types,
             "grades": grades,
             "managers": managers,
+            "manager_position_titles": manager_position_titles,
+            "current_manager_id": current_manager_id,
             "cost_centers": cost_centers,
             "locations": locations,
             "shift_types": shift_types,
@@ -1959,6 +2100,16 @@ class HRWebService:
             )
             .items
         )
+        manager_position_titles = {
+            str(emp_id): title
+            for emp_id, title in self._load_manager_position_titles(
+                db, org_id, [m.employee_id for m in managers]
+            ).items()
+        }
+        current_manager_emp = OrgResolver(db).get_manager(employee.employee_id, org_id)
+        current_manager_id: UUID | None = (
+            current_manager_emp.employee_id if current_manager_emp else None
+        )
         cost_centers = db.scalars(
             select(CostCenter)
             .where(
@@ -2029,6 +2180,8 @@ class HRWebService:
             "employment_types": employment_types,
             "grades": grades,
             "managers": managers,
+            "manager_position_titles": manager_position_titles,
+            "current_manager_id": current_manager_id,
             "cost_centers": cost_centers,
             "locations": locations,
             "shift_types": shift_types,

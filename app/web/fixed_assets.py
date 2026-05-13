@@ -78,6 +78,27 @@ def fa_reports(
     return templates.TemplateResponse(request, "fixed_assets/reports.html", context)
 
 
+@router.get("/reports/gl-reconciliation/export")
+def export_fa_gl_reconciliation_report(
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    as_of: date | None = Query(default=None),
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
+):
+    """Export asset register to GL control reconciliation as CSV or PDF."""
+    if format == "pdf":
+        return fa_web_service.export_gl_reconciliation_pdf_response(
+            db,
+            str(auth.organization_id),
+            as_of=as_of,
+        )
+    return fa_web_service.export_gl_reconciliation_csv_response(
+        db,
+        str(auth.organization_id),
+        as_of=as_of,
+    )
+
+
 @router.get("/reports/gl-reconciliation", response_class=HTMLResponse)
 def fa_gl_reconciliation_report(
     request: Request,
@@ -97,6 +118,56 @@ def fa_gl_reconciliation_report(
     return templates.TemplateResponse(
         request, "fixed_assets/gl_reconciliation.html", context
     )
+
+
+@router.get("/reports/count-sheets/export")
+def export_fa_count_sheets_report(
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    audit_plan_id: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
+):
+    """Export asset count sheets as CSV or PDF."""
+    if format == "pdf":
+        return fa_web_service.export_asset_count_sheet_pdf_response(
+            db,
+            str(auth.organization_id),
+            audit_plan_id=audit_plan_id,
+            location=location,
+            category=category,
+        )
+    return fa_web_service.export_asset_count_sheet_csv_response(
+        db,
+        str(auth.organization_id),
+        audit_plan_id=audit_plan_id,
+        location=location,
+        category=category,
+    )
+
+
+@router.get("/reports/count-sheets", response_class=HTMLResponse)
+def fa_count_sheets_report(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    audit_plan_id: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+):
+    """Asset count sheets comparing system quantities with physical checks."""
+    context = base_context(request, auth, "Asset Count Sheets", "reports", db=db)
+    context.update(
+        fa_web_service.asset_count_sheet_context(
+            db,
+            str(auth.organization_id),
+            audit_plan_id=audit_plan_id,
+            location=location,
+            category=category,
+        )
+    )
+    return templates.TemplateResponse(request, "fixed_assets/count_sheets.html", context)
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -169,6 +240,154 @@ def fa_import_form(
 
     return templates.TemplateResponse(
         request, "fixed_assets/import_export/import_form.html", context
+    )
+
+
+# =============================================================================
+# Asset Count Plans
+# =============================================================================
+
+
+@router.get("/count-plans", response_class=HTMLResponse)
+def list_count_plans(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    status: str | None = Query(default=None),
+):
+    """List fixed asset physical count plans."""
+    context = base_context(request, auth, "Asset Count Plans", "count_plans", db=db)
+    context.update(
+        fa_web_service.count_plans_context(
+            db,
+            str(auth.organization_id),
+            status=status,
+        )
+    )
+    return templates.TemplateResponse(request, "fixed_assets/count_plans.html", context)
+
+
+@router.get("/count-plans/new", response_class=HTMLResponse)
+def new_count_plan_form(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+):
+    """New fixed asset physical count plan form."""
+    context = base_context(request, auth, "New Asset Count Plan", "count_plans", db=db)
+    context.update(fa_web_service.count_plan_form_context(db, str(auth.organization_id)))
+    return templates.TemplateResponse(
+        request, "fixed_assets/count_plan_form.html", context
+    )
+
+
+@router.post("/count-plans/new")
+def create_count_plan(
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    title: str = Form(...),
+    planned_date: str = Form(...),
+    scope_location_id: str | None = Form(default=None),
+):
+    """Create a fixed asset physical count plan."""
+    return fa_web_service.create_count_plan_response(
+        db,
+        str(auth.organization_id),
+        auth.person_id,
+        title,
+        planned_date,
+        scope_location_id=scope_location_id,
+    )
+
+
+@router.get("/count-plans/{audit_plan_id}", response_class=HTMLResponse)
+def count_plan_detail(
+    request: Request,
+    audit_plan_id: str,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    line_status: str | None = Query(default=None),
+):
+    """Fixed asset physical count plan detail and check screen."""
+    context = base_context(request, auth, "Asset Count Plan", "count_plans", db=db)
+    context.update(
+        fa_web_service.count_plan_detail_context(
+            db,
+            str(auth.organization_id),
+            audit_plan_id,
+            line_status=line_status,
+        )
+    )
+    return templates.TemplateResponse(
+        request, "fixed_assets/count_plan_detail.html", context
+    )
+
+
+@router.post("/count-plans/{audit_plan_id}/start")
+def start_count_plan(
+    audit_plan_id: str,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+):
+    """Start a fixed asset physical count plan."""
+    return fa_web_service.start_count_plan_response(
+        db,
+        str(auth.organization_id),
+        audit_plan_id,
+    )
+
+
+@router.post("/count-plans/{audit_plan_id}/complete")
+def complete_count_plan(
+    audit_plan_id: str,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+):
+    """Complete a fixed asset physical count plan."""
+    return fa_web_service.complete_count_plan_response(
+        db,
+        str(auth.organization_id),
+        audit_plan_id,
+    )
+
+
+@router.post("/count-plans/{audit_plan_id}/mark-pending-found")
+def mark_count_plan_pending_found(
+    audit_plan_id: str,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+):
+    """Mark all pending lines in a count plan as found."""
+    return fa_web_service.mark_count_plan_pending_found_response(
+        db,
+        str(auth.organization_id),
+        auth.person_id,
+        audit_plan_id,
+    )
+
+
+@router.post("/count-plans/{audit_plan_id}/lines/{audit_line_id}/check")
+def check_count_plan_line(
+    audit_plan_id: str,
+    audit_line_id: str,
+    auth: WebAuthContext = Depends(require_fixed_assets_access),
+    db: Session = Depends(get_db),
+    action: str = Form(...),
+    observed_location_id: str | None = Form(default=None),
+    observed_status: str | None = Form(default=None),
+    discrepancy_notes: str | None = Form(default=None),
+):
+    """Record a fixed asset physical count line check."""
+    return fa_web_service.check_count_plan_line_response(
+        db,
+        str(auth.organization_id),
+        auth.person_id,
+        audit_plan_id,
+        audit_line_id,
+        action,
+        observed_location_id=observed_location_id,
+        observed_status=observed_status,
+        discrepancy_notes=discrepancy_notes,
     )
 
 

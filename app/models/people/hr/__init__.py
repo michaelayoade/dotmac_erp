@@ -33,6 +33,11 @@ from app.models.people.hr.employee_extended import (
 )
 from app.models.people.hr.employee_grade import EmployeeGrade
 from app.models.people.hr.employment_type import EmploymentType
+from app.models.people.hr.position import Position
+from app.models.people.hr.position_assignment import (
+    PositionAssignment,
+    PositionAssignmentType,
+)
 from app.models.people.hr.handbook import (
     DocumentCategory,
     DocumentStatus,
@@ -110,6 +115,9 @@ __all__ = [
     "EmployeeStatus",
     "EmploymentType",
     "Gender",
+    "Position",
+    "PositionAssignment",
+    "PositionAssignmentType",
     # Lifecycle enums and models
     "ActivityStatus",
     "BoardingStatus",

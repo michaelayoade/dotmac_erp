@@ -1,0 +1,85 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Yearly Stock Movement - {{ org_name }}{% endblock %}
+{% block report_title %}Yearly Stock Movement Summary{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_meta %}
+<p class="meta-line">Scope: {{ scope_label }}</p>
+<p class="meta-line">Rows: {{ row_count }}</p>
+{% endblock %}
+
+{% block extra_styles %}
+table.report-table th,
+table.report-table td {
+  font-size: 7px;
+  padding: 4px 5px;
+}
+.wide-text {
+  max-width: 160px;
+  overflow-wrap: anywhere;
+}
+{% endblock %}
+
+{% block report_body %}
+<table class="summary-grid">
+  <tr>
+    <td>
+      <div class="summary-label">Opening Qty</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.opening_qty or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Quantity In</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.quantity_in or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Purchases</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.purchase_qty or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Issued</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.issued_qty or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Closing Qty</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.closing_qty or 0) }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if yearly_rows %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Year</th>
+      <th>Item</th>
+      <th>Warehouse</th>
+      <th class="num">Opening Qty</th>
+      <th class="num">Quantity In</th>
+      <th class="num">Purchases</th>
+      <th class="num">Issued</th>
+      <th class="num">Quantity Out</th>
+      <th class="num">Closing Qty</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in yearly_rows %}
+    <tr>
+      <td>{{ row.year }}</td>
+      <td class="wide-text">{{ row.item.item_code }}<br><span class="muted">{{ row.item.item_name }}</span></td>
+      <td class="wide-text">{{ row.warehouse.warehouse_code }}<br><span class="muted">{{ row.warehouse.warehouse_name }}</span></td>
+      <td class="num">{{ "{:,.2f}".format(row.opening_qty or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.quantity_in or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.purchase_qty or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.issued_qty or 0) }}</td>
+      <td class="num">{{ "{:,.2f}".format(row.quantity_out or 0) }}</td>
+      <td class="num bold">{{ "{:,.2f}".format(row.closing_qty or 0) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notes">
+  <p>No yearly stock movement rows were found for this export.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -194,7 +194,7 @@ class ExpenseApprovalService:
         self,
         claim: ExpenseClaim,
     ) -> ApprovalChain:
-        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee import Employee, EmployeeStatus
 
         org_id = claim.organization_id
         claim_amount = claim.total_approved_amount or claim.total_claimed_amount
@@ -227,27 +227,40 @@ class ExpenseApprovalService:
             r.action_type == LimitActionType.AUTO_ESCALATE for r in rules
         )
 
-        # Step 2: Start with expense approver (if set), otherwise manager
+        # Step 2: Start with expense approver (if set), otherwise position manager
+        initial_approver = None
         initial_approver_id = (
-            claim.requested_approver_id
-            or employee.expense_approver_id
-            or employee.reports_to_id
+            claim.requested_approver_id or employee.expense_approver_id
         )
         if initial_approver_id:
-            manager = self.db.get(Employee, initial_approver_id)
-            if manager:
-                manager_limit = self._get_approver_max_amount(org_id, manager)
-                if manager_limit and manager_limit >= claim_amount:
-                    steps.append(
-                        ApprovalStep(
-                            step_number=1,
-                            approver_id=manager.employee_id,
-                            approver_name=manager.full_name,
-                            max_amount=manager_limit,
-                            is_escalation=False,
-                        )
+            initial_approver = self.db.scalar(
+                select(Employee).where(
+                    Employee.employee_id == initial_approver_id,
+                    Employee.organization_id == org_id,
+                    Employee.status != EmployeeStatus.TERMINATED,
+                )
+            )
+        else:
+            from app.services.people.hr.org_resolver import OrgResolver
+
+            initial_approver = OrgResolver(self.db).get_manager(
+                employee.employee_id,
+                org_id,
+            )
+
+        if initial_approver:
+            manager_limit = self._get_approver_max_amount(org_id, initial_approver)
+            if manager_limit and manager_limit >= claim_amount:
+                steps.append(
+                    ApprovalStep(
+                        step_number=1,
+                        approver_id=initial_approver.employee_id,
+                        approver_name=initial_approver.full_name,
+                        max_amount=manager_limit,
+                        is_escalation=False,
                     )
-                    seen_approvers.add(manager.employee_id)
+                )
+                seen_approvers.add(initial_approver.employee_id)
 
         # Step 3: Check if escalation is needed (manager can't approve amount)
         if not steps or escalation_required:
@@ -490,12 +503,17 @@ class ExpenseApprovalService:
         if approver_limit and approver_limit.escalate_to_employee_id:
             return approver_limit.escalate_to_employee_id
 
-        # Fall back to manager's manager
+        # Fall back to the current approver's position manager
         current_approver = self.db.get(Employee, current_approver_id)
-        if current_approver and current_approver.reports_to_id:
-            manager = self.db.get(Employee, current_approver.reports_to_id)
-            if manager and manager.reports_to_id:
-                return manager.reports_to_id
+        if current_approver:
+            from app.services.people.hr.org_resolver import OrgResolver
+
+            manager = OrgResolver(self.db).get_manager(
+                current_approver.employee_id,
+                org_id,
+            )
+            if manager:
+                return manager.employee_id
 
         # Fall back to grade-based escalation
         if approver_limit and approver_limit.escalate_to_grade_min_rank:
@@ -715,28 +733,24 @@ class ExpenseApprovalService:
     ) -> list[tuple]:
         """Get approvers through escalation chain."""
         from app.models.people.hr.employee import Employee as EmployeeModel
+        from app.services.people.hr.org_resolver import OrgResolver
 
         result = []
 
-        # Walk up the management chain, starting from expense approver if set
-        current = employee
+        # Walk up the position chain, starting from expense approver if set
+        base_employee = employee
         if employee.expense_approver_id:
             base = self.db.get(EmployeeModel, employee.expense_approver_id)
             if base:
-                current = base
-        for _ in range(5):  # Max 5 levels of escalation
-            if not current.reports_to_id:
-                break
-            if current.reports_to_id in exclude_ids:
-                next_employee = self.db.get(EmployeeModel, current.reports_to_id)
-                if not next_employee:
-                    break
-                current = next_employee
-                continue
+                base_employee = base
 
-            manager = self.db.get(EmployeeModel, current.reports_to_id)
-            if not manager:
-                break
+        chain = OrgResolver(self.db).get_approval_chain(
+            base_employee.employee_id,
+            organization_id,
+        )
+        for manager in chain[:5]:  # Max 5 levels of escalation
+            if manager.employee_id in exclude_ids:
+                continue
 
             max_amt = self._get_approver_max_amount(organization_id, manager)
             if max_amt and max_amt >= amount:
@@ -747,8 +761,6 @@ class ExpenseApprovalService:
             if max_amt:
                 result.append((manager, max_amt, True))
                 exclude_ids.add(manager.employee_id)
-
-            current = manager
 
         return result
 

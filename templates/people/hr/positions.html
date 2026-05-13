@@ -1,0 +1,123 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, pagination, icon_svg %}
+
+{% block page_title %}Positions{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Human Resources</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Positions</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/positions/tree" class="btn btn-secondary mr-2">
+    {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
+    View Org Chart
+</a>
+<a href="/people/hr/positions/new" class="btn btn-primary">
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+    New Position
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/positions",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search positions..."
+    ) %}
+    {% endcall %}
+
+    <div id="results-container">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Position</th>
+                            <th scope="col">Department</th>
+                            <th scope="col">Reports To</th>
+                            <th scope="col">Incumbent</th>
+                            <th scope="col" class="text-center">Status</th>
+                            <th scope="col" class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in positions %}
+                        {% set position = row.position %}
+                        {% set parent = position.parent_position %}
+                        <tr class="group">
+                            <td>
+                                <div class="font-medium text-slate-900 dark:text-white">
+                                    {{ position.designation.designation_name if position.designation else 'Unspecified position' }}
+                                </div>
+                                <div class="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{{ position.position_id }}</div>
+                            </td>
+                            <td class="text-slate-600 dark:text-slate-300">
+                                {{ position.department.department_name if position.department else '-' }}
+                            </td>
+                            <td class="text-slate-600 dark:text-slate-300">
+                                {% if parent %}
+                                    {{ parent.designation.designation_name if parent.designation else 'Unspecified position' }}
+                                    {% if parent.department %}
+                                    <span class="block text-xs text-slate-500 dark:text-slate-400">{{ parent.department.department_name }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-slate-400">Root</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.incumbent %}
+                                <a href="/people/hr/employees/{{ row.incumbent.employee_id }}" class="font-medium text-violet-700 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200">
+                                    {{ row.incumbent.full_name }}
+                                </a>
+                                <div class="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">{{ row.incumbent.employee_code }}</div>
+                                {% else %}
+                                <span class="text-slate-400">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if position.is_vacant %}
+                                <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Vacant</span>
+                                {% else %}
+                                <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Filled</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                <a href="/people/hr/positions/{{ position.position_id }}/edit"
+                                   class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                   aria-label="Edit position" title="Edit position">
+                                    {{ icon_svg("edit", "h-4 w-4 inline") }}
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="py-8 text-center text-slate-500">
+                                No positions found.
+                                <a href="/people/hr/positions/new" class="text-violet-600 hover:text-violet-700 dark:text-violet-400">Create your first position</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
+        </div>
+    </div>
+</div>
+{% endblock %}

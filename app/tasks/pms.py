@@ -589,6 +589,7 @@ def pms_probation_check() -> dict[str, Any]:
         )
         from app.models.people.hr.employee import Employee, EmployeeStatus
         from app.services.notification import NotificationService
+        from app.services.people.hr.org_resolver import OrgResolver
         from app.services.people.perf.underperformance_service import (
             UnderperformanceService,
         )
@@ -629,9 +630,10 @@ def pms_probation_check() -> dict[str, Any]:
                             )
                             continue
 
-                        recipient_person_id = _resolve_person_id(
-                            db, org.organization_id, employee.reports_to_id
+                        manager = OrgResolver(db).get_manager(
+                            employee.employee_id, org.organization_id
                         )
+                        recipient_person_id = manager.person_id if manager else None
                         if recipient_person_id is None:
                             logger.warning(
                                 "Skipping probation milestone alert for %s: supervisor person not found",

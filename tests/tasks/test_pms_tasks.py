@@ -76,6 +76,10 @@ class TestPMSProbationCheck:
             reports_to_id=manager_employee_id,
             status=EmployeeStatus.ACTIVE,
         )
+        manager = SimpleNamespace(
+            employee_id=manager_employee_id,
+            person_id=manager_person_id,
+        )
         milestone = {"employee_id": employee_id, "months_of_service": 20}
 
         mock_db = MagicMock()
@@ -97,18 +101,18 @@ class TestPMSProbationCheck:
                 "app.services.people.perf.underperformance_service.UnderperformanceService",
                 return_value=underperformance_service,
             ),
-            patch(
-                "app.tasks.pms._resolve_person_id",
-                return_value=manager_person_id,
-            ) as resolve_person,
+            patch("app.services.people.hr.org_resolver.OrgResolver") as resolver_cls,
         ):
+            resolver_cls.return_value.get_manager.return_value = manager
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
 
             result = pms.pms_probation_check()
 
         assert result["notifications_sent"] == 1
-        resolve_person.assert_called_once_with(mock_db, org_id, manager_employee_id)
+        resolver_cls.return_value.get_manager.assert_called_once_with(
+            employee_id, org_id
+        )
         call = notification_service.create_if_not_sent_since.call_args.kwargs
         assert call["recipient_id"] == manager_person_id
         assert call["entity_id"] == employee_id

@@ -371,6 +371,391 @@ class TestFAWebServiceAssetDetail:
         assert asset_view["net_book_value"] == "USD 3,600.00"
 
 
+class TestFAWebServiceAssetCountSheets:
+    """Tests for fixed asset count sheet reporting."""
+
+    def test_asset_count_sheet_context_computes_physical_variance(self):
+        """Found and discrepancy lines count as physically present; missing does not."""
+        from app.models.people.assets.audit import AssetAuditLineStatus
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        plan_id = uuid.uuid4()
+        category_id = uuid.uuid4()
+        location_id = uuid.uuid4()
+        plan = SimpleNamespace(
+            audit_plan_id=plan_id,
+            organization_id=org_id,
+            plan_number="AAC-0001",
+            title="May Count",
+            planned_date=date(2026, 5, 1),
+            status="COMPLETED",
+            created_at=datetime(2026, 5, 1, tzinfo=UTC),
+        )
+        category = SimpleNamespace(
+            category_id=category_id,
+            category_code="ICT",
+            category_name="IT Equipment",
+        )
+        location = SimpleNamespace(
+            location_id=location_id,
+            location_name="HQ",
+        )
+
+        def scalar_result(items):
+            result = MagicMock()
+            result.all.return_value = items
+            return result
+
+        mock_db.scalars.side_effect = [
+            scalar_result([plan]),
+            scalar_result([category]),
+            scalar_result([location]),
+        ]
+        mock_db.get.return_value = plan
+        mock_db.execute.return_value.all.return_value = [
+            SimpleNamespace(
+                asset_id=uuid.uuid4(),
+                asset_number="FA-001",
+                asset_name="Laptop",
+                serial_number="SN-1",
+                system_status="IN_USE",
+                category_id=category_id,
+                category_code="ICT",
+                category_name="IT Equipment",
+                location_id=location_id,
+                location_code="HQ",
+                location_name="HQ",
+                line_status=AssetAuditLineStatus.FOUND,
+                is_found=True,
+                physical_check_at=datetime(2026, 5, 2, tzinfo=UTC),
+                discrepancy_notes=None,
+            ),
+            SimpleNamespace(
+                asset_id=uuid.uuid4(),
+                asset_number="FA-002",
+                asset_name="Monitor",
+                serial_number="SN-2",
+                system_status="IN_USE",
+                category_id=category_id,
+                category_code="ICT",
+                category_name="IT Equipment",
+                location_id=location_id,
+                location_code="HQ",
+                location_name="HQ",
+                line_status=AssetAuditLineStatus.DISCREPANCY,
+                is_found=True,
+                physical_check_at=datetime(2026, 5, 2, tzinfo=UTC),
+                discrepancy_notes="Found in another room",
+            ),
+            SimpleNamespace(
+                asset_id=uuid.uuid4(),
+                asset_number="FA-003",
+                asset_name="Printer",
+                serial_number="SN-3",
+                system_status="IN_USE",
+                category_id=category_id,
+                category_code="ICT",
+                category_name="IT Equipment",
+                location_id=location_id,
+                location_code="HQ",
+                location_name="HQ",
+                line_status=AssetAuditLineStatus.MISSING,
+                is_found=False,
+                physical_check_at=datetime(2026, 5, 2, tzinfo=UTC),
+                discrepancy_notes="Not found",
+            ),
+        ]
+
+        result = FixedAssetWebService.asset_count_sheet_context(
+            mock_db,
+            str(org_id),
+            audit_plan_id=str(plan_id),
+        )
+
+        assert result["has_count_plan"] is True
+        assert result["count_sheet_totals"]["system_qty"] == 3
+        assert result["count_sheet_totals"]["physical_qty"] == 2
+        assert result["count_sheet_totals"]["variance_qty"] == -1
+        assert result["count_sheet_totals"]["variance_count"] == 1
+        assert result["summary_rows"][0]["system_qty"] == 3
+        assert result["summary_rows"][0]["physical_qty"] == 2
+        assert result["count_sheet_rows"][2]["has_variance"] is True
+
+    def test_export_asset_count_sheet_csv_response_returns_csv(self):
+        """Asset count sheet CSV export should include rows and totals."""
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        plan = SimpleNamespace(plan_number="AAC-0001", title="May Count")
+        context = {
+            "selected_plan": plan,
+            "count_sheet_rows": [
+                {
+                    "asset_number": "FA-001",
+                    "asset_name": "Laptop",
+                    "serial_number": "SN-1",
+                    "location_name": "HQ",
+                    "category_name": "ICT - IT Equipment",
+                    "system_status": "IN_USE",
+                    "line_status": "FOUND",
+                    "system_qty": 1,
+                    "physical_qty": 1,
+                    "variance_qty": 0,
+                    "physical_check_at": "2026-05-02",
+                    "discrepancy_notes": "",
+                }
+            ],
+            "count_sheet_totals": {
+                "system_qty": 1,
+                "physical_qty": 1,
+                "variance_qty": 0,
+                "variance_count": 0,
+                "unchecked_qty": 0,
+            },
+        }
+
+        with patch.object(
+            FixedAssetWebService,
+            "asset_count_sheet_context",
+            return_value=context,
+        ):
+            response = FixedAssetWebService.export_asset_count_sheet_csv_response(
+                MagicMock(),
+                str(uuid.uuid4()),
+                audit_plan_id=str(uuid.uuid4()),
+            )
+
+        assert response.media_type == "text/csv"
+        assert (
+            response.headers["Content-Disposition"]
+            == 'attachment; filename="asset_count_sheets_aac_0001.csv"'
+        )
+        body = response.body.decode()
+        assert "Audit Plan,Asset Number,Asset Name,Serial Number" in body
+        assert "AAC-0001 - May Count,FA-001,Laptop,SN-1,HQ" in body
+        assert "AAC-0001 - May Count,Total,,,,,,,1,1,0,," in body
+
+    def test_export_asset_count_sheet_pdf_response_returns_pdf(self):
+        """Asset count sheet PDF export should render through ReportPDFService."""
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        plan = SimpleNamespace(plan_number="AAC-0001", title="May Count")
+        context = {
+            "selected_plan": plan,
+            "count_sheet_rows": [],
+            "summary_rows": [],
+            "count_sheet_totals": {
+                "system_qty": 0,
+                "physical_qty": 0,
+                "variance_qty": 0,
+                "variance_count": 0,
+                "unchecked_qty": 0,
+            },
+        }
+        captured: dict[str, object] = {}
+
+        def fake_render(self, report_name, organization_id, render_context):
+            captured["report_name"] = report_name
+            captured["organization_id"] = organization_id
+            captured["context"] = render_context
+            return b"%PDF-1.4 asset count"
+
+        org_id = str(uuid.uuid4())
+        with (
+            patch.object(
+                FixedAssetWebService,
+                "asset_count_sheet_context",
+                return_value=context,
+            ),
+            patch("app.services.finance.rpt.pdf.ReportPDFService.render", fake_render),
+        ):
+            response = FixedAssetWebService.export_asset_count_sheet_pdf_response(
+                MagicMock(),
+                org_id,
+                audit_plan_id=str(uuid.uuid4()),
+            )
+
+        assert response.media_type == "application/pdf"
+        assert response.body == b"%PDF-1.4 asset count"
+        assert (
+            response.headers["Content-Disposition"]
+            == 'attachment; filename="asset_count_sheets_aac_0001.pdf"'
+        )
+        assert captured["report_name"] == "asset_count_sheets"
+        assert captured["organization_id"] == org_id
+        assert captured["context"]["row_count"] == 0
+        assert captured["context"]["plan_label"] == "AAC-0001 - May Count"
+
+
+class TestFAWebServiceCountPlans:
+    """Tests for fixed asset count plan web actions."""
+
+    def test_create_count_plan_response_commits_and_redirects(self):
+        """Creating a count plan should call the audit service and commit."""
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        plan_id = uuid.uuid4()
+        plan = SimpleNamespace(audit_plan_id=plan_id)
+
+        with patch(
+            "app.services.fixed_assets.web.AssetAuditService.create_plan",
+            return_value=plan,
+        ) as create_mock:
+            response = FixedAssetWebService.create_count_plan_response(
+                mock_db,
+                str(org_id),
+                user_id,
+                "May Count",
+                "2026-05-08",
+            )
+
+        create_mock.assert_called_once()
+        assert create_mock.call_args.args[0] == org_id
+        assert create_mock.call_args.kwargs["title"] == "May Count"
+        assert create_mock.call_args.kwargs["planned_date"] == date(2026, 5, 8)
+        assert create_mock.call_args.kwargs["created_by_user_id"] == user_id
+        mock_db.commit.assert_called_once()
+        assert response.status_code == 303
+        assert str(plan_id) in response.headers["location"]
+
+    def test_start_count_plan_response_commits_and_redirects(self):
+        """Starting a count plan should delegate to the audit service."""
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        plan_id = uuid.uuid4()
+
+        with patch(
+            "app.services.fixed_assets.web.AssetAuditService.start_plan"
+        ) as start_mock:
+            response = FixedAssetWebService.start_count_plan_response(
+                mock_db,
+                str(org_id),
+                str(plan_id),
+            )
+
+        start_mock.assert_called_once_with(org_id, plan_id)
+        mock_db.commit.assert_called_once()
+        assert response.status_code == 303
+        assert str(plan_id) in response.headers["location"]
+
+    def test_check_count_plan_line_found_uses_expected_state(self):
+        """Found action should record the expected location/status to avoid false variance."""
+        from app.models.people.assets.audit import AssetAuditLineStatus
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        plan_id = uuid.uuid4()
+        line_id = uuid.uuid4()
+        expected_location_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        line = SimpleNamespace(
+            audit_line_id=line_id,
+            organization_id=org_id,
+            audit_plan_id=plan_id,
+            expected_location_id=expected_location_id,
+            expected_status="IN_USE",
+            status=AssetAuditLineStatus.PENDING,
+        )
+        mock_db.get.return_value = line
+
+        with patch(
+            "app.services.fixed_assets.web.AssetAuditService.record_check"
+        ) as record_mock:
+            response = FixedAssetWebService.check_count_plan_line_response(
+                mock_db,
+                str(org_id),
+                user_id,
+                str(plan_id),
+                str(line_id),
+                "found",
+            )
+
+        record_mock.assert_called_once_with(
+            org_id,
+            line_id,
+            is_found=True,
+            observed_location_id=expected_location_id,
+            observed_status="IN_USE",
+            discrepancy_notes=None,
+            checked_by_user_id=user_id,
+        )
+        mock_db.commit.assert_called_once()
+        assert response.status_code == 303
+
+    def test_mark_count_plan_pending_found_records_all_pending_lines(self):
+        """Bulk found action should record expected state for every pending line."""
+        from app.models.people.assets.audit import AssetAuditPlanStatus
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        plan_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        plan = SimpleNamespace(
+            audit_plan_id=plan_id,
+            organization_id=org_id,
+            status=AssetAuditPlanStatus.IN_PROGRESS,
+        )
+        loc_one = uuid.uuid4()
+        loc_two = uuid.uuid4()
+        lines = [
+            SimpleNamespace(
+                audit_line_id=uuid.uuid4(),
+                expected_location_id=loc_one,
+                expected_status="IN_USE",
+            ),
+            SimpleNamespace(
+                audit_line_id=uuid.uuid4(),
+                expected_location_id=loc_two,
+                expected_status="IN_STORE",
+            ),
+        ]
+        scalars_result = MagicMock()
+        scalars_result.all.return_value = lines
+        mock_db.get.return_value = plan
+        mock_db.scalars.return_value = scalars_result
+
+        with patch(
+            "app.services.fixed_assets.web.AssetAuditService.record_check"
+        ) as record_mock:
+            response = FixedAssetWebService.mark_count_plan_pending_found_response(
+                mock_db,
+                str(org_id),
+                user_id,
+                str(plan_id),
+            )
+
+        assert record_mock.call_count == 2
+        record_mock.assert_any_call(
+            org_id,
+            lines[0].audit_line_id,
+            is_found=True,
+            observed_location_id=loc_one,
+            observed_status="IN_USE",
+            discrepancy_notes=None,
+            checked_by_user_id=user_id,
+        )
+        record_mock.assert_any_call(
+            org_id,
+            lines[1].audit_line_id,
+            is_found=True,
+            observed_location_id=loc_two,
+            observed_status="IN_STORE",
+            discrepancy_notes=None,
+            checked_by_user_id=user_id,
+        )
+        mock_db.commit.assert_called_once()
+        assert response.status_code == 303
+        assert "Marked+2+pending+assets+as+found" in response.headers["location"]
+
+
 class TestFAWebServiceDepreciationRunForm:
     """Tests for depreciation run form defaults."""
 
@@ -871,6 +1256,134 @@ class TestFAWebServiceGLReconciliation:
         assert result["totals"]["gl_accumulated_depreciation"] == Decimal("200.00")
         assert result["totals"]["gl_nbv"] == Decimal("800.00")
         assert result["totals"]["nbv_variance"] == Decimal("50.00")
+
+    def test_export_gl_reconciliation_csv_response_returns_csv(self):
+        """GL reconciliation CSV export should include rows and totals."""
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        context = {
+            "as_of": "2026-04-30",
+            "as_of_label": "2026-04-30",
+            "rows": [
+                {
+                    "category_code": "PPE",
+                    "category_names": "Property Plant Equipment",
+                    "asset_count": 2,
+                    "asset_account": {
+                        "account_code": "1500",
+                        "account_name": "Fixed Assets",
+                    },
+                    "accumulated_depreciation_account": {
+                        "account_code": "1590",
+                        "account_name": "Accumulated Depreciation",
+                    },
+                    "register_cost": Decimal("1000.00"),
+                    "gl_cost": Decimal("1000.00"),
+                    "cost_variance": Decimal("0.00"),
+                    "register_accumulated_depreciation": Decimal("150.00"),
+                    "gl_accumulated_depreciation": Decimal("200.00"),
+                    "accumulated_depreciation_variance": Decimal("-50.00"),
+                    "register_nbv": Decimal("850.00"),
+                    "gl_nbv": Decimal("800.00"),
+                    "nbv_variance": Decimal("50.00"),
+                    "is_balanced": False,
+                }
+            ],
+            "totals": {
+                "category_count": 1,
+                "asset_count": 2,
+                "register_cost": Decimal("1000.00"),
+                "gl_cost": Decimal("1000.00"),
+                "cost_variance": Decimal("0.00"),
+                "register_accumulated_depreciation": Decimal("150.00"),
+                "gl_accumulated_depreciation": Decimal("200.00"),
+                "accumulated_depreciation_variance": Decimal("-50.00"),
+                "register_nbv": Decimal("850.00"),
+                "gl_nbv": Decimal("800.00"),
+                "nbv_variance": Decimal("50.00"),
+            },
+            "is_balanced": False,
+            "currency_prefix": "NGN ",
+        }
+
+        with patch.object(
+            FixedAssetWebService,
+            "gl_reconciliation_context",
+            return_value=context,
+        ):
+            response = FixedAssetWebService.export_gl_reconciliation_csv_response(
+                MagicMock(),
+                "00000000-0000-0000-0000-000000000001",
+                as_of=date(2026, 4, 30),
+            )
+
+        assert response.media_type == "text/csv"
+        assert (
+            response.headers["Content-Disposition"]
+            == 'attachment; filename="asset_gl_reconciliation_20260430.csv"'
+        )
+        body = response.body.decode()
+        assert "As Of,Category Mapping,Category Names,Assets" in body
+        assert (
+            "2026-04-30,PPE,Property Plant Equipment,2,1500 - Fixed Assets,1590 - Accumulated Depreciation"
+            in body
+        )
+        assert "2026-04-30,Total,,2,,," in body
+
+    def test_export_gl_reconciliation_pdf_response_returns_pdf(self):
+        """GL reconciliation PDF export should render through ReportPDFService."""
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        context = {
+            "as_of": "2026-04-30",
+            "as_of_label": "2026-04-30",
+            "rows": [],
+            "totals": {
+                "asset_count": 0,
+                "register_cost": Decimal("0"),
+                "gl_cost": Decimal("0"),
+                "cost_variance": Decimal("0"),
+                "register_accumulated_depreciation": Decimal("0"),
+                "gl_accumulated_depreciation": Decimal("0"),
+                "accumulated_depreciation_variance": Decimal("0"),
+                "register_nbv": Decimal("0"),
+                "gl_nbv": Decimal("0"),
+                "nbv_variance": Decimal("0"),
+            },
+            "is_balanced": True,
+            "currency_prefix": "NGN ",
+        }
+        captured: dict[str, object] = {}
+
+        def fake_render(self, report_name, organization_id, render_context):
+            captured["report_name"] = report_name
+            captured["organization_id"] = organization_id
+            captured["context"] = render_context
+            return b"%PDF-1.4 asset gl"
+
+        with (
+            patch.object(
+                FixedAssetWebService,
+                "gl_reconciliation_context",
+                return_value=context,
+            ),
+            patch("app.services.finance.rpt.pdf.ReportPDFService.render", fake_render),
+        ):
+            response = FixedAssetWebService.export_gl_reconciliation_pdf_response(
+                MagicMock(),
+                "00000000-0000-0000-0000-000000000001",
+                as_of=date(2026, 4, 30),
+            )
+
+        assert response.media_type == "application/pdf"
+        assert response.body == b"%PDF-1.4 asset gl"
+        assert (
+            response.headers["Content-Disposition"]
+            == 'attachment; filename="asset_gl_reconciliation_20260430.pdf"'
+        )
+        assert captured["report_name"] == "asset_gl_reconciliation"
+        assert captured["organization_id"] == "00000000-0000-0000-0000-000000000001"
+        assert captured["context"]["row_count"] == 0
 
 
 class TestFAWebServiceAssetUpdate:

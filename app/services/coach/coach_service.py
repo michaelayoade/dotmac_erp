@@ -16,9 +16,9 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.coach.insight import CoachInsight
-from app.models.people.hr.employee import Employee
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.common import coerce_uuid
+from app.services.people.hr.org_resolver import OrgResolver
 
 logger = logging.getLogger(__name__)
 
@@ -473,15 +473,13 @@ class CoachService:
                     continue
                 seen.add(emp_id)
 
-            # Fetch direct reports for current batch.
-            direct = self.db.scalars(
-                select(Employee.employee_id).where(
-                    Employee.organization_id == organization_id,
-                    Employee.reports_to_id.in_(batch),
-                )
-            ).all()
-            for emp_id in direct:
-                if emp_id not in seen:
-                    frontier.add(emp_id)
+            resolver = OrgResolver(self.db)
+            for manager_id in batch:
+                for employee in resolver.get_direct_reports(
+                    manager_id,
+                    organization_id,
+                ):
+                    if employee.employee_id not in seen:
+                        frontier.add(employee.employee_id)
 
         return seen

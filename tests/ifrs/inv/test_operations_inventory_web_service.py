@@ -1001,3 +1001,215 @@ def test_export_count_csv_response_returns_csv_for_posted_count() -> None:
         "CNT-00042,2026-05-04,POSTED,ITEM-001,Test Item,Main Warehouse,10,8,8,-2,-50,DAMAGE,Broken cartons"
         in body
     )
+
+
+def test_export_count_pdf_response_returns_pdf_for_posted_count(monkeypatch) -> None:
+    service = OperationsInventoryWebService()
+    count_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    auth = MagicMock(organization_id=org_id)
+    db = MagicMock()
+
+    count = MagicMock()
+    count.count_id = count_id
+    count.organization_id = org_id
+    count.count_number = "CNT-00043"
+    count.count_date = date(2026, 5, 5)
+
+    from app.models.inventory.inventory_count import CountStatus
+
+    count.status = CountStatus.POSTED
+
+    line = MagicMock()
+    line.item_id = item_id
+    line.warehouse_id = warehouse_id
+    line.system_quantity = Decimal("20")
+    line.counted_quantity = Decimal("18")
+    line.final_quantity = Decimal("18")
+    line.variance_quantity = Decimal("-2")
+    line.variance_value = Decimal("-75")
+    line.reason_code = "SHORT"
+    line.notes = "Missing units"
+
+    item = MagicMock()
+    item.item_id = item_id
+    item.item_code = "ITEM-002"
+    item.item_name = "PDF Item"
+
+    warehouse = MagicMock()
+    warehouse.warehouse_id = warehouse_id
+    warehouse.warehouse_name = "PDF Warehouse"
+
+    db.get.return_value = count
+
+    class _FakeScalarResult:
+        def __init__(self, values):
+            self._values = values
+
+        def all(self):
+            return self._values
+
+    db.scalars.side_effect = [
+        _FakeScalarResult([item]),
+        _FakeScalarResult([warehouse]),
+    ]
+    monkeypatch.setattr(
+        "app.services.inventory.count.InventoryCountService.list_lines",
+        MagicMock(return_value=[line]),
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_render(self, report_name, organization_id, context):
+        captured["report_name"] = report_name
+        captured["organization_id"] = organization_id
+        captured["context"] = context
+        return b"%PDF-1.4 stock count"
+
+    monkeypatch.setattr(
+        "app.services.finance.rpt.pdf.ReportPDFService.render",
+        fake_render,
+    )
+
+    response = service.export_count_pdf_response(str(count_id), auth, db)
+
+    assert response.media_type == "application/pdf"
+    assert response.body == b"%PDF-1.4 stock count"
+    assert (
+        response.headers["Content-Disposition"]
+        == 'attachment; filename="stock_count_CNT-00043.pdf"'
+    )
+    assert captured["report_name"] == "stock_count"
+    assert captured["organization_id"] == str(org_id)
+    context = captured["context"]
+    assert context["count"] is count
+    assert context["row_count"] == 1
+    assert context["summary"]["total_variance_quantity"] == Decimal("-2")
+    assert context["rows"][0]["item_code"] == "ITEM-002"
+
+
+def test_export_yearly_stock_movement_csv_response_returns_csv() -> None:
+    service = OperationsInventoryWebService()
+    org_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    auth = MagicMock(organization_id=org_id)
+    db = MagicMock()
+
+    from app.models.inventory.inventory_transaction import TransactionType
+
+    item = MagicMock()
+    item.item_id = item_id
+    item.item_code = "ITEM-2026"
+    item.item_name = "Annual Item"
+
+    warehouse = MagicMock()
+    warehouse.warehouse_id = warehouse_id
+    warehouse.warehouse_code = "MAIN"
+    warehouse.warehouse_name = "Main Warehouse"
+
+    receipt = MagicMock()
+    receipt.transaction_date = date(2026, 1, 10)
+    receipt.transaction_type = TransactionType.RECEIPT
+    receipt.quantity_before = Decimal("0")
+    receipt.quantity_after = Decimal("10")
+    receipt.source_document_type = "PURCHASE_RECEIPT"
+    receipt.reference = "PO-001"
+
+    issue = MagicMock()
+    issue.transaction_date = date(2026, 2, 12)
+    issue.transaction_type = TransactionType.ISSUE
+    issue.quantity_before = Decimal("10")
+    issue.quantity_after = Decimal("7")
+    issue.source_document_type = "ISSUE"
+    issue.reference = "ISS-001"
+
+    class _FakeExecuteResult:
+        def all(self):
+            return [(receipt, item, warehouse), (issue, item, warehouse)]
+
+    db.execute.return_value = _FakeExecuteResult()
+
+    response = service.export_yearly_stock_movement_csv_response(
+        auth=auth,
+        db=db,
+        year="2026",
+    )
+
+    assert response.media_type == "text/csv"
+    assert (
+        response.headers["Content-Disposition"]
+        == 'attachment; filename="yearly_stock_movement_2026.csv"'
+    )
+    body = response.body.decode()
+    assert "Year,Item Code,Item Name,Warehouse Code,Warehouse Name" in body
+    assert "2026,ITEM-2026,Annual Item,MAIN,Main Warehouse,0,10,10,3,3,7" in body
+
+
+def test_export_yearly_stock_movement_pdf_response_returns_pdf(monkeypatch) -> None:
+    service = OperationsInventoryWebService()
+    org_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    auth = MagicMock(organization_id=org_id)
+    db = MagicMock()
+
+    from app.models.inventory.inventory_transaction import TransactionType
+
+    item = MagicMock()
+    item.item_id = item_id
+    item.item_code = "ITEM-PDF"
+    item.item_name = "PDF Annual Item"
+
+    warehouse = MagicMock()
+    warehouse.warehouse_id = warehouse_id
+    warehouse.warehouse_code = "PDF"
+    warehouse.warehouse_name = "PDF Warehouse"
+
+    receipt = MagicMock()
+    receipt.transaction_date = date(2026, 3, 10)
+    receipt.transaction_type = TransactionType.RECEIPT
+    receipt.quantity_before = Decimal("4")
+    receipt.quantity_after = Decimal("9")
+    receipt.source_document_type = "GOODS_RECEIPT"
+    receipt.reference = "GRN-001"
+
+    class _FakeExecuteResult:
+        def all(self):
+            return [(receipt, item, warehouse)]
+
+    db.execute.return_value = _FakeExecuteResult()
+    captured: dict[str, object] = {}
+
+    def fake_render(self, report_name, organization_id, context):
+        captured["report_name"] = report_name
+        captured["organization_id"] = organization_id
+        captured["context"] = context
+        return b"%PDF-1.4 yearly movement"
+
+    monkeypatch.setattr(
+        "app.services.finance.rpt.pdf.ReportPDFService.render",
+        fake_render,
+    )
+
+    response = service.export_yearly_stock_movement_pdf_response(
+        auth=auth,
+        db=db,
+        year="2026",
+        month="3",
+    )
+
+    assert response.media_type == "application/pdf"
+    assert response.body == b"%PDF-1.4 yearly movement"
+    assert (
+        response.headers["Content-Disposition"]
+        == 'attachment; filename="yearly_stock_movement_2026_03.pdf"'
+    )
+    assert captured["report_name"] == "yearly_stock_movement"
+    assert captured["organization_id"] == str(org_id)
+    context = captured["context"]
+    assert context["row_count"] == 1
+    assert context["scope_label"] == "Year 2026, March"
+    assert context["summary"]["quantity_in"] == Decimal("5")

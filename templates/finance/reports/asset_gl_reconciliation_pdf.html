@@ -1,0 +1,110 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Asset GL Reconciliation - {{ org_name }}{% endblock %}
+{% block report_title %}Asset GL Reconciliation{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_meta %}
+<p class="meta-line">As of: {{ as_of_label }}</p>
+<p class="meta-line">Rows: {{ row_count }}</p>
+<p class="meta-line">Status: {{ "Balanced" if is_balanced else "Review Required" }}</p>
+{% endblock %}
+
+{% block extra_styles %}
+table.report-table th,
+table.report-table td {
+  font-size: 7px;
+  padding: 4px 5px;
+}
+.wide-text {
+  max-width: 145px;
+  overflow-wrap: anywhere;
+}
+{% endblock %}
+
+{% block report_body %}
+<table class="summary-grid">
+  <tr>
+    <td>
+      <div class="summary-label">Asset Count</div>
+      <div class="summary-value num">{{ totals.asset_count }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Register NBV</div>
+      <div class="summary-value num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.register_nbv or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">GL NBV</div>
+      <div class="summary-value num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.gl_nbv or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">NBV Variance</div>
+      <div class="summary-value num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.nbv_variance or 0) }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if rows %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Category Mapping</th>
+      <th class="num">Assets</th>
+      <th>Control Account</th>
+      <th class="num">Register Cost</th>
+      <th class="num">GL Cost</th>
+      <th class="num">Cost Var.</th>
+      <th class="num">Register Accum.</th>
+      <th class="num">GL Accum.</th>
+      <th class="num">NBV Var.</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="wide-text">
+        {{ row.category_code }}<br>
+        <span class="muted">{{ row.category_names }}</span>
+      </td>
+      <td class="num">{{ row.asset_count }}</td>
+      <td class="wide-text">
+        {% if row.asset_account %}
+        {{ row.asset_account.account_code }} - {{ row.asset_account.account_name }}
+        {% else %}
+        Not mapped
+        {% endif %}
+        {% if row.accumulated_depreciation_account %}
+        <br><span class="muted">Accum: {{ row.accumulated_depreciation_account.account_code }} - {{ row.accumulated_depreciation_account.account_name }}</span>
+        {% endif %}
+      </td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(row.register_cost or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(row.gl_cost or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(row.cost_variance or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(row.register_accumulated_depreciation or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(row.gl_accumulated_depreciation or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(row.nbv_variance or 0) }}</td>
+      <td>{{ "Balanced" if row.is_balanced else "Review" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="grandtotal">
+      <td>Total</td>
+      <td class="num">{{ totals.asset_count }}</td>
+      <td></td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.register_cost or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.gl_cost or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.cost_variance or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.register_accumulated_depreciation or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.gl_accumulated_depreciation or 0) }}</td>
+      <td class="num">{{ currency_prefix }}{{ "{:,.2f}".format(totals.nbv_variance or 0) }}</td>
+      <td>{{ "Balanced" if is_balanced else "Review" }}</td>
+    </tr>
+  </tfoot>
+</table>
+{% else %}
+<div class="notes">
+  <p>No GL reconciliation rows were found for this export.</p>
+</div>
+{% endif %}
+{% endblock %}

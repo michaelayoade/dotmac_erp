@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.coach.insight import CoachInsight
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.services.people.hr.org_resolver import OrgResolver
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +73,14 @@ class DataQualityAnalyzer:
             )
             or 0
         )
-        missing_manager = int(
-            self.db.scalar(
-                select(func.count())
-                .select_from(Employee)
-                .where(base, Employee.reports_to_id.is_(None))
-            )
-            or 0
+        active_employee_ids = list(
+            self.db.scalars(select(Employee.employee_id).where(base)).all()
+        )
+        resolver = OrgResolver(self.db)
+        missing_manager = sum(
+            1
+            for employee_id in active_employee_ids
+            if resolver.get_manager(employee_id, org_id) is None
         )
         missing_expense_approver = int(
             self.db.scalar(

@@ -21,8 +21,13 @@ from sqlalchemy import func, select
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.services.people.hr.org_resolver import OrgResolver
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_manager(db, employee: Employee, organization_id) -> Employee | None:
+    return OrgResolver(db).get_manager(employee.employee_id, organization_id)
 
 
 @shared_task
@@ -91,9 +96,7 @@ def process_probation_ending_notifications() -> dict:
                         continue
 
                     # Get manager
-                    manager = None
-                    if employee.reports_to_id:
-                        manager = db.get(Employee, employee.reports_to_id)
+                    manager = _resolve_manager(db, employee, org.organization_id)
 
                     # Send notification to manager
                     if manager:
@@ -207,9 +210,7 @@ def process_contract_expiry_notifications() -> dict:
                         continue
 
                     # Get manager
-                    manager = None
-                    if employee.reports_to_id:
-                        manager = db.get(Employee, employee.reports_to_id)
+                    manager = _resolve_manager(db, employee, org.organization_id)
 
                     # Send notification to manager and HR
                     if manager:
@@ -301,9 +302,7 @@ def process_work_anniversary_notifications() -> dict:
                     is_milestone = years_of_service > 0 and years_of_service % 5 == 0
 
                     # Get manager
-                    manager = None
-                    if employee.reports_to_id:
-                        manager = db.get(Employee, employee.reports_to_id)
+                    manager = _resolve_manager(db, employee, org.organization_id)
 
                     # Send notification
                     success = notification_service.send_work_anniversary_notification(
@@ -395,9 +394,7 @@ def process_birthday_notifications() -> dict:
                         continue
 
                     # Get manager
-                    manager = None
-                    if employee.reports_to_id:
-                        manager = db.get(Employee, employee.reports_to_id)
+                    manager = _resolve_manager(db, employee, org.organization_id)
 
                     # Send notification to manager
                     if manager and notification_type == "tomorrow":

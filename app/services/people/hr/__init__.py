@@ -59,7 +59,15 @@ if TYPE_CHECKING:  # pragma: no cover
     )
     from .lifecycle import LifecycleService  # noqa: F401
     from .onboarding import OnboardingService  # noqa: F401
+    from .org_resolver import OrgResolver  # noqa: F401
     from .organization import OrganizationService  # noqa: F401
+    from .positions import (  # noqa: F401
+        PositionAssignmentCreateData,
+        PositionCreateData,
+        PositionService,
+        PositionSummary,
+        PositionUpdateData,
+    )
     from .organization_types import (  # noqa: F401
         DepartmentCreateData,
         DepartmentFilters,
@@ -85,6 +93,12 @@ __all__ = [
     "OrganizationService",
     "LifecycleService",
     "OnboardingService",
+    "OrgResolver",
+    "PositionService",
+    "PositionAssignmentCreateData",
+    "PositionCreateData",
+    "PositionUpdateData",
+    "PositionSummary",
     "EmployeeDocumentService",
     "EmployeeQualificationService",
     "EmployeeCertificationService",
@@ -155,6 +169,12 @@ _NAME_TO_MODULE = {
     # lifecycle / onboarding
     "LifecycleService": "lifecycle",
     "OnboardingService": "onboarding",
+    "OrgResolver": "org_resolver",
+    "PositionService": "positions",
+    "PositionAssignmentCreateData": "positions",
+    "PositionCreateData": "positions",
+    "PositionUpdateData": "positions",
+    "PositionSummary": "positions",
     # employee_extended
     "EmployeeDocumentService": "employee_extended",
     "EmployeeQualificationService": "employee_extended",

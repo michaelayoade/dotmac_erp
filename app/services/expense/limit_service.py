@@ -1004,27 +1004,26 @@ class ExpenseLimitService(ExpenseServiceBase):
         3. Prefer direct manager first
         4. Then by approval limit scope (employee > grade > designation > role)
         """
-        from app.models.people.hr.employee import Employee as EmployeeModel
-
         eligible = []
         seen_ids = set()
 
-        # 1. Check direct manager
-        if employee.reports_to_id:
-            manager = self.db.get(EmployeeModel, employee.reports_to_id)
-            if manager:
-                manager_limit = self._get_employee_approval_limit(org_id, manager)
-                if manager_limit and manager_limit >= amount:
-                    eligible.append(
-                        EligibleApprover(
-                            employee_id=manager.employee_id,
-                            employee_name=manager.full_name,
-                            max_approval_amount=manager_limit,
-                            is_direct_manager=True,
-                            grade_rank=manager.grade.rank if manager.grade else None,
-                        )
+        # 1. Check direct position manager
+        from app.services.people.hr.org_resolver import OrgResolver
+
+        manager = OrgResolver(self.db).get_manager(employee.employee_id, org_id)
+        if manager:
+            manager_limit = self._get_employee_approval_limit(org_id, manager)
+            if manager_limit and manager_limit >= amount:
+                eligible.append(
+                    EligibleApprover(
+                        employee_id=manager.employee_id,
+                        employee_name=manager.full_name,
+                        max_approval_amount=manager_limit,
+                        is_direct_manager=True,
+                        grade_rank=manager.grade.rank if manager.grade else None,
                     )
-                    seen_ids.add(manager.employee_id)
+                )
+                seen_ids.add(manager.employee_id)
 
         # 2. Get all approver limits that can approve this amount
         limits = self.db.scalars(

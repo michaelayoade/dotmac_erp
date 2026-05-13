@@ -1332,12 +1332,19 @@ def count_detail(
 
 
 @router.get("/counts/{count_id}/export")
-def export_count_csv(
+def export_count(
     count_id: str,
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
 ):
-    """Export a posted inventory count as CSV."""
+    """Export a posted inventory count as CSV or PDF."""
+    if format == "pdf":
+        return operations_inv_web_service.export_count_pdf_response(
+            count_id=count_id,
+            auth=auth,
+            db=db,
+        )
     return operations_inv_web_service.export_count_csv_response(
         count_id=count_id,
         auth=auth,
@@ -1878,4 +1885,37 @@ def yearly_stock_movement_report(
         item=item,
         search=search,
         page=page,
+    )
+
+
+@router.get("/reports/yearly-movement/export")
+def export_yearly_stock_movement_report(
+    format: str = Query(default="csv", pattern="^(csv|pdf)$"),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    year: str | None = None,
+    month: str | None = None,
+    warehouse: str | None = None,
+    item: str | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Export yearly stock movement summary as CSV or PDF."""
+    if format == "pdf":
+        return operations_inv_web_service.export_yearly_stock_movement_pdf_response(
+            auth=auth,
+            db=db,
+            year=year,
+            month=month,
+            warehouse=warehouse,
+            item=item,
+            search=search,
+        )
+    return operations_inv_web_service.export_yearly_stock_movement_csv_response(
+        auth=auth,
+        db=db,
+        year=year,
+        month=month,
+        warehouse=warehouse,
+        item=item,
+        search=search,
     )

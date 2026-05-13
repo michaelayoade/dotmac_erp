@@ -1,0 +1,94 @@
+{% extends "fixed_assets/base_fixed_assets.html" %}
+{% from "components/macros.html" import icon_svg, empty_state, status_badge %}
+
+{% block page_title %}Asset Count Plans{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fixed-assets" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Asset Management</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Count Plans</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/fixed-assets/count-plans/new" class="btn btn-primary">
+    {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+    New Count Plan
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="card p-4">
+        <form method="get" action="/fixed-assets/count-plans" class="flex flex-wrap items-end gap-3">
+            <label class="block min-w-56">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Status</span>
+                <select name="status" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    <option value="">All statuses</option>
+                    {% for option in status_options %}
+                        <option value="{{ option.value }}" {% if status == option.value %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-secondary">
+                {{ icon_svg("filter", "h-4 w-4 mr-1.5") }}
+                Apply
+            </button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Scope</th>
+                        <th>Planned Date</th>
+                        <th>Status</th>
+                        <th class="text-right">System Qty</th>
+                        <th class="text-right">Found</th>
+                        <th class="text-right">Missing</th>
+                        <th class="text-right">Variance</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plan in plans %}
+                    <tr>
+                        <td>
+                            <a href="/fixed-assets/count-plans/{{ plan.audit_plan_id }}" class="font-medium text-teal-700 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100">
+                                {{ plan.plan_number }}
+                            </a>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">{{ plan.title }}</p>
+                        </td>
+                        <td class="text-slate-700 dark:text-slate-200">{{ plan.scope }}</td>
+                        <td class="text-slate-700 dark:text-slate-200">{{ plan.planned_date }}</td>
+                        <td>{{ status_badge(plan.status) }}</td>
+                        <td class="text-right text-slate-700 dark:text-slate-200">{{ plan.total_assets }}</td>
+                        <td class="text-right text-slate-700 dark:text-slate-200">{{ plan.found_count }}</td>
+                        <td class="text-right text-slate-700 dark:text-slate-200">{{ plan.missing_count }}</td>
+                        <td class="text-right text-slate-700 dark:text-slate-200">{{ plan.discrepancy_count }}</td>
+                        <td>
+                            <div class="flex justify-end">
+                                <a href="/fixed-assets/count-plans/{{ plan.audit_plan_id }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300" title="Open plan">
+                                    {{ icon_svg("eye", "h-4 w-4") }}
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="py-12">
+                            {{ empty_state("No count plans", "Create a count plan to capture physical asset checks and generate count sheets.", "clipboard-list", "New Count Plan", "/fixed-assets/count-plans/new") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

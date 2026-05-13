@@ -1,0 +1,125 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Asset Count Sheets - {{ org_name }}{% endblock %}
+{% block report_title %}Asset Count Sheets{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_meta %}
+<p class="meta-line">Audit plan: {{ plan_label }}</p>
+<p class="meta-line">Rows: {{ row_count }}</p>
+<p class="meta-line">Variance lines: {{ count_sheet_totals.variance_count }}</p>
+{% endblock %}
+
+{% block extra_styles %}
+table.report-table th,
+table.report-table td {
+  font-size: 7px;
+  padding: 4px 5px;
+}
+.wide-text {
+  max-width: 150px;
+  overflow-wrap: anywhere;
+}
+.variance {
+  color: #be123c;
+  font-weight: 700;
+}
+{% endblock %}
+
+{% block report_body %}
+<table class="summary-grid">
+  <tr>
+    <td>
+      <div class="summary-label">System Qty</div>
+      <div class="summary-value num">{{ count_sheet_totals.system_qty }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Physical Qty</div>
+      <div class="summary-value num">{{ count_sheet_totals.physical_qty }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Variance Qty</div>
+      <div class="summary-value num">{{ count_sheet_totals.variance_qty }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Unchecked</div>
+      <div class="summary-value num">{{ count_sheet_totals.unchecked_qty }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if summary_rows %}
+<h2>Summary by Location and Category</h2>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Location</th>
+      <th>Category</th>
+      <th class="num">System</th>
+      <th class="num">Physical</th>
+      <th class="num">Variance</th>
+      <th class="num">Unchecked</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in summary_rows %}
+    <tr>
+      <td class="wide-text">{{ row.location_name }}</td>
+      <td class="wide-text">{{ row.category_name }}</td>
+      <td class="num">{{ row.system_qty }}</td>
+      <td class="num">{{ row.physical_qty }}</td>
+      <td class="num {% if row.variance_qty != 0 %}variance{% endif %}">{{ row.variance_qty }}</td>
+      <td class="num">{{ row.unchecked_qty }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if count_sheet_rows %}
+<h2>Asset Lines</h2>
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Asset</th>
+      <th>Serial</th>
+      <th>Location</th>
+      <th>Category</th>
+      <th>Status</th>
+      <th class="num">System</th>
+      <th class="num">Physical</th>
+      <th class="num">Variance</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in count_sheet_rows %}
+    <tr>
+      <td class="wide-text">
+        {{ row.asset_number }} - {{ row.asset_name }}
+        {% if row.discrepancy_notes %}<br><span class="muted">{{ row.discrepancy_notes }}</span>{% endif %}
+      </td>
+      <td>{{ row.serial_number or "-" }}</td>
+      <td class="wide-text">{{ row.location_name }}</td>
+      <td class="wide-text">{{ row.category_name }}</td>
+      <td>{{ row.line_status }}</td>
+      <td class="num">{{ row.system_qty }}</td>
+      <td class="num">{{ row.physical_qty }}</td>
+      <td class="num {% if row.variance_qty != 0 %}variance{% endif %}">{{ row.variance_qty }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr class="grandtotal">
+      <td>Total</td>
+      <td colspan="4"></td>
+      <td class="num">{{ count_sheet_totals.system_qty }}</td>
+      <td class="num">{{ count_sheet_totals.physical_qty }}</td>
+      <td class="num">{{ count_sheet_totals.variance_qty }}</td>
+    </tr>
+  </tfoot>
+</table>
+{% else %}
+<div class="notes">
+  <p>No asset count sheet rows were found for this export.</p>
+</div>
+{% endif %}
+{% endblock %}

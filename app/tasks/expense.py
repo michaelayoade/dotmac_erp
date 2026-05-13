@@ -31,6 +31,7 @@ from app.models.expense import (
 )
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.notification import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -233,8 +234,11 @@ def process_expense_approval_reminders() -> dict:
                 if not approver and claim.employee:
                     if claim.employee.expense_approver_id:
                         approver = db.get(Employee, claim.employee.expense_approver_id)
-                    if not approver and claim.employee.reports_to_id:
-                        approver = db.get(Employee, claim.employee.reports_to_id)
+                    if not approver:
+                        approver = OrgResolver(db).get_manager(
+                            claim.employee.employee_id,
+                            claim.organization_id,
+                        )
 
                 if not approver:
                     continue  # No approver to remind

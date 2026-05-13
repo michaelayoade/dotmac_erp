@@ -36,6 +36,7 @@ from app.models.person import Person
 from app.models.rbac import PersonRole, Role
 from app.services.email import employee_can_receive_email, send_email
 from app.services.notification import NotificationService
+from app.services.people.hr.org_resolver import OrgResolver
 
 if TYPE_CHECKING:
     pass
@@ -684,28 +685,30 @@ class InfoChangeService:
         change_label = request.change_type.value.lower().replace("_", " ")
         employee_name = employee.full_name or employee.employee_code
 
-        # Notify the employee's manager if they have one
-        if employee.reports_to_id:
-            manager = self.db.get(Employee, employee.reports_to_id)
-            if manager and manager.person_id:
-                try:
-                    self.notification_service.create(
-                        self.db,
-                        organization_id=request.organization_id,
-                        recipient_id=manager.person_id,
-                        entity_type=EntityType.EMPLOYEE,
-                        entity_id=request.request_id,
-                        notification_type=NotificationType.SUBMITTED,
-                        title="Employee Info Update Request",
-                        message=(
-                            f"{employee_name} has requested an update to their {change_label}. "
-                            "Please review and approve/reject."
-                        ),
-                        channel=NotificationChannel.IN_APP,
-                        action_url=action_path,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to notify manager: %s", e)
+        # Notify the employee's position manager if they have one.
+        manager = OrgResolver(self.db).get_manager(
+            employee.employee_id,
+            request.organization_id,
+        )
+        if manager and manager.person_id:
+            try:
+                self.notification_service.create(
+                    self.db,
+                    organization_id=request.organization_id,
+                    recipient_id=manager.person_id,
+                    entity_type=EntityType.EMPLOYEE,
+                    entity_id=request.request_id,
+                    notification_type=NotificationType.SUBMITTED,
+                    title="Employee Info Update Request",
+                    message=(
+                        f"{employee_name} has requested an update to their {change_label}. "
+                        "Please review and approve/reject."
+                    ),
+                    channel=NotificationChannel.IN_APP,
+                    action_url=action_path,
+                )
+            except Exception as e:
+                logger.warning("Failed to notify manager: %s", e)
 
         # Notify admins
         admin_recipients = self._get_admin_recipients(request.organization_id)

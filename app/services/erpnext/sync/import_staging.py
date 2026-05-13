@@ -777,7 +777,8 @@ class StagingImportService:
                 logger.error(f"Error importing employee {staging.source_name}: {e}")
                 result.add_error(f"{staging.source_name}: {str(e)}")
 
-        # Second pass: update reports_to references
+        # Second pass: update reports_to references. Direct writes here are
+        # safe because we reconcile positions immediately after; see below.
         for staging in records:
             if staging.reports_to_name and staging.imported_employee_id:
                 manager_id = self._emp_cache.get(staging.reports_to_name)
@@ -787,6 +788,26 @@ class StagingImportService:
                         emp.reports_to_id = manager_id
 
         self.db.flush()
+
+        imported_employee_ids = [
+            staging.imported_employee_id
+            for staging in records
+            if staging.imported_employee_id is not None
+        ]
+        if imported_employee_ids:
+            from app.services.people.hr.positions import PositionService
+
+            position_service = PositionService(self.db, self.organization_id)
+            reconcile = position_service.reconcile_from_reports_to_id(
+                employee_ids=imported_employee_ids,
+            )
+            logger.info(
+                "Position reconcile: %s positions, %s assignments, %s parents",
+                reconcile.positions_created,
+                reconcile.assignments_created,
+                reconcile.parents_synced,
+            )
+
         logger.info(f"Employees imported: {result.imported}, skipped: {result.skipped}")
         return result
 

@@ -23,6 +23,7 @@ from app.services.common import ValidationError, coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.people.hr import BulkUpdateData, EmployeeService
 from app.services.people.hr.lifecycle import LifecycleService
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.hr.web import hr_web_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -575,8 +576,14 @@ class LifecycleWebService:
                 employee.department_id = coerce_uuid(new_department_id)
 
         if new_reports_to_id:
-            current_manager = employee.manager.full_name if employee.manager else "-"
-            new_manager = db.get(Employee, coerce_uuid(new_reports_to_id))
+            new_manager_id = coerce_uuid(new_reports_to_id)
+            current_manager_emp = OrgResolver(db).get_manager(
+                employee.employee_id, org_id
+            )
+            current_manager = (
+                current_manager_emp.full_name if current_manager_emp else "-"
+            )
+            new_manager = db.get(Employee, new_manager_id)
             if new_manager:
                 details.append(
                     {
@@ -585,7 +592,10 @@ class LifecycleWebService:
                         "new_value": new_manager.full_name,
                     }
                 )
-                employee.reports_to_id = coerce_uuid(new_reports_to_id)
+                EmployeeService(db, org_id).set_manager(
+                    employee.employee_id,
+                    new_manager_id,
+                )
 
         lifecycle_svc.create_promotion(
             org_id,
@@ -778,8 +788,14 @@ class LifecycleWebService:
                 employee.designation_id = coerce_uuid(new_designation_id)
 
         if new_reports_to_id:
-            current_manager = employee.manager.full_name if employee.manager else "-"
-            new_manager = db.get(Employee, coerce_uuid(new_reports_to_id))
+            new_manager_id = coerce_uuid(new_reports_to_id)
+            current_manager_emp = OrgResolver(db).get_manager(
+                employee.employee_id, org_id
+            )
+            current_manager = (
+                current_manager_emp.full_name if current_manager_emp else "-"
+            )
+            new_manager = db.get(Employee, new_manager_id)
             if new_manager:
                 details.append(
                     {
@@ -788,7 +804,10 @@ class LifecycleWebService:
                         "new_value": new_manager.full_name,
                     }
                 )
-                employee.reports_to_id = coerce_uuid(new_reports_to_id)
+                EmployeeService(db, org_id).set_manager(
+                    employee.employee_id,
+                    new_manager_id,
+                )
 
         if new_branch:
             current_branch = (

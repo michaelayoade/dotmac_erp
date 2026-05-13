@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     )
     from app.models.people.hr.employee_grade import EmployeeGrade
     from app.models.people.hr.employment_type import EmploymentType
+    from app.models.people.hr.position_assignment import PositionAssignment
     from app.models.person import Person
     from app.models.support.team import SupportTeamMember
     from app.models.support.ticket import Ticket
@@ -454,6 +455,11 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
     default_shift_type: Mapped[Optional["ShiftType"]] = relationship(
         "ShiftType",
         foreign_keys=[default_shift_type_id],
+    )
+    position_assignments: Mapped[list["PositionAssignment"]] = relationship(
+        "PositionAssignment",
+        back_populates="employee",
+        foreign_keys="[PositionAssignment.employee_id]",
     )
 
     # Ticket relationships (support module)

@@ -22,6 +22,8 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
+from app.services.people.hr.org_resolver import OrgResolver
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -284,10 +286,11 @@ class UnderperformanceService:
         )
         pip_code = f"PIP-{date.today().year}-{count + 1:04d}"
 
+        supervisor = OrgResolver(self.db).get_manager(employee.employee_id, org_id)
         pip = PerformanceImprovementPlan(
             organization_id=org_id,
             employee_id=employee_id,
-            supervisor_id=employee.reports_to_id or employee_id,
+            supervisor_id=supervisor.employee_id if supervisor else employee_id,
             hr_officer_id=employee_id,  # Placeholder — HR assigns later
             pip_code=pip_code,
             start_date=date.today(),

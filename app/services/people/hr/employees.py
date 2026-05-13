@@ -37,6 +37,9 @@ from app.models.people.hr import (
     EmployeeGrade,
     EmployeeStatus,
     EmploymentType,
+    Position,
+    PositionAssignment,
+    PositionAssignmentType,
 )
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
@@ -44,6 +47,7 @@ from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password, request_password_reset
 from app.services.common import PaginatedResult, PaginationParams, paginate
 from app.services.email import send_password_reset_email
+from app.services.people.hr.org_resolver import OrgResolver
 
 from .employee_filter_contract import FilterExpression
 from .employee_filter_engine import apply_employee_filter_expression
@@ -122,48 +126,116 @@ class EmployeeService:
         self,
         employee_id: uuid.UUID,
         manager_id: uuid.UUID,
-        visited: set | None = None,
     ) -> bool:
-        """Check if setting manager_id would create a circular reference.
-
-        Args:
-            employee_id: The employee being modified.
-            manager_id: The proposed manager ID.
-            visited: Set of already visited employee IDs.
-
-        Returns:
-            True if the manager assignment is valid, False if it creates a cycle.
         """
-        if visited is None:
-            visited = set()
+        Check that setting ``manager_id`` would not create a reporting cycle.
 
-        # Can't report to self
+        Walks the position parent chain from the manager's active assignment
+        upward; if the employee's own position appears, the assignment is a
+        cycle. When either party has no active assignment, no cycle is
+        possible (one of them is not in the tree at all), so the check
+        returns True — caller paths that need a manager to actually be in
+        the tree should validate that separately.
+        """
         if employee_id == manager_id:
             return False
 
-        # Check if manager reports to employee (directly or transitively)
-        manager = self.db.scalar(
+        resolver = OrgResolver(self.db)
+        employee_assignment = resolver.get_active_assignment(
+            employee_id,
+            self.organization_id,
+        )
+        manager_assignment = resolver.get_active_assignment(
+            manager_id,
+            self.organization_id,
+        )
+        if not employee_assignment or not manager_assignment:
+            return True
+
+        current_position_id = manager_assignment.position_id
+        visited_positions = {employee_assignment.position_id}
+        while current_position_id:
+            if current_position_id in visited_positions:
+                return False
+            visited_positions.add(current_position_id)
+            position = self.db.scalar(
+                select(Position).where(
+                    Position.position_id == current_position_id,
+                    Position.organization_id == self.organization_id,
+                    Position.is_active.is_(True),
+                )
+            )
+            if not position:
+                return True
+            current_position_id = position.parent_position_id
+        return True
+
+    def set_manager(
+        self,
+        employee_id: uuid.UUID,
+        manager_employee_id: uuid.UUID | None,
+        *,
+        validate_cycle: bool = True,
+    ) -> None:
+        """
+        Update an employee's manager through the canonical chokepoint.
+
+        Updates the parent of the employee's active position so position
+        reads (OrgResolver) reflect the new manager. Direct writers (forms,
+        API, lifecycle transitions, recruit, import) call this instead of
+        touching the legacy ``reports_to_id`` column, which is no longer
+        read for any business logic.
+
+        Skips ``validate_cycle`` for callers that have already validated, such
+        as ``update_employee`` which checks before writing.
+        """
+        employee = self.db.scalar(
             select(Employee).where(
-                Employee.employee_id == manager_id,
+                Employee.employee_id == employee_id,
                 Employee.organization_id == self.organization_id,
                 Employee.status != EmployeeStatus.TERMINATED,
             )
         )
-        if not manager:
-            return True  # Manager doesn't exist, will fail separately
+        if not employee:
+            raise ValidationError(f"Employee with ID {employee_id} not found")
 
-        visited.add(manager_id)
+        from app.services.people.hr.positions import PositionService
 
-        if manager.reports_to_id is None:
-            return True
+        position_service = PositionService(self.db, self.organization_id)
+        position_service.provision_positions_for_employees([employee_id])
 
-        if manager.reports_to_id == employee_id:
-            return False
+        if manager_employee_id is not None:
+            manager = self.db.scalar(
+                select(Employee).where(
+                    Employee.employee_id == manager_employee_id,
+                    Employee.organization_id == self.organization_id,
+                    Employee.status != EmployeeStatus.TERMINATED,
+                )
+            )
+            if not manager:
+                raise ValidationError(
+                    f"Manager with ID {manager_employee_id} not found"
+                )
+            position_service.provision_positions_for_employees([manager_employee_id])
+            if validate_cycle and not self._validate_manager(
+                employee_id, manager_employee_id
+            ):
+                raise InvalidManagerError()
 
-        if manager.reports_to_id in visited:
-            return False
+        self._set_manager_position(employee_id, manager_employee_id)
 
-        return self._validate_manager(employee_id, manager.reports_to_id, visited)
+    def _set_manager_position(
+        self,
+        employee_id: uuid.UUID,
+        manager_employee_id: uuid.UUID | None,
+    ) -> None:
+        """Update the parent of the employee's active position."""
+        from app.services.people.hr.positions import PositionService
+
+        PositionService(self.db, self.organization_id).sync_employee_manager_position(
+            employee_id,
+            manager_employee_id,
+        )
 
     def _generate_employee_code(self) -> str:
         """Generate a unique employee code.
@@ -272,7 +344,29 @@ class EmployeeService:
             stmt = stmt.where(Employee.designation_id == filters.designation_id)
 
         if filters.reports_to_id:
-            stmt = stmt.where(Employee.reports_to_id == filters.reports_to_id)
+            manager_position_subq = (
+                select(PositionAssignment.position_id)
+                .where(
+                    PositionAssignment.organization_id == self.organization_id,
+                    PositionAssignment.employee_id == filters.reports_to_id,
+                    PositionAssignment.assignment_type
+                    == PositionAssignmentType.PRIMARY,
+                    PositionAssignment.end_date.is_(None),
+                )
+                .scalar_subquery()
+            )
+            direct_report_subq = (
+                select(PositionAssignment.employee_id)
+                .join(Position, Position.position_id == PositionAssignment.position_id)
+                .where(
+                    PositionAssignment.organization_id == self.organization_id,
+                    Position.parent_position_id == manager_position_subq,
+                    PositionAssignment.assignment_type
+                    == PositionAssignmentType.PRIMARY,
+                    PositionAssignment.end_date.is_(None),
+                )
+            )
+            stmt = stmt.where(Employee.employee_id.in_(direct_report_subq))
 
         if filters.expense_approver_id:
             stmt = stmt.where(
@@ -469,7 +563,7 @@ class EmployeeService:
         ]
 
     def get_direct_reports(self, manager_id: uuid.UUID) -> list[Employee]:
-        """Get all direct reports of a manager.
+        """Get all direct reports of a manager through active positions.
 
         Args:
             manager_id: The manager's employee ID.
@@ -477,16 +571,11 @@ class EmployeeService:
         Returns:
             List of Employee objects who report to this manager.
         """
-        stmt = (
-            select(Employee)
-            .where(
-                Employee.reports_to_id == manager_id,
-                Employee.organization_id == self.organization_id,
-                Employee.status != EmployeeStatus.TERMINATED,
-            )
-            .order_by(Employee.employee_code.asc())
+        reports = OrgResolver(self.db).get_direct_reports(
+            manager_id,
+            self.organization_id,
         )
-        return list(self.db.scalars(stmt).all())
+        return sorted(reports, key=lambda emp: emp.employee_code or "")
 
     def get_org_chart(
         self, root_employee_id: uuid.UUID | None = None, depth: int = 3
@@ -524,13 +613,14 @@ class EmployeeService:
             )
 
             if current_depth < depth:
-                reports = reports_by_manager.get(employee.employee_id, [])
+                reports = OrgResolver(self.db).get_direct_reports(
+                    employee.employee_id,
+                    self.organization_id,
+                )
                 for report in reports:
                     node.direct_reports.append(build_node(report, current_depth + 1))
 
             return node
-
-        reports_by_manager: dict[uuid.UUID | None, list[Employee]] = {}
 
         if root_employee_id:
             root_stmt = (
@@ -550,82 +640,27 @@ class EmployeeService:
             if not root:
                 raise EmployeeNotFoundError(root_employee_id)
 
-            employee_by_id = {root.employee_id: root}
-            current_level = [root.employee_id]
-            current_depth = 0
-
-            while current_depth < depth and current_level:
-                level_stmt = (
-                    select(Employee)
-                    .where(
-                        Employee.reports_to_id.in_(current_level),
-                        Employee.organization_id == self.organization_id,
-                        Employee.status != EmployeeStatus.TERMINATED,
-                    )
-                    .options(
-                        selectinload(Employee.person),
-                        selectinload(Employee.department),
-                        selectinload(Employee.designation),
-                    )
-                    .order_by(Employee.employee_code.asc())
-                )
-                level_employees = list(self.db.scalars(level_stmt).all())
-                if not level_employees:
-                    break
-                for emp in level_employees:
-                    employee_by_id[emp.employee_id] = emp
-                    reports_by_manager.setdefault(emp.reports_to_id, []).append(emp)
-                current_level = [emp.employee_id for emp in level_employees]
-                current_depth += 1
-
             return [build_node(root, 0)]
 
-        roots_stmt = (
-            select(Employee)
-            .where(
-                Employee.reports_to_id.is_(None),
-                Employee.organization_id == self.organization_id,
-                Employee.status != EmployeeStatus.TERMINATED,
-            )
-            .options(
-                selectinload(Employee.person),
-                selectinload(Employee.department),
-                selectinload(Employee.designation),
-            )
-            .order_by(Employee.employee_code.asc())
+        root_positions_stmt = select(Position).where(
+            Position.organization_id == self.organization_id,
+            Position.parent_position_id.is_(None),
+            Position.is_active.is_(True),
         )
-        roots = list(self.db.scalars(roots_stmt).all())
-
-        for emp in roots:
-            reports_by_manager.setdefault(None, []).append(emp)
-
-        current_level = [emp.employee_id for emp in roots]
-        current_depth = 0
-
-        while current_depth < depth and current_level:
-            level_stmt = (
-                select(Employee)
-                .where(
-                    Employee.reports_to_id.in_(current_level),
-                    Employee.organization_id == self.organization_id,
-                    Employee.status != EmployeeStatus.TERMINATED,
+        resolver = OrgResolver(self.db)
+        root_employees = [
+            incumbent
+            for position in self.db.scalars(root_positions_stmt).all()
+            if (
+                incumbent := resolver.get_position_incumbent(
+                    position.position_id,
+                    self.organization_id,
                 )
-                .options(
-                    selectinload(Employee.person),
-                    selectinload(Employee.department),
-                    selectinload(Employee.designation),
-                )
-                .order_by(Employee.employee_code.asc())
             )
-            level_employees = list(self.db.scalars(level_stmt).all())
-            if not level_employees:
-                break
-            for emp in level_employees:
-                reports_by_manager.setdefault(emp.reports_to_id, []).append(emp)
-            current_level = [emp.employee_id for emp in level_employees]
-            current_depth += 1
+        ]
+        root_employees.sort(key=lambda emp: emp.employee_code or "")
 
-        return [build_node(emp, 0) for emp in roots]
+        return [build_node(emp, 0) for emp in root_employees]
 
     # =========================================================================
     # CRUD
@@ -736,7 +771,6 @@ class EmployeeService:
             designation_id=data.designation_id,
             employment_type_id=data.employment_type_id,
             grade_id=data.grade_id,
-            reports_to_id=data.reports_to_id,
             expense_approver_id=data.expense_approver_id,
             assigned_location_id=data.assigned_location_id,
             default_shift_type_id=data.default_shift_type_id,
@@ -766,6 +800,18 @@ class EmployeeService:
 
         self.db.add(employee)
         self.db.flush()
+        if data.reports_to_id:
+            self.set_manager(
+                employee.employee_id,
+                data.reports_to_id,
+                validate_cycle=False,
+            )
+        else:
+            from app.services.people.hr.positions import PositionService
+
+            PositionService(
+                self.db, self.organization_id
+            ).provision_positions_for_employees([employee.employee_id])
         self.ensure_local_user_credentials_for_employee(employee.employee_id)
         self._ensure_default_employee_role(person.id)
 
@@ -915,28 +961,13 @@ class EmployeeService:
                 )
             employee.employee_code = data.employee_number
 
-        # Validate manager doesn't create cycle
         if (
             data.reports_to_id is not None
             and data.reports_to_id != employee.reports_to_id
         ):
-            if data.reports_to_id:
-                manager = self.db.scalar(
-                    select(Employee).where(
-                        Employee.employee_id == data.reports_to_id,
-                        Employee.organization_id == self.organization_id,
-                        Employee.status != EmployeeStatus.TERMINATED,
-                    )
-                )
-                if not manager:
-                    raise ValidationError(
-                        f"Manager with ID {data.reports_to_id} not found"
-                    )
-                if not self._validate_manager(employee_id, data.reports_to_id):
-                    raise InvalidManagerError()
-            employee.reports_to_id = data.reports_to_id
+            self.set_manager(employee_id, data.reports_to_id)
         elif use_provided_fields and "reports_to_id" in provided_fields:
-            employee.reports_to_id = None
+            self.set_manager(employee_id, None)
 
         if (
             data.expense_approver_id is not None
@@ -1522,6 +1553,12 @@ class EmployeeService:
         )
         result_proxy = cast(CursorResult[Any], self.db.execute(stmt))
         result.updated_count = result_proxy.rowcount or 0
+        if "reports_to_id" in updates:
+            for updated_employee_id in data.ids:
+                self._set_manager_position(
+                    updated_employee_id,
+                    data.reports_to_id,
+                )
 
         return result
 

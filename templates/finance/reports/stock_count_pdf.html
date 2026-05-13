@@ -1,0 +1,85 @@
+{% extends "finance/reports/_pdf_base.html" %}
+
+{% block title %}Stock Count {{ count.count_number }} - {{ org_name }}{% endblock %}
+{% block report_title %}Stock Count Sheet{% endblock %}
+{% block page_size %}A4 landscape{% endblock %}
+{% block report_meta %}
+<p class="meta-line">Count Number: {{ count.count_number }}</p>
+<p class="meta-line">Count Date: {{ count.count_date.strftime("%d %b %Y") if count.count_date else "-" }}</p>
+<p class="meta-line">Status: {{ count.status.value | replace("_", " ") | title }}</p>
+<p class="meta-line">Rows: {{ row_count }}</p>
+{% endblock %}
+
+{% block extra_styles %}
+table.report-table th,
+table.report-table td {
+  font-size: 7px;
+  padding: 4px 5px;
+}
+.wide-text {
+  max-width: 150px;
+  overflow-wrap: anywhere;
+}
+{% endblock %}
+
+{% block report_body %}
+<table class="summary-grid">
+  <tr>
+    <td>
+      <div class="summary-label">Total System Qty</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_system_quantity or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Total Counted Qty</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_counted_quantity or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Total Variance Qty</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_variance_quantity or 0) }}</div>
+    </td>
+    <td>
+      <div class="summary-label">Total Variance Value</div>
+      <div class="summary-value num">{{ "{:,.2f}".format(summary.total_variance_value or 0) }}</div>
+    </td>
+  </tr>
+</table>
+
+{% if rows %}
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Item Code</th>
+      <th>Item Name</th>
+      <th>Warehouse</th>
+      <th class="num">System Qty</th>
+      <th class="num">Counted Qty</th>
+      <th class="num">Final Qty</th>
+      <th class="num">Variance Qty</th>
+      <th class="num">Variance Value</th>
+      <th>Reason</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td class="wide-text">{{ row.item_code }}</td>
+      <td class="wide-text">{{ row.item_name }}</td>
+      <td class="wide-text">{{ row.warehouse_name }}</td>
+      <td class="num">{{ row.system_quantity }}</td>
+      <td class="num">{{ row.counted_quantity }}</td>
+      <td class="num">{{ row.final_quantity }}</td>
+      <td class="num">{{ row.variance_quantity }}</td>
+      <td class="num">{{ row.variance_value }}</td>
+      <td>{{ row.reason_code }}</td>
+      <td class="wide-text">{{ row.notes }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="notes">
+  <p>No stock count lines were found for this export.</p>
+</div>
+{% endif %}
+{% endblock %}

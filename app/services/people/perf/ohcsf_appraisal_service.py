@@ -40,6 +40,7 @@ from app.services.people.perf.performance_policy import (
     get_policy_profile,
 )
 from app.services.people.perf.performance_mode_policy import enforce_pms_write_mode
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.perf.scoring_engine import OHCSFScoringEngine
 
 if TYPE_CHECKING:
@@ -170,14 +171,24 @@ class OHCSFAppraisalService:
 
         An appraisal is considered incomplete if its status is not COMPLETED or CANCELLED.
         """
-        from app.models.people.hr.employee import Employee
-
-        # Find direct reports of this employee
-        direct_report_ids_stmt = select(Employee.employee_id).where(
-            Employee.organization_id == org_id,
-            Employee.reports_to_id == employee_id,
+        direct_report_ids = [
+            employee.employee_id
+            for employee in OrgResolver(self.db).get_direct_reports(
+                employee_id,
+                org_id,
+            )
+            if employee.employee_id != employee_id
+        ]
+        legacy_direct_report_ids_stmt = select(Appraisal.employee_id).where(
+            Appraisal.organization_id == org_id,
+            Appraisal.cycle_id == cycle_id,
+            Appraisal.manager_id == employee_id,
         )
-        direct_report_ids = list(self.db.scalars(direct_report_ids_stmt).all())
+        direct_report_ids.extend(
+            employee_id
+            for employee_id in self.db.scalars(legacy_direct_report_ids_stmt).all()
+            if employee_id not in direct_report_ids
+        )
 
         if not direct_report_ids:
             return  # No direct reports — no cascade-up constraint

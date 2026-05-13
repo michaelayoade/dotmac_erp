@@ -28,6 +28,7 @@ from app.models.people.leave.leave_application import (
     LeaveApplication,
     LeaveApplicationStatus,
 )
+from app.services.people.hr.org_resolver import OrgResolver
 
 logger = logging.getLogger(__name__)
 
@@ -148,14 +149,15 @@ class WorkforceAnalyzer:
             or 0
         )
 
-        # Employees without a reporting manager
-        no_manager = int(
-            self.db.scalar(
-                select(func.count())
-                .select_from(Employee)
-                .where(active_base, Employee.reports_to_id.is_(None))
-            )
-            or 0
+        # Employees without a position-resolved reporting manager.
+        active_employee_ids = list(
+            self.db.scalars(select(Employee.employee_id).where(active_base)).all()
+        )
+        resolver = OrgResolver(self.db)
+        no_manager = sum(
+            1
+            for employee_id in active_employee_ids
+            if resolver.get_manager(employee_id, organization_id) is None
         )
 
         return WorkforceHealthSummary(

@@ -486,10 +486,18 @@ class TestFlagForPIP:
 
         svc = UnderperformanceService(db)
 
-        with patch(
-            "app.models.people.perf.pip.PerformanceImprovementPlan",
-            autospec=True,
-        ) as MockPIP:
+        with (
+            patch(
+                "app.models.people.perf.pip.PerformanceImprovementPlan",
+                autospec=True,
+            ) as MockPIP,
+            patch(
+                "app.services.people.perf.underperformance_service.OrgResolver"
+            ) as resolver_cls,
+        ):
+            resolver_cls.return_value.get_manager.return_value = SimpleNamespace(
+                employee_id=supervisor_id
+            )
             mock_pip_instance = MagicMock()
             mock_pip_instance.pip_id = uuid.uuid4()
             MockPIP.return_value = mock_pip_instance
@@ -545,7 +553,11 @@ class TestFlagForPIP:
         db.scalar.side_effect = capturing_scalar
 
         svc = UnderperformanceService(db)
-        svc.flag_for_pip(org_id, employee_id, trigger_type="quarterly")
+        with patch(
+            "app.services.people.perf.underperformance_service.OrgResolver"
+        ) as resolver_cls:
+            resolver_cls.return_value.get_manager.return_value = None
+            svc.flag_for_pip(org_id, employee_id, trigger_type="quarterly")
 
         # db.scalar must have been called at least once (employee lookup)
         assert db.scalar.call_count >= 1
@@ -562,7 +574,11 @@ class TestFlagForPIP:
         db.scalar.side_effect = [employee, 9]  # count = 9 → code should be 0010
 
         svc = UnderperformanceService(db)
-        result = svc.flag_for_pip(org_id, employee_id, trigger_type="probation")
+        with patch(
+            "app.services.people.perf.underperformance_service.OrgResolver"
+        ) as resolver_cls:
+            resolver_cls.return_value.get_manager.return_value = None
+            result = svc.flag_for_pip(org_id, employee_id, trigger_type="probation")
 
         assert result["pip_code"].endswith("-0010")
 
@@ -580,7 +596,11 @@ class TestFlagForPIP:
         db.scalar.side_effect = [employee, 0]
 
         svc = UnderperformanceService(db)
-        result = svc.flag_for_pip(org_id, employee_id, trigger_type="annual")
+        with patch(
+            "app.services.people.perf.underperformance_service.OrgResolver"
+        ) as resolver_cls:
+            resolver_cls.return_value.get_manager.return_value = None
+            result = svc.flag_for_pip(org_id, employee_id, trigger_type="annual")
 
         # With no reports_to_id the method uses employee_id as supervisor fallback
         # and still produces a flagged result
@@ -603,12 +623,16 @@ class TestFlagForPIP:
         db.scalar.side_effect = [employee, 0]
 
         svc = UnderperformanceService(db)
-        svc.flag_for_pip(
-            org_id,
-            employee_id,
-            trigger_type="score_below_50",
-            triggering_appraisal_id=appraisal_id,
-        )
+        with patch(
+            "app.services.people.perf.underperformance_service.OrgResolver"
+        ) as resolver_cls:
+            resolver_cls.return_value.get_manager.return_value = None
+            svc.flag_for_pip(
+                org_id,
+                employee_id,
+                trigger_type="score_below_50",
+                triggering_appraisal_id=appraisal_id,
+            )
 
         # PIP + AppraisalOutcomeAction
         assert db.add.call_count == 2

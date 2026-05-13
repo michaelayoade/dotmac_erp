@@ -471,8 +471,8 @@
                             <option value="">Select manager</option>
                             {% for mgr in managers %}
                             <option value="{{ mgr.employee_id }}"
-                                {{ 'selected' if (employee and employee.reports_to_id == mgr.employee_id) or (form_data.reports_to_id == mgr.employee_id | string) }}>
-                                {{ mgr.employee_code }} - {{ mgr.full_name }}
+                                {{ 'selected' if (current_manager_id and current_manager_id == mgr.employee_id) or (form_data.reports_to_id == mgr.employee_id | string) }}>
+                                {{ mgr.employee_code }} - {{ mgr.full_name }}{% if manager_position_titles and manager_position_titles.get(mgr.employee_id | string) %} · {{ manager_position_titles[mgr.employee_id | string] }}{% endif %}
                             </option>
                             {% endfor %}
                         </select>
@@ -499,7 +499,7 @@
                             {% for mgr in managers %}
                             <option value="{{ mgr.employee_id }}"
                                 {{ 'selected' if (employee and employee.expense_approver_id == mgr.employee_id) or (form_data.expense_approver_id == mgr.employee_id | string) }}>
-                                {{ mgr.employee_code }} - {{ mgr.full_name }}
+                                {{ mgr.employee_code }} - {{ mgr.full_name }}{% if manager_position_titles and manager_position_titles.get(mgr.employee_id | string) %} · {{ manager_position_titles[mgr.employee_id | string] }}{% endif %}
                             </option>
                             {% endfor %}
                         </select>

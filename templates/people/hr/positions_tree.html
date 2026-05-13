@@ -1,0 +1,99 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, empty_state %}
+
+{% block page_title %}Organization Chart{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Human Resources</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr/positions" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Positions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Organization Chart</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/hr/positions" class="btn btn-secondary">
+    {{ icon_svg("chevron-right", "h-4 w-4 mr-1.5 rotate-180") }}
+    Back to Positions
+</a>
+{% endblock %}
+
+{% macro render_node(node, depth) %}
+<li class="relative {% if depth > 0 %}pl-6 ml-2 border-l border-slate-200 dark:border-slate-700{% endif %}">
+    {% if depth > 0 %}
+    <span aria-hidden="true" class="absolute left-0 top-5 w-5 border-t border-slate-200 dark:border-slate-700"></span>
+    {% endif %}
+    <div class="flex items-start gap-3 p-3 rounded-lg border
+        {% if node.is_vacant %}
+            bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800
+        {% else %}
+            bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700
+        {% endif %}
+        {% if depth == 0 %} shadow-sm{% endif %}">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <a href="/people/hr/positions/{{ node.position_id }}/edit"
+                   class="text-sm font-medium text-slate-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
+                    {{ node.designation_name if node.designation_name else 'Untitled Position' }}
+                </a>
+                {% if node.is_vacant %}
+                <span class="text-xs font-medium px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    Vacant
+                </span>
+                {% endif %}
+            </div>
+            {% if node.department_name %}
+            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {{ node.department_name }}
+            </div>
+            {% endif %}
+            <div class="text-sm mt-1">
+                {% if node.is_vacant %}
+                <span class="text-amber-700 dark:text-amber-400">No active incumbent</span>
+                {% elif node.incumbent_employee_id %}
+                <a href="/people/hr/employees/{{ node.incumbent_employee_id }}"
+                   class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                    {{ node.incumbent_name if node.incumbent_name else 'Unnamed' }}
+                </a>
+                {% else %}
+                <span class="text-slate-500 dark:text-slate-400">—</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% if node.children %}
+    <ol class="mt-2 space-y-2">
+        {% for child in node.children %}
+            {{ render_node(child, depth + 1) }}
+        {% endfor %}
+    </ol>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="card">
+        <div class="card-body p-6">
+            {% if roots %}
+            <ol class="space-y-3">
+                {% for root in roots %}
+                    {{ render_node(root, 0) }}
+                {% endfor %}
+            </ol>
+            {% else %}
+            {{ empty_state(
+                title="No positions yet",
+                description="Create your first position or run a position reconcile after importing employees.",
+                icon="users",
+                cta_text="New Position",
+                cta_href="/people/hr/positions/new"
+            ) }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -31,6 +31,13 @@ class ImportService:
                 ImportStatus.COMPLETED,
                 ImportStatus.COMPLETED_WITH_ERRORS,
             ):
+                # Subclasses may define reconcile_positions() (or other
+                # post-batch hooks) to run inside the same transaction
+                # before commit. Duck-typed so non-HR importers stay
+                # unaffected.
+                post_hook = getattr(importer, "reconcile_positions", None)
+                if callable(post_hook):
+                    post_hook()
                 importer.db.commit()
             else:
                 importer.db.rollback()

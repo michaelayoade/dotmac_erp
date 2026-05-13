@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.perf.appraisal import Appraisal, AppraisalStatus
 from app.models.people.perf.appraisal_cycle import AppraisalCycle, AppraisalCycleStatus
+from app.services.people.hr.org_resolver import OrgResolver
 
 if TYPE_CHECKING:
     pass
@@ -280,10 +281,14 @@ class PerformanceAutomationService:
 
         eligible_employees = self.get_eligible_employees(cycle)
         created_appraisals: list[Appraisal] = []
+        org_resolver = OrgResolver(self.db)
 
         for employee in eligible_employees:
             # Determine the reviewing manager
-            manager_id = employee.reports_to_id
+            manager = org_resolver.get_manager(
+                employee.employee_id, cycle.organization_id
+            )
+            manager_id = manager.employee_id if manager else None
 
             if not manager_id:
                 logger.warning(

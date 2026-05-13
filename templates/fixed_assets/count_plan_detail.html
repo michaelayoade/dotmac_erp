@@ -1,0 +1,181 @@
+{% extends "fixed_assets/base_fixed_assets.html" %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
+
+{% block page_title %}Asset Count Plan{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fixed-assets" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Asset Management</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fixed-assets/count-plans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Count Plans</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ plan.plan_number }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex flex-wrap items-center gap-2">
+    <a href="/fixed-assets/reports/count-sheets?audit_plan_id={{ plan.audit_plan_id }}" class="btn btn-secondary">
+        {{ icon_svg("document-report", "h-4 w-4 mr-1.5") }}
+        Count Sheet
+    </a>
+    {% if plan.status in ["DRAFT", "CANCELLED"] %}
+    <form method="post" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}/start">
+        <button type="submit" class="btn btn-primary">
+            {{ icon_svg("play", "h-4 w-4 mr-1.5") }}
+            Start Count
+        </button>
+    </form>
+    {% elif plan.status == "IN_PROGRESS" %}
+    <form method="post" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}/mark-pending-found">
+        <button type="submit" class="btn btn-secondary" onclick="return confirm('Mark all pending assets as found? You can still change exceptions after this.')">
+            {{ icon_svg("check-circle", "h-4 w-4 mr-1.5") }}
+            Mark Pending Found
+        </button>
+    </form>
+    <form method="post" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}/complete">
+        <button type="submit" class="btn btn-primary">
+            {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
+            Complete Count
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">{{ plan.plan_number }}</p>
+                <h1 class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ plan.title }}</h1>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Planned {{ plan.planned_date }}</p>
+            </div>
+            <div>{{ status_badge(plan.status) }}</div>
+        </div>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">System Qty</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ count_totals.total }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Found</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ count_totals.found }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Missing</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ count_totals.missing }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Discrepancy</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ count_totals.discrepancy }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">Pending</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ count_totals.pending }}</p>
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <form method="get" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}" class="flex flex-wrap items-end gap-3">
+            <label class="block min-w-56">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Line Status</span>
+                <select name="line_status" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    <option value="">All lines</option>
+                    {% for option in line_status_options %}
+                        <option value="{{ option.value }}" {% if line_status == option.value %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="btn btn-secondary">
+                {{ icon_svg("filter", "h-4 w-4 mr-1.5") }}
+                Apply
+            </button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Serial/Barcode</th>
+                        <th>Expected Location</th>
+                        <th>Expected Status</th>
+                        <th>Count Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in lines %}
+                    <tr class="{% if line.status in ['MISSING', 'DISCREPANCY'] %}bg-rose-50/40 dark:bg-rose-950/20{% endif %}">
+                        <td>
+                            <a href="/fixed-assets/assets/{{ line.asset_id }}" class="font-medium text-teal-700 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100">
+                                {{ line.asset_number }} - {{ line.asset_name }}
+                            </a>
+                            {% if line.discrepancy_notes %}
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ line.discrepancy_notes }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="text-slate-700 dark:text-slate-200">
+                            {{ line.serial_number or "-" }}
+                            {% if line.barcode %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ line.barcode }}</p>{% endif %}
+                        </td>
+                        <td class="text-slate-700 dark:text-slate-200">{{ line.expected_location }}</td>
+                        <td class="text-slate-700 dark:text-slate-200">{{ line.expected_status or "-" }}</td>
+                        <td>{{ status_badge(line.status) }}</td>
+                        <td>
+                            {% if plan.status == "IN_PROGRESS" %}
+                            <div class="space-y-2">
+                                <div class="flex justify-end gap-2">
+                                    <form method="post" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}/lines/{{ line.audit_line_id }}/check">
+                                        <input type="hidden" name="action" value="found">
+                                        <button type="submit" class="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">Found</button>
+                                    </form>
+                                    <form method="post" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}/lines/{{ line.audit_line_id }}/check">
+                                        <input type="hidden" name="action" value="missing">
+                                        <button type="submit" class="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">Missing</button>
+                                    </form>
+                                </div>
+                                <form method="post" action="/fixed-assets/count-plans/{{ plan.audit_plan_id }}/lines/{{ line.audit_line_id }}/check" class="grid gap-2 sm:grid-cols-3">
+                                    <input type="hidden" name="action" value="discrepancy">
+                                    <select name="observed_location_id" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                                        <option value="">Observed location</option>
+                                        {% for loc in locations %}
+                                            <option value="{{ loc.location_id }}" {% if line.observed_location_id == loc.location_id|string %}selected{% endif %}>{{ loc.location_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <select name="observed_status" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                                        <option value="">Observed status</option>
+                                        {% for option in asset_statuses %}
+                                            <option value="{{ option.value }}" {% if line.observed_status == option.value %}selected{% endif %}>{{ option.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="flex gap-1">
+                                        <input type="text" name="discrepancy_notes" value="{{ line.discrepancy_notes }}" placeholder="Notes" class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                                        <button type="submit" class="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                            {% else %}
+                                <span class="text-sm text-slate-500 dark:text-slate-400">{{ line.physical_check_at or "-" }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-12">
+                            {{ empty_state("No asset lines", "No assets were included in this count plan.", "clipboard-list") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

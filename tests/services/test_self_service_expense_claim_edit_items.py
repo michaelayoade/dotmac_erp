@@ -7,20 +7,31 @@ from uuid import UUID, uuid4
 
 from app.models.people.exp import ExpenseClaimStatus
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.people.hr.position import Position
+from app.models.people.hr.position_assignment import (
+    PositionAssignment,
+    PositionAssignmentType,
+)
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.services.people.self_service_web import SelfServiceWebService
 
 
 def _ensure_employee_table(engine) -> None:
-    for column in Employee.__table__.columns:
-        default = column.server_default
-        if default is None:
-            continue
-        default_text = str(getattr(default, "arg", default)).lower()
-        if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
-            column.server_default = None
-    Employee.__table__.create(engine, checkfirst=True)
+    tables = (
+        Employee.__table__,
+        Position.__table__,
+        PositionAssignment.__table__,
+    )
+    for table in tables:
+        for column in table.columns:
+            default = column.server_default
+            if default is None:
+                continue
+            default_text = str(getattr(default, "arg", default)).lower()
+            if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
+                column.server_default = None
+        table.create(engine, checkfirst=True)
 
 
 def _make_auth():
@@ -113,6 +124,50 @@ def test_expense_claim_update_supports_existing_new_and_removed_items():
         item_id=removed_item_id,
     )
     db.commit.assert_called_once()
+
+
+def _wire_manager_via_position(
+    db_session,
+    org_id: UUID,
+    *,
+    employee: Employee,
+    manager: Employee,
+) -> None:
+    """Establish a position chain so OrgResolver.get_manager returns the manager."""
+    manager_position = Position(
+        position_id=uuid4(),
+        organization_id=org_id,
+        is_vacant=False,
+    )
+    employee_position = Position(
+        position_id=uuid4(),
+        organization_id=org_id,
+        parent_position_id=manager_position.position_id,
+        is_vacant=False,
+    )
+    db_session.add_all([manager_position, employee_position])
+    db_session.flush()
+    db_session.add_all(
+        [
+            PositionAssignment(
+                position_assignment_id=uuid4(),
+                organization_id=org_id,
+                employee_id=manager.employee_id,
+                position_id=manager_position.position_id,
+                assignment_type=PositionAssignmentType.PRIMARY,
+                start_date=date.today(),
+            ),
+            PositionAssignment(
+                position_assignment_id=uuid4(),
+                organization_id=org_id,
+                employee_id=employee.employee_id,
+                position_id=employee_position.position_id,
+                assignment_type=PositionAssignmentType.PRIMARY,
+                start_date=date.today(),
+            ),
+        ]
+    )
+    db_session.flush()
 
 
 def _person(org_id: UUID, first_name: str, last_name: str) -> Person:
@@ -226,6 +281,10 @@ def test_expense_approver_options_include_all_active_expense_approvers_and_defau
             PersonRole(id=uuid4(), person_id=other.person_id, role_id=role.id),
             PersonRole(id=uuid4(), person_id=inactive.person_id, role_id=role.id),
         ]
+    )
+    db_session.flush()
+    _wire_manager_via_position(
+        db_session, org_id, employee=requester, manager=manager
     )
     db_session.commit()
 

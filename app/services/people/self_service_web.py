@@ -59,6 +59,7 @@ from app.services.people.expense import (
 from app.services.people.hr.employees import EmployeeService
 from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.info_change_service import InfoChangeService
+from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.leave import LeaveService
 from app.services.people.leave.leave_service import LeaveServiceError
 from app.services.people.payroll.paye_calculator import PAYECalculator
@@ -449,7 +450,8 @@ class SelfServiceWebService:
         if employee_id:
             employee = db.get(Employee, employee_id)
             if employee and default_approver_id is None:
-                default_approver_id = employee.reports_to_id
+                manager = OrgResolver(db).get_manager(employee.employee_id, org_id)
+                default_approver_id = manager.employee_id if manager else None
 
         rows = db.execute(
             select(Employee, Person)
@@ -562,12 +564,34 @@ class SelfServiceWebService:
         except HTTPException:
             return False
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1),
+        return bool(
+            SelfServiceWebService._get_direct_reports(
+                db,
+                org_id,
+                manager_employee_id,
+            )
         )
-        return bool(reports.items)
+
+    @staticmethod
+    def _get_direct_reports(
+        db: Session,
+        org_id: UUID,
+        manager_employee_id: UUID,
+    ) -> list[Employee]:
+        return OrgResolver(db).get_direct_reports(manager_employee_id, org_id)
+
+    @staticmethod
+    def _get_direct_report_ids(
+        db: Session,
+        org_id: UUID,
+        manager_employee_id: UUID,
+    ) -> set[UUID]:
+        return {
+            employee.employee_id
+            for employee in SelfServiceWebService._get_direct_reports(
+                db, org_id, manager_employee_id
+            )
+        }
 
     @staticmethod
     def _has_team_expense_approvals(
@@ -2215,11 +2239,7 @@ class SelfServiceWebService:
                 )
             raise
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
+        reports = self._get_direct_reports(db, org_id, manager_employee_id)
         report_ids = [emp.employee_id for emp in reports]
         items = []
         total = 0
@@ -2298,12 +2318,7 @@ class SelfServiceWebService:
         if application.employee_id == manager_employee_id:
             raise HTTPException(status_code=400, detail="Cannot approve own leave")
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
-        report_ids = {emp.employee_id for emp in reports}
+        report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
         if (
             application.employee_id not in report_ids
             and application.leave_approver_id != manager_employee_id
@@ -2331,12 +2346,7 @@ class SelfServiceWebService:
         manager_employee_id = self._get_employee_id(db, org_id, person_id)
 
         application = LeaveService(db, auth).get_application(org_id, application_id)
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
-        report_ids = {emp.employee_id for emp in reports}
+        report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
         if (
             application.employee_id not in report_ids
             and application.leave_approver_id != manager_employee_id
@@ -2943,11 +2953,7 @@ class SelfServiceWebService:
                 )
             raise
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
+        reports = self._get_direct_reports(db, org_id, manager_employee_id)
         report_ids = [emp.employee_id for emp in reports]
         has_direct_reports = bool(report_ids)
 
@@ -3039,11 +3045,7 @@ class SelfServiceWebService:
                 )
             raise
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
+        reports = self._get_direct_reports(db, org_id, manager_employee_id)
 
         context = base_context(
             request, auth, "New Team Discipline Case", "self-team-discipline", db=db
@@ -3142,12 +3144,7 @@ class SelfServiceWebService:
                 form_data=form_data,
             )
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
-        report_ids = {emp.employee_id for emp in reports}
+        report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
         if employee_uuid not in report_ids:
             return self.team_discipline_new_form_response(
                 request,
@@ -3234,12 +3231,7 @@ class SelfServiceWebService:
         person_id = coerce_uuid(auth.person_id)
         manager_employee_id = self._get_employee_id(db, org_id, person_id)
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
-        report_ids = {emp.employee_id for emp in reports}
+        report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
 
         try:
             case = DisciplineService(db).get_case_detail(case_id)
@@ -3307,12 +3299,7 @@ class SelfServiceWebService:
         person_id = coerce_uuid(auth.person_id)
         manager_employee_id = self._get_employee_id(db, org_id, person_id)
 
-        employee_svc = EmployeeService(db, org_id)
-        reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
-            pagination=PaginationParams(offset=0, limit=1000),
-        ).items
-        report_ids = {emp.employee_id for emp in reports}
+        report_ids = self._get_direct_report_ids(db, org_id, manager_employee_id)
 
         service = DisciplineService(db)
         case = service.get_case_or_404(case_id, organization_id=coerce_uuid(org_id))

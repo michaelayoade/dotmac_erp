@@ -277,6 +277,10 @@ class EmployeeImporter(BaseImporter[Employee]):
     entity_name = "Employee"
     model_class = Employee
 
+    def __init__(self, db, config) -> None:
+        super().__init__(db, config)
+        self._imported_employee_ids: list[UUID] = []
+
     def get_field_mappings(self) -> list[FieldMapping]:
         return [
             FieldMapping("Employee Code", "employee_code", required=False),
@@ -434,6 +438,12 @@ class EmployeeImporter(BaseImporter[Employee]):
         return None
 
     def create_entity(self, row: dict[str, Any]) -> Employee:
+        # Bulk import writes ``Employee.reports_to_id`` directly without
+        # provisioning hr.position / hr.position_assignment. Each created
+        # employee_id is tracked on ``self._imported_employee_ids`` so the
+        # caller can finalize with ``reconcile_positions()`` after
+        # ``import_file()`` returns. See ``EmployeeService.set_manager`` for
+        # the per-row chokepoint used outside bulk paths.
         employee_code = _first_value(row, "employee_code", "employee_code_alt")
         first_name = _first_value(row, "first_name")
         last_name = _first_value(row, "last_name")
@@ -494,7 +504,7 @@ class EmployeeImporter(BaseImporter[Employee]):
         if row.get("cost_center_code") and not cost_center_id:
             raise ValueError(f"Cost Center not found: {row.get('cost_center_code')}")
 
-        return Employee(
+        employee = Employee(
             employee_id=uuid4(),
             organization_id=self.config.organization_id,
             person_id=person.id,
@@ -510,3 +520,28 @@ class EmployeeImporter(BaseImporter[Employee]):
             personal_phone=row.get("phone"),
             personal_email=None,
         )
+        self._imported_employee_ids.append(employee.employee_id)
+        return employee
+
+    def reconcile_positions(self):
+        """
+        Provision positions/assignments for employees created during this
+        import batch.
+
+        Invoked automatically by ``ImportService.run_import`` via the
+        duck-typed post-import hook, inside the same transaction that
+        commits the imported employees. Exposed publicly so tests and
+        ad-hoc callers can drive it directly. Safe under partial-success
+        state — IDs whose row never committed are silently skipped by the
+        bulk reconcile.
+        """
+        from app.services.people.hr.positions import (
+            PositionService,
+            ReconcileResult,
+        )
+
+        if not self._imported_employee_ids:
+            return ReconcileResult()
+        return PositionService(
+            self.db, self.config.organization_id
+        ).reconcile_from_reports_to_id(employee_ids=self._imported_employee_ids)

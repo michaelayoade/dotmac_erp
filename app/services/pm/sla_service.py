@@ -409,6 +409,7 @@ class ProjectSLAService:
 
         if task.assigned_to_id:
             from app.models.people.hr.employee import Employee
+            from app.services.people.hr.org_resolver import OrgResolver
 
             assigned_employee = self.db.scalar(
                 select(Employee).where(
@@ -418,15 +419,12 @@ class ProjectSLAService:
             )
             if assigned_employee:
                 candidate_ids.add(assigned_employee.person_id)
-                if assigned_employee.reports_to_id:
-                    manager = self.db.scalar(
-                        select(Employee).where(
-                            Employee.organization_id == self.organization_id,
-                            Employee.employee_id == assigned_employee.reports_to_id,
-                        )
-                    )
-                    if manager:
-                        candidate_ids.add(manager.person_id)
+                manager = OrgResolver(self.db).get_manager(
+                    assigned_employee.employee_id,
+                    self.organization_id,
+                )
+                if manager:
+                    candidate_ids.add(manager.person_id)
 
         normalized_roles = {r.strip().lower() for r in role_names if r.strip()}
         if normalized_roles:

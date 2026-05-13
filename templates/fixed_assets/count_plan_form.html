@@ -1,0 +1,55 @@
+{% extends "fixed_assets/base_fixed_assets.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}New Asset Count Plan{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fixed-assets" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Asset Management</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fixed-assets/count-plans" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Count Plans</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">New</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl">
+    <form method="post" action="/fixed-assets/count-plans/new" class="card p-6 space-y-5">
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Physical Count</p>
+            <h1 class="mt-1 text-xl font-semibold text-slate-900 dark:text-white">Create Asset Count Plan</h1>
+        </div>
+
+        <label class="block">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Title</span>
+            <input type="text" name="title" required maxlength="220" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white" placeholder="May 2026 fixed asset count">
+        </label>
+
+        <div class="grid gap-4 md:grid-cols-2">
+            <label class="block">
+                <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Planned Date</span>
+                <input type="date" name="planned_date" required value="{{ today }}" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+            </label>
+
+            <label class="block">
+                <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Scope Location</span>
+                <select name="scope_location_id" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    <option value="">All locations</option>
+                    {% for loc in locations %}
+                        <option value="{{ loc.location_id }}">{{ loc.location_name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <a href="/fixed-assets/count-plans" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+                Create Plan
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

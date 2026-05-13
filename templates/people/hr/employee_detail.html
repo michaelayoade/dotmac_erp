@@ -581,6 +581,61 @@
             </div>
         </div>
 
+        {# Position Chain #}
+        {% if position_chain %}
+        <div class="card">
+            <div class="card-header px-6 pt-6 flex items-center justify-between">
+                <h3 class="font-medium text-slate-900 dark:text-white">Position Chain</h3>
+                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                    {{ position_chain | length }} levels
+                </span>
+            </div>
+            <div class="card-body px-6 pb-6">
+                <ol class="space-y-2">
+                    {% for entry in position_chain %}
+                    <li class="flex items-start gap-3 p-3 rounded-lg border
+                        {% if entry.is_self %}
+                            bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800
+                        {% elif entry.is_vacant %}
+                            bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800
+                        {% else %}
+                            bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700
+                        {% endif %}">
+                        <div class="font-mono tabular-nums text-xs text-slate-400 dark:text-slate-500 pt-0.5">
+                            {{ loop.index }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">
+                                {{ entry.designation_name if entry.designation_name else 'Position' }}
+                                {% if entry.is_self %}
+                                <span class="ml-2 text-xs font-medium text-violet-700 dark:text-violet-300 uppercase tracking-wide">you</span>
+                                {% endif %}
+                            </div>
+                            {% if entry.department_name %}
+                            <div class="text-xs text-slate-500 dark:text-slate-400">
+                                {{ entry.department_name }}
+                            </div>
+                            {% endif %}
+                            <div class="text-sm mt-1">
+                                {% if entry.is_vacant %}
+                                <span class="text-amber-700 dark:text-amber-400 font-medium">Vacant</span>
+                                {% elif entry.incumbent_employee_id %}
+                                <a href="/people/hr/employees/{{ entry.incumbent_employee_id }}"
+                                   class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                                    {{ entry.incumbent_name }}
+                                </a>
+                                {% else %}
+                                <span class="text-slate-500 dark:text-slate-400">—</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+        {% endif %}
+
         {# Dates #}
         <div class="card">
             <div class="card-header px-6 pt-6">

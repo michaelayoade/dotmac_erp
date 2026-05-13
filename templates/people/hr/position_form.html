@@ -1,0 +1,198 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{% if position and position.position_id is defined %}Edit Position{% else %}New Position{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Human Resources</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr/positions" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Positions</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{% if position and position.position_id is defined %}Edit{% else %}New{% endif %}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% set is_edit = position and position.position_id is defined %}
+{% set selected_designation_id = position.designation_id | string if position and position.designation_id else '' %}
+{% set selected_department_id = position.department_id | string if position and position.department_id else '' %}
+{% set selected_parent_position_id = position.parent_position_id | string if position and position.parent_position_id else '' %}
+
+<div class="max-w-3xl">
+    {% if success %}
+    <div class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
+        <div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+            {{ icon_svg("check-circle", "h-5 w-5 flex-shrink-0") }}
+            <span>{{ success }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-900/20">
+        <div class="flex items-center gap-2 text-rose-700 dark:text-rose-300">
+            {{ icon_svg("exclamation-circle", "h-5 w-5 flex-shrink-0") }}
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/hr/positions/{% if is_edit %}{{ position.position_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Position Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                        <label for="designation_id" class="form-label">Designation</label>
+                        <select name="designation_id" id="designation_id" class="form-input w-full {% if errors.designation_id %}border-rose-500{% endif %}">
+                            <option value="">Select designation</option>
+                            {% for designation in designations %}
+                            <option value="{{ designation.designation_id }}" {{ 'selected' if selected_designation_id == designation.designation_id | string }}>
+                                {{ designation.designation_code }} - {{ designation.designation_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if errors.designation_id %}
+                        <p class="mt-1 text-sm text-rose-500">{{ errors.designation_id }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        <select name="department_id" id="department_id" class="form-input w-full {% if errors.department_id %}border-rose-500{% endif %}">
+                            <option value="">Select department</option>
+                            {% for department in departments %}
+                            <option value="{{ department.department_id }}" {{ 'selected' if selected_department_id == department.department_id | string }}>
+                                {{ department.department_code }} - {{ department.department_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if errors.department_id %}
+                        <p class="mt-1 text-sm text-rose-500">{{ errors.department_id }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="parent_position_id" class="form-label">Reports To Position</label>
+                    <select name="parent_position_id" id="parent_position_id" class="form-input w-full">
+                        <option value="">No parent position</option>
+                        {% for parent in parent_positions %}
+                        <option value="{{ parent.position_id }}" {{ 'selected' if selected_parent_position_id == parent.position_id | string }}>
+                            {{ parent.designation.designation_name if parent.designation else 'Unspecified position' }}
+                            {% if parent.department %} - {{ parent.department.department_name }}{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="is_vacant" id="is_vacant" value="true"
+                        {{ 'checked' if not position or position.is_vacant }}
+                        class="rounded border-slate-300 text-violet-600 focus:ring-violet-500">
+                    <label for="is_vacant" class="ml-2 text-sm text-slate-700 dark:text-slate-300">Vacant</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-6 dark:border-slate-700">
+            <a href="/people/hr/positions" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                {% if is_edit %}Update{% else %}Create{% endif %} Position
+            </button>
+        </div>
+    </form>
+
+    {% if is_edit %}
+    <div class="mt-8 card">
+        <div class="card-header">
+            <h3 class="font-medium text-slate-900 dark:text-white">Position Assignments</h3>
+        </div>
+        <div class="card-body space-y-6">
+            <form method="post" action="/people/hr/positions/{{ position.position_id }}/assignments" class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {{ request.state.csrf_form | safe }}
+                <div class="md:col-span-2">
+                    <label for="employee_id" class="form-label">Employee</label>
+                    <select name="employee_id" id="employee_id" class="form-input w-full" required>
+                        <option value="">Select employee</option>
+                        {% for employee in employee_options %}
+                        <option value="{{ employee.employee_id }}">{{ employee.employee_code }} - {{ employee.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="assignment_type" class="form-label">Assignment Type</label>
+                    <select name="assignment_type" id="assignment_type" class="form-input w-full" required>
+                        {% for assignment_type in assignment_types %}
+                        <option value="{{ assignment_type.value }}">{{ assignment_type.value | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="start_date" class="form-label">Start Date</label>
+                    <input type="date" name="start_date" id="start_date" class="form-input w-full" required>
+                </div>
+
+                <div>
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" name="end_date" id="end_date" class="form-input w-full">
+                </div>
+
+                <div class="flex items-end justify-end">
+                    <button type="submit" class="btn btn-primary w-full md:w-auto">Assign Employee</button>
+                </div>
+            </form>
+
+            <div class="overflow-x-auto border-t border-slate-200 pt-6 dark:border-slate-700">
+                <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead>
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Employee</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Type</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Dates</th>
+                            <th class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for assignment in assignments %}
+                        <tr>
+                            <td class="px-3 py-3 text-sm text-slate-900 dark:text-white">
+                                {{ assignment.employee.employee_code }} - {{ assignment.employee.full_name }}
+                            </td>
+                            <td class="px-3 py-3 text-sm text-slate-600 dark:text-slate-300">{{ assignment.assignment_type.value | title }}</td>
+                            <td class="px-3 py-3 text-sm text-slate-600 dark:text-slate-300">
+                                {{ assignment.start_date }}{% if assignment.end_date %} to {{ assignment.end_date }}{% else %} onward{% endif %}
+                            </td>
+                            <td class="px-3 py-3 text-right">
+                                {% if not assignment.end_date %}
+                                <form method="post" action="/people/hr/positions/{{ position.position_id }}/assignments/{{ assignment.position_assignment_id }}/end" class="inline-flex items-center gap-2">
+                                    {{ request.state.csrf_form | safe }}
+                                    <input type="date" name="end_date" class="form-input w-36" required>
+                                    <button type="submit" class="btn btn-secondary btn-sm">End</button>
+                                </form>
+                                {% else %}
+                                <span class="text-sm text-slate-400">Ended</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="px-3 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No assignments yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

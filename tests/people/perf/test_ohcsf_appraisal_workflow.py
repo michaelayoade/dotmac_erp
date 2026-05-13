@@ -10,7 +10,8 @@ from __future__ import annotations
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -259,7 +260,15 @@ class TestCascadeUpRule:
         svc.db.scalars.return_value.all.return_value = [sub_emp_id]
         # 2 subordinates still incomplete
         svc.db.scalar.return_value = 2
-        with pytest.raises(CascadeUpViolation) as exc_info:
+        with (
+            patch(
+                "app.services.people.perf.ohcsf_appraisal_service.OrgResolver"
+            ) as resolver_cls,
+            pytest.raises(CascadeUpViolation) as exc_info,
+        ):
+            resolver_cls.return_value.get_direct_reports.return_value = [
+                SimpleNamespace(employee_id=sub_emp_id)
+            ]
             svc._check_cascade_up(ORG_ID, CYCLE_ID, EMP_ID)
         assert exc_info.value.incomplete_count == 2
 
@@ -361,7 +370,15 @@ class TestSubmitSelfAssessment:
         # Override: direct reports exist and are incomplete
         svc.db.scalars.return_value.all.return_value = [uuid.uuid4()]
         svc.db.scalar.return_value = 1
-        with pytest.raises(CascadeUpViolation):
+        with (
+            patch(
+                "app.services.people.perf.ohcsf_appraisal_service.OrgResolver"
+            ) as resolver_cls,
+            pytest.raises(CascadeUpViolation),
+        ):
+            resolver_cls.return_value.get_direct_reports.return_value = [
+                SimpleNamespace(employee_id=uuid.uuid4())
+            ]
             svc.submit_self_assessment_ohcsf(
                 ORG_ID, ap.appraisal_id, self_overall_rating=3, self_summary="Blocked"
             )

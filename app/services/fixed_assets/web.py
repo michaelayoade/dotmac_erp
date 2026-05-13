@@ -6,18 +6,20 @@ Provides view-focused data for FA web routes.
 
 from __future__ import annotations
 
+import csv
 import logging
 from datetime import date, datetime
 from decimal import Decimal
+from io import StringIO
 from urllib.parse import quote
 from typing import TypedDict
 from uuid import UUID
 
 from fastapi import HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from starlette.datastructures import UploadFile
 
 from app.models.finance.core_config.numbering_sequence import (
@@ -38,7 +40,13 @@ from app.models.fixed_assets.maintenance_request import (
 from app.models.fixed_assets.depreciation_run import DepreciationRun
 from app.models.fixed_assets.depreciation_schedule import DepreciationSchedule
 from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
-from app.models.people.assets.audit import AssetAuditDiscrepancy
+from app.models.people.assets.audit import (
+    AssetAuditDiscrepancy,
+    AssetAuditLine,
+    AssetAuditLineStatus,
+    AssetAuditPlan,
+    AssetAuditPlanStatus,
+)
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.platform.currency_context import get_currency_context
@@ -50,6 +58,7 @@ from app.services.fixed_assets.asset import (
     asset_service,
 )
 from app.services.fixed_assets.depreciation import DepreciationService
+from app.services.people.assets.audit_service import AssetAuditService
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
 from app.templates import templates
@@ -539,6 +548,142 @@ class FixedAssetWebService:
             "is_balanced": total_variance_abs <= tolerance,
             "currency_prefix": currency_prefix,
         }
+
+    @staticmethod
+    def export_gl_reconciliation_csv_response(
+        db: Session,
+        organization_id: str,
+        as_of: date | None = None,
+    ) -> Response:
+        """Export fixed asset GL reconciliation rows as CSV."""
+        context = FixedAssetWebService.gl_reconciliation_context(
+            db,
+            organization_id,
+            as_of=as_of,
+        )
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "As Of",
+                "Category Mapping",
+                "Category Names",
+                "Assets",
+                "Control Account",
+                "Accumulated Depreciation Account",
+                "Register Cost",
+                "GL Cost",
+                "Cost Variance",
+                "Register Accumulated Depreciation",
+                "GL Accumulated Depreciation",
+                "Accumulated Depreciation Variance",
+                "Register NBV",
+                "GL NBV",
+                "NBV Variance",
+                "Status",
+            ]
+        )
+        for row in context["rows"]:
+            asset_account = row.get("asset_account") or {}
+            accumulated_account = row.get("accumulated_depreciation_account") or {}
+            writer.writerow(
+                [
+                    context["as_of"],
+                    row["category_code"],
+                    row["category_names"],
+                    row["asset_count"],
+                    FixedAssetWebService._account_export_label(asset_account),
+                    FixedAssetWebService._account_export_label(accumulated_account),
+                    row["register_cost"],
+                    row["gl_cost"],
+                    row["cost_variance"],
+                    row["register_accumulated_depreciation"],
+                    row["gl_accumulated_depreciation"],
+                    row["accumulated_depreciation_variance"],
+                    row["register_nbv"],
+                    row["gl_nbv"],
+                    row["nbv_variance"],
+                    "Balanced" if row["is_balanced"] else "Review",
+                ]
+            )
+
+        totals = context["totals"]
+        writer.writerow(
+            [
+                context["as_of"],
+                "Total",
+                "",
+                totals["asset_count"],
+                "",
+                "",
+                totals["register_cost"],
+                totals["gl_cost"],
+                totals["cost_variance"],
+                totals["register_accumulated_depreciation"],
+                totals["gl_accumulated_depreciation"],
+                totals["accumulated_depreciation_variance"],
+                totals["register_nbv"],
+                totals["gl_nbv"],
+                totals["nbv_variance"],
+                "Balanced" if context["is_balanced"] else "Review",
+            ]
+        )
+
+        filename_stem = FixedAssetWebService._gl_reconciliation_filename(context)
+        return Response(
+            content=buffer.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.csv"'
+            },
+        )
+
+    @staticmethod
+    def export_gl_reconciliation_pdf_response(
+        db: Session,
+        organization_id: str,
+        as_of: date | None = None,
+    ) -> Response:
+        """Export fixed asset GL reconciliation rows as PDF."""
+        from app.services.finance.rpt.pdf import ReportPDFService
+
+        context = FixedAssetWebService.gl_reconciliation_context(
+            db,
+            organization_id,
+            as_of=as_of,
+        )
+        context["row_count"] = len(context["rows"])
+        filename_stem = FixedAssetWebService._gl_reconciliation_filename(context)
+        pdf_bytes = ReportPDFService(db).render(
+            "asset_gl_reconciliation",
+            organization_id,
+            context,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.pdf"'
+            },
+        )
+
+    @staticmethod
+    def _account_export_label(account: object) -> str:
+        """Format an account dict for export output."""
+        if not isinstance(account, dict):
+            return ""
+        account_code = account.get("account_code") or ""
+        account_name = account.get("account_name") or ""
+        if account_code and account_name:
+            return f"{account_code} - {account_name}"
+        return str(account_code or account_name)
+
+    @staticmethod
+    def _gl_reconciliation_filename(context: dict) -> str:
+        """Build a stable fixed asset GL reconciliation export filename stem."""
+        as_of = str(context.get("as_of") or "").replace("-", "")
+        return f"asset_gl_reconciliation_{as_of}" if as_of else "asset_gl_reconciliation"
 
     @staticmethod
     def _build_depreciation_posting_preview(
@@ -1139,6 +1284,706 @@ class FixedAssetWebService:
         # Provide state distribution for overview and state-section cards.
         data["kpi"]["by_state"] = dashboard_data.get("kpi", {}).get("by_state", [])
         return data
+
+    @staticmethod
+    def asset_count_sheet_context(
+        db: Session,
+        organization_id: str,
+        audit_plan_id: str | None = None,
+        location: str | None = None,
+        category: str | None = None,
+    ) -> dict:
+        """Build a count sheet comparing asset register quantities to physical checks."""
+        org_id = coerce_uuid(organization_id)
+        selected_plan_id = _try_uuid(audit_plan_id)
+        selected_location_id = _try_uuid(location)
+        selected_category_id = _try_uuid(category)
+
+        audit_plans = db.scalars(
+            select(AssetAuditPlan)
+            .where(AssetAuditPlan.organization_id == org_id)
+            .order_by(AssetAuditPlan.planned_date.desc(), AssetAuditPlan.created_at.desc())
+        ).all()
+        if selected_plan_id is None and audit_plans:
+            selected_plan_id = audit_plans[0].audit_plan_id
+
+        selected_plan = None
+        if selected_plan_id is not None:
+            selected_plan = db.get(AssetAuditPlan, selected_plan_id)
+            if not selected_plan or selected_plan.organization_id != org_id:
+                raise HTTPException(status_code=404, detail="Asset count plan not found")
+
+        categories = db.scalars(
+            select(AssetCategory)
+            .where(
+                AssetCategory.organization_id == org_id,
+                AssetCategory.is_active.is_(True),
+            )
+            .order_by(AssetCategory.category_code)
+        ).all()
+        locations = db.scalars(
+            select(Location)
+            .where(
+                Location.organization_id == org_id,
+                Location.is_active.is_(True),
+            )
+            .order_by(Location.location_name)
+        ).all()
+
+        line_rows = []
+        if selected_plan_id is not None:
+            line_query = (
+                select(
+                    Asset.asset_id,
+                    Asset.asset_number,
+                    Asset.asset_name,
+                    Asset.serial_number,
+                    Asset.status.label("system_status"),
+                    AssetCategory.category_id,
+                    AssetCategory.category_code,
+                    AssetCategory.category_name,
+                    Location.location_id,
+                    Location.location_code,
+                    Location.location_name,
+                    AssetAuditLine.status.label("line_status"),
+                    AssetAuditLine.is_found,
+                    AssetAuditLine.physical_check_at,
+                    AssetAuditLine.discrepancy_notes,
+                )
+                .join(Asset, Asset.asset_id == AssetAuditLine.asset_id)
+                .join(AssetCategory, Asset.category_id == AssetCategory.category_id)
+                .outerjoin(Location, Asset.location_id == Location.location_id)
+                .where(
+                    AssetAuditLine.organization_id == org_id,
+                    AssetAuditLine.audit_plan_id == selected_plan_id,
+                )
+            )
+            if selected_location_id is not None:
+                line_query = line_query.where(Asset.location_id == selected_location_id)
+            if selected_category_id is not None:
+                line_query = line_query.where(Asset.category_id == selected_category_id)
+            line_rows = db.execute(
+                line_query.order_by(
+                    Location.location_name.asc().nulls_last(),
+                    AssetCategory.category_code.asc(),
+                    Asset.asset_number.asc(),
+                )
+            ).all()
+
+        detail_rows: list[dict[str, object]] = []
+        group_map: dict[tuple[str, str], dict[str, object]] = {}
+        totals = {
+            "system_qty": 0,
+            "physical_qty": 0,
+            "variance_qty": 0,
+            "variance_count": 0,
+            "unchecked_qty": 0,
+        }
+
+        for row in line_rows:
+            system_qty = 1
+            physical_qty = (
+                1
+                if row.is_found is True
+                or row.line_status
+                in {AssetAuditLineStatus.FOUND, AssetAuditLineStatus.DISCREPANCY}
+                else 0
+            )
+            is_unchecked = row.line_status == AssetAuditLineStatus.PENDING
+            variance_qty = physical_qty - system_qty
+            has_variance = variance_qty != 0
+
+            location_label = row.location_name or "Unassigned"
+            category_label = (
+                f"{row.category_code} - {row.category_name}"
+                if row.category_code
+                else row.category_name
+            )
+            group_key = (location_label, category_label)
+            if group_key not in group_map:
+                group_map[group_key] = {
+                    "location_name": location_label,
+                    "category_name": category_label,
+                    "system_qty": 0,
+                    "physical_qty": 0,
+                    "variance_qty": 0,
+                    "variance_count": 0,
+                    "unchecked_qty": 0,
+                }
+
+            group = group_map[group_key]
+            group["system_qty"] = int(group["system_qty"]) + system_qty
+            group["physical_qty"] = int(group["physical_qty"]) + physical_qty
+            group["variance_qty"] = int(group["variance_qty"]) + variance_qty
+            group["variance_count"] = int(group["variance_count"]) + int(has_variance)
+            group["unchecked_qty"] = int(group["unchecked_qty"]) + int(is_unchecked)
+
+            totals["system_qty"] += system_qty
+            totals["physical_qty"] += physical_qty
+            totals["variance_qty"] += variance_qty
+            totals["variance_count"] += int(has_variance)
+            totals["unchecked_qty"] += int(is_unchecked)
+
+            detail_rows.append(
+                {
+                    "asset_id": str(row.asset_id),
+                    "asset_number": row.asset_number,
+                    "asset_name": row.asset_name,
+                    "serial_number": row.serial_number or "",
+                    "location_name": location_label,
+                    "category_name": category_label,
+                    "system_qty": system_qty,
+                    "physical_qty": physical_qty,
+                    "variance_qty": variance_qty,
+                    "line_status": row.line_status.value
+                    if hasattr(row.line_status, "value")
+                    else str(row.line_status),
+                    "system_status": row.system_status.value
+                    if hasattr(row.system_status, "value")
+                    else str(row.system_status),
+                    "physical_check_at": _format_date(row.physical_check_at),
+                    "discrepancy_notes": row.discrepancy_notes or "",
+                    "has_variance": has_variance,
+                    "is_unchecked": is_unchecked,
+                }
+            )
+
+        return {
+            "audit_plans": [
+                {
+                    "audit_plan_id": str(plan.audit_plan_id),
+                    "plan_number": plan.plan_number,
+                    "title": plan.title,
+                    "planned_date": _format_date(plan.planned_date),
+                    "status": plan.status.value
+                    if hasattr(plan.status, "value")
+                    else str(plan.status),
+                }
+                for plan in audit_plans
+            ],
+            "selected_plan": selected_plan,
+            "audit_plan_id": str(selected_plan_id) if selected_plan_id else "",
+            "location": str(selected_location_id) if selected_location_id else "",
+            "category": str(selected_category_id) if selected_category_id else "",
+            "locations": locations,
+            "categories": categories,
+            "summary_rows": sorted(
+                group_map.values(),
+                key=lambda item: (
+                    str(item["location_name"]),
+                    str(item["category_name"]),
+                ),
+            ),
+            "count_sheet_rows": detail_rows,
+            "count_sheet_totals": totals,
+            "has_count_plan": selected_plan is not None,
+        }
+
+    @staticmethod
+    def export_asset_count_sheet_csv_response(
+        db: Session,
+        organization_id: str,
+        audit_plan_id: str | None = None,
+        location: str | None = None,
+        category: str | None = None,
+    ) -> Response:
+        """Export asset count sheet rows as CSV."""
+        context = FixedAssetWebService.asset_count_sheet_context(
+            db,
+            organization_id,
+            audit_plan_id=audit_plan_id,
+            location=location,
+            category=category,
+        )
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "Audit Plan",
+                "Asset Number",
+                "Asset Name",
+                "Serial Number",
+                "Location",
+                "Category",
+                "System Status",
+                "Line Status",
+                "System Qty",
+                "Physical Qty",
+                "Variance Qty",
+                "Physical Check Date",
+                "Notes",
+            ]
+        )
+        plan_label = FixedAssetWebService._asset_count_sheet_plan_label(context)
+        for row in context["count_sheet_rows"]:
+            writer.writerow(
+                [
+                    plan_label,
+                    row["asset_number"],
+                    row["asset_name"],
+                    row["serial_number"],
+                    row["location_name"],
+                    row["category_name"],
+                    row["system_status"],
+                    row["line_status"],
+                    row["system_qty"],
+                    row["physical_qty"],
+                    row["variance_qty"],
+                    row["physical_check_at"],
+                    row["discrepancy_notes"],
+                ]
+            )
+
+        totals = context["count_sheet_totals"]
+        writer.writerow(
+            [
+                plan_label,
+                "Total",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                totals["system_qty"],
+                totals["physical_qty"],
+                totals["variance_qty"],
+                "",
+                "",
+            ]
+        )
+
+        filename_stem = FixedAssetWebService._asset_count_sheet_filename(context)
+        return Response(
+            content=buffer.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.csv"'
+            },
+        )
+
+    @staticmethod
+    def export_asset_count_sheet_pdf_response(
+        db: Session,
+        organization_id: str,
+        audit_plan_id: str | None = None,
+        location: str | None = None,
+        category: str | None = None,
+    ) -> Response:
+        """Export asset count sheet rows as PDF."""
+        from app.services.finance.rpt.pdf import ReportPDFService
+
+        context = FixedAssetWebService.asset_count_sheet_context(
+            db,
+            organization_id,
+            audit_plan_id=audit_plan_id,
+            location=location,
+            category=category,
+        )
+        context["row_count"] = len(context["count_sheet_rows"])
+        context["plan_label"] = FixedAssetWebService._asset_count_sheet_plan_label(
+            context
+        )
+        filename_stem = FixedAssetWebService._asset_count_sheet_filename(context)
+        pdf_bytes = ReportPDFService(db).render(
+            "asset_count_sheets",
+            organization_id,
+            context,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.pdf"'
+            },
+        )
+
+    @staticmethod
+    def _asset_count_sheet_plan_label(context: dict) -> str:
+        """Return a readable plan label for exports."""
+        selected_plan = context.get("selected_plan")
+        if selected_plan is None:
+            return "No audit plan"
+        return (
+            f"{getattr(selected_plan, 'plan_number', '')} - "
+            f"{getattr(selected_plan, 'title', '')}"
+        ).strip(" -")
+
+    @staticmethod
+    def _asset_count_sheet_filename(context: dict) -> str:
+        """Build a stable asset count sheet export filename stem."""
+        selected_plan = context.get("selected_plan")
+        plan_number = getattr(selected_plan, "plan_number", None)
+        if not plan_number:
+            return "asset_count_sheets"
+        safe_plan = "".join(
+            char.lower() if char.isalnum() else "_"
+            for char in str(plan_number).strip()
+        ).strip("_")
+        return f"asset_count_sheets_{safe_plan}" if safe_plan else "asset_count_sheets"
+
+    @staticmethod
+    def count_plans_context(
+        db: Session,
+        organization_id: str,
+        status: str | None = None,
+    ) -> dict:
+        """Build context for fixed asset physical count plans."""
+        org_id = coerce_uuid(organization_id)
+        status_value = None
+        if status:
+            try:
+                status_value = AssetAuditPlanStatus(status.upper())
+            except ValueError:
+                status_value = None
+
+        query = (
+            select(AssetAuditPlan, Location)
+            .outerjoin(Location, AssetAuditPlan.scope_location_id == Location.location_id)
+            .where(AssetAuditPlan.organization_id == org_id)
+        )
+        if status_value:
+            query = query.where(AssetAuditPlan.status == status_value)
+        rows = db.execute(
+            query.order_by(
+                AssetAuditPlan.planned_date.desc(),
+                AssetAuditPlan.created_at.desc(),
+            )
+        ).all()
+
+        plans = []
+        for plan, location_row in rows:
+            plans.append(
+                {
+                    "audit_plan_id": str(plan.audit_plan_id),
+                    "plan_number": plan.plan_number,
+                    "title": plan.title,
+                    "planned_date": _format_date(plan.planned_date),
+                    "scope": location_row.location_name if location_row else "All locations",
+                    "status": plan.status.value
+                    if hasattr(plan.status, "value")
+                    else str(plan.status),
+                    "total_assets": int(plan.total_assets or 0),
+                    "found_count": int(plan.found_count or 0),
+                    "missing_count": int(plan.missing_count or 0),
+                    "discrepancy_count": int(plan.discrepancy_count or 0),
+                    "started_at": _format_date(plan.started_at),
+                    "completed_at": _format_date(plan.completed_at),
+                }
+            )
+
+        return {
+            "plans": plans,
+            "status": status or "",
+            "status_options": [
+                {"value": option.value, "label": option.value.replace("_", " ").title()}
+                for option in AssetAuditPlanStatus
+            ],
+        }
+
+    @staticmethod
+    def count_plan_form_context(db: Session, organization_id: str) -> dict:
+        """Build context for the new asset count plan form."""
+        org_id = coerce_uuid(organization_id)
+        locations = db.scalars(
+            select(Location)
+            .where(
+                Location.organization_id == org_id,
+                Location.is_active.is_(True),
+            )
+            .order_by(Location.location_name)
+        ).all()
+        return {
+            "locations": locations,
+            "today": _format_date(date.today()),
+        }
+
+    @staticmethod
+    def count_plan_detail_context(
+        db: Session,
+        organization_id: str,
+        audit_plan_id: str,
+        line_status: str | None = None,
+    ) -> dict:
+        """Build context for performing a fixed asset physical count plan."""
+        org_id = coerce_uuid(organization_id)
+        plan_id = coerce_uuid(audit_plan_id)
+        plan = db.get(AssetAuditPlan, plan_id)
+        if not plan or plan.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Asset count plan not found")
+
+        selected_status = None
+        if line_status:
+            try:
+                selected_status = AssetAuditLineStatus(line_status.upper())
+            except ValueError:
+                selected_status = None
+
+        expected_location = aliased(Location)
+        observed_location = aliased(Location)
+        line_query = (
+            select(AssetAuditLine, Asset, expected_location, observed_location)
+            .join(Asset, Asset.asset_id == AssetAuditLine.asset_id)
+            .outerjoin(
+                expected_location,
+                expected_location.location_id == AssetAuditLine.expected_location_id,
+            )
+            .outerjoin(
+                observed_location,
+                observed_location.location_id == AssetAuditLine.observed_location_id,
+            )
+            .where(
+                AssetAuditLine.organization_id == org_id,
+                AssetAuditLine.audit_plan_id == plan_id,
+            )
+        )
+        if selected_status:
+            line_query = line_query.where(AssetAuditLine.status == selected_status)
+
+        rows = db.execute(
+            line_query.order_by(Asset.asset_number.asc(), Asset.asset_name.asc())
+        ).all()
+        counts_by_status = dict(
+            db.execute(
+                select(AssetAuditLine.status, func.count(AssetAuditLine.audit_line_id))
+                .where(
+                    AssetAuditLine.organization_id == org_id,
+                    AssetAuditLine.audit_plan_id == plan_id,
+                )
+                .group_by(AssetAuditLine.status)
+            ).all()
+        )
+        locations = db.scalars(
+            select(Location)
+            .where(
+                Location.organization_id == org_id,
+                Location.is_active.is_(True),
+            )
+            .order_by(Location.location_name)
+        ).all()
+
+        count_totals = {
+            "total": int(plan.total_assets or 0),
+            "found": int(counts_by_status.get(AssetAuditLineStatus.FOUND, 0) or 0),
+            "missing": int(counts_by_status.get(AssetAuditLineStatus.MISSING, 0) or 0),
+            "discrepancy": int(
+                counts_by_status.get(AssetAuditLineStatus.DISCREPANCY, 0) or 0
+            ),
+            "pending": int(counts_by_status.get(AssetAuditLineStatus.PENDING, 0) or 0),
+            "resolved": int(counts_by_status.get(AssetAuditLineStatus.RESOLVED, 0) or 0),
+        }
+
+        lines = []
+        for line, asset, expected_loc, observed_loc in rows:
+            lines.append(
+                {
+                    "audit_line_id": str(line.audit_line_id),
+                    "asset_id": str(asset.asset_id),
+                    "asset_number": asset.asset_number,
+                    "asset_name": asset.asset_name,
+                    "serial_number": asset.serial_number or "",
+                    "barcode": asset.barcode or "",
+                    "expected_location_id": str(line.expected_location_id or ""),
+                    "expected_location": expected_loc.location_name
+                    if expected_loc
+                    else "Unassigned",
+                    "observed_location_id": str(line.observed_location_id or ""),
+                    "observed_location": observed_loc.location_name
+                    if observed_loc
+                    else "",
+                    "expected_status": line.expected_status or "",
+                    "observed_status": line.observed_status or "",
+                    "status": line.status.value
+                    if hasattr(line.status, "value")
+                    else str(line.status),
+                    "is_found": line.is_found,
+                    "physical_check_at": _format_date(line.physical_check_at),
+                    "discrepancy_notes": line.discrepancy_notes or "",
+                }
+            )
+
+        return {
+            "plan": {
+                "audit_plan_id": str(plan.audit_plan_id),
+                "plan_number": plan.plan_number,
+                "title": plan.title,
+                "planned_date": _format_date(plan.planned_date),
+                "scope_location_id": str(plan.scope_location_id or ""),
+                "status": plan.status.value
+                if hasattr(plan.status, "value")
+                else str(plan.status),
+                "total_assets": int(plan.total_assets or 0),
+                "started_at": _format_date(plan.started_at),
+                "completed_at": _format_date(plan.completed_at),
+            },
+            "lines": lines,
+            "line_status": line_status or "",
+            "count_totals": count_totals,
+            "locations": locations,
+            "asset_statuses": [
+                {"value": option.value, "label": option.value.replace("_", " ").title()}
+                for option in EDITABLE_ASSET_STATUSES
+            ],
+            "line_status_options": [
+                {"value": option.value, "label": option.value.replace("_", " ").title()}
+                for option in AssetAuditLineStatus
+            ],
+        }
+
+    @staticmethod
+    def create_count_plan_response(
+        db: Session,
+        organization_id: str,
+        user_id: UUID | None,
+        title: str,
+        planned_date: str,
+        scope_location_id: str | None = None,
+    ) -> RedirectResponse:
+        """Create a fixed asset count plan and redirect to its detail page."""
+        org_id = coerce_uuid(organization_id)
+        parsed_date = date.fromisoformat(planned_date)
+        location_id = _try_uuid(scope_location_id)
+        plan = AssetAuditService(db).create_plan(
+            org_id,
+            title=title.strip(),
+            planned_date=parsed_date,
+            scope_location_id=location_id,
+            created_by_user_id=user_id,
+        )
+        db.commit()
+        return RedirectResponse(
+            f"/fixed-assets/count-plans/{plan.audit_plan_id}?success=Count+plan+created",
+            status_code=303,
+        )
+
+    @staticmethod
+    def start_count_plan_response(
+        db: Session,
+        organization_id: str,
+        audit_plan_id: str,
+    ) -> RedirectResponse:
+        """Start a fixed asset count plan."""
+        plan_id = coerce_uuid(audit_plan_id)
+        AssetAuditService(db).start_plan(coerce_uuid(organization_id), plan_id)
+        db.commit()
+        return RedirectResponse(
+            f"/fixed-assets/count-plans/{plan_id}?success=Count+plan+started",
+            status_code=303,
+        )
+
+    @staticmethod
+    def complete_count_plan_response(
+        db: Session,
+        organization_id: str,
+        audit_plan_id: str,
+    ) -> RedirectResponse:
+        """Complete a fixed asset count plan."""
+        plan_id = coerce_uuid(audit_plan_id)
+        AssetAuditService(db).complete_plan(coerce_uuid(organization_id), plan_id)
+        db.commit()
+        return RedirectResponse(
+            f"/fixed-assets/count-plans/{plan_id}?success=Count+plan+completed",
+            status_code=303,
+        )
+
+    @staticmethod
+    def check_count_plan_line_response(
+        db: Session,
+        organization_id: str,
+        user_id: UUID | None,
+        audit_plan_id: str,
+        audit_line_id: str,
+        action: str,
+        observed_location_id: str | None = None,
+        observed_status: str | None = None,
+        discrepancy_notes: str | None = None,
+    ) -> RedirectResponse:
+        """Record one physical count line result."""
+        org_id = coerce_uuid(organization_id)
+        plan_id = coerce_uuid(audit_plan_id)
+        line_id = coerce_uuid(audit_line_id)
+        line = db.get(AssetAuditLine, line_id)
+        if not line or line.organization_id != org_id or line.audit_plan_id != plan_id:
+            raise HTTPException(status_code=404, detail="Asset count line not found")
+
+        normalized_action = (action or "").strip().lower()
+        if normalized_action == "found":
+            is_found = True
+            resolved_location_id = line.expected_location_id
+            resolved_status = line.expected_status
+            notes = discrepancy_notes
+        elif normalized_action == "missing":
+            is_found = False
+            resolved_location_id = None
+            resolved_status = None
+            notes = discrepancy_notes or "Asset not found during physical count"
+        elif normalized_action == "discrepancy":
+            is_found = True
+            resolved_location_id = _try_uuid(observed_location_id)
+            resolved_status = observed_status or line.expected_status
+            notes = discrepancy_notes
+        else:
+            raise HTTPException(status_code=400, detail="Invalid count action")
+
+        AssetAuditService(db).record_check(
+            org_id,
+            line_id,
+            is_found=is_found,
+            observed_location_id=resolved_location_id,
+            observed_status=resolved_status,
+            discrepancy_notes=notes,
+            checked_by_user_id=user_id,
+        )
+        db.commit()
+        return RedirectResponse(
+            f"/fixed-assets/count-plans/{plan_id}?success=Count+line+updated",
+            status_code=303,
+        )
+
+    @staticmethod
+    def mark_count_plan_pending_found_response(
+        db: Session,
+        organization_id: str,
+        user_id: UUID | None,
+        audit_plan_id: str,
+    ) -> RedirectResponse:
+        """Mark every pending count plan line as found."""
+        org_id = coerce_uuid(organization_id)
+        plan_id = coerce_uuid(audit_plan_id)
+        plan = db.get(AssetAuditPlan, plan_id)
+        if not plan or plan.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Asset count plan not found")
+        if plan.status != AssetAuditPlanStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=400,
+                detail="Only in-progress count plans can be updated",
+            )
+
+        audit_service = AssetAuditService(db)
+        pending_lines = db.scalars(
+            select(AssetAuditLine).where(
+                AssetAuditLine.organization_id == org_id,
+                AssetAuditLine.audit_plan_id == plan_id,
+                AssetAuditLine.status == AssetAuditLineStatus.PENDING,
+            )
+        ).all()
+        for line in pending_lines:
+            audit_service.record_check(
+                org_id,
+                line.audit_line_id,
+                is_found=True,
+                observed_location_id=line.expected_location_id,
+                observed_status=line.expected_status,
+                discrepancy_notes=None,
+                checked_by_user_id=user_id,
+            )
+
+        db.commit()
+        return RedirectResponse(
+            f"/fixed-assets/count-plans/{plan_id}?success=Marked+{len(pending_lines)}+pending+assets+as+found",
+            status_code=303,
+        )
 
     @staticmethod
     def asset_form_context(

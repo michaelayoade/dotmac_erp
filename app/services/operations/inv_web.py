@@ -3784,6 +3784,394 @@ class OperationsInventoryWebService:
             context,
         )
 
+    def export_yearly_stock_movement_csv_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        year: str | None = None,
+        month: str | None = None,
+        warehouse: str | None = None,
+        item: str | None = None,
+        search: str | None = None,
+    ) -> Response:
+        """Export yearly stock movement summary rows as CSV."""
+        export_context, filename_stem = self._yearly_stock_movement_export_context(
+            auth,
+            db,
+            year=year,
+            month=month,
+            warehouse=warehouse,
+            item=item,
+            search=search,
+        )
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "Year",
+                "Item Code",
+                "Item Name",
+                "Warehouse Code",
+                "Warehouse Name",
+                "Opening Quantity",
+                "Quantity In",
+                "Purchases",
+                "Issued",
+                "Quantity Out",
+                "Closing Quantity",
+            ]
+        )
+        for row in export_context["yearly_rows"]:
+            row_item = row["item"]
+            row_warehouse = row["warehouse"]
+            writer.writerow(
+                [
+                    row["year"],
+                    row_item.item_code,
+                    row_item.item_name,
+                    row_warehouse.warehouse_code,
+                    row_warehouse.warehouse_name,
+                    row["opening_qty"],
+                    row["quantity_in"],
+                    row["purchase_qty"],
+                    row["issued_qty"],
+                    row["quantity_out"],
+                    row["closing_qty"],
+                ]
+            )
+
+        return Response(
+            content=buffer.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.csv"'
+            },
+        )
+
+    def export_yearly_stock_movement_pdf_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        year: str | None = None,
+        month: str | None = None,
+        warehouse: str | None = None,
+        item: str | None = None,
+        search: str | None = None,
+    ) -> Response:
+        """Export yearly stock movement summary rows as PDF."""
+        from app.services.finance.rpt.pdf import ReportPDFService
+
+        export_context, filename_stem = self._yearly_stock_movement_export_context(
+            auth,
+            db,
+            year=year,
+            month=month,
+            warehouse=warehouse,
+            item=item,
+            search=search,
+        )
+        pdf_bytes = ReportPDFService(db).render(
+            "yearly_stock_movement",
+            str(auth.organization_id),
+            export_context,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename_stem}.pdf"'
+            },
+        )
+
+    def _yearly_stock_movement_export_context(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        year: str | None = None,
+        month: str | None = None,
+        warehouse: str | None = None,
+        item: str | None = None,
+        search: str | None = None,
+    ) -> tuple[dict[str, Any], str]:
+        """Build yearly stock movement data for exports."""
+        from decimal import Decimal
+        from uuid import UUID as UUID_Type
+
+        from app.models.inventory.inventory_transaction import (
+            InventoryTransaction,
+            TransactionType,
+        )
+        from app.models.inventory.item import Item
+        from app.models.inventory.warehouse import Warehouse
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=400, detail="Organization is required")
+
+        selected_year: int | None = None
+        if year:
+            try:
+                parsed_year = int(year)
+                if 1900 <= parsed_year <= 2100:
+                    selected_year = parsed_year
+            except ValueError:
+                selected_year = None
+
+        selected_month: int | None = None
+        if month:
+            try:
+                parsed_month = int(month)
+                if 1 <= parsed_month <= 12:
+                    selected_month = parsed_month
+            except ValueError:
+                selected_month = None
+
+        month_options = [
+            {"value": "1", "label": "January"},
+            {"value": "2", "label": "February"},
+            {"value": "3", "label": "March"},
+            {"value": "4", "label": "April"},
+            {"value": "5", "label": "May"},
+            {"value": "6", "label": "June"},
+            {"value": "7", "label": "July"},
+            {"value": "8", "label": "August"},
+            {"value": "9", "label": "September"},
+            {"value": "10", "label": "October"},
+            {"value": "11", "label": "November"},
+            {"value": "12", "label": "December"},
+        ]
+
+        movement_stmt = (
+            select(InventoryTransaction, Item, Warehouse)
+            .join(Item, InventoryTransaction.item_id == Item.item_id)
+            .join(
+                Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id
+            )
+            .where(InventoryTransaction.organization_id == org_id)
+        )
+
+        selected_warehouse = None
+        if warehouse:
+            try:
+                warehouse_id = UUID_Type(warehouse)
+                movement_stmt = movement_stmt.where(
+                    InventoryTransaction.warehouse_id == warehouse_id
+                )
+                selected_warehouse = db.get(Warehouse, warehouse_id)
+                if selected_warehouse and selected_warehouse.organization_id != org_id:
+                    selected_warehouse = None
+            except ValueError:
+                pass
+
+        selected_item = None
+        if item:
+            try:
+                item_id = UUID_Type(item)
+                movement_stmt = movement_stmt.where(
+                    InventoryTransaction.item_id == item_id
+                )
+                selected_item = db.get(Item, item_id)
+                if selected_item and selected_item.organization_id != org_id:
+                    selected_item = None
+            except ValueError:
+                pass
+
+        if search:
+            term = f"%{search}%"
+            movement_stmt = movement_stmt.where(
+                or_(
+                    InventoryTransaction.reference.ilike(term),
+                    Item.item_code.ilike(term),
+                    Item.item_name.ilike(term),
+                    Warehouse.warehouse_name.ilike(term),
+                    Warehouse.warehouse_code.ilike(term),
+                )
+            )
+
+        row_data = list(
+            db.execute(
+                movement_stmt.order_by(
+                    Item.item_code,
+                    Warehouse.warehouse_name,
+                    InventoryTransaction.transaction_date,
+                    InventoryTransaction.created_at,
+                )
+            ).all()
+        )
+
+        purchase_source_tokens = ("PURCHASE", "GOODS_RECEIPT", "SUPPLIER_INVOICE")
+        issued_types = {
+            TransactionType.ISSUE.value,
+            TransactionType.SALE.value,
+            TransactionType.SCRAP.value,
+        }
+
+        def _decimal(value: object) -> Decimal:
+            if value is None:
+                return Decimal("0")
+            return Decimal(str(value))
+
+        def _transaction_value(transaction: object, attr: str) -> object:
+            value = getattr(transaction, attr, None)
+            return getattr(value, "value", value)
+
+        def _net_delta(transaction: object) -> Decimal:
+            before = getattr(transaction, "quantity_before", None)
+            after = getattr(transaction, "quantity_after", None)
+            if before is not None and after is not None:
+                return _decimal(after) - _decimal(before)
+
+            quantity = _decimal(getattr(transaction, "quantity", None))
+            movement_type = _transaction_value(transaction, "transaction_type")
+            if movement_type in issued_types:
+                return -abs(quantity)
+            return quantity
+
+        def _is_purchase_receipt(transaction: object) -> bool:
+            movement_type = _transaction_value(transaction, "transaction_type")
+            if movement_type != TransactionType.RECEIPT.value:
+                return False
+            source_text = " ".join(
+                str(part or "")
+                for part in (
+                    getattr(transaction, "source_document_type", None),
+                    getattr(transaction, "reference", None),
+                )
+            ).upper()
+            return any(token in source_text for token in purchase_source_tokens)
+
+        balances: dict[tuple[object, object], Decimal] = {}
+        yearly_rows_by_key: dict[tuple[object, object, int], dict[str, object]] = {}
+        available_years: set[int] = set()
+
+        for txn, row_item, row_warehouse in row_data:
+            transaction_date = getattr(txn, "transaction_date", None)
+            if transaction_date is None:
+                continue
+
+            txn_year = int(transaction_date.year)
+            txn_month = int(transaction_date.month)
+            available_years.add(txn_year)
+            balance_key = (row_item.item_id, row_warehouse.warehouse_id)
+            current_balance = balances.get(balance_key, Decimal("0"))
+            delta = _net_delta(txn)
+            should_show_period = (
+                selected_year is None or txn_year == selected_year
+            ) and (selected_month is None or txn_month == selected_month)
+
+            if should_show_period:
+                row_key = (row_item.item_id, row_warehouse.warehouse_id, txn_year)
+                yearly_row = yearly_rows_by_key.get(row_key)
+                if yearly_row is None:
+                    yearly_row = {
+                        "year": txn_year,
+                        "item": row_item,
+                        "warehouse": row_warehouse,
+                        "opening_qty": current_balance,
+                        "quantity_in": Decimal("0"),
+                        "purchase_qty": Decimal("0"),
+                        "issued_qty": Decimal("0"),
+                        "quantity_out": Decimal("0"),
+                        "closing_qty": current_balance,
+                    }
+                    yearly_rows_by_key[row_key] = yearly_row
+
+                if delta > 0:
+                    yearly_row["quantity_in"] = (
+                        cast(Decimal, yearly_row["quantity_in"]) + delta
+                    )
+                    if _is_purchase_receipt(txn):
+                        yearly_row["purchase_qty"] = (
+                            cast(Decimal, yearly_row["purchase_qty"]) + delta
+                        )
+                elif delta < 0:
+                    yearly_row["quantity_out"] = cast(
+                        Decimal, yearly_row["quantity_out"]
+                    ) + abs(delta)
+
+                if _transaction_value(txn, "transaction_type") in issued_types:
+                    yearly_row["issued_qty"] = cast(
+                        Decimal, yearly_row["issued_qty"]
+                    ) + abs(delta)
+
+            current_balance += delta
+            balances[balance_key] = current_balance
+
+            if should_show_period and yearly_row is not None:
+                yearly_row["closing_qty"] = current_balance
+
+        yearly_rows = sorted(
+            yearly_rows_by_key.values(),
+            key=lambda row: (
+                -cast(int, row["year"]),
+                getattr(row["item"], "item_code", ""),
+                getattr(row["warehouse"], "warehouse_name", ""),
+            ),
+        )
+        summary = {
+            "total_rows": len(yearly_rows),
+            "opening_qty": sum(
+                (cast(Decimal, row["opening_qty"]) for row in yearly_rows), Decimal("0")
+            ),
+            "quantity_in": sum(
+                (cast(Decimal, row["quantity_in"]) for row in yearly_rows), Decimal("0")
+            ),
+            "purchase_qty": sum(
+                (cast(Decimal, row["purchase_qty"]) for row in yearly_rows),
+                Decimal("0"),
+            ),
+            "issued_qty": sum(
+                (cast(Decimal, row["issued_qty"]) for row in yearly_rows), Decimal("0")
+            ),
+            "quantity_out": sum(
+                (cast(Decimal, row["quantity_out"]) for row in yearly_rows),
+                Decimal("0"),
+            ),
+            "closing_qty": sum(
+                (cast(Decimal, row["closing_qty"]) for row in yearly_rows), Decimal("0")
+            ),
+        }
+
+        selected_month_label = next(
+            (
+                option["label"]
+                for option in month_options
+                if option["value"] == str(selected_month)
+            ),
+            "",
+        )
+        scope_parts = []
+        filename_parts = ["yearly_stock_movement"]
+        if selected_year:
+            scope_parts.append(f"Year {selected_year}")
+            filename_parts.append(str(selected_year))
+        if selected_month_label:
+            scope_parts.append(selected_month_label)
+            filename_parts.append(str(selected_month).zfill(2))
+        if selected_warehouse:
+            scope_parts.append(f"Warehouse {selected_warehouse.warehouse_name}")
+        if selected_item:
+            scope_parts.append(f"Item {selected_item.item_code}")
+        if search:
+            scope_parts.append(f'Search "{search}"')
+
+        return (
+            {
+                "yearly_rows": yearly_rows,
+                "summary": summary,
+                "row_count": len(yearly_rows),
+                "scope_label": ", ".join(scope_parts) if scope_parts else "All rows",
+                "year": str(selected_year) if selected_year else "",
+                "month": str(selected_month) if selected_month else "",
+                "selected_month_label": selected_month_label,
+                "selected_warehouse": selected_warehouse,
+                "selected_item": selected_item,
+                "search": search or "",
+            },
+            "_".join(filename_parts),
+        )
+
     # ------------------------------------------------------------------
     # Stock Count Detail & Workflow
     # ------------------------------------------------------------------
@@ -3892,6 +4280,96 @@ class OperationsInventoryWebService:
         db: Session,
     ) -> Response | RedirectResponse:
         """Export a posted stock count as CSV."""
+        export_context = self._stock_count_export_context(count_id, auth, db)
+        if isinstance(export_context, RedirectResponse):
+            return export_context
+
+        count = export_context["count"]
+        rows = export_context["rows"]
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "Count Number",
+                "Count Date",
+                "Status",
+                "Item Code",
+                "Item Name",
+                "Warehouse",
+                "System Quantity",
+                "Counted Quantity",
+                "Final Quantity",
+                "Variance Quantity",
+                "Variance Value",
+                "Reason Code",
+                "Notes",
+            ]
+        )
+        for row in rows:
+            writer.writerow(
+                [
+                    count.count_number,
+                    count.count_date.isoformat() if count.count_date else "",
+                    count.status.value,
+                    row["item_code"],
+                    row["item_name"],
+                    row["warehouse_name"],
+                    row["system_quantity"],
+                    row["counted_quantity"],
+                    row["final_quantity"],
+                    row["variance_quantity"],
+                    row["variance_value"],
+                    row["reason_code"],
+                    row["notes"],
+                ]
+            )
+
+        filename = f"stock_count_{count.count_number}.csv"
+        return Response(
+            content=buffer.getvalue(),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+
+    def export_count_pdf_response(
+        self,
+        count_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> Response | RedirectResponse:
+        """Export a posted stock count as PDF."""
+        from app.services.finance.rpt.pdf import ReportPDFService
+
+        export_context = self._stock_count_export_context(count_id, auth, db)
+        if isinstance(export_context, RedirectResponse):
+            return export_context
+
+        count = export_context["count"]
+        filename = f"stock_count_{count.count_number}.pdf"
+        pdf_bytes = ReportPDFService(db).render(
+            "stock_count",
+            str(auth.organization_id),
+            export_context,
+        )
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+
+    def _stock_count_export_context(
+        self,
+        count_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> dict[str, Any] | RedirectResponse:
+        """Build the shared export context for posted stock count downloads."""
+        from decimal import Decimal
         from uuid import UUID as UUID_Type
 
         from app.models.inventory.inventory_count import CountStatus, InventoryCount
@@ -3932,62 +4410,62 @@ class OperationsInventoryWebService:
                 ).all()
             }
 
-        buffer = StringIO()
-        writer = csv.writer(buffer)
-        writer.writerow(
-            [
-                "Count Number",
-                "Count Date",
-                "Status",
-                "Item Code",
-                "Item Name",
-                "Warehouse",
-                "System Quantity",
-                "Counted Quantity",
-                "Final Quantity",
-                "Variance Quantity",
-                "Variance Value",
-                "Reason Code",
-                "Notes",
-            ]
-        )
+        rows = []
+        total_system_quantity = Decimal("0")
+        total_counted_quantity = Decimal("0")
+        total_variance_quantity = Decimal("0")
+        total_variance_value = Decimal("0")
         for line in lines:
             item = items_map.get(line.item_id)
             warehouse = warehouses_map.get(line.warehouse_id)
-            writer.writerow(
-                [
-                    count.count_number,
-                    count.count_date.isoformat() if count.count_date else "",
-                    count.status.value,
-                    item.item_code if item else "",
-                    item.item_name if item else "",
-                    warehouse.warehouse_name if warehouse else "",
-                    f"{line.system_quantity or 0}",
-                    f"{line.counted_quantity or 0}"
-                    if line.counted_quantity is not None
+            system_quantity = line.system_quantity or Decimal("0")
+            counted_quantity = line.counted_quantity
+            final_quantity = line.final_quantity
+            variance_quantity = line.variance_quantity
+            variance_value = line.variance_value
+
+            total_system_quantity += system_quantity
+            if counted_quantity is not None:
+                total_counted_quantity += counted_quantity
+            if variance_quantity is not None:
+                total_variance_quantity += variance_quantity
+            if variance_value is not None:
+                total_variance_value += variance_value
+
+            rows.append(
+                {
+                    "item_code": item.item_code if item else "",
+                    "item_name": item.item_name if item else "",
+                    "warehouse_name": warehouse.warehouse_name if warehouse else "",
+                    "system_quantity": f"{system_quantity}",
+                    "counted_quantity": f"{counted_quantity or 0}"
+                    if counted_quantity is not None
                     else "",
-                    f"{line.final_quantity or 0}"
-                    if line.final_quantity is not None
+                    "final_quantity": f"{final_quantity or 0}"
+                    if final_quantity is not None
                     else "",
-                    f"{line.variance_quantity or 0}"
-                    if line.variance_quantity is not None
+                    "variance_quantity": f"{variance_quantity or 0}"
+                    if variance_quantity is not None
                     else "",
-                    f"{line.variance_value or 0}"
-                    if line.variance_value is not None
+                    "variance_value": f"{variance_value or 0}"
+                    if variance_value is not None
                     else "",
-                    line.reason_code or "",
-                    line.notes or "",
-                ]
+                    "reason_code": line.reason_code or "",
+                    "notes": line.notes or "",
+                }
             )
 
-        filename = f"stock_count_{count.count_number}.csv"
-        return Response(
-            content=buffer.getvalue(),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
+        return {
+            "count": count,
+            "rows": rows,
+            "row_count": len(rows),
+            "summary": {
+                "total_system_quantity": total_system_quantity,
+                "total_counted_quantity": total_counted_quantity,
+                "total_variance_quantity": total_variance_quantity,
+                "total_variance_value": total_variance_value,
             },
-        )
+        }
 
     def start_count_response(
         self,

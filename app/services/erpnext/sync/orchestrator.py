@@ -511,6 +511,13 @@ class ERPNextSyncOrchestrator:
                     batch_size=self.config.batch_size,
                 ),
             )
+            # Services may define reconcile_positions() (or other post-batch
+            # hooks) to run inside the same transaction before the
+            # orchestrator commits. Duck-typed so non-HR services stay
+            # unaffected.
+            post_hook = getattr(service, "reconcile_positions", None)
+            if callable(post_hook):
+                post_hook()
             return result
 
         except Exception as e:

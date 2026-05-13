@@ -91,6 +91,7 @@ _test_engine = create_engine(
             "ap": None,
             "core_org": None,
             "hr": None,
+            "perf": None,
             "pm": None,
             "support": None,
             "automation": None,

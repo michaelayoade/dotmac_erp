@@ -1,0 +1,190 @@
+{% extends "fixed_assets/base_fixed_assets.html" %}
+{% from "components/macros.html" import icon_svg, empty_state, status_badge %}
+
+{% block page_title %}Asset Count Sheets{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/fixed-assets" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Asset Management</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fixed-assets/reports" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Reports</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Count Sheets</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% set totals = count_sheet_totals | default({}) %}
+<div class="space-y-6 stagger-in">
+    <div class="card p-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Physical Verification</p>
+                <h1 class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">Asset Count Sheets</h1>
+                {% if selected_plan %}
+                    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        {{ selected_plan.plan_number }} - {{ selected_plan.title }}
+                    </p>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="/fixed-assets/reports/count-sheets/export?format=csv{% if audit_plan_id %}&audit_plan_id={{ audit_plan_id }}{% endif %}{% if location %}&location={{ location }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+                   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                    {{ icon_svg("download", "h-4 w-4") }}
+                    Export CSV
+                </a>
+                <a href="/fixed-assets/reports/count-sheets/export?format=pdf{% if audit_plan_id %}&audit_plan_id={{ audit_plan_id }}{% endif %}{% if location %}&location={{ location }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+                   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                    {{ icon_svg("file-text", "h-4 w-4") }}
+                    Export PDF
+                </a>
+                <a href="/fixed-assets/reports" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                    {{ icon_svg("arrow-left", "h-4 w-4") }}
+                    Reports
+                </a>
+            </div>
+        </div>
+
+        <form method="get" action="/fixed-assets/reports/count-sheets" class="mt-5 grid gap-3 md:grid-cols-4">
+            <label class="block">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Audit Plan</span>
+                <select name="audit_plan_id" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    {% for plan in audit_plans %}
+                        <option value="{{ plan.audit_plan_id }}" {% if audit_plan_id == plan.audit_plan_id %}selected{% endif %}>
+                            {{ plan.plan_number }} - {{ plan.title }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="block">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Location</span>
+                <select name="location" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    <option value="">All locations</option>
+                    {% for loc in locations %}
+                        <option value="{{ loc.location_id }}" {% if location == loc.location_id|string %}selected{% endif %}>{{ loc.location_name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="block">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Category</span>
+                <select name="category" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                    <option value="">All categories</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat.category_id }}" {% if category == cat.category_id|string %}selected{% endif %}>{{ cat.category_code }} - {{ cat.category_name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <div class="flex items-end">
+                <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+                    {{ icon_svg("filter", "h-4 w-4") }}
+                    Apply
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">System Qty</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ totals.get("system_qty", 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Physical Qty</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ totals.get("physical_qty", 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Variance Qty</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ totals.get("variance_qty", 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Unchecked</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ totals.get("unchecked_qty", 0) }}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">Variance Lines</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ totals.get("variance_count", 0) }}</p>
+        </div>
+    </div>
+
+    {% if not has_count_plan %}
+        {{ empty_state("No asset audit plans", "Create an asset audit plan to generate count sheets and compare physical quantities.", "clipboard-list") }}
+    {% else %}
+    <div class="card p-5">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Summary by Location and Category</h2>
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full border-collapse text-sm">
+                <thead>
+                    <tr class="text-left text-slate-500 dark:text-slate-400">
+                        <th class="border-b border-slate-200 py-2 dark:border-slate-700">Location</th>
+                        <th class="border-b border-slate-200 py-2 dark:border-slate-700">Category</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">System Qty</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">Physical Qty</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">Variance</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">Unchecked</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in summary_rows %}
+                        <tr class="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                            <td class="py-3 text-slate-700 dark:text-slate-200">{{ row.location_name }}</td>
+                            <td class="py-3 text-slate-700 dark:text-slate-200">{{ row.category_name }}</td>
+                            <td class="py-3 text-right text-slate-700 dark:text-slate-200">{{ row.system_qty }}</td>
+                            <td class="py-3 text-right text-slate-700 dark:text-slate-200">{{ row.physical_qty }}</td>
+                            <td class="py-3 text-right font-semibold {% if row.variance_qty != 0 %}text-rose-700 dark:text-rose-300{% else %}text-emerald-700 dark:text-emerald-300{% endif %}">{{ row.variance_qty }}</td>
+                            <td class="py-3 text-right text-slate-700 dark:text-slate-200">{{ row.unchecked_qty }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No count sheet rows match the selected filters.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Asset Lines</h2>
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full border-collapse text-sm">
+                <thead>
+                    <tr class="text-left text-slate-500 dark:text-slate-400">
+                        <th class="border-b border-slate-200 py-2 dark:border-slate-700">Asset</th>
+                        <th class="border-b border-slate-200 py-2 dark:border-slate-700">Serial</th>
+                        <th class="border-b border-slate-200 py-2 dark:border-slate-700">Location</th>
+                        <th class="border-b border-slate-200 py-2 dark:border-slate-700">Status</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">System</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">Physical</th>
+                        <th class="border-b border-slate-200 py-2 text-right dark:border-slate-700">Variance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in count_sheet_rows %}
+                        <tr class="border-b border-slate-100 last:border-0 dark:border-slate-800 {% if row.has_variance %}bg-rose-50/40 dark:bg-rose-950/20{% endif %}">
+                            <td class="py-3">
+                                <a href="/fixed-assets/assets/{{ row.asset_id }}" class="font-medium text-teal-700 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100">
+                                    {{ row.asset_number }} - {{ row.asset_name }}
+                                </a>
+                                {% if row.discrepancy_notes %}
+                                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ row.discrepancy_notes }}</p>
+                                {% endif %}
+                            </td>
+                            <td class="py-3 text-slate-700 dark:text-slate-200">{{ row.serial_number or "-" }}</td>
+                            <td class="py-3 text-slate-700 dark:text-slate-200">{{ row.location_name }}</td>
+                            <td class="py-3">{{ status_badge(row.line_status) }}</td>
+                            <td class="py-3 text-right text-slate-700 dark:text-slate-200">{{ row.system_qty }}</td>
+                            <td class="py-3 text-right text-slate-700 dark:text-slate-200">{{ row.physical_qty }}</td>
+                            <td class="py-3 text-right font-semibold {% if row.variance_qty != 0 %}text-rose-700 dark:text-rose-300{% else %}text-emerald-700 dark:text-emerald-300{% endif %}">{{ row.variance_qty }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="py-6 text-center text-sm text-slate-500 dark:text-slate-400">No count sheet rows match the selected filters.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
