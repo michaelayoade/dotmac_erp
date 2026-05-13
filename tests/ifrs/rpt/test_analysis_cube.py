@@ -151,15 +151,56 @@ def test_refresh_due_cubes_refreshes_only_due():
     refresh_cube.assert_called_once_with(due_cube, now=now)
 
 
-def test_refresh_cube_falls_back_when_concurrent_refresh_fails():
+def test_refresh_cube_uses_concurrently_when_matview_is_populated():
     cube = _cube()
     cube.last_refreshed_at = None
     db = MagicMock()
-    db.execute.side_effect = [Exception("no unique index"), MagicMock()]
+    # First execute: pg_matviews.ispopulated lookup. Second: the refresh.
+    populated_result = MagicMock()
+    populated_result.scalar.return_value = True
+    db.execute.side_effect = [populated_result, MagicMock()]
     service = AnalysisCubeService(db)
     now = datetime(2026, 2, 25, 12, 0, tzinfo=UTC)
 
     service.refresh_cube(cube, now=now)
 
     assert db.execute.call_count == 2
+    refresh_sql = str(db.execute.call_args_list[1].args[0])
+    assert "CONCURRENTLY" in refresh_sql
     assert cube.last_refreshed_at == now
+
+
+def test_refresh_cube_skips_concurrently_when_matview_is_not_populated():
+    """First-time refresh: pg rejects CONCURRENTLY against an empty matview
+    and aborts the txn, so we have to detect this up front and use the
+    plain variant. Otherwise the retry path lands in InFailedSqlTransaction
+    and any sibling cubes' last_refreshed_at updates would roll back.
+    """
+    cube = _cube()
+    cube.last_refreshed_at = None
+    db = MagicMock()
+    unpopulated_result = MagicMock()
+    unpopulated_result.scalar.return_value = False
+    db.execute.side_effect = [unpopulated_result, MagicMock()]
+    service = AnalysisCubeService(db)
+    now = datetime(2026, 2, 25, 12, 0, tzinfo=UTC)
+
+    service.refresh_cube(cube, now=now)
+
+    assert db.execute.call_count == 2
+    refresh_sql = str(db.execute.call_args_list[1].args[0])
+    assert "CONCURRENTLY" not in refresh_sql
+    assert "REFRESH MATERIALIZED VIEW" in refresh_sql
+    assert cube.last_refreshed_at == now
+
+
+def test_refresh_cube_raises_when_matview_does_not_exist():
+    cube = _cube()
+    db = MagicMock()
+    missing_result = MagicMock()
+    missing_result.scalar.return_value = None
+    db.execute.return_value = missing_result
+    service = AnalysisCubeService(db)
+
+    with pytest.raises(RuntimeError, match="does not exist"):
+        service.refresh_cube(cube)

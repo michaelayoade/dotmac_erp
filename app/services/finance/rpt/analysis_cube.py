@@ -173,11 +173,42 @@ class AnalysisCubeService:
         return results
 
     def refresh_cube(self, cube: AnalysisCube, *, now: datetime | None = None) -> None:
-        """Refresh one materialized view with concurrent fallback."""
+        """Refresh one materialized view, using CONCURRENTLY when possible.
+
+        Postgres only allows ``REFRESH MATERIALIZED VIEW CONCURRENTLY`` on
+        matviews that have already been populated at least once — the
+        first refresh after creation must be non-concurrent so the unique
+        index has rows to diff against. Earlier code caught the resulting
+        ``FeatureNotSupported`` and retried, but the failed CONCURRENTLY
+        statement aborts the surrounding transaction, so the retry hit
+        ``InFailedSqlTransaction`` and any sibling cubes' in-memory
+        ``last_refreshed_at`` updates would be rolled back too. Picking
+        the variant up front from ``pg_matviews.ispopulated`` keeps the
+        whole loop in one healthy transaction.
+        """
         view_name = self._safe_view(cube.source_view)
-        try:
+        schema_name, _, relation_name = view_name.partition(".")
+        if not relation_name:
+            relation_name = schema_name
+            schema_name = ""
+        target_schema = schema_name or "public"
+
+        is_populated = self.db.execute(
+            text(
+                "SELECT ispopulated FROM pg_matviews "
+                "WHERE schemaname = :schema AND matviewname = :name"
+            ),
+            {"schema": target_schema, "name": relation_name},
+        ).scalar()
+        if is_populated is None:
+            raise RuntimeError(
+                f"Materialized view {view_name} does not exist; "
+                "did you run the migration that creates it?"
+            )
+
+        if is_populated:
             self.db.execute(text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {view_name}"))
-        except Exception:
+        else:
             self.db.execute(text(f"REFRESH MATERIALIZED VIEW {view_name}"))
         cube.last_refreshed_at = now or datetime.now(UTC)
 
