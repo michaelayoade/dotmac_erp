@@ -284,7 +284,7 @@
                         {# Bulk Status Change #}
                         <div class="flex items-center gap-2">
                             <label for="bulk-status" class="sr-only">Bulk status change</label>
-                            <select id="bulk-status" name="status" aria-label="Bulk status change" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
+                            <select aria-label="Status" id="bulk-status" name="status" aria-label="Bulk status change" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
                                 <option value="" class="text-slate-900">Change Status...</option>
                                 <option value="active" class="text-slate-900">Active</option>
                                 <option value="on_leave" class="text-slate-900">On Leave</option>
@@ -294,7 +294,7 @@
                         {# Bulk Department Change #}
                         <div class="flex items-center gap-2">
                             <label for="bulk-department" class="sr-only">Bulk department change</label>
-                            <select id="bulk-department" name="department_id" aria-label="Bulk department change" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
+                            <select aria-label="Department" id="bulk-department" name="department_id" aria-label="Bulk department change" class="text-sm rounded-lg border-0 bg-white/20 text-white placeholder-teal-100 focus:ring-2 focus:ring-white/50 py-1.5 pl-3 pr-8">
                                 <option value="" class="text-slate-900">Change Dept...</option>
                                 {% for dept in departments %}
                                 <option value="{{ dept.department_id }}" class="text-slate-900">{{ dept.department_name }}</option>
@@ -354,7 +354,7 @@
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 w-10">
-                            <input type="checkbox" id="selectAll" @change="toggleAll($event)" :checked="allSelected"
+                            <input aria-label="Select all rows" type="checkbox" id="selectAll" @change="toggleAll($event)" :checked="allSelected"
                                    class="rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700">
                         </th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Employee</th>
@@ -369,7 +369,7 @@
                     {% for emp in employees %}
                     <tr class="group hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                         <td class="px-4 py-4">
-                            <input type="checkbox" name="employee_ids" value="{{ emp.employee_id }}"
+                            <input aria-label="Select employee" type="checkbox" name="employee_ids" value="{{ emp.employee_id }}"
                                    @change="updateSelection($event)"
                                    class="employee-checkbox rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700">
                         </td>

@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters, pagination %}
+{% from "components/macros.html" import status_badge, compact_filters, pagination, empty_state %}
 
 {% block page_title %}Info Change Requests{% endblock %}
 
@@ -84,6 +84,13 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/hr/info-changes/{{ req.request_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">Review</a>
+                        </td>
+                    </tr>
+
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="py-12">
+                            {{ empty_state("No info change requests found", "Get started by creating your first info change request.", "document") }}
                         </td>
                     </tr>
                     {% endfor %}

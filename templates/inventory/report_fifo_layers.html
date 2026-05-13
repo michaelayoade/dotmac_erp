@@ -108,17 +108,17 @@
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                             <td class="font-mono text-sm">{{ row.lot.received_date }}</td>
                             <td>
-                                <div class="flex flex-col">
-                                    <a href="/inventory/items/{{ row.item.item_id }}" class="font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300">
+                                <div class="flex flex-col min-w-0">
+                                    <a href="/inventory/items/{{ row.item.item_id }}" class="block max-w-[14rem] truncate font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300" title="{{ row.item.item_name }}">
                                         {{ row.item.item_name }}
                                     </a>
-                                    <span class="text-xs font-mono text-slate-500">{{ row.item.item_code }}</span>
+                                    <span class="block max-w-[14rem] truncate text-xs font-mono text-slate-500" title="{{ row.item.item_code }}">{{ row.item.item_code }}</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="flex flex-col">
-                                    <span class="font-mono font-medium text-slate-900 dark:text-white">{{ row.lot.lot_number }}</span>
-                                    <span class="text-xs text-slate-500">{{ row.lot.allocation_reference or 'FIFO receipt layer' }}</span>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="block max-w-[10rem] truncate font-mono font-medium text-slate-900 dark:text-white" title="{{ row.lot.lot_number }}">{{ row.lot.lot_number }}</span>
+                                    <span class="block max-w-[10rem] truncate text-xs text-slate-500" title="{{ row.lot.allocation_reference or 'FIFO receipt layer' }}">{{ row.lot.allocation_reference or 'FIFO receipt layer' }}</span>
                                 </div>
                             </td>
                             <td>

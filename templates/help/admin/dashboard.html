@@ -80,7 +80,7 @@
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Popular Searches</h2>
             {% if popular_searches %}
-            <div class="mt-4">
+            <div class="mt-4 overflow-x-auto">
                 <table class="table">
                     <thead>
                         <tr>
@@ -111,7 +111,7 @@
             These searches returned no results. Consider creating articles for these topics.
         </p>
         {% if zero_result_searches %}
-        <div class="mt-4">
+        <div class="mt-4 overflow-x-auto">
             <table class="table">
                 <thead>
                     <tr>

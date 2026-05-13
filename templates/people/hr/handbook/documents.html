@@ -31,7 +31,7 @@
         search=search,
         search_placeholder="Search documents..."
     ) %}
-    <select name="category" class="form-select" {{ filter_attrs }}>
+    <select aria-label="Filter by category" name="category" class="form-select" {{ filter_attrs }}>
         <option value="">All Categories</option>
         {% for cat in categories %}
         <option value="{{ cat.value }}" {% if category_filter == cat.value %}selected{% endif %}>
@@ -39,7 +39,7 @@
         </option>
         {% endfor %}
     </select>
-    <select name="status" class="form-select" {{ filter_attrs }}>
+    <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
         <option value="">All Statuses</option>
         {% for st in statuses %}
         <option value="{{ st.value }}" {% if status_filter == st.value %}selected{% endif %}>
@@ -52,7 +52,7 @@
     <div id="results-container">
     {# Documents List #}
     {% if documents %}
-    <div class="card overflow-hidden">
+    <div class="card overflow-hidden overflow-x-auto">
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead class="bg-slate-50 dark:bg-slate-800/50">
                 <tr>

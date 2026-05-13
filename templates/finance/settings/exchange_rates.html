@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, icon_svg %}
+{% from "components/macros.html" import status_badge, icon_svg, empty_state %}
 
 {% block page_title %}Exchange rates{% endblock %}
 
@@ -64,7 +64,12 @@
                 <ul class="mt-1 list-disc list-inside text-rose-600 dark:text-rose-400">
                     {% for err in fetch_result.errors %}
                     <li>{{ err }}</li>
-                    {% endfor %}
+
+                {% else %}
+                <li class="py-8">
+                    {{ empty_state("No exchange rates found", "Get started by creating your first exchange rate.", "document") }}
+                </li>
+                {% endfor %}
                 </ul>
                 {% endif %}
             </div>

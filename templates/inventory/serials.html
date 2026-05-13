@@ -192,16 +192,18 @@
                         {% set serial = row.serial %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
                             onclick="window.location='/inventory/serials/{{ serial.serial_id }}'">
-                            <td class="font-medium font-mono text-slate-900 dark:text-white">{{ serial.serial_number }}</td>
+                            <td class="font-medium font-mono text-slate-900 dark:text-white">
+                                <span class="block max-w-[12rem] truncate" title="{{ serial.serial_number }}">{{ serial.serial_number }}</span>
+                            </td>
                             <td>
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-mono text-slate-500">{{ row.item.item_code if row.item else '-' }}</span>
-                                    <span>{{ row.item.item_name if row.item else '-' }}</span>
+                                <div class="flex flex-col min-w-0">
+                                    <span class="block max-w-[14rem] truncate text-xs font-mono text-slate-500" title="{{ row.item.item_code if row.item else '' }}">{{ row.item.item_code if row.item else '-' }}</span>
+                                    <span class="block max-w-[14rem] truncate" title="{{ row.item.item_name if row.item else '' }}">{{ row.item.item_name if row.item else '-' }}</span>
                                 </div>
                             </td>
                             <td>
                                 {% if row.lot %}
-                                <a href="/inventory/lots/{{ row.lot.lot_id }}" class="font-mono text-amber-700 hover:text-amber-800 dark:text-amber-300" onclick="event.stopPropagation()">{{ row.lot.lot_number }}</a>
+                                <a href="/inventory/lots/{{ row.lot.lot_id }}" class="block max-w-[10rem] truncate font-mono text-amber-700 hover:text-amber-800 dark:text-amber-300" onclick="event.stopPropagation()" title="{{ row.lot.lot_number }}">{{ row.lot.lot_number }}</a>
                                 {% else %}
                                 -
                                 {% endif %}

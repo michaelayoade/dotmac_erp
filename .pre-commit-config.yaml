@@ -50,6 +50,13 @@ repos:
         pass_filenames: false
         files: ^templates/.*\.html$
 
+      - id: template-color-only
+        name: template color-only status (no new color-only status dots)
+        language: system
+        entry: python3 scripts/audit_color_only.py
+        pass_filenames: false
+        files: ^templates/.*\.html$
+
   # Security: detect hardcoded secrets
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

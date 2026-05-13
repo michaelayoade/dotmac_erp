@@ -17,7 +17,7 @@
 <div class="flex items-center gap-2">
     <form method="get" action="/people/payroll/slips/export">
         <input type="hidden" name="search" value="{{ search | default('', true) }}">
-        <input type="hidden" name="status" value="{{ status | default('', true) }}">
+        <input aria-label="Status" type="hidden" name="status" value="{{ status | default('', true) }}">
         <button type="submit" class="btn btn-secondary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M5 20h14a2 2 0 002-2v-4M3 14v4a2 2 0 002 2h2"/>
@@ -93,7 +93,7 @@
         search=search,
         search_placeholder="Search by slip number or employee..."
     ) %}
-        <select name="status" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | title }}</option>

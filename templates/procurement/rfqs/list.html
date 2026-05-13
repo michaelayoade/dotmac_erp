@@ -149,7 +149,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">File <span class="text-rose-500">*</span></label>
-                <input type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
+                <input aria-label="Choose file to upload" type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
             </div>
             <div class="flex items-center justify-end gap-2">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('proc-rfq-import-modal').classList.add('hidden')">Cancel</button>
@@ -191,7 +191,7 @@
                 </div>
             </div>
             {% if filter_status %}
-            <input type="hidden" name="status" value="{{ filter_status }}">
+            <input aria-label="Status" type="hidden" name="status" value="{{ filter_status }}">
             {% endif %}
             {% if filter_method %}
             <input type="hidden" name="method" value="{{ filter_method }}">

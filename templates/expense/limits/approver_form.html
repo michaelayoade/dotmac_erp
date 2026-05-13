@@ -33,7 +33,7 @@
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2" x-data="{ scopeType: '{{ approver_limit.scope_type if approver_limit else '' }}' }">
                 <div>
                     <label class="form-label">Scope Type <span class="text-red-500">*</span></label>
-                    <select name="scope_type" x-model="scopeType"
+                    <select aria-label="Scope type" name="scope_type" x-model="scopeType"
                             class="form-input form-select{% if errors.scope_type %} border-red-300{% endif %}">
                         <option value="">Select scope type...</option>
                         {% for st in scope_types %}
@@ -67,7 +67,7 @@
                         <div data-typeahead-results></div>
                     </div>
 
-                    <select name="scope_option_id"
+                    <select aria-label="Scope option" name="scope_option_id"
                             class="form-input form-select"
                             x-show="scopeType !== 'EMPLOYEE'"
                             x-bind:disabled="scopeType === 'EMPLOYEE'">

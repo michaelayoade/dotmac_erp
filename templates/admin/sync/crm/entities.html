@@ -14,13 +14,13 @@
     </nav>
 
     {% call(search_attrs) live_search(search=filter_search, base_url="/admin/sync/crm/entities", placeholder="Search by name, code, or CRM ID...") %}
-        <select name="entity_type" class="form-select" {{ search_attrs }}>
+        <select aria-label="Filter by entity type" name="entity_type" class="form-select" {{ search_attrs }}>
             <option value="">All Types</option>
             {% for value, label in entity_type_choices %}
             <option value="{{ value }}" {{ 'selected' if filter_entity_type == value else '' }}>{{ label }}</option>
             {% endfor %}
         </select>
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <select aria-label="Filter by status" name="status" class="form-select" {{ search_attrs }}>
             <option value="">All Statuses</option>
             {% for value, label in status_choices %}
             <option value="{{ value }}" {{ 'selected' if filter_status == value else '' }}>{{ label }}</option>

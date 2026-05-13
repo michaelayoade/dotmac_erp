@@ -189,7 +189,7 @@
             <button type="submit" :disabled="!isBalanced || lines.length === 0"
                     :class="{'opacity-50 cursor-not-allowed': !isBalanced || lines.length === 0}"
                     class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-primary-600/25 hover:bg-primary-700 transition-colors">
-                {{ "Update Journal" if entry else "Create Journal" }}
+                {{ "Save Journal" if entry else "Create Journal" }}
             </button>
         </div>
     </form>

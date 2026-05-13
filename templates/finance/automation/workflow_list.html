@@ -34,7 +34,7 @@
             show_apply_button=true
         ) %}
         <div>
-            <select name="entity_type"
+            <select aria-label="Entity type" name="entity_type"
                     class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <option value="">All Entities</option>
                 {% for et in entity_types %}
@@ -43,7 +43,7 @@
             </select>
         </div>
         <div>
-            <select name="trigger_event"
+            <select aria-label="Filter by trigger event" name="trigger_event"
                     class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <option value="">All Triggers</option>
                 {% for te in trigger_events %}
@@ -52,7 +52,7 @@
             </select>
         </div>
         <div>
-            <select name="is_active"
+            <select aria-label="Filter by active status" name="is_active"
                     class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <option value="">All Status</option>
                 <option value="true" {{ 'selected' if filters.is_active == true else '' }}>Active</option>

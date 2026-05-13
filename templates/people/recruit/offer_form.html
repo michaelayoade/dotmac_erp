@@ -221,7 +221,7 @@
             <a href="{{ '/people/recruit/offers/' ~ offer.offer_id if offer else '/people/recruit/offers' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-1") }}
-                {{ "Update Offer" if offer else "Create Offer" }}
+                {{ "Save Offer" if offer else "Create Offer" }}
             </button>
         </div>
     </form>

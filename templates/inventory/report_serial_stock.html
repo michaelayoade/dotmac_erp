@@ -111,15 +111,15 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="flex flex-col">
-                                    <a href="/inventory/items/{{ row.item.item_id }}" class="font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300">
+                                <div class="flex flex-col min-w-0">
+                                    <a href="/inventory/items/{{ row.item.item_id }}" class="block max-w-[14rem] truncate font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300" title="{{ row.item.item_name }}">
                                         {{ row.item.item_name }}
                                     </a>
-                                    <span class="text-xs font-mono text-slate-500">{{ row.item.item_code }}</span>
+                                    <span class="block max-w-[14rem] truncate text-xs font-mono text-slate-500" title="{{ row.item.item_code }}">{{ row.item.item_code }}</span>
                                 </div>
                             </td>
                             <td>
-                                <a href="/inventory/serials/{{ serial.serial_id }}" class="font-mono font-medium text-slate-900 hover:text-amber-700 dark:text-white dark:hover:text-amber-300">
+                                <a href="/inventory/serials/{{ serial.serial_id }}" class="block max-w-[12rem] truncate font-mono font-medium text-slate-900 hover:text-amber-700 dark:text-white dark:hover:text-amber-300" title="{{ serial.serial_number }}">
                                     {{ serial.serial_number }}
                                 </a>
                             </td>

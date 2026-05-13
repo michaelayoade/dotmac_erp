@@ -123,7 +123,7 @@
                         {% for s in ticket.can_transition_to %}
                         <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/status" class="block">
                             {{ request.state.csrf_form | safe }}
-                            <input type="hidden" name="status" value="{{ s.value }}">
+                            <input aria-label="Status" type="hidden" name="status" value="{{ s.value }}">
                             <button type="submit" class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50 transition-colors">
                                 {{ s.label }}
                             </button>
@@ -545,7 +545,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div>
                         <label class="form-label">{{ 'Reassign to' if ticket.assigned_to_name else 'Assign to' }} <span class="text-rose-500">*</span></label>
-                        <select name="assigned_to_id" class="form-input w-full" required>
+                        <select aria-label="Assign to" name="assigned_to_id" class="form-input w-full" required>
                             <option value="">Select employee...</option>
                             {% for emp in employees %}
                             <option value="{{ emp.employee_id }}" {{ 'selected' if ticket.assigned_to_id == emp.employee_id }}>
@@ -698,7 +698,7 @@
                         <textarea aria-label="Add a comment..." name="content" required rows="2" class="form-input w-full" placeholder="Add a comment..."></textarea>
                     </div>
                     <div>
-                        <input type="file" name="files" multiple
+                        <input aria-label="Choose file to upload" type="file" name="files" multiple
                                accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
                                class="block w-full text-sm text-slate-500 dark:text-slate-400
                                       file:mr-4 file:py-2 file:px-4

@@ -1,5 +1,5 @@
 {% extends "help/base_help.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, empty_state %}
 
 {% block page_title %}Release Notes{% endblock %}
 
@@ -46,6 +46,11 @@
                     <span class="mt-1 text-emerald-500">{{ icon_svg("plus", "h-4 w-4") }}</span>
                     <span>{{ feature }}</span>
                 </li>
+
+                {% else %}
+                <li class="py-8">
+                    {{ empty_state("No release notes found", "Get started by creating your first release note.", "document") }}
+                </li>
                 {% endfor %}
             </ul>
         </div>
@@ -60,6 +65,11 @@
                     <span class="mt-1 text-blue-500">{{ icon_svg("trending-up", "h-4 w-4") }}</span>
                     <span>{{ item }}</span>
                 </li>
+
+                {% else %}
+                <li class="py-8">
+                    {{ empty_state("No release notes found", "Get started by creating your first release note.", "document") }}
+                </li>
                 {% endfor %}
             </ul>
         </div>
@@ -73,6 +83,11 @@
                 <li class="flex gap-2 text-sm text-slate-700 dark:text-slate-300">
                     <span class="mt-1 text-amber-500">{{ icon_svg("check", "h-4 w-4") }}</span>
                     <span>{{ fix }}</span>
+                </li>
+
+                {% else %}
+                <li class="py-8">
+                    {{ empty_state("No release notes found", "Get started by creating your first release note.", "document") }}
                 </li>
                 {% endfor %}
             </ul>

@@ -100,8 +100,12 @@
                 <tbody>
                     {% for comp in bom.components %}
                     <tr>
-                        <td class="font-medium font-mono text-slate-900 dark:text-white">{{ comp.component_item.item_code if comp.component_item else '-' }}</td>
-                        <td>{{ comp.component_item.item_name if comp.component_item else '-' }}</td>
+                        <td class="font-medium font-mono text-slate-900 dark:text-white">
+                            <span class="block max-w-[10rem] truncate" title="{{ comp.component_item.item_code if comp.component_item else '' }}">{{ comp.component_item.item_code if comp.component_item else '-' }}</span>
+                        </td>
+                        <td>
+                            <span class="block truncate" title="{{ comp.component_item.item_name if comp.component_item else '' }}">{{ comp.component_item.item_name if comp.component_item else '-' }}</span>
+                        </td>
                         <td class="text-right font-mono">{{ '{:,.4f}'.format(comp.quantity or 0) }}</td>
                         <td>{{ comp.uom or 'EACH' }}</td>
                         <td class="text-right font-mono">{{ '{:,.2f}'.format(comp.component_item.standard_cost or 0) if comp.component_item else '-' }}</td>

@@ -646,7 +646,7 @@
                 </button>
                 <button type="submit" class="btn btn-primary" :disabled="isSubmitting" :class="{ 'opacity-60 cursor-not-allowed': isSubmitting }">
                     {{ icon_svg("check", "w-4 h-4") }}
-                    <span x-text="isSubmitting ? 'Saving...' : '{{ "Update Invoice" if invoice else "Create Invoice" }}'"></span>
+                    <span x-text="isSubmitting ? 'Saving...' : '{{ "Save Invoice" if invoice else "Create Invoice" }}'"></span>
                 </button>
             </div>
         </div>

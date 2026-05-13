@@ -62,7 +62,7 @@
                         {% for employee in employees %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                             <td class="px-4 py-3 align-top">
-                                <input type="checkbox" name="employee_ids" value="{{ employee.employee_id }}"
+                                <input aria-label="Select employee" type="checkbox" name="employee_ids" value="{{ employee.employee_id }}"
                                        class="mt-1 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                             </td>
                             <td class="px-4 py-3">

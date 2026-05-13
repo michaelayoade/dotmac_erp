@@ -78,7 +78,7 @@
         active_filters=active_filters | default([])
     ) %}
     <div>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by status" name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 {% for s in statuses %}
                 <option value="{{ s.value }}" {{ 'selected' if status == s.value else '' }}>{{ s.value | replace('_', ' ') | title }}</option>
@@ -86,7 +86,7 @@
             </select>
     </div>
     <div>
-            <select name="maintenance_type" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by maintenance type" name="maintenance_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for mt in maintenance_types %}
                 <option value="{{ mt.value }}" {{ 'selected' if maintenance_type == mt.value else '' }}>{{ mt.value | replace('_', ' ') | title }}</option>
@@ -94,7 +94,7 @@
             </select>
     </div>
     <div>
-            <select name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by vehicle" name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Vehicles</option>
                 {% for v in vehicles %}
                 <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>

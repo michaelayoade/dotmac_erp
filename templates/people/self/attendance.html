@@ -151,7 +151,7 @@
             <div class="flex flex-wrap items-center gap-2">
                 <a href="/people/self/attendance?month={{ _previous_month }}" class="btn btn-secondary">Previous</a>
                 <form method="get" class="flex items-center gap-2">
-                    <input type="month" name="month" value="{{ _selected_month }}" class="form-input">
+                    <input aria-label="Select month" type="month" name="month" value="{{ _selected_month }}" class="form-input">
                     <button type="submit" class="btn btn-secondary">Go</button>
                 </form>
                 <a href="/people/self/attendance?month={{ _next_month }}" class="btn btn-secondary">Next</a>

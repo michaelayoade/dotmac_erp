@@ -48,9 +48,9 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="text-sm text-slate-600 dark:text-slate-300">{{ txn.transaction_date }}</td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">{{ txn.transaction_type | replace('_', ' ') | title }}</td>
-                        <td>
-                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ txn.item_name }}</p>
-                            <p class="text-xs text-slate-500">{{ txn.item_code }}</p>
+                        <td class="max-w-[14rem]">
+                            <p class="truncate text-sm font-medium text-slate-900 dark:text-white" title="{{ txn.item_name }}">{{ txn.item_name }}</p>
+                            <p class="truncate text-xs font-mono text-slate-500" title="{{ txn.item_code }}">{{ txn.item_code }}</p>
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">{{ txn.warehouse_name }}</td>
                         <td class="table-cell-amount text-slate-600 dark:text-slate-300">{{ txn.quantity }} {{ txn.uom }}</td>

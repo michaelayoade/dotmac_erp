@@ -144,7 +144,7 @@
             <a href="{{ '/people/recruit/interviews/' ~ interview.interview_id if interview else '/people/recruit/interviews' }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-1") }}
-                {{ "Update Interview" if interview else "Schedule Interview" }}
+                {{ "Save Interview" if interview else "Schedule Interview" }}
             </button>
         </div>
     </form>

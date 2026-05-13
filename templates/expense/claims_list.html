@@ -78,7 +78,12 @@
             <p class="text-sm text-slate-500 dark:text-slate-400">{{ s | replace('_', ' ') | title }}</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get(s, 0) }}</p>
         </div>
-        {% endfor %}
+
+                {% else %}
+                <div class="col-span-full py-8">
+                    {{ empty_state("No claims found", "Get started by creating your first claim.", "document") }}
+                </div>
+                {% endfor %}
     </div>
 
     <div id="results-container">

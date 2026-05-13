@@ -7,7 +7,7 @@
             <thead>
                 <tr>
                     <th scope="col" class="w-10 text-center">
-                        <input id="rule-select-all" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                        <input aria-label="Select all rules" id="rule-select-all" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                     </th>
                     <th scope="col" class="w-20 text-center">#</th>
                     <th scope="col">Rule</th>
@@ -24,7 +24,7 @@
                 {% for rule in rules %}
                 <tr class="group">
                     <td class="whitespace-nowrap text-center">
-                        <input
+                        <input aria-label="Select rule for bulk action"
                             type="checkbox"
                             class="rule-select h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                             value="{{ rule.rule_id }}">

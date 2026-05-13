@@ -180,7 +180,7 @@
                         <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             {{ bulk_select_cell(item.item_id) }}
                             <td>
-                                <a href="/inventory/items/{{ item.item_id }}" class="font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-amber-300" data-copy-text="{{ item.item_code }}" title="Click to copy item code">
+                                <a href="/inventory/items/{{ item.item_id }}" class="block max-w-[10rem] truncate font-mono text-sm font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-amber-300" data-copy-text="{{ item.item_code }}" title="{{ item.item_code }}">
                                     {{ item.item_code }}
                                 </a>
                             </td>

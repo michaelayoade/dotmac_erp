@@ -139,13 +139,13 @@
                             <!-- Priority Indicator -->
                             <div class="flex-shrink-0 mt-1">
                                 {% if task.priority == 'URGENT' %}
-                                <span class="inline-flex h-3 w-3 rounded-full bg-rose-500"></span>
+                                <span class="inline-flex h-3 w-3 rounded-full bg-rose-500" role="img" aria-label="Urgent priority"></span>
                                 {% elif task.priority == 'HIGH' %}
-                                <span class="inline-flex h-3 w-3 rounded-full bg-amber-500"></span>
+                                <span class="inline-flex h-3 w-3 rounded-full bg-amber-500" role="img" aria-label="High priority"></span>
                                 {% elif task.priority == 'MEDIUM' %}
-                                <span class="inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
+                                <span class="inline-flex h-3 w-3 rounded-full bg-blue-500" role="img" aria-label="Medium priority"></span>
                                 {% else %}
-                                <span class="inline-flex h-3 w-3 rounded-full bg-slate-400"></span>
+                                <span class="inline-flex h-3 w-3 rounded-full bg-slate-400" role="img" aria-label="Low priority"></span>
                                 {% endif %}
                             </div>
 

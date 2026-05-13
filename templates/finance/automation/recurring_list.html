@@ -34,7 +34,7 @@
             show_apply_button=true
         ) %}
         <div>
-            <select name="entity_type"
+            <select aria-label="Entity type" name="entity_type"
                     class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <option value="">All Types</option>
                 {% for et in entity_types %}
@@ -43,7 +43,7 @@
             </select>
         </div>
         <div>
-            <select name="status"
+            <select aria-label="Status" name="status"
                     class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 <option value="">All Status</option>
                 {% for st in statuses %}

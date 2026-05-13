@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, empty_state %}
 
 {% block page_title %}Dependents - {{ employee.full_name }}{% endblock %}
 
@@ -85,7 +85,12 @@
                 </form>
             </div>
         </div>
-        {% endfor %}
+
+                {% else %}
+                <div class="col-span-full py-8">
+                    {{ empty_state("No dependents found", "Get started by creating your first dependent.", "document") }}
+                </div>
+                {% endfor %}
     </div>
     {% else %}
     <div class="card p-8 text-center">

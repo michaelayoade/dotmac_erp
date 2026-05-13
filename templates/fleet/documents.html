@@ -78,7 +78,7 @@
         active_filters=active_filters | default([])
     ) %}
     <div>
-            <select name="document_type" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by document type" name="document_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for dt in document_types %}
                 <option value="{{ dt }}" {{ 'selected' if document_type == dt else '' }}>{{ dt | replace('_', ' ') | title }}</option>
@@ -86,7 +86,7 @@
             </select>
     </div>
     <div>
-            <select name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
+            <select aria-label="Filter by vehicle" name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Vehicles</option>
                 {% for v in vehicles %}
                 <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>

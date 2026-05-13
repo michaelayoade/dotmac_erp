@@ -33,13 +33,13 @@
         search=search,
         search_placeholder="Search applicants..."
     ) %}
-        <select name="status" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <select name="job_opening_id" class="form-select" {{ filter_attrs }}>
+        <select aria-label="Filter by job opening" name="job_opening_id" class="form-select" {{ filter_attrs }}>
             <option value="">All Job Openings</option>
             {% for opening in job_openings %}
             <option value="{{ opening.job_opening_id }}" {{ 'selected' if job_opening_id == opening.job_opening_id|string else '' }}>

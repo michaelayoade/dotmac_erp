@@ -32,7 +32,7 @@
         show_apply_button=true
     ) %}
     <div>
-            <select name="status"
+            <select aria-label="Status" name="status"
                     class="form-select">
                 <option value="">All Status</option>
                 <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>

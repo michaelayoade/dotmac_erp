@@ -10,7 +10,7 @@
             <p class="text-sm text-slate-500 dark:text-slate-400">Published and draft shifts for the selected month.</p>
         </div>
         <form method="get" class="flex items-center gap-2">
-            <input type="month" name="year_month" value="{{ year_month }}" class="form-input">
+            <input aria-label="Select month" type="month" name="year_month" value="{{ year_month }}" class="form-input">
             <button type="submit" class="btn btn-secondary">Filter</button>
             <a href="/people/self/scheduling/swaps?year_month={{ year_month }}" class="btn btn-primary">Go To Swaps</a>
         </form>

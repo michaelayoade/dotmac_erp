@@ -23,7 +23,7 @@
         base_url="/careers",
         placeholder="Search jobs..."
     ) %}
-        <select name="department_id" class="form-select" {{ search_attrs }}>
+        <select aria-label="Filter by department" name="department_id" class="form-select" {{ search_attrs }}>
             <option value="">All Departments</option>
             {% for dept_id, dept_name, count in departments %}
             <option value="{{ dept_id }}" {{ 'selected' if selected_department_ids and dept_id in selected_department_ids else '' }}>
@@ -31,13 +31,13 @@
             </option>
             {% endfor %}
         </select>
-        <select name="location" class="form-select" {{ search_attrs }}>
+        <select aria-label="Filter by location" name="location" class="form-select" {{ search_attrs }}>
             <option value="">All Locations</option>
             {% for loc in locations %}
             <option value="{{ loc }}" {{ 'selected' if location == loc else '' }}>{{ loc }}</option>
             {% endfor %}
         </select>
-        <select name="employment_type" class="form-select" {{ search_attrs }}>
+        <select aria-label="Filter by employment type" name="employment_type" class="form-select" {{ search_attrs }}>
             <option value="">All Types</option>
             {% for value, label in employment_types %}
             <option value="{{ value }}" {{ 'selected' if employment_type == value else '' }}>{{ label }}</option>

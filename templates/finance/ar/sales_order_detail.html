@@ -356,35 +356,35 @@
                 </div>
                 {% if order.submitted_at %}
                 <div class="relative pl-10">
-                    <div class="absolute left-2 w-4 h-4 rounded-full bg-blue-500"></div>
+                    <div class="absolute left-2 w-4 h-4 rounded-full bg-blue-500" aria-hidden="true"></div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ order.submitted_at }}</p>
                     <p class="text-slate-900 dark:text-white">Submitted for approval</p>
                 </div>
                 {% endif %}
                 {% if order.approved_at %}
                 <div class="relative pl-10">
-                    <div class="absolute left-2 w-4 h-4 rounded-full bg-cyan-500"></div>
+                    <div class="absolute left-2 w-4 h-4 rounded-full bg-cyan-500" aria-hidden="true"></div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ order.approved_at }}</p>
                     <p class="text-slate-900 dark:text-white">Approved</p>
                 </div>
                 {% endif %}
                 {% if order.confirmed_at %}
                 <div class="relative pl-10">
-                    <div class="absolute left-2 w-4 h-4 rounded-full bg-teal-500"></div>
+                    <div class="absolute left-2 w-4 h-4 rounded-full bg-teal-500" aria-hidden="true"></div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ order.confirmed_at }}</p>
                     <p class="text-slate-900 dark:text-white">Confirmed with customer</p>
                 </div>
                 {% endif %}
                 {% if order.completed_at %}
                 <div class="relative pl-10">
-                    <div class="absolute left-2 w-4 h-4 rounded-full bg-emerald-500"></div>
+                    <div class="absolute left-2 w-4 h-4 rounded-full bg-emerald-500" aria-hidden="true"></div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ order.completed_at }}</p>
                     <p class="text-slate-900 dark:text-white">Completed</p>
                 </div>
                 {% endif %}
                 {% if order.cancelled_at %}
                 <div class="relative pl-10">
-                    <div class="absolute left-2 w-4 h-4 rounded-full bg-rose-500"></div>
+                    <div class="absolute left-2 w-4 h-4 rounded-full bg-rose-500" aria-hidden="true"></div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">{{ order.cancelled_at }}</p>
                     <p class="text-slate-900 dark:text-white">Cancelled{% if order.cancellation_reason %}: {{ order.cancellation_reason }}{% endif %}</p>
                 </div>

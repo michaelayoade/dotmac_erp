@@ -163,7 +163,7 @@
                 {% endif %}
                 {% if tax_return.filed_date %}
                 <div class="relative flex gap-4">
-                    <div class="absolute left-4 -ml-2 h-4 w-4 rounded-full border-2 border-green-500 bg-green-500"></div>
+                    <div class="absolute left-4 -ml-2 h-4 w-4 rounded-full border-2 border-green-500 bg-green-500" aria-hidden="true"></div>
                     <div class="ml-8">
                         <p class="text-sm font-medium text-slate-900 dark:text-white">Filed</p>
                         <p class="text-xs text-slate-500">{{ tax_return.filed_date }}</p>

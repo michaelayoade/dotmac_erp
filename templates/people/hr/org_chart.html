@@ -19,7 +19,7 @@
 {% macro render_node(node) %}
 <li class="relative pl-6">
     <div class="flex items-start gap-3">
-        <span class="mt-1 h-2 w-2 rounded-full bg-teal-500"></span>
+        <span class="mt-1 h-2 w-2 rounded-full bg-teal-500" aria-hidden="true"></span>
         <div>
             <div class="font-medium text-slate-900 dark:text-white">
                 <a href="/people/hr/employees/{{ node.employee_id }}" class="hover:text-teal-600 dark:hover:text-teal-400">
