@@ -604,6 +604,10 @@ def base_context(
     if effective_db is None and auth.organization_id:
         effective_db = SessionLocal()
         owns_db = True
+        # Sessions created here are outside FastAPI's get_db dependency,
+        # so RLS context hasn't been set yet — tenant-scoped queries below
+        # would return None for every row and look like missing data.
+        set_current_organization_sync(effective_db, auth.organization_id)
 
     try:
         # Load organization object for template conditionals (e.g. IPSAS sidebar toggle)
