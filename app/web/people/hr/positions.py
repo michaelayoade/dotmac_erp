@@ -154,6 +154,37 @@ def list_positions(
     return templates.TemplateResponse(request, "people/hr/positions.html", context)
 
 
+@router.get("/positions/roles", response_class=HTMLResponse)
+def list_position_roles(
+    request: Request,
+    search: str | None = None,
+    page: int = Query(default=1, ge=1),
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Grouped role/headcount view for position seats."""
+    org_id = coerce_uuid(auth.organization_id)
+    pagination = PaginationParams.from_page(page, DEFAULT_PAGE_SIZE)
+    result = PositionService(db, org_id).list_role_summaries(
+        search=search,
+        pagination=pagination,
+    )
+    context = {
+        **base_context(request, auth, "Roles & Headcount", "positions", db=db),
+        "roles": result.items,
+        "search": search or "",
+        "page": page,
+        "limit": result.limit,
+        "total_count": result.total,
+        "total_pages": result.total_pages,
+        "active_filters": build_active_filters(
+            params={"search": search},
+            labels={"search": "Search"},
+        ),
+    }
+    return templates.TemplateResponse(request, "people/hr/position_roles.html", context)
+
+
 @router.get("/org-chart", response_class=HTMLResponse)
 def org_chart(
     request: Request,

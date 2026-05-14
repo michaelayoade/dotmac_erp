@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import case, func, literal, or_, select
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.models.people.hr import (
     Department,
@@ -78,6 +79,20 @@ class PositionSummary:
 
 
 @dataclass
+class PositionRoleSummary:
+    """Grouped headcount summary for position seats sharing a role."""
+
+    role_name: str
+    designation_name: str
+    department_name: str
+    total_seats: int
+    assigned_seats: int
+    vacant_seats: int
+    primary_assignments: int
+    coverage_assignments: int
+
+
+@dataclass
 class ReconcileResult:
     """Counts returned from ``PositionService.reconcile_from_reports_to_id``."""
 
@@ -128,8 +143,10 @@ class PositionService:
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Position]:
         """List positions for the organization."""
+        hierarchy = self._position_hierarchy_cte(include_deleted=include_deleted)
         stmt = (
             select(Position)
+            .outerjoin(hierarchy, hierarchy.c.position_id == Position.position_id)
             .where(Position.organization_id == self.organization_id)
             .options(
                 selectinload(Position.designation),
@@ -141,7 +158,12 @@ class PositionService:
                     Position.department
                 ),
             )
-            .order_by(Position.created_at.desc())
+            .order_by(
+                func.coalesce(hierarchy.c.depth, 999).asc(),
+                Position.position_name.asc(),
+                Position.position_code.asc(),
+                Position.created_at.desc(),
+            )
         )
         if not include_deleted:
             stmt = stmt.where(Position.is_active.is_(True))
@@ -174,6 +196,37 @@ class PositionService:
 
         return paginate(self.db, stmt, pagination or PaginationParams())
 
+    def _position_hierarchy_cte(self, *, include_deleted: bool):
+        """Return position IDs with hierarchy depth for top-down ordering."""
+        root_filters: list[Any] = [
+            Position.organization_id == self.organization_id,
+            Position.parent_position_id.is_(None),
+        ]
+        if not include_deleted:
+            root_filters.append(Position.is_active.is_(True))
+
+        roots = select(
+            Position.position_id.label("position_id"),
+            literal(0).label("depth"),
+        ).where(*root_filters)
+        hierarchy = roots.cte("position_hierarchy", recursive=True)
+        child = aliased(Position)
+        child_filters: list[Any] = [
+            child.organization_id == self.organization_id,
+            child.parent_position_id == hierarchy.c.position_id,
+            hierarchy.c.depth < 50,
+        ]
+        if not include_deleted:
+            child_filters.append(child.is_active.is_(True))
+
+        hierarchy = hierarchy.union_all(
+            select(
+                child.position_id.label("position_id"),
+                (hierarchy.c.depth + 1).label("depth"),
+            ).where(*child_filters)
+        )
+        return hierarchy
+
     def list_position_summaries(
         self,
         *,
@@ -197,6 +250,137 @@ class PositionService:
             total=positions.total,
             offset=positions.offset,
             limit=positions.limit,
+        )
+
+    def list_role_summaries(
+        self,
+        *,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
+    ) -> PaginatedResult[PositionRoleSummary]:
+        """Group active position seats by role/designation/department."""
+        params = pagination or PaginationParams()
+        assignment_counts = (
+            select(
+                PositionAssignment.position_id.label("position_id"),
+                func.count(PositionAssignment.position_assignment_id).label(
+                    "active_assignments"
+                ),
+                func.count(PositionAssignment.position_assignment_id)
+                .filter(
+                    PositionAssignment.assignment_type == PositionAssignmentType.PRIMARY
+                )
+                .label("primary_assignments"),
+                func.count(PositionAssignment.position_assignment_id)
+                .filter(
+                    PositionAssignment.assignment_type != PositionAssignmentType.PRIMARY
+                )
+                .label("coverage_assignments"),
+            )
+            .where(
+                PositionAssignment.organization_id == self.organization_id,
+                PositionAssignment.end_date.is_(None),
+            )
+            .group_by(PositionAssignment.position_id)
+            .subquery()
+        )
+
+        role_name = func.coalesce(Position.position_name, "Position").label("role_name")
+        designation_name = func.coalesce(Designation.designation_name, "").label(
+            "designation_name"
+        )
+        department_name = func.coalesce(Department.department_name, "").label(
+            "department_name"
+        )
+        active_count = func.coalesce(assignment_counts.c.active_assignments, 0)
+        primary_count = func.coalesce(assignment_counts.c.primary_assignments, 0)
+        coverage_count = func.coalesce(assignment_counts.c.coverage_assignments, 0)
+
+        base_stmt = (
+            select(
+                role_name,
+                designation_name,
+                department_name,
+                func.count(Position.position_id).label("total_seats"),
+                func.sum(case((active_count > 0, 1), else_=0)).label("assigned_seats"),
+                func.sum(case((active_count == 0, 1), else_=0)).label("vacant_seats"),
+                func.sum(primary_count).label("primary_assignments"),
+                func.sum(coverage_count).label("coverage_assignments"),
+            )
+            .select_from(Position)
+            .join(
+                Designation,
+                Position.designation_id == Designation.designation_id,
+                isouter=True,
+            )
+            .join(
+                Department,
+                Position.department_id == Department.department_id,
+                isouter=True,
+            )
+            .join(
+                assignment_counts,
+                assignment_counts.c.position_id == Position.position_id,
+                isouter=True,
+            )
+            .where(
+                Position.organization_id == self.organization_id,
+                Position.is_active.is_(True),
+            )
+        )
+
+        search_text = (search or "").strip()
+        if search_text:
+            like = f"%{search_text}%"
+            base_stmt = base_stmt.where(
+                or_(
+                    Position.position_name.ilike(like),
+                    Position.position_code.ilike(like),
+                    Designation.designation_name.ilike(like),
+                    Designation.designation_code.ilike(like),
+                    Department.department_name.ilike(like),
+                    Department.department_code.ilike(like),
+                )
+            )
+
+        grouped_stmt = (
+            base_stmt.group_by(
+                Position.position_name,
+                Designation.designation_name,
+                Department.department_name,
+            )
+            .order_by(role_name.asc(), department_name.asc(), designation_name.asc())
+            .subquery()
+        )
+        total = self.db.scalar(select(func.count()).select_from(grouped_stmt)) or 0
+        rows = self.db.execute(
+            select(grouped_stmt)
+            .order_by(
+                grouped_stmt.c.role_name.asc(),
+                grouped_stmt.c.department_name.asc(),
+                grouped_stmt.c.designation_name.asc(),
+            )
+            .offset(params.offset)
+            .limit(params.limit)
+        ).all()
+
+        return PaginatedResult(
+            items=[
+                PositionRoleSummary(
+                    role_name=row.role_name,
+                    designation_name=row.designation_name,
+                    department_name=row.department_name,
+                    total_seats=int(row.total_seats or 0),
+                    assigned_seats=int(row.assigned_seats or 0),
+                    vacant_seats=int(row.vacant_seats or 0),
+                    primary_assignments=int(row.primary_assignments or 0),
+                    coverage_assignments=int(row.coverage_assignments or 0),
+                )
+                for row in rows
+            ],
+            total=total,
+            offset=params.offset,
+            limit=params.limit,
         )
 
     def build_org_chart(self) -> list[OrgChartNode]:

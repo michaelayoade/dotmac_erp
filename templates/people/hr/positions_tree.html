@@ -8,6 +8,7 @@
     <ol class="flex items-center gap-2">
         <li><a href="/people" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">People</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Human Resources</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/people/hr/positions" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Position Seats</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Organization Chart</span></li>
     </ol>
 </nav>
@@ -15,97 +16,171 @@
 
 {% block header_actions %}
 <a href="/people/hr/positions" class="btn btn-secondary">
-    {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
-    View Positions
+    {{ icon_svg("chevron-right", "h-4 w-4 mr-1.5 rotate-180") }}
+    Back to Seats
+</a>
+<a href="/people/hr/positions/roles" class="btn btn-secondary ml-2">
+    {{ icon_svg("list-bullet", "h-4 w-4 mr-1.5") }}
+    Roles & Headcount
 </a>
 {% endblock %}
 
-{% macro render_node(node, depth) %}
-<li class="relative {% if depth > 0 %}pl-6 ml-2 border-l border-slate-200 dark:border-slate-700{% endif %}">
-    {% if depth > 0 %}
-    <span aria-hidden="true" class="absolute left-0 top-5 w-5 border-t border-slate-200 dark:border-slate-700"></span>
-    {% endif %}
-    <div class="flex items-start gap-3 p-3 rounded-lg border
-        {% if node.is_vacant %}
-            bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800
-        {% else %}
-            bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700
-        {% endif %}
-        {% if depth == 0 %} shadow-sm{% endif %}">
-        <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
+{% macro render_row(node, depth, parent_path, parent_label) %}
+{% set node_id = node.position_id | string %}
+{% set path = parent_path ~ ',' ~ node_id if parent_path else node_id %}
+<tr x-show="isVisible('{{ parent_path }}')"
+    x-cloak
+    class="border-b border-slate-100 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/70">
+    <td class="min-w-[22rem]">
+        <div class="flex items-center gap-2" style="padding-left: {{ depth * 1.5 }}rem;">
+            {% if node.children %}
+            <button type="button"
+                    class="inline-flex h-7 w-7 flex-none items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                    @click="toggle('{{ node_id }}', {{ depth }})"
+                    :aria-expanded="isExpanded('{{ node_id }}', {{ depth }}) ? 'true' : 'false'"
+                    aria-label="Toggle reporting line">
+                <span x-show="!isExpanded('{{ node_id }}', {{ depth }})">{{ icon_svg("chevron-right", "h-4 w-4") }}</span>
+                <span x-show="isExpanded('{{ node_id }}', {{ depth }})">{{ icon_svg("chevron-right", "h-4 w-4 rotate-90") }}</span>
+            </button>
+            {% else %}
+            <span class="h-7 w-7 flex-none"></span>
+            {% endif %}
+            <div class="min-w-0">
                 <a href="/people/hr/positions/{{ node.position_id }}/edit"
-                   class="text-sm font-medium text-slate-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-400 transition-colors">
+                   class="block truncate text-sm font-medium text-slate-900 hover:text-violet-700 dark:text-white dark:hover:text-violet-300">
                     {{ node.position_name if node.position_name else 'Untitled Position' }}
                 </a>
-                <span class="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                    {{ node.position_code }}
-                </span>
-                {% if node.is_vacant %}
-                <span class="text-xs font-medium px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                    Vacant
-                </span>
-                {% endif %}
-                {% if node.covering_assignments %}
-                <span class="text-xs font-medium px-2 py-0.5 rounded-md bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                    Covered
-                </span>
-                {% endif %}
+                <div class="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="font-mono">{{ node.position_code }}</span>
+                    {% if depth == 0 %}
+                    <span class="rounded bg-violet-50 px-1.5 py-0.5 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">Top</span>
+                    {% endif %}
+                </div>
             </div>
-            {% if node.designation_name or node.department_name %}
-            <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {% if node.designation_name %}{{ node.designation_name }}{% endif %}
-                {% if node.designation_name and node.department_name %} / {% endif %}
-                {% if node.department_name %}{{ node.department_name }}{% endif %}
-            </div>
+        </div>
+    </td>
+    <td>
+        {% if node.incumbent_employee_id %}
+        <a href="/people/hr/employees/{{ node.incumbent_employee_id }}"
+           class="font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300 dark:hover:text-teal-200">
+            {{ node.incumbent_name if node.incumbent_name else 'Unnamed' }}
+        </a>
+        {% else %}
+        <span class="text-amber-700 dark:text-amber-300">No active incumbent</span>
+        {% endif %}
+    </td>
+    <td class="text-slate-600 dark:text-slate-300">
+        {{ node.department_name if node.department_name else '-' }}
+        {% if node.designation_name %}
+        <span class="block text-xs text-slate-500 dark:text-slate-400">{{ node.designation_name }}</span>
+        {% endif %}
+    </td>
+    <td class="text-slate-600 dark:text-slate-300">
+        {{ parent_label if parent_label else 'Root' }}
+    </td>
+    <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">
+        {{ node.children | length }}
+    </td>
+    <td class="text-right">
+        <div class="inline-flex flex-wrap justify-end gap-1">
+            {% if node.is_vacant %}
+            <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Vacant</span>
+            {% else %}
+            <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Filled</span>
             {% endif %}
-            <div class="text-sm mt-1">
-                {% if node.is_vacant %}
-                <span class="text-amber-700 dark:text-amber-400">No active incumbent</span>
-                {% elif node.incumbent_employee_id %}
-                <a href="/people/hr/employees/{{ node.incumbent_employee_id }}"
-                   class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
-                    {{ node.incumbent_name if node.incumbent_name else 'Unnamed' }}
-                </a>
-                {% else %}
-                <span class="text-slate-500 dark:text-slate-400">—</span>
-                {% endif %}
-            </div>
             {% if node.covering_assignments %}
-            <div class="mt-2 flex flex-wrap gap-2">
-                {% for assignment in node.covering_assignments %}
-                <a href="/people/hr/employees/{{ assignment.employee_id }}"
-                   class="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-300 dark:hover:bg-sky-900/40">
-                    <span>{{ assignment.assignment_type.value | title }}</span>
-                    <span aria-hidden="true">•</span>
-                    <span>{{ assignment.employee_name if assignment.employee_name else 'Unnamed' }}</span>
-                </a>
-                {% endfor %}
-            </div>
+            <span class="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                {{ node.covering_assignments | length }} cover
+            </span>
             {% endif %}
         </div>
-    </div>
-    {% if node.children %}
-    <ol class="mt-2 space-y-2">
-        {% for child in node.children %}
-            {{ render_node(child, depth + 1) }}
-        {% endfor %}
-    </ol>
-    {% endif %}
-</li>
+    </td>
+</tr>
+{% if node.covering_assignments %}
+<tr x-show="isVisible('{{ path }}')" x-cloak class="border-b border-slate-100 bg-sky-50/60 dark:border-slate-800 dark:bg-sky-950/20">
+    <td colspan="6">
+        <div class="flex flex-wrap gap-2 text-xs" style="padding-left: {{ (depth + 2) * 1.5 }}rem;">
+            {% for assignment in node.covering_assignments %}
+            <a href="/people/hr/employees/{{ assignment.employee_id }}"
+               class="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-white px-2 py-1 font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-100 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-300 dark:hover:bg-sky-900/40">
+                <span>{{ assignment.assignment_type.value | replace('_', ' ') | title }}</span>
+                <span aria-hidden="true">/</span>
+                <span>{{ assignment.employee_name if assignment.employee_name else 'Unnamed' }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </td>
+</tr>
+{% endif %}
+{% for child in node.children %}
+    {{ render_row(child, depth + 1, path, node.position_name if node.position_name else 'Untitled Position') }}
+{% endfor %}
 {% endmacro %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6"
+     x-data='{
+        expanded: {},
+        allOpen: false,
+        toggle(id, depth) {
+            this.expanded[id] = !this.isExpanded(id, depth);
+        },
+        isExpanded(id, depth) {
+            if (this.allOpen) return true;
+            return this.expanded[id] ?? depth < 1;
+        },
+        isVisible(path) {
+            if (!path || this.allOpen) return true;
+            const ids = path.split(",").filter(Boolean);
+            return ids.every((id, index) => this.expanded[id] ?? index < 1);
+        },
+        expandAll() {
+            this.allOpen = true;
+        },
+        collapseAll() {
+            this.allOpen = false;
+            this.expanded = {};
+        }
+     }'>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+            Top level is open by default. Expand a row to drill into reporting lines.
+        </div>
+        <div class="flex items-center gap-2">
+            <button type="button" class="btn btn-secondary" @click="expandAll()">
+                {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+                Expand All
+            </button>
+            <button type="button" class="btn btn-secondary" @click="collapseAll()">
+                {{ icon_svg("minus", "h-4 w-4 mr-1.5") }}
+                Collapse
+            </button>
+        </div>
+    </div>
+
     <div class="card">
+        {% if roots %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Role / Seat</th>
+                        <th scope="col">Incumbent</th>
+                        <th scope="col">Department</th>
+                        <th scope="col">Reports To</th>
+                        <th scope="col" class="text-right">Reports</th>
+                        <th scope="col" class="text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for root in roots %}
+                        {{ render_row(root, 0, '', '') }}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
         <div class="card-body p-6">
-            {% if roots %}
-            <ol class="space-y-3">
-                {% for root in roots %}
-                    {{ render_node(root, 0) }}
-                {% endfor %}
-            </ol>
-            {% else %}
             {{ empty_state(
                 title="No positions yet",
                 description="Create your first position or run a position reconcile after importing employees.",
@@ -113,8 +188,8 @@
                 cta_text="New Position",
                 cta_href="/people/hr/positions/new"
             ) }}
-            {% endif %}
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

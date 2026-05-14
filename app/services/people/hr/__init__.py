@@ -63,6 +63,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .positions import (  # noqa: F401
         PositionAssignmentCreateData,
         PositionCreateData,
+        PositionRoleSummary,
         PositionService,
         PositionSummary,
         PositionUpdateData,
@@ -172,6 +173,7 @@ _NAME_TO_MODULE = {
     "PositionAssignmentCreateData": "positions",
     "PositionCreateData": "positions",
     "PositionUpdateData": "positions",
+    "PositionRoleSummary": "positions",
     "PositionSummary": "positions",
     # employee_extended
     "EmployeeDocumentService": "employee_extended",
