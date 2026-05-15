@@ -1523,6 +1523,16 @@ def get_db_for_org(
     db = SessionLocal()
     try:
         prime_session(db, auth.organization_id)
+        # Also set the PostgreSQL GUC consumed by RLS policies — prime_session
+        # only writes a Python-side marker on session.info, which the ORM
+        # listener reads, but in-database row-level security needs
+        # ``app.current_organization_id``. Without this, RLS-protected
+        # SELECTs return empty result sets and (pre Bug A's per-row pin in
+        # the audit listener) audit_log INSERTs tripped InsufficientPrivilege.
+        # Skip when no org is bound — callers must not route pre-org-selection
+        # pages through this dependency.
+        if auth.organization_id is not None:
+            set_current_organization_sync(db, auth.organization_id)
         yield db
     finally:
         db.close()

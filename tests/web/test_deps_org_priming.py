@@ -28,6 +28,69 @@ def test_get_db_for_org_primes_session_with_auth_org_id():
             pass
 
 
+def test_get_db_for_org_sets_postgres_rls_guc(monkeypatch):
+    """The dependency must call set_current_organization_sync so the
+    PostgreSQL GUC (app.current_organization_id) is set on the *same*
+    session it yields. Without this, RLS-protected queries return empty
+    rows and audit_log INSERTs (pre Bug A's per-row pin) tripped
+    InsufficientPrivilege.
+    """
+    from app.web import deps as web_deps
+
+    org_id = uuid4()
+    auth = MagicMock(organization_id=org_id)
+    calls: list[tuple[object, object]] = []
+
+    monkeypatch.setattr(
+        web_deps,
+        "set_current_organization_sync",
+        lambda db, org: calls.append((db, org)),
+    )
+
+    gen = web_deps.get_db_for_org(auth=auth)
+    db = next(gen)
+    try:
+        assert len(calls) == 1, "set_current_organization_sync must run once"
+        called_db, called_org = calls[0]
+        assert called_db is db, (
+            "GUC must be set on the same session that's yielded — "
+            "calling it on a different session is the original Bug A pattern"
+        )
+        assert called_org == org_id
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
+
+
+def test_get_db_for_org_skips_rls_guc_when_no_org(monkeypatch):
+    """When auth has no organization (e.g. pre-org-selection state),
+    set_current_organization_sync must be skipped — passing None would
+    trip the UUID validator. prime_session still runs (it tolerates None
+    and the marker is just session.info)."""
+    from app.web import deps as web_deps
+
+    auth = MagicMock(organization_id=None)
+    calls: list[tuple[object, object]] = []
+
+    monkeypatch.setattr(
+        web_deps,
+        "set_current_organization_sync",
+        lambda db, org: calls.append((db, org)),
+    )
+
+    gen = web_deps.get_db_for_org(auth=auth)
+    next(gen)
+    try:
+        assert calls == [], "set_current_organization_sync must not run with org=None"
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
+
+
 def test_get_db_for_org_closes_session_on_completion():
     """The session must be closed when the generator exhausts.
 
