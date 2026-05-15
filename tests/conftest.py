@@ -486,17 +486,13 @@ def client(db_session):
     from fastapi import APIRouter, Depends, FastAPI
 
     from app.api.audit import router as audit_router
-    from app.api.auth_flow import get_db as auth_flow_get_db
     from app.api.auth_flow import router as auth_flow_router
     from app.api.deps import get_db_admin_bypass, get_db_with_org
     from app.api.people.discipline import router as discipline_router
-    from app.api.persons import get_db as persons_get_db
     from app.api.persons import router as persons_router
-    from app.api.rbac import get_db as rbac_get_db
     from app.api.rbac import router as rbac_router
     from app.api.scheduler import router as scheduler_router
     from app.api.service_hooks import router as service_hooks_router
-    from app.api.settings import get_db as settings_get_db
     from app.api.settings import router as settings_router
     from app.errors import register_error_handlers
     from app.services.auth_dependencies import (
@@ -548,17 +544,12 @@ def client(db_session):
     people_v1.include_router(discipline_router)
     app.include_router(people_v1)
 
-    # Override all get_db dependencies
-    app.dependency_overrides[persons_get_db] = override_get_db
-    app.dependency_overrides[auth_flow_get_db] = override_get_db
-    app.dependency_overrides[rbac_get_db] = override_get_db
-    # audit.py now uses get_db_admin_bypass (cross-tenant), overridden
-    # with the un-primed test session for the in-memory test DB.
+    # Override all get_db dependencies. Wave 4B migrated audit, auth,
+    # auth_flow, persons, rbac, settings to get_db_admin_bypass — and
+    # wave-1/2/3 modules to get_db_with_org. Overriding the two shared
+    # deps covers every migrated module with two lines instead of one
+    # per module.
     app.dependency_overrides[get_db_admin_bypass] = override_get_db
-    app.dependency_overrides[settings_get_db] = override_get_db
-    # scheduler and service_hooks were migrated to get_db_with_org.
-    # The shared dep override below covers them along with every other
-    # wave-1/wave-2/wave-3 module that uses get_db_with_org.
     app.dependency_overrides[get_db_with_org] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 

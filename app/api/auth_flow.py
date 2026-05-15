@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
 from app.net import get_request_host, get_request_scheme
 from app.schemas.auth import MFAMethodRead
 from app.schemas.auth_flow import (
@@ -31,22 +30,11 @@ from app.schemas.auth_flow import (
     TokenResponse,
 )
 from app.services import auth_flow as auth_flow_service
+from app.api.deps import get_db_admin_bypass
 from app.services.auth_dependencies import require_user_auth
 from app.services.auth_flow_api import auth_flow_api_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 @router.post(
@@ -105,7 +93,9 @@ After 5 failed login attempts, the account is locked for 15 minutes.
         },
     },
 )
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(
+    payload: LoginRequest, request: Request, db: Session = Depends(get_db_admin_bypass)
+):
     provider = payload.provider.value if payload.provider else None
     return auth_flow_service.auth_flow.login_response(
         db, payload.username, payload.password, request, provider
@@ -124,7 +114,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 def mfa_setup(
     payload: MfaSetupRequest,
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     if str(payload.person_id) != auth["person_id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -144,7 +134,7 @@ def mfa_setup(
 def mfa_confirm(
     payload: MfaConfirmRequest,
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_service.auth_flow.mfa_confirm(
         db, str(payload.method_id), payload.code, auth["person_id"]
@@ -161,7 +151,9 @@ def mfa_confirm(
     },
 )
 def mfa_verify(
-    payload: MfaVerifyRequest, request: Request, db: Session = Depends(get_db)
+    payload: MfaVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_service.auth_flow.mfa_verify_response(
         db, payload.mfa_token, payload.code, request
@@ -176,7 +168,11 @@ def mfa_verify(
         401: {"model": ErrorResponse},
     },
 )
-def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)):
+def refresh(
+    payload: RefreshRequest,
+    request: Request,
+    db: Session = Depends(get_db_admin_bypass),
+):
     return auth_flow_service.auth_flow.refresh_response(
         db, payload.refresh_token, request
     )
@@ -190,7 +186,9 @@ def refresh(payload: RefreshRequest, request: Request, db: Session = Depends(get
         404: {"model": ErrorResponse},
     },
 )
-def logout(payload: LogoutRequest, request: Request, db: Session = Depends(get_db)):
+def logout(
+    payload: LogoutRequest, request: Request, db: Session = Depends(get_db_admin_bypass)
+):
     return auth_flow_service.auth_flow.logout_response(
         db, payload.refresh_token, request
     )
@@ -206,7 +204,7 @@ def logout(payload: LogoutRequest, request: Request, db: Session = Depends(get_d
 )
 def get_me(
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.get_me(auth, db)
 
@@ -222,7 +220,7 @@ def get_me(
 def update_me(
     payload: MeUpdateRequest,
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.update_me(auth, payload, db)
 
@@ -239,7 +237,7 @@ def update_me(
 async def upload_avatar(
     file: UploadFile,
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return await auth_flow_api_service.upload_avatar(file, auth, db)
 
@@ -253,7 +251,7 @@ async def upload_avatar(
 )
 def delete_avatar(
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     auth_flow_api_service.delete_avatar(auth, db)
 
@@ -268,7 +266,7 @@ def delete_avatar(
 )
 def list_sessions(
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.list_sessions(auth, db)
 
@@ -285,7 +283,7 @@ def list_sessions(
 def revoke_session(
     session_id: str,
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.revoke_session(session_id, auth, db)
 
@@ -300,7 +298,7 @@ def revoke_session(
 )
 def revoke_all_other_sessions(
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.revoke_all_other_sessions(auth, db)
 
@@ -318,7 +316,7 @@ def revoke_all_other_sessions(
 def change_password(
     payload: PasswordChangeRequest,
     auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.change_password(payload, auth, db)
 
@@ -335,7 +333,7 @@ def change_password(
 )
 def reset_password_required(
     payload: PasswordResetRequiredRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return auth_flow_api_service.reset_password_required(payload, db)
 
@@ -348,7 +346,7 @@ def reset_password_required(
 def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     """
     Request a password reset email.
@@ -376,7 +374,7 @@ def _resolve_app_url(request: Request) -> str:
 )
 def reset_password_endpoint(
     payload: ResetPasswordRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     """
     Reset password using the token from forgot-password email.

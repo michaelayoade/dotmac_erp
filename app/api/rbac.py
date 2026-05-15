@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.rbac import (
     PermissionCreate,
@@ -18,28 +17,17 @@ from app.schemas.rbac import (
     RoleUpdate,
 )
 from app.services import rbac as rbac_service
+from app.api.deps import get_db_admin_bypass
 from app.services.auth_dependencies import require_permission
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 @router.post("/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
 def create_role(
     payload: RoleCreate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.create(db, payload)
 
@@ -48,7 +36,7 @@ def create_role(
 def get_role(
     role_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.get(db, role_id)
 
@@ -61,7 +49,7 @@ def list_roles(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.list_response(
         db, is_active, order_by, order_dir, limit, offset
@@ -73,7 +61,7 @@ def update_role(
     role_id: str,
     payload: RoleUpdate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.roles.update(db, role_id, payload)
 
@@ -82,7 +70,7 @@ def update_role(
 def delete_role(
     role_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.roles.delete(db, role_id)
 
@@ -93,7 +81,7 @@ def delete_role(
 def create_permission(
     payload: PermissionCreate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.create(db, payload)
 
@@ -102,7 +90,7 @@ def create_permission(
 def get_permission(
     permission_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.get(db, permission_id)
 
@@ -115,7 +103,7 @@ def list_permissions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.list_response(
         db, is_active, order_by, order_dir, limit, offset
@@ -127,7 +115,7 @@ def update_permission(
     permission_id: str,
     payload: PermissionUpdate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.permissions.update(db, permission_id, payload)
 
@@ -136,7 +124,7 @@ def update_permission(
 def delete_permission(
     permission_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.permissions.delete(db, permission_id)
 
@@ -149,7 +137,7 @@ def delete_permission(
 def create_role_permission(
     payload: RolePermissionCreate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.create(db, payload)
 
@@ -158,7 +146,7 @@ def create_role_permission(
 def get_role_permission(
     link_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.get(db, link_id)
 
@@ -172,7 +160,7 @@ def list_role_permissions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.list_response(
         db, role_id, permission_id, order_by, order_dir, limit, offset
@@ -184,7 +172,7 @@ def update_role_permission(
     link_id: str,
     payload: RolePermissionUpdate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.role_permissions.update(db, link_id, payload)
 
@@ -193,7 +181,7 @@ def update_role_permission(
 def delete_role_permission(
     link_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.role_permissions.delete(db, link_id)
 
@@ -204,7 +192,7 @@ def delete_role_permission(
 def create_person_role(
     payload: PersonRoleCreate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.create(db, payload)
 
@@ -213,7 +201,7 @@ def create_person_role(
 def get_person_role(
     link_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.get(db, link_id)
 
@@ -227,7 +215,7 @@ def list_person_roles(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.list_response(
         db, person_id, role_id, order_by, order_dir, limit, offset
@@ -239,7 +227,7 @@ def update_person_role(
     link_id: str,
     payload: PersonRoleUpdate,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return rbac_service.person_roles.update(db, link_id, payload)
 
@@ -248,6 +236,6 @@ def update_person_role(
 def delete_person_role(
     link_id: str,
     auth: dict = Depends(require_permission("rbac:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     rbac_service.person_roles.delete(db, link_id)

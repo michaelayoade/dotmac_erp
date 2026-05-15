@@ -3,32 +3,20 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.db import SessionLocal
 from app.schemas.common import ListResponse
 from app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from app.services import person as person_service
+from app.api.deps import get_db_admin_bypass
 from app.services.auth_dependencies import require_permission
 
 router = APIRouter(prefix="/people", tags=["people"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 @router.post("", response_model=PersonRead, status_code=status.HTTP_201_CREATED)
 def create_person(
     payload: PersonCreate,
     auth: dict = Depends(require_permission("people:write")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return person_service.people.create(db, payload)
 
@@ -37,7 +25,7 @@ def create_person(
 def get_person(
     person_id: UUID,
     auth: dict = Depends(require_permission("people:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return person_service.people.get(db, str(person_id))
 
@@ -52,7 +40,7 @@ def list_people(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_permission("people:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return person_service.people.list_response(
         db, email, person_status, is_active, order_by, order_dir, limit, offset
@@ -64,7 +52,7 @@ def update_person(
     person_id: UUID,
     payload: PersonUpdate,
     auth: dict = Depends(require_permission("people:write")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     return person_service.people.update(db, str(person_id), payload)
 
@@ -73,6 +61,6 @@ def update_person(
 def delete_person(
     person_id: UUID,
     auth: dict = Depends(require_permission("people:write")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     person_service.people.delete(db, str(person_id))
