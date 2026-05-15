@@ -16,6 +16,7 @@ from app.api.deps import (
     require_organization_id,
     require_tenant_auth,
 )
+from app.db.session_context import allow_cross_org, prime_session
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.payments.payment_intent import PaymentIntentStatus
@@ -760,7 +761,11 @@ async def paystack_webhook(
     # Get reference to find organization and config
     reference = event_data.get("reference", "")
 
-    intent = PaymentService.get_intent_by_reference(db, reference)
+    # The reference→org lookup is genuinely cross-org — we don't know the
+    # tenant until we resolve it. Wrap so the planned ORM listener doesn't
+    # raise MissingOrgContextError when it fires on this SELECT.
+    with allow_cross_org(db):
+        intent = PaymentService.get_intent_by_reference(db, reference)
 
     if not intent:
         # Log but don't fail - might be test webhook or unknown reference
@@ -770,6 +775,9 @@ async def paystack_webhook(
             message=f"Unknown reference: {reference}",
         )
 
+    # Prime both the Python-side ORM listener marker AND the PostgreSQL GUC
+    # so subsequent queries in this handler see the resolved tenant.
+    prime_session(db, intent.organization_id)
     set_payment_tenant_context(db, intent.organization_id)
 
     # Get Paystack config for this organization

@@ -512,14 +512,21 @@ class MonoSyncService:
         Recording it on ``mono_last_sync_error`` surfaces it in the UI
         health banner alongside API-level failures.
         """
-        bank_account = self.db.scalar(
-            select(BankAccount).where(BankAccount.mono_account_id == mono_account_id)
-        )
+        from app.db.session_context import allow_cross_org, prime_session
+
+        # Cross-org lookup: mono_account_id alone, no tenant context yet.
+        with allow_cross_org(self.db):
+            bank_account = self.db.scalar(
+                select(BankAccount).where(
+                    BankAccount.mono_account_id == mono_account_id
+                )
+            )
         if bank_account is None:
             logger.warning(
                 "Mono FAILED webhook for unlinked account mono_id=%s", mono_account_id
             )
             return
+        prime_session(self.db, bank_account.organization_id)
         job_id = meta.get("job_id") or "unknown"
         sync_status = meta.get("sync_status") or "FAILED"
         retrieved_data = list(meta.get("retrieved_data") or [])
@@ -601,9 +608,17 @@ class MonoSyncService:
         ``sync_account_incremental`` so webhook-triggered and user-triggered
         syncs share the same stateful window logic.
         """
-        bank_account = self.db.scalar(
-            select(BankAccount).where(BankAccount.mono_account_id == mono_account_id)
-        )
+        from app.db.session_context import allow_cross_org, prime_session
+
+        # mono_account_id → org_id is the resolution we're doing right here.
+        # The planned do_orm_execute listener can't filter by org because we
+        # don't know it yet; wrap so it doesn't raise MissingOrgContextError.
+        with allow_cross_org(self.db):
+            bank_account = self.db.scalar(
+                select(BankAccount).where(
+                    BankAccount.mono_account_id == mono_account_id
+                )
+            )
         if not bank_account:
             logger.warning(
                 "Mono webhook for unlinked account %s",
@@ -614,6 +629,10 @@ class MonoSyncService:
                 message=f"No bank account linked to mono_account_id={mono_account_id}",
             )
 
+        # Now we know the tenant. Prime the session so subsequent queries in
+        # sync_account_incremental (statement-line inserts, balance updates)
+        # see the right org context.
+        prime_session(self.db, bank_account.organization_id)
         return self.sync_account_incremental(bank_account, user_id=None)
 
     def get_linked_accounts(
