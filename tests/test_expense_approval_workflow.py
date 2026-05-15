@@ -39,6 +39,8 @@ from app.web.deps import WebAuthContext
 
 
 def _ensure_hr_tables(engine) -> None:
+    from sqlalchemy import Text
+
     for table in (
         Department.__table__,
         Employee.__table__,
@@ -49,11 +51,23 @@ def _ensure_hr_tables(engine) -> None:
     ):
         for column in table.columns:
             default = column.server_default
-            if default is None:
-                continue
-            default_text = str(getattr(default, "arg", default)).lower()
-            if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
-                column.server_default = None
+            if default is not None:
+                default_text = str(getattr(default, "arg", default)).lower()
+                if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
+                    column.server_default = None
+            # SQLite has no JSONB; conftest.py monkey-patches
+            # ``sqlalchemy.dialects.postgresql.JSONB`` to a Text subclass,
+            # but that swap only catches model classes whose import runs
+            # AFTER conftest patches. Other test files that import
+            # ``app.models.expense`` first capture the original JSONB
+            # type, and Column.type stays bound to that original. When
+            # ``-k`` filtering shuffles collection order, this test is
+            # left with original-JSONB columns that SQLite can't compile.
+            # Coerce any JSONB-shaped column to Text at table-create time
+            # so the test is robust regardless of import order.
+            type_name = type(column.type).__name__
+            if type_name in ("JSONB", "JSON"):
+                column.type = Text()
         table.create(engine, checkfirst=True)
 
 
