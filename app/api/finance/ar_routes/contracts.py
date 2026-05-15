@@ -8,8 +8,8 @@ from fastapi import Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ar_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ar_routes.base import router
 from app.models.finance.ar.contract import ContractStatus, ContractType
 from app.schemas.finance.common import ListResponse
 from app.services.auth_dependencies import require_tenant_permission
@@ -96,7 +96,7 @@ def create_contract(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:contracts:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an IFRS 15 revenue contract."""
     obligations = [
@@ -136,7 +136,7 @@ def get_contract(
     contract_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ar:contracts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a contract by ID."""
     return contract_service.get(db, str(contract_id), organization_id)
@@ -150,7 +150,7 @@ def list_contracts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:contracts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List IFRS 15 contracts with filters."""
     status_value = None
@@ -181,7 +181,7 @@ def activate_contract(
     organization_id: UUID = Depends(require_organization_id),
     approved_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:contracts:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Activate an IFRS 15 contract."""
     return contract_service.activate_contract(
@@ -195,7 +195,7 @@ def add_performance_obligation(
     payload: PerformanceObligationCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ar:contracts:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a performance obligation to a contract."""
     input_data = contract_service.build_obligation_input(
@@ -224,7 +224,7 @@ def update_contract_progress(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:contracts:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update progress and recognize revenue."""
     input_data = ProgressUpdateInput(

@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.schemas.procurement.rfq import (
     RFQCreate,
     RFQInvitationCreate,
@@ -22,18 +21,6 @@ from app.services.procurement.rfq import RFQService
 router = APIRouter(prefix="/rfqs", tags=["procurement-rfqs"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=list[RFQResponse])
 def list_rfqs(
     organization_id: UUID = Depends(require_organization_id),
@@ -41,7 +28,7 @@ def list_rfqs(
     method_filter: str | None = Query(None, alias="method"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List RFQs."""
     service = RFQService(db)
@@ -59,7 +46,7 @@ def list_rfqs(
 def get_rfq(
     rfq_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an RFQ by ID."""
     service = RFQService(db)
@@ -74,7 +61,7 @@ def create_rfq(
     data: RFQCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new RFQ."""
     service = RFQService(db)
@@ -94,7 +81,7 @@ def update_rfq(
     rfq_id: UUID,
     data: RFQUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an RFQ."""
     service = RFQService(db)
@@ -111,7 +98,7 @@ def update_rfq(
 def publish_rfq(
     rfq_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Publish an RFQ."""
     service = RFQService(db)
@@ -128,7 +115,7 @@ def publish_rfq(
 def close_rfq(
     rfq_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Close bidding on an RFQ."""
     service = RFQService(db)
@@ -146,7 +133,7 @@ def invite_vendor(
     rfq_id: UUID,
     data: RFQInvitationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Invite a vendor to an RFQ."""
     service = RFQService(db)

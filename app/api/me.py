@@ -11,8 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_tenant_auth
 from app.models.people.exp import CashAdvanceStatus, ExpenseClaimStatus
 from app.models.people.leave import LeaveApplicationStatus
 from app.models.people.payroll.salary_slip import SalarySlipStatus
@@ -41,18 +40,6 @@ router = APIRouter(
     prefix="/me",
     tags=["me"],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def _get_employee_id(db: Session, organization_id: UUID, person_id: UUID) -> UUID:
@@ -121,7 +108,7 @@ def _parse_status(value: str | None, enum_type, label: str):
 @router.get("/leave/balance")
 def my_leave_balance(
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get leave balances for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -141,7 +128,7 @@ def my_leave_applications(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List leave applications for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -171,7 +158,7 @@ def my_leave_applications(
 def create_leave_application(
     payload: LeaveApplicationRequest,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a leave application for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -194,7 +181,7 @@ def create_leave_application(
 def get_leave_application(
     application_id: UUID,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a leave application for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -211,7 +198,7 @@ def cancel_leave_application(
     application_id: UUID,
     reason: str | None = None,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a leave application for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -234,7 +221,7 @@ def team_leave_requests(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List leave requests from direct reports."""
     _require_leave_approval_permission(auth)
@@ -278,7 +265,7 @@ def team_leave_requests(
 def approve_team_leave(
     application_id: UUID,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a direct report leave request."""
     _require_leave_approval_permission(auth)
@@ -312,7 +299,7 @@ def reject_team_leave(
     application_id: UUID,
     reason: str | None = None,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a direct report leave request."""
     _require_leave_approval_permission(auth)
@@ -351,7 +338,7 @@ def my_payslips(
     offset: int = Query(0, ge=0),
     limit: int = Query(12, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List salary slips for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -402,7 +389,7 @@ def my_payslips(
 def my_payslip_detail(
     slip_id: UUID,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a salary slip for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -426,7 +413,7 @@ def my_attendance(
     offset: int = Query(0, ge=0),
     limit: int = Query(31, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List attendance records for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -453,7 +440,7 @@ def my_attendance(
 @router.get("/attendance/today", response_model=AttendanceRead)
 def my_attendance_today(
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get today's attendance record for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -477,7 +464,7 @@ def my_attendance_today(
 def my_check_in(
     payload: AttendanceRecordCheckIn,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Check in for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -502,7 +489,7 @@ def my_check_in(
 def my_check_out(
     payload: AttendanceRecordCheckOut,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Check out for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -523,7 +510,7 @@ def my_check_out(
 def my_attendance_summary(
     month: str | None = Query(None, description="Month in YYYY-MM format"),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get monthly attendance summary for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -560,7 +547,7 @@ def my_attendance_summary(
 @router.get("/training/history")
 def my_training_history(
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get training history for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -583,7 +570,7 @@ def my_appraisals(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List appraisals for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -610,7 +597,7 @@ def my_scorecards(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List scorecards for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -641,7 +628,7 @@ def my_expense_claims(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List expense claims for the current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -668,7 +655,7 @@ def my_cash_advances(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List cash advances for the current employee."""
     organization_id = UUID(auth["organization_id"])

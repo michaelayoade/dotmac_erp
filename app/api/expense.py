@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, s
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
+    get_db_with_org,
     require_organization_id,
     require_tenant_permission,
 )
@@ -26,7 +27,6 @@ from app.api.idempotency import (
     check_or_reserve_idempotency,
     require_idempotency_key,
 )
-from app.db import SessionLocal
 from app.models.expense import (
     CardTransactionStatus,
     CashAdvanceStatus,
@@ -88,18 +88,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
@@ -129,7 +117,7 @@ def list_expense_categories(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List expense categories."""
     svc = ExpenseService(db)
@@ -156,7 +144,7 @@ def create_expense_category(
     payload: ExpenseCategoryCreate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:categories:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an expense category."""
     svc = ExpenseService(db)
@@ -178,7 +166,7 @@ def get_expense_category(
     category_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:categories:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an expense category by ID."""
     svc = ExpenseService(db)
@@ -193,7 +181,7 @@ def update_expense_category(
     payload: ExpenseCategoryUpdate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:categories:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an expense category."""
     svc = ExpenseService(db)
@@ -207,7 +195,7 @@ def delete_expense_category(
     category_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:categories:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an expense category."""
     svc = ExpenseService(db)
@@ -230,7 +218,7 @@ def list_expense_claims(
     search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List expense claims."""
     svc = ExpenseService(db)
@@ -260,7 +248,7 @@ def create_expense_claim(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Create an expense claim."""
@@ -343,7 +331,7 @@ def get_expense_claim(
     claim_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an expense claim by ID."""
     svc = ExpenseService(db)
@@ -356,7 +344,7 @@ def update_expense_claim(
     payload: ExpenseClaimUpdate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an expense claim (only in draft status)."""
     svc = ExpenseService(db)
@@ -375,7 +363,7 @@ def delete_expense_claim(
     claim_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:delete")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an expense claim (only in draft status)."""
     svc = ExpenseService(db)
@@ -393,7 +381,7 @@ def add_claim_item(
     payload: ExpenseClaimItemCreate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add an item to an expense claim."""
     svc = ExpenseService(db)
@@ -413,7 +401,7 @@ def remove_claim_item(
     item_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Remove an item from an expense claim."""
     svc = ExpenseService(db)
@@ -431,7 +419,7 @@ def submit_claim(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:submit")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Submit an expense claim for approval."""
@@ -497,7 +485,7 @@ def approve_claim(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:approve:tier1")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Approve an expense claim."""
@@ -592,7 +580,7 @@ def reject_claim(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:reject")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Reject an expense claim."""
@@ -659,7 +647,7 @@ def mark_claim_paid(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:reimburse")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Mark an expense claim as paid."""
@@ -724,7 +712,7 @@ def cancel_claim(
     claim_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     reason: str | None = None,
 ):
     """Cancel an expense claim (DRAFT or SUBMITTED only)."""
@@ -749,7 +737,7 @@ def resubmit_claim(
     claim_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("expense:claims:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Resubmit a rejected expense claim (resets to DRAFT)."""
     svc = ExpenseService(db)
@@ -774,7 +762,7 @@ def link_advance_to_claim(
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     idempotency_key: str = Header(None, alias="Idempotency-Key"),
 ):
     """Link a cash advance to an expense claim."""
@@ -848,7 +836,7 @@ def list_cash_advances(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List cash advances."""
     svc = ExpenseService(db)
@@ -876,7 +864,7 @@ def create_cash_advance(
     payload: CashAdvanceCreate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a cash advance request."""
     svc = ExpenseService(db)
@@ -900,7 +888,7 @@ def get_cash_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a cash advance by ID."""
     svc = ExpenseService(db)
@@ -913,7 +901,7 @@ def update_cash_advance(
     payload: CashAdvanceUpdate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a cash advance (only in draft status)."""
     svc = ExpenseService(db)
@@ -927,7 +915,7 @@ def delete_cash_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a cash advance (only in draft status)."""
     svc = ExpenseService(db)
@@ -940,7 +928,7 @@ def submit_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit a cash advance for approval."""
     svc = ExpenseService(db)
@@ -955,7 +943,7 @@ def approve_advance(
     _auth: dict = Depends(require_tenant_permission("expense:advances:approve:tier1")),
     approver_id: UUID | None = None,
     approved_amount: Decimal | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a cash advance."""
     if approver_id is None:
@@ -979,7 +967,7 @@ def reject_advance(
     _auth: dict = Depends(require_tenant_permission("expense:advances:approve:tier1")),
     approver_id: UUID | None = None,
     reason: str = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a cash advance."""
     svc = ExpenseService(db)
@@ -998,7 +986,7 @@ def disburse_advance(
     payload: CashAdvanceDisburseRequest,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:disburse")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Disburse a cash advance."""
     svc = ExpenseService(db)
@@ -1018,7 +1006,7 @@ def settle_advance(
     payload: CashAdvanceSettleRequest,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:settle")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Settle a cash advance."""
     svc = ExpenseService(db)
@@ -1045,7 +1033,7 @@ def list_corporate_cards(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List corporate cards."""
     svc = ExpenseService(db)
@@ -1070,7 +1058,7 @@ def create_corporate_card(
     payload: CorporateCardCreate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a corporate card record."""
     svc = ExpenseService(db)
@@ -1097,7 +1085,7 @@ def get_corporate_card(
     card_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a corporate card by ID."""
     svc = ExpenseService(db)
@@ -1110,7 +1098,7 @@ def update_corporate_card(
     payload: CorporateCardUpdate,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a corporate card."""
     svc = ExpenseService(db)
@@ -1125,7 +1113,7 @@ def deactivate_corporate_card(
     payload: DeactivateCardRequest,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Deactivate a corporate card."""
     svc = ExpenseService(db)
@@ -1148,7 +1136,7 @@ def list_card_transactions(
     unmatched_only: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List card transactions."""
     svc = ExpenseService(db)
@@ -1181,7 +1169,7 @@ def create_card_transaction(
     _auth: dict = Depends(
         require_tenant_permission("expense:cards:transactions:reconcile")
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a card transaction record (typically from bank feed import)."""
     svc = ExpenseService(db)
@@ -1208,7 +1196,7 @@ def get_card_transaction(
     transaction_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:transactions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a card transaction by ID."""
     svc = ExpenseService(db)
@@ -1225,7 +1213,7 @@ def update_card_transaction(
     _auth: dict = Depends(
         require_tenant_permission("expense:cards:transactions:reconcile")
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a card transaction."""
     svc = ExpenseService(db)
@@ -1242,7 +1230,7 @@ def match_transaction(
     _auth: dict = Depends(
         require_tenant_permission("expense:cards:transactions:reconcile")
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Match a card transaction to an expense claim."""
     svc = ExpenseService(db)
@@ -1263,7 +1251,7 @@ def match_transaction(
 def get_expense_stats(
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get overall expense statistics for the organization."""
     svc = ExpenseService(db)
@@ -1277,7 +1265,7 @@ def get_employee_expense_summary(
     _auth: dict = Depends(require_tenant_permission("expense:reports:read")),
     year: int | None = None,
     month: int | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get expense summary for an employee."""
     svc = ExpenseService(db)

@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.schemas.pm import (
     GanttChartData,
     ProjectDashboard,
@@ -30,23 +29,11 @@ from app.services.pm import (
 router = APIRouter(prefix="/projects", tags=["pm-projects"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("/{project_id}/dashboard", response_model=ProjectDashboard)
 def get_project_dashboard(
     project_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get complete dashboard data for a project."""
     svc = DashboardService(db, organization_id)
@@ -61,7 +48,7 @@ def get_project_dashboard(
 def get_gantt_data(
     project_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get Gantt chart data for a project."""
     svc = GanttService(db, organization_id)
@@ -75,7 +62,7 @@ def get_gantt_data(
 def get_project_team(
     project_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get team members allocated to a project."""
     from decimal import Decimal
@@ -134,7 +121,7 @@ def get_project_team(
 def get_time_summary(
     project_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get time tracking summary for a project."""
     from sqlalchemy import select
@@ -165,7 +152,7 @@ def get_time_summary(
 def get_project_expenses(
     project_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get expense claims linked to a project."""
     svc = ProjectExpenseService(db, organization_id)

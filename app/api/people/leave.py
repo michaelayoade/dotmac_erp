@@ -12,8 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.leave import LeaveApplicationStatus
 from app.schemas.people.leave import (
     BulkLeaveAllocationCreate,
@@ -51,18 +50,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def csv_response(rows: list[list[str]], filename: str) -> Response:
     """Return a CSV response for export endpoints."""
     buffer = io.StringIO()
@@ -88,7 +75,7 @@ def list_leave_types(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List leave types."""
     svc = LeaveService(db)
@@ -112,7 +99,7 @@ def list_leave_types(
 def create_leave_type(
     payload: LeaveTypeCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a leave type."""
     svc = LeaveService(db)
@@ -144,7 +131,7 @@ def create_leave_type(
 def get_leave_type(
     leave_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a leave type by ID."""
     svc = LeaveService(db)
@@ -158,7 +145,7 @@ def update_leave_type(
     leave_type_id: UUID,
     payload: LeaveTypeUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a leave type."""
     svc = LeaveService(db)
@@ -172,7 +159,7 @@ def update_leave_type(
 def delete_leave_type(
     leave_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a leave type."""
     svc = LeaveService(db)
@@ -191,7 +178,7 @@ def list_holiday_lists(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List holiday lists."""
     svc = LeaveService(db)
@@ -217,7 +204,7 @@ def list_holiday_lists(
 def create_holiday_list(
     payload: HolidayListCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a holiday list."""
     svc = LeaveService(db)
@@ -250,7 +237,7 @@ def create_holiday_list(
 def get_holiday_list(
     holiday_list_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a holiday list by ID."""
     svc = LeaveService(db)
@@ -264,7 +251,7 @@ def update_holiday_list(
     holiday_list_id: UUID,
     payload: HolidayListUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a holiday list."""
     svc = LeaveService(db)
@@ -281,7 +268,7 @@ def update_holiday_list(
 def delete_holiday_list(
     holiday_list_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a holiday list."""
     svc = LeaveService(db)
@@ -298,7 +285,7 @@ def add_holiday(
     holiday_list_id: UUID,
     payload: HolidayCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a holiday to a holiday list."""
     svc = LeaveService(db)
@@ -321,7 +308,7 @@ def remove_holiday(
     holiday_list_id: UUID,
     holiday_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Remove a holiday from a holiday list."""
     svc = LeaveService(db)
@@ -342,7 +329,7 @@ def list_allocations(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List leave allocations."""
     svc = LeaveService(db)
@@ -369,7 +356,7 @@ def export_allocations(
     leave_type_id: UUID | None = None,
     year: int | None = None,
     is_active: bool | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Export leave allocations to CSV."""
     svc = LeaveService(db)
@@ -427,7 +414,7 @@ def export_allocations(
 def create_allocation(
     payload: LeaveAllocationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a leave allocation."""
     svc = LeaveService(db)
@@ -448,7 +435,7 @@ def create_allocation(
 def bulk_create_allocations(
     payload: BulkLeaveAllocationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk create leave allocations for employees."""
     svc = LeaveService(db)
@@ -469,7 +456,7 @@ def bulk_create_allocations(
 def get_allocation(
     allocation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a leave allocation by ID."""
     svc = LeaveService(db)
@@ -483,7 +470,7 @@ def update_allocation(
     allocation_id: UUID,
     payload: LeaveAllocationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a leave allocation."""
     svc = LeaveService(db)
@@ -496,7 +483,7 @@ def update_allocation(
 def delete_allocation(
     allocation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a leave allocation."""
     svc = LeaveService(db)
@@ -509,7 +496,7 @@ def get_employee_leave_balance(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get leave balance for an employee."""
     svc = LeaveService(db)
@@ -526,7 +513,7 @@ def get_leave_balance(
     organization_id: UUID = Depends(require_organization_id),
     employee_id: UUID = Query(...),
     as_of_date: date | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get leave balances for an employee."""
     svc = LeaveService(db)
@@ -553,7 +540,7 @@ def list_applications(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List leave applications."""
     svc = LeaveService(db)
@@ -588,7 +575,7 @@ def list_applications(
 def create_application(
     payload: LeaveApplicationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a leave application."""
     svc = LeaveService(db)
@@ -613,7 +600,7 @@ def export_applications(
     status: str | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Export leave applications to CSV."""
     svc = LeaveService(db)
@@ -662,7 +649,7 @@ def export_applications(
 def get_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a leave application by ID."""
     svc = LeaveService(db)
@@ -676,7 +663,7 @@ def update_application(
     application_id: UUID,
     payload: LeaveApplicationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a leave application (only in draft/submitted status)."""
     svc = LeaveService(db)
@@ -689,7 +676,7 @@ def update_application(
 def delete_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a leave application (only in draft status)."""
     svc = LeaveService(db)
@@ -709,7 +696,7 @@ def approve_application(
     organization_id: UUID = Depends(require_organization_id),
     approver_id: UUID | None = None,
     notes: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a leave application."""
     svc = LeaveService(db)
@@ -730,7 +717,7 @@ def reject_application(
     organization_id: UUID = Depends(require_organization_id),
     approver_id: UUID | None = None,
     reason: str = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a leave application."""
     svc = LeaveService(db)
@@ -750,7 +737,7 @@ def cancel_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     reason: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a leave application."""
     svc = LeaveService(db)
@@ -768,7 +755,7 @@ def bulk_approve_applications(
     organization_id: UUID = Depends(require_organization_id),
     approver_id: UUID | None = None,
     notes: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk approve leave applications."""
     svc = LeaveService(db)
@@ -786,7 +773,7 @@ def bulk_reject_applications(
     payload: LeaveApplicationBulkAction,
     organization_id: UUID = Depends(require_organization_id),
     approver_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk reject leave applications."""
     svc = LeaveService(db)

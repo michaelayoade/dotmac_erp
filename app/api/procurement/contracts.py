@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.schemas.procurement.contract import (
     ContractCreate,
     ContractResponse,
@@ -20,25 +19,13 @@ from app.services.procurement.contract import ContractService
 router = APIRouter(prefix="/contracts", tags=["procurement-contracts"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=list[ContractResponse])
 def list_contracts(
     organization_id: UUID = Depends(require_organization_id),
     status_filter: str | None = Query(None, alias="status"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List procurement contracts."""
     service = ContractService(db)
@@ -55,7 +42,7 @@ def list_contracts(
 def get_contract(
     contract_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a contract by ID."""
     service = ContractService(db)
@@ -70,7 +57,7 @@ def create_contract(
     data: ContractCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new procurement contract."""
     service = ContractService(db)
@@ -90,7 +77,7 @@ def update_contract(
     contract_id: UUID,
     data: ContractUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a contract."""
     service = ContractService(db)
@@ -117,7 +104,7 @@ def activate_contract(
     ),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Activate a contract. Optionally creates an IPSAS commitment."""
     service = ContractService(db)
@@ -145,7 +132,7 @@ def activate_contract(
 def complete_contract(
     contract_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark a contract as completed."""
     service = ContractService(db)
@@ -166,7 +153,7 @@ def generate_invoice_from_contract(
     payment_terms_days: int = Query(30, ge=1, le=365),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate an AP supplier invoice from a procurement contract."""
     from app.services.procurement.ap_integration import (
@@ -201,7 +188,7 @@ def generate_invoice_from_contract(
 def terminate_contract(
     contract_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Terminate a contract."""
     service = ContractService(db)

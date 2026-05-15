@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.schemas.fleet.assignment import (
     AssignmentBrief,
     AssignmentCreate,
@@ -25,18 +24,6 @@ from app.services.fleet.assignment_service import AssignmentService
 router = APIRouter(prefix="/assignments", tags=["fleet-assignments"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=AssignmentListResponse)
 def list_assignments(
     organization_id: UUID = Depends(require_organization_id),
@@ -46,7 +33,7 @@ def list_assignments(
     active_only: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List assignments with optional filtering."""
     service = AssignmentService(db, organization_id)
@@ -70,7 +57,7 @@ def list_assignments(
 def get_assignment(
     assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get assignment details."""
     service = AssignmentService(db, organization_id)
@@ -85,7 +72,7 @@ def get_assignment(
 def create_assignment(
     data: AssignmentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new vehicle assignment."""
     service = AssignmentService(db, organization_id)
@@ -103,7 +90,7 @@ def update_assignment(
     assignment_id: UUID,
     data: AssignmentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an assignment."""
     service = AssignmentService(db, organization_id)
@@ -121,7 +108,7 @@ def end_assignment(
     assignment_id: UUID,
     data: AssignmentEnd,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """End an active assignment."""
     service = AssignmentService(db, organization_id)

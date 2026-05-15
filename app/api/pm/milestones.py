@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.pm import MilestoneStatus
 from app.schemas.pm import (
     MilestoneAchieveRequest,
@@ -27,18 +26,6 @@ from app.services.pm import MilestoneService
 router = APIRouter(prefix="/milestones", tags=["pm-milestones"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # =============================================================================
 # Milestone CRUD
 # =============================================================================
@@ -51,7 +38,7 @@ def list_milestones(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List milestones with optional filtering."""
     status_enum = None
@@ -80,7 +67,7 @@ def list_milestones(
 def create_milestone(
     data: MilestoneCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new milestone."""
     svc = MilestoneService(db, organization_id)
@@ -93,7 +80,7 @@ def get_upcoming_milestones(
     organization_id: UUID = Depends(require_organization_id),
     project_id: UUID | None = None,
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get milestones due within the specified days."""
     from datetime import date
@@ -129,7 +116,7 @@ def get_upcoming_milestones(
 def get_overdue_milestones(
     organization_id: UUID = Depends(require_organization_id),
     project_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get overdue milestones."""
     from datetime import date
@@ -165,7 +152,7 @@ def get_overdue_milestones(
 def get_milestone(
     milestone_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a milestone by ID."""
     svc = MilestoneService(db, organization_id)
@@ -181,7 +168,7 @@ def update_milestone(
     milestone_id: UUID,
     data: MilestoneUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a milestone."""
     svc = MilestoneService(db, organization_id)
@@ -198,7 +185,7 @@ def update_milestone(
 def delete_milestone(
     milestone_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a milestone."""
     svc = MilestoneService(db, organization_id)
@@ -218,7 +205,7 @@ def achieve_milestone(
     milestone_id: UUID,
     data: MilestoneAchieveRequest = None,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark a milestone as achieved."""
     svc = MilestoneService(db, organization_id)

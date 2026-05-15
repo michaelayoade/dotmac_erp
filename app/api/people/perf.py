@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.perf import AppraisalCycleStatus, AppraisalStatus, KPIStatus
 from app.schemas.people.perf import (
     # Appraisal
@@ -56,18 +55,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
@@ -92,7 +79,7 @@ def list_appraisal_cycles(
     year: int | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List appraisal cycles."""
     svc = PerformanceService(db)
@@ -118,7 +105,7 @@ def list_appraisal_cycles(
 def create_appraisal_cycle(
     payload: AppraisalCycleCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an appraisal cycle."""
     svc = PerformanceService(db)
@@ -144,7 +131,7 @@ def create_appraisal_cycle(
 def get_appraisal_cycle(
     cycle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an appraisal cycle by ID."""
     svc = PerformanceService(db)
@@ -156,7 +143,7 @@ def update_appraisal_cycle(
     cycle_id: UUID,
     payload: AppraisalCycleUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an appraisal cycle."""
     svc = PerformanceService(db)
@@ -169,7 +156,7 @@ def update_appraisal_cycle(
 def delete_appraisal_cycle(
     cycle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an appraisal cycle."""
     svc = PerformanceService(db)
@@ -181,7 +168,7 @@ def delete_appraisal_cycle(
 def start_cycle(
     cycle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Start an appraisal cycle."""
     svc = PerformanceService(db)
@@ -193,7 +180,7 @@ def start_cycle(
 def close_cycle(
     cycle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Close an appraisal cycle."""
     svc = PerformanceService(db)
@@ -215,7 +202,7 @@ def list_appraisal_templates(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List appraisal templates."""
     svc = PerformanceService(db)
@@ -243,7 +230,7 @@ def list_appraisal_templates(
 def create_appraisal_template(
     payload: AppraisalTemplateCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an appraisal template."""
     svc = PerformanceService(db)
@@ -265,7 +252,7 @@ def create_appraisal_template(
 def get_appraisal_template(
     template_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an appraisal template by ID."""
     svc = PerformanceService(db)
@@ -279,7 +266,7 @@ def update_appraisal_template(
     template_id: UUID,
     payload: AppraisalTemplateUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an appraisal template."""
     svc = PerformanceService(db)
@@ -294,7 +281,7 @@ def update_appraisal_template(
 def delete_appraisal_template(
     template_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an appraisal template."""
     svc = PerformanceService(db)
@@ -316,7 +303,7 @@ def list_kras(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List Key Result Areas."""
     svc = PerformanceService(db)
@@ -341,7 +328,7 @@ def list_kras(
 def create_kra(
     payload: KRACreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a Key Result Area."""
     svc = PerformanceService(db)
@@ -364,7 +351,7 @@ def create_kra(
 def get_kra(
     kra_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a KRA by ID."""
     svc = PerformanceService(db)
@@ -376,7 +363,7 @@ def update_kra(
     kra_id: UUID,
     payload: KRAUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a KRA."""
     svc = PerformanceService(db)
@@ -389,7 +376,7 @@ def update_kra(
 def delete_kra(
     kra_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a KRA."""
     svc = PerformanceService(db)
@@ -413,7 +400,7 @@ def list_kpis(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List Key Performance Indicators."""
     svc = PerformanceService(db)
@@ -441,7 +428,7 @@ def list_kpis(
 def create_kpi(
     payload: KPICreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a Key Performance Indicator."""
     svc = PerformanceService(db)
@@ -467,7 +454,7 @@ def create_kpi(
 def get_kpi(
     kpi_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a KPI by ID."""
     svc = PerformanceService(db)
@@ -479,7 +466,7 @@ def update_kpi(
     kpi_id: UUID,
     payload: KPIUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a KPI."""
     svc = PerformanceService(db)
@@ -492,7 +479,7 @@ def update_kpi(
 def delete_kpi(
     kpi_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a KPI."""
     svc = PerformanceService(db)
@@ -513,7 +500,7 @@ def list_appraisals(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List appraisals."""
     svc = PerformanceService(db)
@@ -540,7 +527,7 @@ def list_appraisals(
 def create_appraisal(
     payload: AppraisalCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an appraisal."""
     svc = PerformanceService(db)
@@ -561,7 +548,7 @@ def create_appraisal(
 def get_appraisal(
     appraisal_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an appraisal by ID."""
     svc = PerformanceService(db)
@@ -575,7 +562,7 @@ def update_appraisal(
     appraisal_id: UUID,
     payload: AppraisalUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an appraisal."""
     svc = PerformanceService(db)
@@ -588,7 +575,7 @@ def update_appraisal(
 def delete_appraisal(
     appraisal_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an appraisal (only draft status)."""
     svc = PerformanceService(db)
@@ -605,7 +592,7 @@ def submit_self_assessment(
     appraisal_id: UUID,
     payload: SelfAssessmentRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit employee self-assessment."""
     svc = PerformanceService(db)
@@ -627,7 +614,7 @@ def submit_manager_review(
     appraisal_id: UUID,
     payload: ManagerReviewRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit manager review."""
     svc = PerformanceService(db)
@@ -647,7 +634,7 @@ def submit_calibration(
     appraisal_id: UUID,
     payload: CalibrationRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit calibration review."""
     svc = PerformanceService(db)
@@ -674,7 +661,7 @@ def list_scorecards(
     department_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List performance scorecards."""
     svc = PerformanceService(db)
@@ -697,7 +684,7 @@ def list_scorecards(
 def get_scorecard(
     scorecard_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a scorecard by ID."""
     svc = PerformanceService(db)
@@ -712,7 +699,7 @@ def get_scorecard(
 def finalize_scorecard(
     appraisal_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Finalize and generate scorecard for a completed appraisal."""
     svc = PerformanceService(db)
@@ -729,7 +716,7 @@ def finalize_scorecard(
 def get_cycle_statistics(
     cycle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get statistics for an appraisal cycle."""
     svc = PerformanceService(db)
@@ -740,7 +727,7 @@ def get_cycle_statistics(
 @router.get("/stats")
 def get_performance_stats(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get performance dashboard statistics."""
     svc = PerformanceService(db)

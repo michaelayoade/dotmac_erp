@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.fleet.enums import (
     AssignmentType,
     OwnershipType,
@@ -39,18 +38,6 @@ from app.services.fleet.vehicle_service import VehicleService
 router = APIRouter(prefix="/vehicles", tags=["fleet-vehicles"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=VehicleListResponse)
 def list_vehicles(
     organization_id: UUID = Depends(require_organization_id),
@@ -63,7 +50,7 @@ def list_vehicles(
     include_disposed: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List all vehicles with optional filtering."""
     # Parse enums
@@ -95,7 +82,7 @@ def list_vehicles(
 @router.get("/summary", response_model=FleetSummary)
 def get_fleet_summary(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get overall fleet statistics."""
     service = VehicleService(db, organization_id)
@@ -107,7 +94,7 @@ def get_fleet_summary(
 def get_vehicle(
     vehicle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get vehicle details by ID."""
     service = VehicleService(db, organization_id)
@@ -122,7 +109,7 @@ def get_vehicle(
 def create_vehicle(
     data: VehicleCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a new vehicle to the fleet."""
     service = VehicleService(db, organization_id)
@@ -140,7 +127,7 @@ def update_vehicle(
     vehicle_id: UUID,
     data: VehicleUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update vehicle details."""
     service = VehicleService(db, organization_id)
@@ -158,7 +145,7 @@ def change_vehicle_status(
     vehicle_id: UUID,
     data: VehicleStatusChange,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Change vehicle operational status."""
     service = VehicleService(db, organization_id)
@@ -176,7 +163,7 @@ def update_odometer(
     vehicle_id: UUID,
     data: OdometerUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record new odometer reading."""
     service = VehicleService(db, organization_id)
@@ -194,7 +181,7 @@ def dispose_vehicle(
     vehicle_id: UUID,
     data: VehicleDispose,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Dispose of a vehicle (sell, scrap, trade-in)."""
     service = VehicleService(db, organization_id)
@@ -211,7 +198,7 @@ def dispose_vehicle(
 def delete_vehicle(
     vehicle_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Soft delete a vehicle."""
     service = VehicleService(db, organization_id)

@@ -6,8 +6,8 @@ from fastapi import Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.schemas.finance.ap import POCreate, PORead
 from app.schemas.finance.common import ListResponse
@@ -26,7 +26,7 @@ def create_purchase_order(
     payload: POCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new purchase order."""
     created_by_user_id = UUID(auth["person_id"])
@@ -58,7 +58,7 @@ def get_purchase_order(
     po_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a purchase order by ID."""
     return purchase_order_service.get(db, str(po_id), organization_id)
@@ -72,7 +72,7 @@ def list_purchase_orders(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List purchase orders with filters."""
     status_value = None
@@ -110,7 +110,7 @@ def submit_po_for_approval(
     po_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:submit")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit PO for approval."""
     submitted_by_user_id = UUID(auth["person_id"])
@@ -124,7 +124,7 @@ def approve_purchase_order(
     po_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a purchase order."""
     approved_by_user_id = UUID(auth["person_id"])
@@ -138,7 +138,7 @@ def cancel_purchase_order(
     po_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:void")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a purchase order."""
     return purchase_order_service.cancel_po(db, organization_id, po_id)

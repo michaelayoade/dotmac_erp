@@ -5,6 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.db.session_context import prime_session
+from app.rls import set_current_organization_sync
 from app.services.auth_dependencies import (
     optional_web_session,
     require_admin_bypass,
@@ -40,6 +42,7 @@ __all__ = [
     "require_tenant_role",
     "require_tenant_permission",
     "require_organization_id",
+    "get_db_with_org",
     "require_current_employee_id",
     "get_current_employee_id_optional",
     "require_admin_bypass",
@@ -62,6 +65,46 @@ def _get_db():
     db = SessionLocal()
     try:
         yield db
+    finally:
+        db.close()
+
+
+def get_db_with_org(
+    auth: dict = Depends(require_tenant_auth),
+):
+    """DB session dependency for tenant-scoped API routes.
+
+    Yields a Session with the request's organization_id pinned in *both*
+    Python-side (``session.info["organization_id"]``, consumed by the
+    planned ``do_orm_execute`` listener for query auto-filtering) and
+    PostgreSQL-side (``app.current_organization_id`` GUC, consumed by
+    RLS policies).
+
+    Use this in place of any per-module ``get_db``. Without it,
+    ``select(Foo).where(Foo.organization_id == X)`` on an RLS-protected
+    schema silently returns zero rows because the policy
+    ``organization_id = get_current_organization_id()`` evaluates to NULL
+    when the GUC is unset. See ``app/db/multi_tenant.py`` and
+    ``app/db/org_listener.py`` for the listener side.
+
+    Auto-commits on successful yield, rolls back on exception — matches
+    the historical per-module ``get_db`` behavior so migrations don't
+    change route semantics.
+    """
+    organization_id_str = auth.get("organization_id")
+    if not organization_id_str:
+        raise HTTPException(status_code=403, detail="Organization access required")
+    organization_id = UUID(organization_id_str)
+
+    db = SessionLocal()
+    try:
+        prime_session(db, organization_id)
+        set_current_organization_sync(db, organization_id)
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

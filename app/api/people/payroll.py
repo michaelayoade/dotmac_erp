@@ -13,8 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.payroll.payroll_entry import PayrollEntryStatus
 from app.models.people.payroll.salary_component import (
     SalaryComponentType,
@@ -66,18 +65,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def csv_response(rows: list[list[str]], filename: str) -> Response:
     """Return a CSV response for export endpoints."""
     buffer = io.StringIO()
@@ -103,7 +90,7 @@ def list_salary_components(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List salary components."""
     svc = PayrollService(db)
@@ -129,7 +116,7 @@ def list_salary_components(
 )
 def create_salary_component(
     data: SalaryComponentCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new salary component."""
     svc = PayrollService(db)
@@ -140,7 +127,7 @@ def create_salary_component(
 @router.get("/components/{component_id}", response_model=SalaryComponentRead)
 def get_salary_component(
     component_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a salary component by ID."""
     svc = PayrollService(db)
@@ -154,7 +141,7 @@ def get_salary_component(
 def update_salary_component(
     component_id: UUID,
     data: SalaryComponentUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a salary component."""
     svc = PayrollService(db)
@@ -178,7 +165,7 @@ def list_salary_structures(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List salary structures."""
     svc = PayrollService(db)
@@ -204,7 +191,7 @@ def list_salary_structures(
 def create_salary_structure(
     data: SalaryStructureCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a salary structure."""
     svc = PayrollService(db)
@@ -225,7 +212,7 @@ def create_salary_structure(
 def get_salary_structure(
     structure_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a salary structure by ID."""
     svc = PayrollService(db)
@@ -238,7 +225,7 @@ def update_salary_structure(
     structure_id: UUID,
     data: SalaryStructureUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a salary structure."""
     svc = PayrollService(db)
@@ -255,7 +242,7 @@ def update_salary_structure(
 def delete_salary_structure(
     structure_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a salary structure."""
     svc = PayrollService(db)
@@ -275,7 +262,7 @@ def list_salary_assignments(
     active_on: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List salary structure assignments."""
     svc = PayrollService(db)
@@ -302,7 +289,7 @@ def list_salary_assignments(
 def create_salary_assignment(
     data: SalaryStructureAssignmentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a salary structure assignment."""
     svc = PayrollService(db)
@@ -325,7 +312,7 @@ def create_salary_assignment(
 def get_salary_assignment(
     assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a salary structure assignment by ID."""
     svc = PayrollService(db)
@@ -340,7 +327,7 @@ def update_salary_assignment(
     assignment_id: UUID,
     data: SalaryStructureAssignmentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a salary structure assignment."""
     svc = PayrollService(db)
@@ -353,7 +340,7 @@ def update_salary_assignment(
 def delete_salary_assignment(
     assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a salary structure assignment."""
     svc = PayrollService(db)
@@ -374,7 +361,7 @@ def list_salary_slips(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List salary slips."""
     slips = salary_slip_service.list(
@@ -411,7 +398,7 @@ def export_salary_slips(
     status: SalarySlipStatus | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Export salary slips to CSV."""
     slips = salary_slip_service.list(
@@ -523,7 +510,7 @@ def export_salary_slips(
 def create_salary_slip(
     data: SalarySlipCreate,
     user_id: UUID = Query(..., description="ID of user creating the slip"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new salary slip and calculate amounts from structure."""
     input = SalarySlipInput(
@@ -550,7 +537,7 @@ def create_salary_slip(
 def get_salary_slip(
     slip_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a salary slip by ID."""
     slip = salary_slip_service.get(db, organization_id, slip_id)
@@ -562,7 +549,7 @@ def submit_salary_slip(
     slip_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit a salary slip for approval."""
     slip = salary_slip_service.submit_salary_slip(
@@ -579,7 +566,7 @@ def approve_salary_slip(
     slip_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a salary slip."""
     slip = salary_slip_service.approve_salary_slip(
@@ -595,7 +582,7 @@ def approve_salary_slip(
 def post_salary_slip(
     slip_id: UUID,
     data: SalarySlipPostRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post a salary slip to GL."""
     result = PayrollGLAdapter.post_salary_slip(
@@ -620,7 +607,7 @@ def reverse_salary_slip(
     user_id: UUID = Query(...),
     reversal_date: date = Query(...),
     reason: str = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reverse a posted salary slip."""
     result = PayrollGLAdapter.reverse_salary_slip_posting(
@@ -653,7 +640,7 @@ def list_payroll_entries(
     payroll_frequency: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List payroll entries."""
     svc = PayrollService(db)
@@ -687,7 +674,7 @@ def list_payroll_entries(
 def create_payroll_entry(
     data: PayrollEntryCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a payroll entry."""
     svc = PayrollService(db)
@@ -711,7 +698,7 @@ def create_payroll_entry(
 def get_payroll_entry(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a payroll entry by ID."""
     svc = PayrollService(db)
@@ -724,7 +711,7 @@ def update_payroll_entry(
     entry_id: UUID,
     data: PayrollEntryUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a payroll entry."""
     svc = PayrollService(db)
@@ -739,7 +726,7 @@ def update_payroll_entry(
 def delete_payroll_entry(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a payroll entry."""
     svc = PayrollService(db)
@@ -752,7 +739,7 @@ def delete_payroll_entry(
 def generate_salary_slips(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """Generate salary slips for a payroll entry."""
@@ -771,7 +758,7 @@ def generate_salary_slips(
 def regenerate_salary_slips(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """Regenerate salary slips for a payroll entry."""
@@ -789,7 +776,7 @@ def payout_payroll_entry(
     entry_id: UUID,
     payload: PayrollPayoutRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """Mark payroll entry slips as paid."""
@@ -809,7 +796,7 @@ def handoff_payroll_to_books(
     entry_id: UUID,
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """Post payroll entry to GL."""
@@ -1032,7 +1019,7 @@ class EmployeeTaxProfileUpdate(BaseModel):
 def list_tax_bands(
     organization_id: UUID = Depends(require_organization_id),
     active_only: bool = Query(True, description="Only return active bands"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     List tax bands for the organization.
@@ -1060,7 +1047,7 @@ def seed_nta_2025_tax_bands(
     effective_from: date = Query(
         default=date(2026, 1, 1), description="When bands become effective"
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """
@@ -1095,7 +1082,7 @@ def calculate_paye_tax(
     data: PAYECalculateRequest,
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date = Query(default=None, description="Date for tax band lookup"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ) -> PAYEBreakdownResponse:
     """
     Calculate PAYE tax for given income.
@@ -1135,7 +1122,7 @@ def get_employee_tax_profile(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date = Query(default=None, description="Date for profile lookup"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get employee tax profile."""
     svc = PayrollService(db)
@@ -1153,7 +1140,7 @@ def get_employee_tax_profile(
 def create_employee_tax_profile(
     data: EmployeeTaxProfileCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """Create employee tax profile."""
@@ -1171,7 +1158,7 @@ def update_employee_tax_profile(
     employee_id: UUID,
     data: EmployeeTaxProfileUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_auth),
 ):
     """Update employee tax profile."""

@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.pm import BillingStatus
 from app.schemas.pm import (
     TimeEntryCreate,
@@ -26,18 +25,6 @@ from app.services.common import NotFoundError, PaginationParams, ValidationError
 from app.services.pm import TimeEntryService
 
 router = APIRouter(prefix="/time-entries", tags=["pm-time-entries"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -57,7 +44,7 @@ def list_time_entries(
     billing_status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List time entries with optional filtering."""
     billing_status_enum = None
@@ -120,7 +107,7 @@ def list_time_entries(
 def log_time(
     data: TimeEntryCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Log a new time entry."""
     svc = TimeEntryService(db, organization_id)
@@ -136,7 +123,7 @@ def get_my_timesheet(
     organization_id: UUID = Depends(require_organization_id),
     employee_id: UUID = Query(...),
     week_start: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get weekly timesheet for an employee."""
     from datetime import timedelta
@@ -207,7 +194,7 @@ def get_my_timesheet(
 def get_time_entry(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a time entry by ID."""
     svc = TimeEntryService(db, organization_id)
@@ -223,7 +210,7 @@ def update_time_entry(
     entry_id: UUID,
     data: TimeEntryUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a time entry."""
     svc = TimeEntryService(db, organization_id)
@@ -240,7 +227,7 @@ def update_time_entry(
 def delete_time_entry(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a time entry."""
     svc = TimeEntryService(db, organization_id)

@@ -12,9 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.api.finance.utils import parse_enum
-from app.db import SessionLocal
 from app.models.finance.tax.deferred_tax_basis import DifferenceType
 from app.models.finance.tax.tax_code import TaxType
 from app.models.finance.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
@@ -42,18 +41,6 @@ router = APIRouter(
     tags=["tax"],
     dependencies=[Depends(require_tenant_auth)],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -368,7 +355,7 @@ def create_jurisdiction(
     payload: TaxJurisdictionCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:jurisdictions:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new tax jurisdiction."""
     input_data = TaxJurisdictionInput(
@@ -398,7 +385,7 @@ def get_jurisdiction(
     jurisdiction_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:jurisdictions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a tax jurisdiction by ID."""
     return tax_jurisdiction_service.get(db, str(jurisdiction_id), organization_id)
@@ -412,7 +399,7 @@ def list_jurisdictions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("tax:jurisdictions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tax jurisdictions with filters."""
     jurisdictions = tax_jurisdiction_service.list(
@@ -441,7 +428,7 @@ def create_tax_code(
     payload: TaxCodeCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:codes:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new tax code."""
     try:
@@ -468,7 +455,7 @@ def get_tax_code(
     tax_code_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:codes:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a tax code by ID."""
     return tax_code_service.get(db, str(tax_code_id), organization_id)
@@ -483,7 +470,7 @@ def list_tax_codes(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("tax:codes:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tax codes with filters."""
     codes = tax_code_service.list(
@@ -510,7 +497,7 @@ def calculate_tax(
     transaction_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:codes:calculate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate tax for a given amount."""
     return tax_code_service.calculate_tax(
@@ -532,7 +519,7 @@ def calculate_line_taxes(
     payload: SingleLineTaxRequest,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:codes:calculate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Calculate multiple taxes for a single invoice line.
@@ -581,7 +568,7 @@ def calculate_invoice_taxes(
     payload: MultiLineTaxRequest,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:codes:calculate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Calculate taxes for an entire invoice (multiple lines).
@@ -658,7 +645,7 @@ def create_tax_transaction(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:transactions:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a tax transaction."""
     tx_type = parse_enum(TaxTransactionType, payload.transaction_type)
@@ -703,7 +690,7 @@ def list_tax_transactions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("tax:transactions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tax transactions with filters."""
     transactions = tax_transaction_service.list(
@@ -731,7 +718,7 @@ def get_tax_return_summary(
     organization_id: UUID = Depends(require_organization_id),
     fiscal_period_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:transactions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get tax return summary for a period."""
     summary = tax_transaction_service.get_return_summary(
@@ -765,7 +752,7 @@ def create_deferred_tax_basis(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:deferred:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a deferred tax basis record."""
     try:
@@ -804,7 +791,7 @@ def list_deferred_tax_basis(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("tax:deferred:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List deferred tax basis records."""
     items = deferred_tax_service.list(
@@ -827,7 +814,7 @@ def calculate_deferred_taxes(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:deferred:calculate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate deferred tax assets and liabilities."""
     return deferred_tax_service.get_summary(
@@ -841,7 +828,7 @@ def get_deferred_tax_summary(
     organization_id: UUID = Depends(require_organization_id),
     jurisdiction_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("tax:deferred:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get deferred tax summary."""
     return deferred_tax_service.get_summary(
@@ -866,7 +853,7 @@ def create_tax_reconciliation(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:reconciliation:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a tax reconciliation."""
     input_data = TaxReconciliationInput(
@@ -901,7 +888,7 @@ def get_tax_reconciliation(
     jurisdiction_id: UUID = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:reconciliation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get tax reconciliation for a fiscal period and jurisdiction."""
     reconciliation = tax_reconciliation_service.get_by_period_jurisdiction(
@@ -927,7 +914,7 @@ def post_tax_transaction(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:transactions:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post tax transaction to GL."""
     result = tax_posting_adapter.post_tax_transaction(
@@ -952,7 +939,7 @@ def post_deferred_tax_movement(
     posting_date: date = Query(...),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:deferred:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post deferred tax movement to GL."""
     result = tax_posting_adapter.post_deferred_tax_movement(
@@ -1017,7 +1004,7 @@ def create_tax_period(
     payload: TaxPeriodCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:periods:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new tax period."""
     frequency_value = parse_enum(TaxPeriodFrequency, payload.frequency)
@@ -1040,7 +1027,7 @@ def get_overdue_tax_periods(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("tax:periods:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get overdue tax periods."""
     periods = tax_period_service.get_overdue_periods(db, organization_id, as_of_date)
@@ -1052,7 +1039,7 @@ def get_tax_period(
     period_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:periods:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a tax period by ID."""
     return tax_period_service.get(db, str(period_id), organization_id)
@@ -1068,7 +1055,7 @@ def list_tax_periods(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("tax:periods:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tax periods with filters."""
     periods = tax_period_service.list(
@@ -1092,7 +1079,7 @@ def generate_tax_periods(
     frequency: str = Query(default="MONTHLY"),
     due_date_offset_days: int = Query(default=30),
     auth: dict = Depends(require_tenant_permission("tax:periods:generate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Auto-generate tax periods for a year."""
     frequency_value = parse_enum(TaxPeriodFrequency, frequency)
@@ -1115,7 +1102,7 @@ def extend_tax_period(
     extended_due_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:periods:extend")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """File an extension for a tax period."""
     return tax_period_service.file_extension(
@@ -1168,7 +1155,7 @@ def prepare_tax_return(
     organization_id: UUID = Depends(require_organization_id),
     prepared_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:returns:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Prepare a new tax return."""
     return_type_value = parse_enum(TaxReturnType, payload.return_type)
@@ -1193,7 +1180,7 @@ def get_tax_return(
     return_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:returns:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a tax return by ID."""
     return tax_return_service.get(db, str(return_id), organization_id)
@@ -1209,7 +1196,7 @@ def list_tax_returns(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("tax:returns:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tax returns with filters."""
     returns = tax_return_service.list(
@@ -1231,7 +1218,7 @@ def review_tax_return(
     organization_id: UUID = Depends(require_organization_id),
     reviewed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:returns:review")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Review and approve a tax return."""
     try:
@@ -1249,7 +1236,7 @@ def file_tax_return(
     organization_id: UUID = Depends(require_organization_id),
     filed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:returns:file")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """File a tax return with the authority."""
     try:
@@ -1268,7 +1255,7 @@ def record_return_payment(
     journal_entry_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("tax:returns:payment")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record a tax payment for a return."""
     try:
@@ -1292,7 +1279,7 @@ def amend_tax_return(
     organization_id: UUID = Depends(require_organization_id),
     prepared_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("tax:returns:amend")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an amended tax return."""
     try:

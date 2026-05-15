@@ -12,8 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.attendance import AttendanceRequestStatus
 from app.models.people.attendance.attendance import AttendanceStatus
 from app.schemas.people.attendance import (
@@ -53,18 +52,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def csv_response(rows: list[list[str]], filename: str) -> Response:
     """Return a CSV response for export endpoints."""
     buffer = io.StringIO()
@@ -90,7 +77,7 @@ def list_shift_types(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List shift types."""
     svc = AttendanceService(db)
@@ -114,7 +101,7 @@ def list_shift_types(
 def create_shift_type(
     payload: ShiftTypeCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a shift type."""
     svc = AttendanceService(db)
@@ -142,7 +129,7 @@ def create_shift_type(
 def get_shift_type(
     shift_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a shift type by ID."""
     svc = AttendanceService(db)
@@ -156,7 +143,7 @@ def update_shift_type(
     shift_type_id: UUID,
     payload: ShiftTypeUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a shift type."""
     svc = AttendanceService(db)
@@ -169,7 +156,7 @@ def update_shift_type(
 def delete_shift_type(
     shift_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a shift type."""
     svc = AttendanceService(db)
@@ -190,7 +177,7 @@ def list_shift_assignments(
     end_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List shift assignments."""
     svc = AttendanceService(db)
@@ -218,7 +205,7 @@ def list_shift_assignments(
 def create_shift_assignment(
     payload: ShiftAssignmentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a shift assignment."""
     svc = AttendanceService(db)
@@ -239,7 +226,7 @@ def create_shift_assignment(
 def get_shift_assignment(
     shift_assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a shift assignment by ID."""
     svc = AttendanceService(db)
@@ -256,7 +243,7 @@ def update_shift_assignment(
     shift_assignment_id: UUID,
     payload: ShiftAssignmentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a shift assignment."""
     svc = AttendanceService(db)
@@ -275,7 +262,7 @@ def update_shift_assignment(
 def delete_shift_assignment(
     shift_assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Deactivate a shift assignment."""
     svc = AttendanceService(db)
@@ -296,7 +283,7 @@ def list_attendance(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List attendance records."""
     svc = AttendanceService(db)
@@ -328,7 +315,7 @@ def list_attendance(
 def create_attendance(
     payload: AttendanceCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an attendance record."""
     svc = AttendanceService(db)
@@ -351,7 +338,7 @@ def create_attendance(
 def get_attendance(
     attendance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an attendance record by ID."""
     svc = AttendanceService(db)
@@ -365,7 +352,7 @@ def update_attendance(
     attendance_id: UUID,
     payload: AttendanceUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an attendance record."""
     svc = AttendanceService(db)
@@ -378,7 +365,7 @@ def update_attendance(
 def delete_attendance(
     attendance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an attendance record."""
     svc = AttendanceService(db)
@@ -394,7 +381,7 @@ def delete_attendance(
 def check_in(
     payload: CheckInRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record employee check-in."""
     svc = AttendanceService(db)
@@ -414,7 +401,7 @@ def check_in(
 def check_out(
     payload: CheckOutRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record employee check-out."""
     svc = AttendanceService(db)
@@ -434,7 +421,7 @@ def check_in_record(
     attendance_id: UUID,
     payload: AttendanceRecordCheckIn,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record check-in for an existing attendance record."""
     svc = AttendanceService(db)
@@ -452,7 +439,7 @@ def check_out_record(
     attendance_id: UUID,
     payload: AttendanceRecordCheckOut,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record check-out for an existing attendance record."""
     svc = AttendanceService(db)
@@ -474,7 +461,7 @@ def check_out_record(
 def bulk_mark_attendance(
     payload: BulkAttendanceCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk mark attendance for multiple employees."""
     svc = AttendanceService(db)
@@ -507,7 +494,7 @@ def list_attendance_requests(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List attendance requests."""
     svc = AttendanceService(db)
@@ -535,7 +522,7 @@ def list_attendance_requests(
 def create_attendance_request(
     payload: AttendanceRequestCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an attendance request."""
     svc = AttendanceService(db)
@@ -556,7 +543,7 @@ def create_attendance_request(
 def get_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get attendance request detail."""
     svc = AttendanceService(db)
@@ -570,7 +557,7 @@ def update_attendance_request(
     request_id: UUID,
     payload: AttendanceRequestUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an attendance request."""
     svc = AttendanceService(db)
@@ -583,7 +570,7 @@ def update_attendance_request(
 def delete_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an attendance request."""
     svc = AttendanceService(db)
@@ -594,7 +581,7 @@ def delete_attendance_request(
 def submit_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit an attendance request for approval."""
     svc = AttendanceService(db)
@@ -606,7 +593,7 @@ def submit_attendance_request(
 def approve_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve an attendance request."""
     svc = AttendanceService(db)
@@ -618,7 +605,7 @@ def approve_attendance_request(
 def reject_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject an attendance request."""
     svc = AttendanceService(db)
@@ -630,7 +617,7 @@ def reject_attendance_request(
 def bulk_approve_attendance_requests(
     payload: AttendanceRequestBulkAction,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk approve attendance requests."""
     svc = AttendanceService(db)
@@ -642,7 +629,7 @@ def bulk_approve_attendance_requests(
 def bulk_reject_attendance_requests(
     payload: AttendanceRequestBulkAction,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk reject attendance requests."""
     svc = AttendanceService(db)
@@ -661,7 +648,7 @@ def attendance_summary(
     employee_id: UUID | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get attendance summary counts."""
     svc = AttendanceService(db)
@@ -680,7 +667,7 @@ def export_attendance(
     from_date: date | None = None,
     to_date: date | None = None,
     status: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Export attendance records to CSV."""
     svc = AttendanceService(db)
@@ -736,7 +723,7 @@ def get_employee_monthly_summary(
     organization_id: UUID = Depends(require_organization_id),
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get monthly attendance summary for an employee."""
     svc = AttendanceService(db)

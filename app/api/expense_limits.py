@@ -14,8 +14,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_permission
-from app.db import SessionLocal
+from app.api.deps import (
+    get_db_with_org,
+    require_organization_id,
+    require_tenant_permission,
+)
 from app.models.expense import (
     LimitActionType,
     LimitPeriodType,
@@ -51,18 +54,6 @@ router = APIRouter(
     tags=["expense-limits"],
     dependencies=[Depends(require_tenant_permission("expense:access"))],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def parse_scope_type(value: str | None) -> LimitScopeType | None:
@@ -118,7 +109,7 @@ def list_limit_rules(
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List expense limit rules."""
     service = ExpenseLimitService(db)
@@ -142,7 +133,7 @@ def get_limit_rule(
     rule_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an expense limit rule by ID."""
     service = ExpenseLimitService(db)
@@ -160,7 +151,7 @@ def create_limit_rule(
     data: ExpenseLimitRuleCreate,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new expense limit rule."""
     service = ExpenseLimitService(db)
@@ -206,7 +197,7 @@ def update_limit_rule(
     data: ExpenseLimitRuleUpdate,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an expense limit rule."""
     service = ExpenseLimitService(db)
@@ -238,7 +229,7 @@ def delete_limit_rule(
     rule_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an expense limit rule."""
     service = ExpenseLimitService(db)
@@ -261,7 +252,7 @@ def list_approver_limits(
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List expense approver limits."""
     service = ExpenseLimitService(db)
@@ -284,7 +275,7 @@ def get_approver_limit(
     approver_limit_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an expense approver limit by ID."""
     service = ExpenseLimitService(db)
@@ -304,7 +295,7 @@ def create_approver_limit(
     data: ExpenseApproverLimitCreate,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new expense approver limit."""
     service = ExpenseLimitService(db)
@@ -335,7 +326,7 @@ def update_approver_limit(
     data: ExpenseApproverLimitUpdate,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an expense approver limit."""
     service = ExpenseLimitService(db)
@@ -359,7 +350,7 @@ def delete_approver_limit(
     approver_limit_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an expense approver limit."""
     service = ExpenseLimitService(db)
@@ -385,7 +376,7 @@ def list_evaluations(
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List expense limit evaluations."""
     service = ExpenseLimitService(db)
@@ -418,7 +409,7 @@ def evaluate_claim_limits(
     data: EvaluateLimitRequest,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Evaluate expense limits for a claim.
@@ -472,7 +463,7 @@ def get_eligible_approvers(
     claim_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Get eligible approvers for a claim.
@@ -507,7 +498,7 @@ def get_employee_usage(
     employee_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:policies:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Get expense usage summary for an employee.

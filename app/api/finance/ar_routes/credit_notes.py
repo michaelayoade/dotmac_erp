@@ -5,8 +5,8 @@ from uuid import UUID
 from fastapi import Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ar_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ar_routes.base import router
 from app.config import settings
 from app.models.finance.ar.invoice import InvoiceType
 from app.schemas.finance.ar import CreditNoteCreate, CreditNoteRead
@@ -26,7 +26,7 @@ def create_credit_note(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:credit_notes:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a credit note."""
     lines = [

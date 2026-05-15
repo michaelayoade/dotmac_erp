@@ -13,8 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.recruit import (
     ApplicantStatus,
     InterviewStatus,
@@ -56,18 +55,6 @@ router = APIRouter(
     tags=["recruitment"],
     dependencies=[Depends(require_tenant_auth)],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def parse_enum(value: str | None, enum_type, field_name: str):
@@ -114,7 +101,7 @@ def list_job_openings(
     designation_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List job openings."""
     svc = RecruitmentService(db)
@@ -141,7 +128,7 @@ def list_job_openings(
 def create_job_opening(
     payload: JobOpeningCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a job opening."""
     svc = RecruitmentService(db)
@@ -175,7 +162,7 @@ def create_job_opening(
 def get_job_opening(
     job_opening_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a job opening by ID."""
     svc = RecruitmentService(db)
@@ -193,7 +180,7 @@ def update_job_opening(
     job_opening_id: UUID,
     payload: JobOpeningUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a job opening."""
     svc = RecruitmentService(db)
@@ -206,7 +193,7 @@ def update_job_opening(
 def delete_job_opening(
     job_opening_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a job opening."""
     svc = RecruitmentService(db)
@@ -218,7 +205,7 @@ def delete_job_opening(
 def publish_job_opening(
     job_opening_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Publish a job opening."""
     svc = RecruitmentService(db)
@@ -230,7 +217,7 @@ def publish_job_opening(
 def close_job_opening(
     job_opening_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Close a job opening."""
     svc = RecruitmentService(db)
@@ -242,7 +229,7 @@ def close_job_opening(
 def hold_job_opening(
     job_opening_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Put a job opening on hold."""
     svc = RecruitmentService(db)
@@ -254,7 +241,7 @@ def hold_job_opening(
 def reopen_job_opening(
     job_opening_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reopen a job opening."""
     svc = RecruitmentService(db)
@@ -265,7 +252,7 @@ def reopen_job_opening(
 @router.get("/job-openings/summary", response_model=JobOpeningStats)
 def job_opening_summary(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get job opening summary statistics."""
     svc = RecruitmentService(db)
@@ -287,7 +274,7 @@ def list_applicants(
     source: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List job applicants."""
     svc = RecruitmentService(db)
@@ -314,7 +301,7 @@ def list_applicants(
 def create_applicant(
     payload: JobApplicantCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a job applicant."""
     svc = RecruitmentService(db)
@@ -346,7 +333,7 @@ def create_applicant(
 def get_applicant(
     applicant_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a job applicant by ID."""
     svc = RecruitmentService(db)
@@ -360,7 +347,7 @@ def update_applicant(
     applicant_id: UUID,
     payload: JobApplicantUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a job applicant."""
     svc = RecruitmentService(db)
@@ -373,7 +360,7 @@ def update_applicant(
 def delete_applicant(
     applicant_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a job applicant."""
     svc = RecruitmentService(db)
@@ -386,7 +373,7 @@ def advance_applicant(
     applicant_id: UUID,
     payload: ApplicantStatusUpdateRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Advance applicant to next pipeline stage."""
     svc = RecruitmentService(db)
@@ -404,7 +391,7 @@ def reject_applicant(
     applicant_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     reason: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a job applicant."""
     svc = RecruitmentService(db)
@@ -432,7 +419,7 @@ def list_interviews(
     to_date: datetime | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List interviews."""
     svc = RecruitmentService(db)
@@ -461,7 +448,7 @@ def list_interviews(
 def schedule_interview(
     payload: InterviewCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Schedule an interview."""
     svc = RecruitmentService(db)
@@ -484,7 +471,7 @@ def schedule_interview(
 def get_interview(
     interview_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an interview by ID."""
     svc = RecruitmentService(db)
@@ -498,7 +485,7 @@ def update_interview(
     interview_id: UUID,
     payload: InterviewUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an interview."""
     svc = RecruitmentService(db)
@@ -522,7 +509,7 @@ def update_interview(
 def cancel_interview(
     interview_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel an interview."""
     svc = RecruitmentService(db)
@@ -535,7 +522,7 @@ def submit_interview_feedback(
     interview_id: UUID,
     payload: InterviewFeedbackRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit interview feedback."""
     svc = RecruitmentService(db)
@@ -566,7 +553,7 @@ def list_job_offers(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List job offers."""
     svc = RecruitmentService(db)
@@ -594,7 +581,7 @@ def list_job_offers(
 def create_job_offer(
     payload: JobOfferCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a job offer."""
     svc = RecruitmentService(db)
@@ -626,7 +613,7 @@ def create_job_offer(
 def get_job_offer(
     offer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a job offer by ID."""
     svc = RecruitmentService(db)
@@ -638,7 +625,7 @@ def update_job_offer(
     offer_id: UUID,
     payload: JobOfferUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a job offer."""
     svc = RecruitmentService(db)
@@ -652,7 +639,7 @@ def update_job_offer(
 def extend_offer(
     offer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Extend/send a job offer."""
     svc = RecruitmentService(db)
@@ -664,7 +651,7 @@ def extend_offer(
 def accept_offer(
     offer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Accept a job offer."""
     svc = RecruitmentService(db)
@@ -676,7 +663,7 @@ def accept_offer(
 def delete_job_offer(
     offer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a job offer."""
     svc = RecruitmentService(db)
@@ -688,7 +675,7 @@ def decline_offer(
     offer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     reason: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Decline a job offer."""
     svc = RecruitmentService(db)
@@ -701,7 +688,7 @@ def convert_to_employee(
     offer_id: UUID,
     date_of_joining: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Convert accepted offer to employee."""
     svc = RecruitmentService(db)
@@ -725,7 +712,7 @@ def convert_to_employee(
 def get_pipeline_stats(
     organization_id: UUID = Depends(require_organization_id),
     job_opening_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get recruitment pipeline statistics."""
     svc = RecruitmentService(db)
@@ -740,7 +727,7 @@ def get_pipeline_stats(
 def get_applicant_summary(
     organization_id: UUID = Depends(require_organization_id),
     job_opening_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get applicant summary statistics."""
     svc = RecruitmentService(db)
@@ -768,7 +755,7 @@ def export_applicants(
     job_opening_id: UUID | None = None,
     status: str | None = None,
     source: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Export job applicants to CSV."""
     svc = RecruitmentService(db)
@@ -814,7 +801,7 @@ def export_applicants(
 @router.get("/stats")
 def get_recruitment_stats(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get recruitment dashboard statistics."""
     svc = RecruitmentService(db)
@@ -824,7 +811,7 @@ def get_recruitment_stats(
 @router.get("/offers/summary")
 def get_offer_summary(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get offer summary by status."""
     svc = RecruitmentService(db)

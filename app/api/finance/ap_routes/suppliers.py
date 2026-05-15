@@ -6,8 +6,8 @@ from fastapi import Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.api.finance.utils import parse_enum
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.schemas.finance.ap import SupplierCreate, SupplierRead, SupplierUpdate
@@ -23,7 +23,7 @@ def create_supplier(
     payload: SupplierCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:suppliers:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new supplier."""
     input_data = SupplierInput(
@@ -46,7 +46,7 @@ def get_supplier(
     supplier_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:suppliers:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a supplier by ID."""
     return supplier_service.get(db, organization_id, str(supplier_id))
@@ -59,7 +59,7 @@ def list_suppliers(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:suppliers:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List suppliers with filters."""
     suppliers = supplier_service.list(
@@ -89,7 +89,7 @@ def update_supplier(
     payload: SupplierUpdate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:suppliers:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a supplier (partial update)."""
     update_data = payload.model_dump(exclude_unset=True)

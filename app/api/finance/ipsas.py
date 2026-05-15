@@ -12,9 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
-    _get_db as get_db,
-)
-from app.api.deps import (
+    get_db_with_org,
     require_organization_id,
     require_tenant_auth,
     require_tenant_permission,
@@ -58,7 +56,7 @@ def list_funds(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List funds for the organization."""
     from app.services.finance.ipsas.fund_service import FundService
@@ -74,7 +72,7 @@ def create_fund(
     payload: FundCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new fund."""
     from app.services.finance.ipsas.fund_service import FundService
@@ -93,7 +91,7 @@ def get_fund(
     fund_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a fund by ID."""
     from app.services.finance.ipsas.fund_service import FundService
@@ -107,7 +105,7 @@ def update_fund(
     payload: FundUpdate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a fund."""
     from app.services.finance.ipsas.fund_service import FundService
@@ -124,7 +122,7 @@ def get_fund_balance(
     fiscal_period_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get aggregated balance for a fund."""
     from app.services.finance.ipsas.fund_service import FundService
@@ -149,7 +147,7 @@ def list_appropriations(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List appropriations."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -170,7 +168,7 @@ def create_appropriation(
     payload: AppropriationCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new appropriation."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -189,7 +187,7 @@ def get_appropriation(
     appropriation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an appropriation by ID."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -204,7 +202,7 @@ def approve_appropriation(
     appropriation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve an appropriation."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -227,7 +225,7 @@ def get_appropriation_available_balance(
     appropriation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get available balance for an appropriation."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -253,7 +251,7 @@ def list_allotments(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List allotments."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -269,7 +267,7 @@ def create_allotment(
     payload: AllotmentCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an allotment."""
     from app.services.finance.ipsas.appropriation_service import AppropriationService
@@ -292,7 +290,7 @@ def list_commitments(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List commitments."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
@@ -308,7 +306,7 @@ def get_commitment(
     commitment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a commitment by ID."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
@@ -331,7 +329,7 @@ def create_commitment_from_po(
     appropriation_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a commitment from a purchase order."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
@@ -363,7 +361,7 @@ def obligate_commitment(
     amount: Decimal = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record obligation against a commitment."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
@@ -380,7 +378,7 @@ def expend_commitment(
     amount: Decimal = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record expenditure against a commitment."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
@@ -397,7 +395,7 @@ def cancel_commitment(
     amount: Decimal | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a commitment (full or partial)."""
     from app.services.finance.ipsas.commitment_service import CommitmentService
@@ -421,7 +419,7 @@ def list_virements(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List virements."""
     from app.services.finance.ipsas.virement_service import VirementService
@@ -442,7 +440,7 @@ def create_virement(
     virement_number: str = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a virement request."""
     from app.services.finance.ipsas.virement_service import VirementService
@@ -461,7 +459,7 @@ def approve_virement(
     virement_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a virement."""
     from app.services.finance.ipsas.virement_service import VirementService
@@ -481,7 +479,7 @@ def apply_virement(
     virement_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Apply an approved virement."""
     from app.services.finance.ipsas.virement_service import VirementService
@@ -503,7 +501,7 @@ def get_budget_comparison(
     fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate IPSAS 24 Budget vs Actual comparison."""
     from app.services.finance.ipsas.budget_comparison_service import (
@@ -521,7 +519,7 @@ def get_financial_position(
     fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate IPSAS 1 Statement of Financial Position."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
@@ -537,7 +535,7 @@ def get_financial_performance(
     fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate IPSAS 1 Statement of Financial Performance."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
@@ -553,7 +551,7 @@ def get_changes_net_assets(
     fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate IPSAS 1 Statement of Changes in Net Assets."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
@@ -569,7 +567,7 @@ def get_cash_flow(
     fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate IPSAS 2 Cash Flow Statement."""
     from app.services.finance.ipsas.ipsas_statement_service import IPSASStatementService
@@ -591,7 +589,7 @@ def get_available_balance(
     account_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate available balance."""
     from app.services.finance.ipsas.available_balance_service import (
@@ -613,7 +611,7 @@ def get_available_balance_by_fund(
     fund_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate available balance for a specific fund."""
     from app.services.finance.ipsas.available_balance_service import (
@@ -632,7 +630,7 @@ def get_available_balance_by_fund(
 def list_coa_segments(
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:coa:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List CoA segment definitions."""
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService
@@ -647,7 +645,7 @@ def create_coa_segment(
     payload: CoASegmentDefinitionCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:coa:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a CoA segment definition."""
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService
@@ -663,7 +661,7 @@ def create_coa_segment(
 def list_coa_segment_values(
     segment_def_id: UUID,
     auth: dict = Depends(require_tenant_permission("ipsas:coa:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List values for a CoA segment."""
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService
@@ -681,7 +679,7 @@ def create_coa_segment_value(
     payload: CoASegmentValueCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:coa:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a value for a CoA segment."""
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService

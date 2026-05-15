@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import (
     get_current_employee_id_optional,
+    get_db_with_org,
     require_organization_id,
     require_tenant_auth,
     require_tenant_permission,
@@ -24,7 +25,6 @@ from app.schemas.coach import (
 )
 from app.services.coach.coach_service import CoachService
 from app.services.common import coerce_uuid
-from app.web.deps import get_db
 
 router = APIRouter(
     prefix="/coach",
@@ -46,7 +46,7 @@ def list_insights(
     include_expired: bool = Query(False),
     category: str | None = Query(None),
     severity: str | None = Query(None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = CoachService(db)
     if not svc.is_enabled():
@@ -82,7 +82,7 @@ def submit_feedback(
     insight_id: str,
     payload: CoachInsightFeedbackUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = CoachService(db)
     updated = svc.update_feedback(

@@ -11,9 +11,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.api.finance.utils import parse_enum
-from app.db import SessionLocal
 from app.models.finance.gl.account import AccountType, NormalBalance
 from app.models.finance.gl.fiscal_period import PeriodStatus
 from app.models.finance.gl.journal_entry import JournalStatus, JournalType
@@ -48,18 +47,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # =============================================================================
 # Chart of Accounts
 # =============================================================================
@@ -73,7 +60,7 @@ def create_account(
     organization_id: UUID = Depends(require_organization_id),
     category_id: UUID = Query(..., description="Account category ID"),
     auth: dict = Depends(require_tenant_permission("gl:accounts:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new GL account."""
     try:
@@ -102,7 +89,7 @@ def get_account(
     account_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:accounts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a GL account by ID."""
     return chart_of_accounts_service.get(db, str(account_id), organization_id)
@@ -118,7 +105,7 @@ def list_accounts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("gl:accounts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List GL accounts with filters."""
     accounts = chart_of_accounts_service.list(
@@ -145,7 +132,7 @@ def update_account(
     payload: AccountUpdate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:accounts:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a GL account."""
     user_id = UUID(auth["person_id"]) if auth.get("person_id") else None
@@ -174,7 +161,7 @@ def deactivate_account(
     account_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:accounts:delete")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Deactivate a GL account."""
     return chart_of_accounts_service.deactivate_account(db, organization_id, account_id)
@@ -185,7 +172,7 @@ def activate_account(
     account_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:accounts:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Activate a GL account."""
     return chart_of_accounts_service.activate_account(db, organization_id, account_id)
@@ -205,7 +192,7 @@ def create_fiscal_period(
     payload: FiscalPeriodCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:periods:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new fiscal period."""
     input_data = FiscalPeriodInput(
@@ -225,7 +212,7 @@ def get_fiscal_period(
     period_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:periods:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a fiscal period by ID."""
     return fiscal_period_service.get(db, str(period_id), organization_id)
@@ -239,7 +226,7 @@ def list_fiscal_periods(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("gl:periods:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List fiscal periods with filters."""
     periods = fiscal_period_service.list(
@@ -263,7 +250,7 @@ def open_fiscal_period(
     period_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:periods:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Open a fiscal period for posting."""
     opened_by_user_id = UUID(auth["person_id"]) if auth.get("person_id") else None
@@ -282,7 +269,7 @@ def close_fiscal_period(
     organization_id: UUID = Depends(require_organization_id),
     closed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("gl:periods:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Close a fiscal period."""
     return fiscal_period_service.close_period(
@@ -305,7 +292,7 @@ def create_journal_entry(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("gl:journals:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new journal entry."""
     lines = [
@@ -348,7 +335,7 @@ def get_journal_entry(
     entry_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:journals:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a journal entry by ID."""
     return journal_service.get(db, str(entry_id), organization_id)
@@ -365,7 +352,7 @@ def list_journal_entries(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("gl:journals:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List journal entries with filters."""
     entries = journal_service.list(
@@ -393,7 +380,7 @@ def post_journal_entry(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("gl:journals:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post a journal entry to the ledger."""
     result = ledger_posting_service.post_entry(
@@ -417,7 +404,7 @@ def reverse_journal_entry(
     organization_id: UUID = Depends(require_organization_id),
     reversed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("gl:journals:void")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reverse a posted journal entry."""
     return journal_service.reverse_entry(
@@ -440,7 +427,7 @@ def get_account_balance(
     fiscal_period_id: UUID = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:balances:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get account balance for a fiscal period."""
     from app.services.finance.gl import balance_service
@@ -476,7 +463,7 @@ def get_trial_balance(
     fiscal_period_id: UUID = Query(...),
     as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("reports:trial_balance:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get trial balance for a fiscal period."""
     from app.services.finance.gl import balance_service

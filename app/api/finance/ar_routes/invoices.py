@@ -6,8 +6,8 @@ from uuid import UUID
 from fastapi import Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ar_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ar_routes.base import router
 from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
 from app.schemas.finance.ar import ARInvoiceCreate, ARInvoiceRead
 from app.schemas.finance.common import ListResponse, PostingResultSchema
@@ -28,7 +28,7 @@ def create_ar_invoice(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:invoices:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new AR invoice."""
     lines = [
@@ -67,7 +67,7 @@ def get_ar_invoice(
     invoice_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ar:invoices:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an AR invoice by ID."""
     return ar_invoice_service.get(db, organization_id, str(invoice_id))
@@ -83,7 +83,7 @@ def list_ar_invoices(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:invoices:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List AR invoices with filters."""
     status_value = None
@@ -117,7 +117,7 @@ def post_ar_invoice(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:invoices:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post an AR invoice to the GL."""
     result = ar_posting_adapter.post_invoice(

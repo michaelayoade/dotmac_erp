@@ -11,11 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
+    get_db_with_org,
     require_current_employee_id,
     require_organization_id,
     require_tenant_auth,
 )
-from app.db import SessionLocal
 from app.models.people.scheduling import RotationType, ScheduleStatus, SwapRequestStatus
 from app.schemas.people.scheduling import (
     GenerateScheduleResult,
@@ -91,18 +91,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # =============================================================================
 # Shift Patterns
 # =============================================================================
@@ -116,7 +104,7 @@ def list_patterns(
     rotation_type: RotationType | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List shift patterns."""
     svc = SchedulingService(db)
@@ -141,7 +129,7 @@ def list_patterns(
 def create_pattern(
     payload: ShiftPatternCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a shift pattern."""
     try:
@@ -174,7 +162,7 @@ def create_pattern(
 def get_pattern(
     pattern_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a shift pattern by ID."""
     try:
@@ -191,7 +179,7 @@ def update_pattern(
     pattern_id: UUID,
     payload: ShiftPatternUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a shift pattern."""
     svc = SchedulingService(db)
@@ -204,7 +192,7 @@ def update_pattern(
 def delete_pattern(
     pattern_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Deactivate a shift pattern."""
     svc = SchedulingService(db)
@@ -226,7 +214,7 @@ def list_assignments(
     effective_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List pattern assignments."""
     svc = SchedulingService(db)
@@ -255,7 +243,7 @@ def list_assignments(
 def create_assignment(
     payload: PatternAssignmentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a pattern assignment."""
     svc = SchedulingService(db)
@@ -276,7 +264,7 @@ def create_assignment(
 def bulk_create_assignments(
     payload: PatternAssignmentBulkCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk create pattern assignments for multiple employees."""
     svc = SchedulingService(db)
@@ -296,7 +284,7 @@ def bulk_create_assignments(
 def get_assignment(
     assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a pattern assignment by ID."""
     svc = SchedulingService(db)
@@ -310,7 +298,7 @@ def update_assignment(
     assignment_id: UUID,
     payload: PatternAssignmentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a pattern assignment."""
     svc = SchedulingService(db)
@@ -323,7 +311,7 @@ def update_assignment(
 def delete_assignment(
     assignment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """End a pattern assignment."""
     svc = SchedulingService(db)
@@ -346,7 +334,7 @@ def list_schedules(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List shift schedules."""
     svc = SchedulingService(db)
@@ -372,7 +360,7 @@ def list_schedules(
 def generate_schedules(
     payload: ScheduleGenerateRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate monthly schedules for a department."""
     try:
@@ -391,7 +379,7 @@ def generate_schedules(
 def publish_schedules(
     payload: SchedulePublishRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Publish draft schedules for a department."""
     generator = ScheduleGenerator(db)
@@ -412,7 +400,7 @@ def delete_month_schedules(
     department_id: UUID,
     year_month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete all draft schedules for a month (for regeneration)."""
     generator = ScheduleGenerator(db)
@@ -432,7 +420,7 @@ def delete_month_schedules(
 def get_schedule(
     schedule_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a shift schedule by ID."""
     svc = SchedulingService(db)
@@ -446,7 +434,7 @@ def update_schedule(
     schedule_id: UUID,
     payload: ShiftScheduleUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a shift schedule entry (DRAFT only)."""
     svc = SchedulingService(db)
@@ -459,7 +447,7 @@ def update_schedule(
 def delete_schedule(
     schedule_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a shift schedule entry (DRAFT only)."""
     svc = SchedulingService(db)
@@ -479,7 +467,7 @@ def list_swap_requests(
     target_employee_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List swap requests."""
     svc = SwapService(db)
@@ -505,7 +493,7 @@ def create_swap_request(
     payload: SwapRequestCreate,
     organization_id: UUID = Depends(require_organization_id),
     requester_id: UUID = Depends(require_current_employee_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a swap request."""
     try:
@@ -528,7 +516,7 @@ def get_my_swap_requests(
     employee_id: UUID = Depends(require_current_employee_id),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get swap requests created by the current employee."""
     svc = SwapService(db)
@@ -551,7 +539,7 @@ def get_pending_acceptance(
     employee_id: UUID = Depends(require_current_employee_id),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get swap requests waiting for the current employee's acceptance."""
     svc = SwapService(db)
@@ -572,7 +560,7 @@ def get_pending_acceptance(
 def get_swap_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a swap request by ID."""
     svc = SwapService(db)
@@ -586,7 +574,7 @@ def accept_swap_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     employee_id: UUID = Depends(require_current_employee_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Target employee accepts the swap request."""
     try:
@@ -607,7 +595,7 @@ def decline_swap_request(
     payload: SwapRequestDecline,
     organization_id: UUID = Depends(require_organization_id),
     employee_id: UUID = Depends(require_current_employee_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Target employee declines the swap request."""
     try:
@@ -629,7 +617,7 @@ def approve_swap_request(
     payload: SwapRequestReview,
     organization_id: UUID = Depends(require_organization_id),
     manager_id: UUID = Depends(require_current_employee_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Manager approves the swap request."""
     try:
@@ -651,7 +639,7 @@ def reject_swap_request(
     payload: SwapRequestReview,
     organization_id: UUID = Depends(require_organization_id),
     manager_id: UUID = Depends(require_current_employee_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Manager rejects the swap request."""
     try:
@@ -672,7 +660,7 @@ def cancel_swap_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     requester_id: UUID = Depends(require_current_employee_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Requester cancels the swap request."""
     try:

@@ -12,9 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.api.finance.utils import parse_enum
-from app.db import SessionLocal
 from app.models.fixed_assets.asset import AssetStatus
 from app.models.fixed_assets.asset_disposal import DisposalType
 from app.schemas.finance.common import ListResponse, PostingResultSchema
@@ -38,18 +37,6 @@ router = APIRouter(
         Depends(require_feature(FEATURE_FIXED_ASSETS)),
     ],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -183,7 +170,7 @@ def create_asset(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("fa:assets:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new fixed asset."""
     input_data = AssetInput(
@@ -210,7 +197,7 @@ def get_asset(
     asset_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("fa:assets:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a fixed asset by ID."""
     return asset_service.get(db, str(asset_id), organization_id)
@@ -225,7 +212,7 @@ def list_assets(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("fa:assets:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List fixed assets with filters."""
     assets = asset_service.list(
@@ -252,7 +239,7 @@ def capitalize_asset(
     in_service_date: date | None = None,
     depreciation_start_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("fa:assets:capitalize")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Capitalize an asset (put in service)."""
     return asset_service.activate_asset(
@@ -273,7 +260,7 @@ def post_asset_acquisition(
     credit_account_id: UUID = Query(...),
     description: str | None = None,
     auth: dict = Depends(require_tenant_permission("fa:assets:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post asset acquisition to GL."""
     result = FAPostingAdapter.post_asset_acquisition(
@@ -308,7 +295,7 @@ def run_depreciation(
     organization_id: UUID = Depends(require_organization_id),
     run_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("fa:depreciation:run")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Run depreciation for a fiscal period."""
     run = depreciation_service.create_depreciation_run(
@@ -332,7 +319,7 @@ def list_depreciation_runs(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("fa:depreciation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List depreciation runs."""
     runs = depreciation_service.list(
@@ -358,7 +345,7 @@ def calculate_depreciation_run(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("fa:depreciation:run")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate depreciation for an existing run."""
     return depreciation_service.calculate_run(
@@ -375,7 +362,7 @@ def post_depreciation(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("fa:depreciation:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post depreciation run to GL."""
     run = depreciation_service.post_run(
@@ -401,7 +388,7 @@ def list_depreciation_schedules(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("fa:depreciation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List depreciation schedules for a specific run."""
     schedules = depreciation_service.get_run_schedules(
@@ -433,7 +420,7 @@ def dispose_asset(
     organization_id: UUID = Depends(require_organization_id),
     disposed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("fa:disposals:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Dispose of a fixed asset."""
     try:
@@ -471,7 +458,7 @@ def post_disposal(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("fa:disposals:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post asset disposal to GL."""
     result = FAPostingAdapter.post_asset_disposal(

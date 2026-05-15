@@ -7,8 +7,8 @@ from fastapi import Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.api.finance.utils import parse_enum
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -33,7 +33,7 @@ def create_ap_invoice(
     payload: APInvoiceCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:invoices:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new AP invoice."""
     created_by_user_id = UUID(auth["person_id"])
@@ -74,7 +74,7 @@ def get_ap_invoice(
     invoice_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:invoices:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an AP invoice by ID."""
     return supplier_invoice_service.get(db, str(invoice_id), organization_id)
@@ -90,7 +90,7 @@ def list_ap_invoices(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:invoices:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List AP invoices with filters."""
     status_value = None
@@ -134,7 +134,7 @@ def submit_ap_invoice(
     invoice_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:invoices:submit")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit an AP invoice for approval."""
     submitted_by_user_id = UUID(auth["person_id"])
@@ -151,7 +151,7 @@ def approve_ap_invoice(
     invoice_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:invoices:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve an AP invoice."""
     approved_by_user_id = UUID(auth["person_id"])
@@ -169,7 +169,7 @@ def post_ap_invoice(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:invoices:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post an AP invoice to the GL."""
     posted_by_user_id = UUID(auth["person_id"])

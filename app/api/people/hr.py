@@ -11,8 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.finance.core_org.location import LocationType
 from app.models.people.hr.checklist_template import ChecklistTemplateType
 from app.net import get_request_host, get_request_scheme
@@ -100,18 +99,6 @@ def _resolve_app_url(request: Request) -> str:
     return f"{scheme}://{host}".rstrip("/")
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
@@ -154,7 +141,7 @@ def list_departments(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List departments."""
     svc = OrganizationService(db, organization_id)
@@ -174,7 +161,7 @@ def list_departments(
 def create_department(
     payload: DepartmentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a department."""
     svc = OrganizationService(db, organization_id)
@@ -194,7 +181,7 @@ def create_department(
 def get_department(
     department_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a department by ID."""
     svc = OrganizationService(db, organization_id)
@@ -206,7 +193,7 @@ def update_department(
     department_id: UUID,
     payload: DepartmentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a department."""
     svc = OrganizationService(db, organization_id)
@@ -226,7 +213,7 @@ def update_department(
 def delete_department(
     department_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a department."""
     svc = OrganizationService(db, organization_id)
@@ -244,7 +231,7 @@ def list_designations(
     search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List designations."""
     svc = OrganizationService(db, organization_id)
@@ -272,7 +259,7 @@ def list_locations(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = OrganizationService(db, organization_id)
     result = svc.list_locations(
@@ -294,7 +281,7 @@ def list_locations(
 def create_location(
     payload: LocationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     location_type = parse_enum(payload.location_type, LocationType, "location_type")
     svc = OrganizationService(db, organization_id)
@@ -326,7 +313,7 @@ def create_location(
 def get_location(
     location_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = OrganizationService(db, organization_id)
     return LocationRead.model_validate(svc.get_location(location_id))
@@ -337,7 +324,7 @@ def update_location(
     location_id: UUID,
     payload: LocationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     update_data = payload.model_dump(exclude_unset=True)
     if "location_type" in update_data:
@@ -355,7 +342,7 @@ def update_location(
 def delete_location(
     location_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = OrganizationService(db, organization_id)
     svc.delete_location(location_id)
@@ -374,7 +361,7 @@ def list_checklist_templates(
     search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = ChecklistTemplateService(db)
     template_enum = parse_enum(template_type, ChecklistTemplateType, "template_type")
@@ -401,7 +388,7 @@ def list_checklist_templates(
 def create_checklist_template(
     payload: ChecklistTemplateCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = ChecklistTemplateService(db)
     template = svc.create_template(
@@ -420,7 +407,7 @@ def create_checklist_template(
 def get_checklist_template(
     template_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = ChecklistTemplateService(db)
     return ChecklistTemplateRead.model_validate(
@@ -435,7 +422,7 @@ def update_checklist_template(
     template_id: UUID,
     payload: ChecklistTemplateUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = ChecklistTemplateService(db)
     update_data = payload.model_dump(exclude_unset=True)
@@ -451,7 +438,7 @@ def update_checklist_template(
 def delete_checklist_template(
     template_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = ChecklistTemplateService(db)
     svc.delete_template(organization_id, template_id)
@@ -463,7 +450,7 @@ def delete_checklist_template(
 def create_designation(
     payload: DesignationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a designation."""
     svc = OrganizationService(db, organization_id)
@@ -481,7 +468,7 @@ def create_designation(
 def get_designation(
     designation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a designation by ID."""
     svc = OrganizationService(db, organization_id)
@@ -493,7 +480,7 @@ def update_designation(
     designation_id: UUID,
     payload: DesignationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a designation."""
     svc = OrganizationService(db, organization_id)
@@ -511,7 +498,7 @@ def update_designation(
 def delete_designation(
     designation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a designation."""
     svc = OrganizationService(db, organization_id)
@@ -530,7 +517,7 @@ def list_employment_types(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List employment types."""
     svc = OrganizationService(db, organization_id)
@@ -554,7 +541,7 @@ def list_employment_types(
 def create_employment_type(
     payload: EmploymentTypeCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an employment type."""
     svc = OrganizationService(db, organization_id)
@@ -572,7 +559,7 @@ def create_employment_type(
 def get_employment_type(
     employment_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an employment type by ID."""
     svc = OrganizationService(db, organization_id)
@@ -588,7 +575,7 @@ def update_employment_type(
     employment_type_id: UUID,
     payload: EmploymentTypeUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an employment type."""
     svc = OrganizationService(db, organization_id)
@@ -608,7 +595,7 @@ def update_employment_type(
 def delete_employment_type(
     employment_type_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an employment type."""
     svc = OrganizationService(db, organization_id)
@@ -627,7 +614,7 @@ def list_employee_grades(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List employee grades."""
     svc = OrganizationService(db, organization_id)
@@ -649,7 +636,7 @@ def list_employee_grades(
 def create_employee_grade(
     payload: EmployeeGradeCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an employee grade."""
     svc = OrganizationService(db, organization_id)
@@ -670,7 +657,7 @@ def create_employee_grade(
 def get_employee_grade(
     grade_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an employee grade by ID."""
     svc = OrganizationService(db, organization_id)
@@ -682,7 +669,7 @@ def update_employee_grade(
     grade_id: UUID,
     payload: EmployeeGradeUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an employee grade."""
     svc = OrganizationService(db, organization_id)
@@ -703,7 +690,7 @@ def update_employee_grade(
 def delete_employee_grade(
     grade_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an employee grade."""
     svc = OrganizationService(db, organization_id)
@@ -728,7 +715,7 @@ def list_employees(
     filters: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List employees."""
     svc = EmployeeService(db, organization_id)
@@ -762,7 +749,7 @@ def list_employees(
 @router.get("/employees/stats", response_model=EmployeeStatsRead)
 def get_employee_stats(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get employee statistics."""
     svc = EmployeeService(db, organization_id)
@@ -776,7 +763,7 @@ def create_employee(
     payload: EmployeeCreate,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an employee."""
     svc = EmployeeService(db, organization_id)
@@ -811,7 +798,7 @@ def create_employee(
 def get_employee(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an employee by ID."""
     svc = EmployeeService(db, organization_id)
@@ -824,7 +811,7 @@ def update_employee(
     payload: EmployeeUpdate,
     auth: dict = Depends(require_tenant_auth),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an employee."""
     if _payload_updates_final_payroll(
@@ -871,7 +858,7 @@ def create_employee_user_credentials(
     employee_id: UUID,
     payload: EmployeeUserCredentialCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create user credentials for an employee's linked Person."""
     svc = EmployeeService(db, organization_id)
@@ -890,7 +877,7 @@ def link_employee_user(
     employee_id: UUID,
     payload: EmployeeUserLink,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Link an employee to an existing user (Person)."""
     svc = EmployeeService(db, organization_id)
@@ -902,7 +889,7 @@ def link_employee_user(
 def delete_employee(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an employee (soft delete)."""
     svc = EmployeeService(db, organization_id)
@@ -918,7 +905,7 @@ def delete_employee(
 def activate_employee(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Activate an employee."""
     svc = EmployeeService(db, organization_id)
@@ -930,7 +917,7 @@ def activate_employee(
 def suspend_employee(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Suspend an employee."""
     svc = EmployeeService(db, organization_id)
@@ -944,7 +931,7 @@ def terminate_employee(
     payload: TerminationRequest,
     auth: dict = Depends(require_tenant_auth),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Terminate an employee."""
     if _payload_updates_final_payroll(
@@ -971,7 +958,7 @@ def resign_employee(
     payload: ResignationRequest,
     auth: dict = Depends(require_tenant_auth),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record employee resignation."""
     if _payload_updates_final_payroll(
@@ -995,7 +982,7 @@ def rehire_employee(
     employee_id: UUID,
     payload: RehireRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Rehire a previously separated employee."""
     svc = EmployeeService(db, organization_id)
@@ -1016,7 +1003,7 @@ def rehire_employee(
 def bulk_update_employees(
     payload: BulkUpdateRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk update employees."""
     svc = EmployeeService(db, organization_id)
@@ -1039,7 +1026,7 @@ def bulk_update_employees(
 def bulk_delete_employees(
     payload: BulkDeleteRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk delete employees."""
     svc = EmployeeService(db, organization_id)

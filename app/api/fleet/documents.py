@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.fleet.enums import DocumentType
 from app.schemas.fleet.document import (
     DocumentBrief,
@@ -25,18 +24,6 @@ from app.services.fleet.document_service import DocumentService
 router = APIRouter(prefix="/documents", tags=["fleet-documents"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
     organization_id: UUID = Depends(require_organization_id),
@@ -46,7 +33,7 @@ def list_documents(
     expiring_soon: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List documents with optional filtering."""
     type_enum = DocumentType(document_type) if document_type else None
@@ -72,7 +59,7 @@ def list_documents(
 def get_document(
     document_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get document details."""
     service = DocumentService(db, organization_id)
@@ -87,7 +74,7 @@ def get_document(
 def create_document(
     data: DocumentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new document record."""
     service = DocumentService(db, organization_id)
@@ -103,7 +90,7 @@ def update_document(
     document_id: UUID,
     data: DocumentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a document record."""
     service = DocumentService(db, organization_id)
@@ -118,7 +105,7 @@ def update_document(
 def delete_document(
     document_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a document record."""
     service = DocumentService(db, organization_id)

@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.schemas.procurement.vendor import (
     PrequalificationCreate,
     PrequalificationResponse,
@@ -20,18 +19,6 @@ from app.services.procurement.vendor import VendorPrequalificationService
 router = APIRouter(prefix="/vendors", tags=["procurement-vendors"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=list[PrequalificationResponse])
 @router.get("/", response_model=list[PrequalificationResponse], include_in_schema=False)
 def list_vendors(
@@ -39,7 +26,7 @@ def list_vendors(
     status_filter: str | None = Query(None, alias="status"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List vendors (prequalification records)."""
     service = VendorPrequalificationService(db)
@@ -58,7 +45,7 @@ def list_prequalifications(
     status_filter: str | None = Query(None, alias="status"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List vendor prequalifications."""
     service = VendorPrequalificationService(db)
@@ -77,7 +64,7 @@ def list_prequalifications(
 def get_prequalification(
     prequalification_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a prequalification by ID."""
     service = VendorPrequalificationService(db)
@@ -95,7 +82,7 @@ def get_prequalification(
 def create_prequalification(
     data: PrequalificationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a prequalification record."""
     service = VendorPrequalificationService(db)
@@ -111,7 +98,7 @@ def update_prequalification(
     prequalification_id: UUID,
     data: PrequalificationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a prequalification record."""
     service = VendorPrequalificationService(db)
@@ -130,7 +117,7 @@ def qualify_vendor(
     prequalification_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Qualify a vendor."""
     person_id = auth.get("person_id")
@@ -153,7 +140,7 @@ def disqualify_vendor(
     prequalification_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Disqualify a vendor."""
     person_id = auth.get("person_id")

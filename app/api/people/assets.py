@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
 from app.schemas.finance.common import ListResponse
 from app.models.fixed_assets.maintenance_request import MaintenanceRequestStatus
@@ -70,18 +69,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
@@ -101,7 +88,7 @@ def list_assignments(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List asset assignments."""
     svc = AssetAssignmentService(db)
@@ -127,7 +114,7 @@ def list_available_assets(
     location_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List available (unassigned) assets."""
     svc = AssetAssignmentService(db)
@@ -154,7 +141,7 @@ def list_assignment_movements(
     movement_type: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List assignment and location movement history."""
     svc = AssetAssignmentService(db)
@@ -184,7 +171,7 @@ def list_tracking_events(
     location_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List asset tracking events (QR/Barcode, RFID, GPS)."""
     svc = AssetTrackingService(db)
@@ -213,7 +200,7 @@ def record_tracking_event(
     payload: AssetTrackingEventCreate,
     organization_id: UUID = Depends(require_organization_id),
     scanned_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record a new asset tracking event and update location when provided."""
     svc = AssetTrackingService(db)
@@ -239,7 +226,7 @@ def list_asset_audit_plans(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List asset audit plans."""
     svc = AssetAuditService(db)
@@ -266,7 +253,7 @@ def create_asset_audit_plan(
     payload: AssetAuditPlanCreate,
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an asset audit plan and snapshot expected asset state."""
     svc = AssetAuditService(db)
@@ -285,7 +272,7 @@ def create_asset_audit_plan(
 def start_asset_audit_plan(
     audit_plan_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Start an audit plan."""
     svc = AssetAuditService(db)
@@ -303,7 +290,7 @@ def list_asset_audit_lines(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List audit lines for a plan."""
     svc = AssetAuditService(db)
@@ -332,7 +319,7 @@ def list_asset_audit_discrepancies(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List discrepancy records captured for an audit plan."""
     svc = AssetAuditService(db)
@@ -357,7 +344,7 @@ def list_asset_lifecycle_events(
     event_category: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List asset state/location/ownership/maintenance lifecycle events."""
     svc = AssetAuditService(db)
@@ -381,7 +368,7 @@ def record_asset_audit_check(
     payload: AssetAuditLineCheckRequest,
     organization_id: UUID = Depends(require_organization_id),
     checked_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record physical verification of one asset line."""
     svc = AssetAuditService(db)
@@ -402,7 +389,7 @@ def record_asset_audit_check(
 def complete_asset_audit_plan(
     audit_plan_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Complete audit and compute discrepancy metrics."""
     svc = AssetAuditService(db)
@@ -420,7 +407,7 @@ def apply_asset_audit_adjustment(
     payload: AssetAuditAdjustmentCreate,
     organization_id: UUID = Depends(require_organization_id),
     applied_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Apply discrepancy adjustment action."""
     svc = AssetAuditService(db)
@@ -445,7 +432,7 @@ def issue_asset(
     organization_id: UUID = Depends(require_organization_id),
     moved_by_user_id: UUID | None = Query(default=None),
     location_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Issue an asset to an employee."""
     svc = AssetAssignmentService(db)
@@ -469,7 +456,7 @@ def return_asset(
     payload: AssetAssignmentReturnRequest,
     organization_id: UUID = Depends(require_organization_id),
     moved_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Return an assigned asset."""
     svc = AssetAssignmentService(db)
@@ -492,7 +479,7 @@ def transfer_asset(
     payload: AssetAssignmentTransferRequest,
     organization_id: UUID = Depends(require_organization_id),
     moved_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Transfer an asset to another employee."""
     svc = AssetAssignmentService(db)
@@ -518,7 +505,7 @@ def reassign_asset(
     payload: AssetAssignmentReassignRequest,
     organization_id: UUID = Depends(require_organization_id),
     moved_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reassign an asset to another employee/location."""
     svc = AssetAssignmentService(db)
@@ -542,7 +529,7 @@ def move_asset_location(
     payload: AssetLocationMoveRequest,
     organization_id: UUID = Depends(require_organization_id),
     moved_by_user_id: UUID | None = Query(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Move an asset between locations and log the movement."""
     svc = AssetAssignmentService(db)
@@ -566,7 +553,7 @@ def run_depreciation(
     payload: AssetDepreciationRunCreate,
     run_by_user_id: UUID = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create and calculate a depreciation run."""
     svc = PeopleAssetDepreciationService(db)
@@ -586,7 +573,7 @@ def list_depreciation_runs(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List depreciation runs."""
     svc = PeopleAssetDepreciationService(db)
@@ -608,7 +595,7 @@ def list_depreciation_runs(
 def calculate_depreciation_run(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate depreciation for an existing run."""
     svc = PeopleAssetDepreciationService(db)
@@ -624,7 +611,7 @@ def post_depreciation_run(
     posted_by_user_id: UUID = Query(...),
     posting_date: date | None = Query(default=None),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post depreciation run and update asset balances."""
     svc = PeopleAssetDepreciationService(db)
@@ -644,7 +631,7 @@ def post_depreciation_run(
 def list_depreciation_run_schedules(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List depreciation schedules for a run."""
     svc = PeopleAssetDepreciationService(db)
@@ -666,7 +653,7 @@ def list_maintenance_requests(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List maintenance requests."""
     svc = AssetMaintenanceService(db)
@@ -694,7 +681,7 @@ def create_maintenance_request(
     payload: MaintenanceRequestCreate,
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create maintenance request."""
     svc = AssetMaintenanceService(db)
@@ -721,7 +708,7 @@ def list_maintenance_work_orders(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List maintenance work orders."""
     svc = AssetMaintenanceService(db)
@@ -749,7 +736,7 @@ def create_maintenance_work_order(
     payload: MaintenanceWorkOrderCreate,
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create maintenance work order from a request."""
     svc = AssetMaintenanceService(db)
@@ -772,7 +759,7 @@ def start_maintenance_work_order(
     work_order_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     started_by_user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Start maintenance work order."""
     svc = AssetMaintenanceService(db)
@@ -793,7 +780,7 @@ def use_parts_for_maintenance_work_order(
     payload: MaintenancePartsUseRequest,
     organization_id: UUID = Depends(require_organization_id),
     used_by_user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Issue available parts and trigger procurement for shortages."""
     svc = AssetMaintenanceService(db)
@@ -832,7 +819,7 @@ def complete_maintenance_work_order(
     payload: MaintenanceWorkOrderCompleteRequest,
     organization_id: UUID = Depends(require_organization_id),
     completed_by_user_id: UUID = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Complete maintenance work order."""
     svc = AssetMaintenanceService(db)

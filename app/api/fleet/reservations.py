@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.fleet.enums import ReservationStatus
 from app.schemas.fleet.reservation import (
     AvailableVehiclesRequest,
@@ -38,18 +37,6 @@ from app.services.fleet.vehicle_service import VehicleService
 router = APIRouter(prefix="/reservations", tags=["fleet-reservations"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=ReservationListResponse)
 def list_reservations(
     organization_id: UUID = Depends(require_organization_id),
@@ -60,7 +47,7 @@ def list_reservations(
     to_date: datetime | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List reservations with optional filtering."""
     status_enum = ReservationStatus(status) if status else None
@@ -87,7 +74,7 @@ def list_reservations(
 def get_available_vehicles(
     data: AvailableVehiclesRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get pool vehicles available for the requested time period."""
     service = VehicleService(db, organization_id)
@@ -101,7 +88,7 @@ def get_available_vehicles(
 def get_reservation(
     reservation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get reservation details."""
     service = ReservationService(db, organization_id)
@@ -116,7 +103,7 @@ def get_reservation(
 def create_reservation(
     data: ReservationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new reservation request."""
     service = ReservationService(db, organization_id)
@@ -136,7 +123,7 @@ def update_reservation(
     reservation_id: UUID,
     data: ReservationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a reservation."""
     service = ReservationService(db, organization_id)
@@ -156,7 +143,7 @@ def approve_reservation(
     reservation_id: UUID,
     data: ReservationApprove,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a reservation request."""
     service = ReservationService(db, organization_id)
@@ -176,7 +163,7 @@ def reject_reservation(
     reservation_id: UUID,
     data: ReservationReject,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a reservation request."""
     service = ReservationService(db, organization_id)
@@ -194,7 +181,7 @@ def checkout_vehicle(
     reservation_id: UUID,
     data: ReservationCheckout,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Check out vehicle (start the reservation)."""
     service = ReservationService(db, organization_id)
@@ -212,7 +199,7 @@ def checkin_vehicle(
     reservation_id: UUID,
     data: ReservationCheckin,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Check in vehicle (complete the reservation)."""
     service = ReservationService(db, organization_id)
@@ -229,7 +216,7 @@ def checkin_vehicle(
 def cancel_reservation(
     reservation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a reservation."""
     service = ReservationService(db, organization_id)

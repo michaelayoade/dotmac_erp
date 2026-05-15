@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.schemas.fleet.fuel import (
     FuelEfficiencyReport,
     FuelLogBrief,
@@ -26,18 +25,6 @@ from app.services.fleet.fuel_service import FuelService
 router = APIRouter(prefix="/fuel", tags=["fleet-fuel"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=FuelLogListResponse)
 def list_fuel_logs(
     organization_id: UUID = Depends(require_organization_id),
@@ -47,7 +34,7 @@ def list_fuel_logs(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List fuel log entries with optional filtering."""
     service = FuelService(db, organization_id)
@@ -73,7 +60,7 @@ def get_fuel_efficiency(
     from_date: date | None = None,
     to_date: date | None = None,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate fuel efficiency for a vehicle."""
     service = FuelService(db, organization_id)
@@ -84,7 +71,7 @@ def get_fuel_efficiency(
 def get_fuel_log(
     fuel_log_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get fuel log details."""
     service = FuelService(db, organization_id)
@@ -99,7 +86,7 @@ def get_fuel_log(
 def create_fuel_log(
     data: FuelLogCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record a new fuel purchase."""
     service = FuelService(db, organization_id)
@@ -117,7 +104,7 @@ def update_fuel_log(
     fuel_log_id: UUID,
     data: FuelLogUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a fuel log entry."""
     service = FuelService(db, organization_id)
@@ -132,7 +119,7 @@ def update_fuel_log(
 def delete_fuel_log(
     fuel_log_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a fuel log entry."""
     service = FuelService(db, organization_id)

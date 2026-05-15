@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.schemas.procurement.procurement_plan import (
     ProcurementPlanCreate,
     ProcurementPlanResponse,
@@ -20,18 +19,6 @@ from app.services.procurement.procurement_plan import ProcurementPlanService
 router = APIRouter(prefix="/plans", tags=["procurement-plans"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=list[ProcurementPlanResponse])
 def list_plans(
     organization_id: UUID = Depends(require_organization_id),
@@ -39,7 +26,7 @@ def list_plans(
     fiscal_year: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List procurement plans."""
     service = ProcurementPlanService(db)
@@ -57,7 +44,7 @@ def list_plans(
 def get_plan(
     plan_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a procurement plan by ID."""
     service = ProcurementPlanService(db)
@@ -74,7 +61,7 @@ def create_plan(
     data: ProcurementPlanCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new procurement plan."""
     service = ProcurementPlanService(db)
@@ -94,7 +81,7 @@ def update_plan(
     plan_id: UUID,
     data: ProcurementPlanUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a procurement plan."""
     service = ProcurementPlanService(db)
@@ -111,7 +98,7 @@ def update_plan(
 def submit_plan(
     plan_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit a plan for approval."""
     service = ProcurementPlanService(db)
@@ -129,7 +116,7 @@ def approve_plan(
     plan_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a procurement plan."""
     service = ProcurementPlanService(db)

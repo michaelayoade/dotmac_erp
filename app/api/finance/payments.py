@@ -11,7 +11,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import (
+    get_db_with_org,
+    require_organization_id,
+    require_tenant_auth,
+)
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.payments.payment_intent import PaymentIntentStatus
@@ -52,7 +56,7 @@ def get_db():
 
 def require_expense_reimburse_access(
     auth=Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Allow finance users and expense approvers to reimburse via Paystack.
@@ -277,7 +281,7 @@ def initialize_invoice_payment(
     request_data: InitializeInvoicePaymentRequest,
     request: Request,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_permission("payments:invoice:initialize")),
 ):
     """
@@ -328,7 +332,7 @@ def initialize_invoice_payment(
 def get_payment_status(
     reference: str,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """
@@ -359,7 +363,7 @@ def get_payment_status(
 def get_payment_intent(
     intent_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """
@@ -391,7 +395,7 @@ def get_payment_intent(
 def verify_payment(
     reference: str,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_permission("payments:verify")),
 ):
     """
@@ -433,7 +437,7 @@ def verify_payment(
 @router.get("/banks", response_model=list[BankInfo])
 def list_banks(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
@@ -463,7 +467,7 @@ def list_banks(
 def resolve_bank_account(
     request_data: ResolveAccountRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
@@ -505,7 +509,7 @@ def resolve_bank_account(
 def initialize_expense_payment(
     request_data: InitializeExpensePaymentRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
@@ -573,7 +577,7 @@ def reset_expense_payment_intent(
     expense_claim_id: UUID,
     request_data: ResetExpensePaymentIntentRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
@@ -612,7 +616,7 @@ def reset_expense_payment_intent(
 def initiate_transfer(
     intent_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_expense_reimburse_access),
 ):
     """
@@ -684,7 +688,7 @@ def initiate_transfer(
 @router.get("/transfers/pending")
 def list_pending_transfers(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     auth: dict = Depends(require_tenant_permission("payments:read")),
 ):
     """

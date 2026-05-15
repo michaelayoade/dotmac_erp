@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_db_with_org
 from app.db import SessionLocal
 from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
 from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
@@ -60,6 +61,12 @@ router = APIRouter(prefix="/banking", tags=["banking"])
 
 
 def get_db():
+    """Unprimed DB session for unauthenticated routes (Mono webhook).
+
+    Tenant-scoped banking routes use ``get_db_with_org`` instead; this
+    yielder exists only for the webhook handler at the bottom of this
+    module, which has no auth context to derive an org from.
+    """
     db = SessionLocal()
     try:
         yield db
@@ -150,7 +157,7 @@ async def _bank_account_payload_from_request(request: Request, model_cls):
 async def create_bank_account(
     request: Request,
     auth: dict = Depends(require_tenant_permission("banking:accounts:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new bank account."""
     organization_id = _get_org_id(auth)
@@ -184,7 +191,7 @@ async def create_bank_account(
 def get_bank_account(
     bank_account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:accounts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a bank account by ID."""
     result = bank_account_service.get(db, _get_org_id(auth), bank_account_id)
@@ -204,7 +211,7 @@ def list_bank_accounts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("banking:accounts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List bank accounts with filters."""
     organization_id = _get_org_id(auth)
@@ -249,7 +256,7 @@ async def update_bank_account(
     request: Request,
     bank_account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:accounts:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a bank account."""
     return await _update_bank_account(request, bank_account_id, auth, db)
@@ -260,7 +267,7 @@ async def update_bank_account_post(
     request: Request,
     bank_account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:accounts:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a bank account via form submission."""
     return await _update_bank_account(request, bank_account_id, auth, db)
@@ -271,7 +278,7 @@ def update_bank_account_status(
     bank_account_id: UUID,
     payload: BankAccountStatusUpdate,
     auth: dict = Depends(require_tenant_permission("banking:accounts:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update bank account status."""
     organization_id = _get_org_id(auth)
@@ -296,7 +303,7 @@ def get_bank_account_gl_balance(
     bank_account_id: UUID,
     as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("banking:accounts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get GL balance for a bank account."""
     organization_id = _get_org_id(auth)
@@ -331,7 +338,7 @@ def get_bank_account_gl_balance(
 def import_bank_statement(
     payload: BankStatementImport,
     auth: dict = Depends(require_tenant_permission("banking:statements:import")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Import a bank statement with lines."""
     organization_id = _get_org_id(auth)
@@ -363,7 +370,7 @@ def import_bank_statement(
 def get_bank_statement(
     statement_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a bank statement by ID."""
     organization_id = _get_org_id(auth)
@@ -378,7 +385,7 @@ def get_bank_statement(
 def get_bank_statement_with_lines(
     statement_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a bank statement with all lines."""
     organization_id = _get_org_id(auth)
@@ -398,7 +405,7 @@ def list_bank_statements(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List bank statements with filters."""
     organization_id = _get_org_id(auth)
@@ -431,7 +438,7 @@ def list_bank_statements(
 def get_unmatched_statement_lines(
     statement_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get all unmatched lines for a statement."""
     organization_id = _get_org_id(auth)
@@ -447,7 +454,7 @@ def get_unmatched_statement_lines(
 def delete_bank_statement(
     statement_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statements:delete")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a bank statement."""
     organization_id = _get_org_id(auth)
@@ -466,7 +473,7 @@ def delete_bank_statement(
 def get_statement_summary(
     bank_account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get statement summary statistics for a bank account."""
     organization_id = _get_org_id(auth)
@@ -488,7 +495,7 @@ def get_statement_summary(
 def create_reconciliation(
     payload: ReconciliationCreate,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new bank reconciliation."""
     organization_id = _get_org_id(auth)
@@ -518,7 +525,7 @@ def create_reconciliation(
 def get_reconciliation(
     reconciliation_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a reconciliation by ID."""
     organization_id = _get_org_id(auth)
@@ -535,7 +542,7 @@ def get_reconciliation(
 def get_reconciliation_with_lines(
     reconciliation_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a reconciliation with all lines."""
     organization_id = _get_org_id(auth)
@@ -556,7 +563,7 @@ def list_reconciliations(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List reconciliations with filters."""
     organization_id = _get_org_id(auth)
@@ -593,7 +600,7 @@ def add_reconciliation_match(
     reconciliation_id: UUID,
     payload: ReconciliationMatchCreate,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a match between statement line and GL entry."""
     organization_id = _get_org_id(auth)
@@ -624,7 +631,7 @@ def add_reconciliation_multi_match(
     reconciliation_id: UUID,
     payload: ReconciliationMultiMatchCreate,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Match multiple statement lines to multiple GL entries."""
     organization_id = _get_org_id(auth)
@@ -652,7 +659,7 @@ def add_reconciliation_adjustment(
     reconciliation_id: UUID,
     payload: ReconciliationAdjustmentCreate,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a reconciling adjustment."""
     organization_id = _get_org_id(auth)
@@ -681,7 +688,7 @@ def add_outstanding_item(
     reconciliation_id: UUID,
     payload: ReconciliationOutstandingCreate,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add an outstanding item (deposit in transit or outstanding check)."""
     organization_id = _get_org_id(auth)
@@ -710,7 +717,7 @@ def auto_match_reconciliation(
     reconciliation_id: UUID,
     payload: AutoMatchRequest = AutoMatchRequest(),
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Automatically match statement lines to GL entries."""
     organization_id = _get_org_id(auth)
@@ -733,7 +740,7 @@ def auto_match_reconciliation(
 def submit_reconciliation_for_review(
     reconciliation_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:submit")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit reconciliation for review."""
     organization_id = _get_org_id(auth)
@@ -751,7 +758,7 @@ def approve_reconciliation(
     reconciliation_id: UUID,
     payload: ReconciliationApproval = ReconciliationApproval(),
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a reconciliation."""
     organization_id = _get_org_id(auth)
@@ -774,7 +781,7 @@ def reject_reconciliation(
     reconciliation_id: UUID,
     payload: ReconciliationRejection,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a reconciliation."""
     organization_id = _get_org_id(auth)
@@ -796,7 +803,7 @@ def reject_reconciliation(
 def get_reconciliation_report(
     reconciliation_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get full reconciliation report."""
     organization_id = _get_org_id(auth)
@@ -825,7 +832,7 @@ def link_mono_account(
     account_id: UUID,
     payload: MonoLinkRequest,
     auth: dict = Depends(require_tenant_permission("banking:account:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Link a bank account to Mono Connect.
@@ -851,7 +858,7 @@ def link_mono_account(
 def unlink_mono_account(
     account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:account:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Remove Mono Connect link from a bank account."""
     organization_id = _get_org_id(auth)
@@ -876,7 +883,7 @@ def unlink_mono_account(
 def sync_mono_account(
     account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statement:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Trigger an incremental Mono sync for a bank account.
 
@@ -899,7 +906,7 @@ def sync_mono_account(
 def refresh_mono_account(
     account_id: UUID,
     auth: dict = Depends(require_tenant_permission("banking:statement:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Trigger a real-time data refresh from the upstream bank via Mono.
 

@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.fleet.enums import IncidentSeverity, IncidentStatus, IncidentType
 from app.schemas.fleet.incident import (
     IncidentBrief,
@@ -27,18 +26,6 @@ from app.services.fleet.incident_service import IncidentService
 router = APIRouter(prefix="/incidents", tags=["fleet-incidents"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=IncidentListResponse)
 def list_incidents(
     organization_id: UUID = Depends(require_organization_id),
@@ -51,7 +38,7 @@ def list_incidents(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List incidents with optional filtering."""
     status_enum = IncidentStatus(status) if status else None
@@ -82,7 +69,7 @@ def list_incidents(
 def get_incident(
     incident_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get incident details."""
     service = IncidentService(db, organization_id)
@@ -97,7 +84,7 @@ def get_incident(
 def create_incident(
     data: IncidentCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Report a new incident."""
     service = IncidentService(db, organization_id)
@@ -113,7 +100,7 @@ def update_incident(
     incident_id: UUID,
     data: IncidentUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update incident details."""
     service = IncidentService(db, organization_id)
@@ -131,7 +118,7 @@ def resolve_incident(
     incident_id: UUID,
     data: IncidentResolve,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Resolve an incident."""
     service = IncidentService(db, organization_id)
@@ -148,7 +135,7 @@ def resolve_incident(
 def close_incident(
     incident_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Close an incident."""
     service = IncidentService(db, organization_id)
@@ -165,7 +152,7 @@ def close_incident(
 def delete_incident(
     incident_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Soft delete an incident."""
     service = IncidentService(db, organization_id)

@@ -6,8 +6,8 @@ from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.schemas.finance.ap import GRCreate, GRRead
 from app.schemas.finance.common import ListResponse
@@ -22,7 +22,7 @@ def create_goods_receipt(
     payload: GRCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a goods receipt against a PO."""
     received_by_user_id = UUID(auth["person_id"])
@@ -53,7 +53,7 @@ def get_goods_receipt(
     receipt_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a goods receipt by ID."""
     return goods_receipt_service.get(db, str(receipt_id), organization_id)
@@ -67,7 +67,7 @@ def list_goods_receipts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List goods receipts with filters."""
     status_value = None
@@ -105,7 +105,7 @@ def start_gr_inspection(
     receipt_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Start inspection for a goods receipt."""
     return goods_receipt_service.start_inspection(db, organization_id, receipt_id)
@@ -116,7 +116,7 @@ def accept_goods_receipt(
     receipt_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Accept all items in a goods receipt."""
     return goods_receipt_service.accept_all(db, organization_id, receipt_id)

@@ -12,8 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.finance.rpt.disclosure_checklist import DisclosureStatus
 from app.models.finance.rpt.financial_statement_line import StatementType
 from app.models.finance.rpt.report_definition import ReportType
@@ -39,18 +38,6 @@ router = APIRouter(
     tags=["reporting"],
     dependencies=[Depends(require_tenant_auth)],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def _resolve_statement_type(
@@ -370,7 +357,7 @@ def create_report_definition(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:definitions:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new report definition."""
     input_data = ReportDefinitionInput(
@@ -405,7 +392,7 @@ def get_report_definition(
     report_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:definitions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a report definition by ID."""
     return report_definition_service.get(db, str(report_id), organization_id)
@@ -419,7 +406,7 @@ def list_report_definitions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:definitions:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List report definitions with filters."""
     definitions = report_definition_service.list(
@@ -446,7 +433,7 @@ def clone_report_definition(
     organization_id: UUID = Depends(require_organization_id),
     cloned_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:definitions:clone")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Clone an existing report definition."""
     return report_definition_service.clone_definition(
@@ -472,7 +459,7 @@ def create_statement_line(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:lines:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a financial statement line."""
     statement_type = _resolve_statement_type(db, organization_id, payload.report_id)
@@ -505,7 +492,7 @@ def list_statement_lines(
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:lines:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List statement lines for a report."""
     statement_type = _resolve_statement_type(db, organization_id, report_id)
@@ -530,7 +517,7 @@ def reorder_statement_lines(
     organization_id: UUID = Depends(require_organization_id),
     updated_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:lines:reorder")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reorder statement lines."""
     statement_type = _resolve_statement_type(db, organization_id, report_id)
@@ -557,7 +544,7 @@ def create_report_instance(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:instances:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a report instance (schedule for generation)."""
     request = ReportGenerationRequest(
@@ -580,7 +567,7 @@ def get_report_instance(
     instance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:instances:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a report instance by ID."""
     return report_instance_service.get(db, str(instance_id), organization_id)
@@ -595,7 +582,7 @@ def list_report_instances(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:instances:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List report instances with filters."""
     status_value = None
@@ -627,7 +614,7 @@ def generate_report(
     organization_id: UUID = Depends(require_organization_id),
     generated_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:instances:generate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate a report instance."""
     return report_instance_service.generate_report(
@@ -643,7 +630,7 @@ def get_report_data(
     instance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:instances:data")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get generated report data."""
     payload = report_instance_service.get_report_data(
@@ -677,7 +664,7 @@ def create_disclosure_item(
     payload: DisclosureItemCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:disclosures:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a disclosure checklist item."""
     input_data = DisclosureItemInput(
@@ -710,7 +697,7 @@ def list_disclosure_items(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:disclosures:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List disclosure checklist items."""
     items = disclosure_checklist_service.list(
@@ -741,7 +728,7 @@ def record_disclosure_completion(
     organization_id: UUID = Depends(require_organization_id),
     recorded_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:disclosures:complete")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record disclosure item completion."""
     return disclosure_checklist_service.record_completion(
@@ -765,7 +752,7 @@ def review_disclosure_completion(
     organization_id: UUID = Depends(require_organization_id),
     reviewed_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:disclosures:review")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Review disclosure completion (SoD enforced)."""
     return disclosure_checklist_service.review_item(
@@ -783,7 +770,7 @@ def get_disclosure_summary(
     instance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:disclosures:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get disclosure checklist summary for a report instance."""
     instance = report_instance_service.get(db, str(instance_id), organization_id)
@@ -811,7 +798,7 @@ def create_report_schedule(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a report schedule."""
     input_data = ScheduleInput(
@@ -843,7 +830,7 @@ def get_report_schedule(
     schedule_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a report schedule by ID."""
     return report_scheduler_service.get(db, str(schedule_id), organization_id)
@@ -858,7 +845,7 @@ def list_report_schedules(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List report schedules with filters."""
     schedules = report_scheduler_service.list(
@@ -884,7 +871,7 @@ def run_scheduled_report(
     organization_id: UUID = Depends(require_organization_id),
     triggered_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:run")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Manually trigger a scheduled report."""
     return report_scheduler_service.record_execution(
@@ -900,7 +887,7 @@ def toggle_schedule_status(
     organization_id: UUID = Depends(require_organization_id),
     updated_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Enable or disable a report schedule."""
     if is_active:
@@ -927,7 +914,7 @@ def list_schedule_executions(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List execution history for a schedule."""
     executions = report_scheduler_service.get_upcoming_schedules(

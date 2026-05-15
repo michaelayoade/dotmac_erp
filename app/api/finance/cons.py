@@ -12,8 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.finance.cons.consolidation_run import ConsolidationStatus
 from app.models.finance.cons.elimination_entry import EliminationEntry, EliminationType
 from app.models.finance.cons.legal_entity import ConsolidationMethod, EntityType
@@ -37,18 +36,6 @@ router = APIRouter(
     tags=["consolidation"],
     dependencies=[Depends(require_tenant_auth)],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -345,7 +332,7 @@ def create_legal_entity(
     payload: LegalEntityCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:entities:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new legal entity."""
     input_data = LegalEntityInput(
@@ -383,7 +370,7 @@ def get_legal_entity(
     entity_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:entities:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a legal entity by ID."""
     return legal_entity_service.get(db, str(entity_id), organization_id)
@@ -398,7 +385,7 @@ def list_legal_entities(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:entities:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List legal entities with filters."""
     entities = legal_entity_service.list(
@@ -423,7 +410,7 @@ def get_group_structure(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("cons:entities:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get group structure hierarchy."""
     return legal_entity_service.get_group_structure(
@@ -441,7 +428,7 @@ def update_consolidation_method(
     consolidation_method: ConsolidationMethod = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:entities:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update entity consolidation method."""
     return legal_entity_service.update_consolidation_method(
@@ -460,7 +447,7 @@ def record_goodwill_impairment(
     impairment_amount: Decimal = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:entities:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record goodwill impairment for entity."""
     return legal_entity_service.record_goodwill_impairment(
@@ -483,7 +470,7 @@ def create_ownership(
     payload: OwnershipCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:ownership:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new ownership interest."""
     input_data = OwnershipInput(
@@ -515,7 +502,7 @@ def list_ownership_interests(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:ownership:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List ownership interests with filters."""
     interests = ownership_service.list(
@@ -541,7 +528,7 @@ def get_effective_ownership(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date = Query(...),
     auth: dict = Depends(require_tenant_permission("cons:ownership:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate effective ownership for an entity."""
     results = ownership_service.calculate_effective_ownership(
@@ -559,7 +546,7 @@ def get_effective_ownership(
 def get_nci_summary(
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:ownership:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get NCI summary for all subsidiaries."""
     return ownership_service.get_nci_summary(
@@ -582,7 +569,7 @@ def create_intercompany_balance(
     payload: IntercompanyBalanceCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:intercompany:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record an intercompany balance."""
     input_data = IntercompanyBalanceInput(
@@ -622,7 +609,7 @@ def list_intercompany_balances(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:intercompany:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List intercompany balances with filters."""
     balances = intercompany_service.list(
@@ -650,7 +637,7 @@ def perform_intercompany_matching(
     fiscal_period_id: UUID = Query(...),
     tolerance: Decimal = Query(default=Decimal("0.01")),
     auth: dict = Depends(require_tenant_permission("cons:intercompany:match")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Perform intercompany balance matching."""
     return intercompany_service.perform_matching(
@@ -674,7 +661,7 @@ def create_consolidation_run(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("cons:runs:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new consolidation run."""
     input_data = ConsolidationRunInput(
@@ -695,7 +682,7 @@ def get_consolidation_run(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:runs:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a consolidation run by ID."""
     return consolidation_service.get(db, str(run_id), organization_id)
@@ -709,7 +696,7 @@ def list_consolidation_runs(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:runs:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List consolidation runs with filters."""
     runs = consolidation_service.list(
@@ -733,7 +720,7 @@ def start_consolidation_run(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:runs:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Start a consolidation run."""
     return consolidation_service.start_run(
@@ -748,7 +735,7 @@ def complete_consolidation_run(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:runs:manage")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Complete a consolidation run."""
     return consolidation_service.complete_run(
@@ -763,7 +750,7 @@ def get_consolidation_summary(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:runs:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get consolidation run summary."""
     return consolidation_service.get_summary(
@@ -788,7 +775,7 @@ def create_elimination_entry(
     payload: EliminationEntryCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:eliminations:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an elimination entry."""
     input_data = EliminationInput(
@@ -826,7 +813,7 @@ def list_elimination_entries(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:eliminations:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List elimination entries for a run."""
     entries = consolidation_service.get_elimination_entries(
@@ -851,7 +838,7 @@ def generate_intercompany_eliminations(
     organization_id: UUID = Depends(require_organization_id),
     intercompany_elimination_account_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("cons:eliminations:generate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Auto-generate intercompany elimination entries."""
     return consolidation_service.generate_intercompany_eliminations(
@@ -874,7 +861,7 @@ def post_elimination_entry(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("cons:eliminations:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post elimination entry to GL."""
     entry = db.get(EliminationEntry, elimination_id)
@@ -904,7 +891,7 @@ def post_all_eliminations(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("cons:eliminations:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post all elimination entries for a run to GL."""
     results = CONSPostingAdapter.post_all_eliminations(

@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.schemas.pm import (
     EndAllocationRequest,
     ResourceAllocationCreate,
@@ -32,18 +31,6 @@ from app.services.pm import ResourceService
 router = APIRouter(prefix="/resources", tags=["pm-resources"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # =============================================================================
 # Resource Allocation CRUD
 # =============================================================================
@@ -57,7 +44,7 @@ def list_allocations(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List resource allocations with optional filtering."""
     svc = ResourceService(db, organization_id)
@@ -109,7 +96,7 @@ def list_allocations(
 def allocate_resource(
     data: ResourceAllocationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Allocate an employee to a project."""
     svc = ResourceService(db, organization_id)
@@ -124,7 +111,7 @@ def allocate_resource(
 def get_project_allocations(
     project_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get all allocations for a project."""
     svc = ResourceService(db, organization_id)
@@ -170,7 +157,7 @@ def get_employee_allocations(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     include_past: bool = False,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get all allocations for an employee."""
     svc = ResourceService(db, organization_id)
@@ -217,7 +204,7 @@ def get_employee_utilization(
     organization_id: UUID = Depends(require_organization_id),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get utilization summary for an employee."""
     svc = ResourceService(db, organization_id)
@@ -238,7 +225,7 @@ def get_employee_utilization(
 def get_allocation(
     allocation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a resource allocation by ID."""
     svc = ResourceService(db, organization_id)
@@ -254,7 +241,7 @@ def update_allocation(
     allocation_id: UUID,
     data: ResourceAllocationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a resource allocation."""
     svc = ResourceService(db, organization_id)
@@ -272,7 +259,7 @@ def end_allocation(
     allocation_id: UUID,
     data: EndAllocationRequest = None,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """End a resource allocation."""
     svc = ResourceService(db, organization_id)
@@ -290,7 +277,7 @@ def end_allocation(
 def delete_allocation(
     allocation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a resource allocation."""
     svc = ResourceService(db, organization_id)

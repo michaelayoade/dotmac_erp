@@ -6,8 +6,8 @@ from uuid import UUID
 from fastapi import Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.schemas.finance.ap import APAgingReportRead  # pragma: allowlist secret
 from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.ap import ap_aging_service
@@ -19,7 +19,7 @@ def get_ap_aging(
     as_of_date: date = Query(...),
     supplier_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("ap:aging:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get AP aging report."""
     return ap_aging_service.build_aging_report(

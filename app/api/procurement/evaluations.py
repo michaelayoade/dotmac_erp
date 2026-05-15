@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.schemas.procurement.evaluation import (
     EvaluationCreate,
     EvaluationResponse,
@@ -21,25 +20,13 @@ from app.services.procurement.evaluation import BidEvaluationService
 router = APIRouter(prefix="/evaluations", tags=["procurement-evaluations"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=list[EvaluationResponse])
 def list_evaluations(
     organization_id: UUID = Depends(require_organization_id),
     rfq_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List bid evaluations."""
     service = BidEvaluationService(db)
@@ -56,7 +43,7 @@ def list_evaluations(
 def get_evaluation(
     evaluation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a bid evaluation by ID."""
     service = BidEvaluationService(db)
@@ -70,7 +57,7 @@ def get_evaluation(
 def create_evaluation(
     data: EvaluationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new bid evaluation."""
     service = BidEvaluationService(db)
@@ -88,7 +75,7 @@ def add_score(
     evaluation_id: UUID,
     data: EvaluationScoreCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a score to an evaluation."""
     service = BidEvaluationService(db)
@@ -104,7 +91,7 @@ def approve_evaluation(
     evaluation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a bid evaluation."""
     service = BidEvaluationService(db)

@@ -7,8 +7,8 @@ from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
 from app.schemas.finance.ap import APPaymentCreate, APPaymentRead
 from app.schemas.finance.common import ListResponse, PostingResultSchema
@@ -23,7 +23,7 @@ def create_ap_payment(
     payload: APPaymentCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payments:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new AP payment."""
     created_by_user_id = UUID(auth["person_id"])
@@ -56,7 +56,7 @@ def get_ap_payment(
     payment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payments:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an AP payment by ID."""
     return supplier_payment_service.get(db, str(payment_id), organization_id)
@@ -72,7 +72,7 @@ def list_ap_payments(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:payments:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List AP payments with filters."""
     status_value = None
@@ -117,7 +117,7 @@ def post_ap_payment(
     posting_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payments:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post an AP payment to the GL."""
     posted_by_user_id = UUID(auth["person_id"])

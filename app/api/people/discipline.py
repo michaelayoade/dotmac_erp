@@ -20,8 +20,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.discipline import CaseStatus, SeverityLevel, ViolationType
 from app.schemas.people.discipline import (
     CaseActionRead,
@@ -57,18 +56,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # =============================================================================
 # Case CRUD
 # =============================================================================
@@ -86,7 +73,7 @@ def list_cases(
     include_closed: bool = Query(False),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List disciplinary cases with filters."""
     service = DisciplineService(db)
@@ -124,7 +111,7 @@ def list_cases(
 def create_case(
     data: DisciplinaryCaseCreate,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new disciplinary case."""
     service = DisciplineService(db)
@@ -136,7 +123,7 @@ def create_case(
 def get_case(
     case_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a disciplinary case with all details."""
     service = DisciplineService(db)
@@ -168,7 +155,7 @@ def update_case(
     case_id: UUID,
     data: DisciplinaryCaseUpdate,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a disciplinary case (only in DRAFT status)."""
     service = DisciplineService(db)
@@ -183,7 +170,7 @@ def delete_case(
     case_id: UUID,
     org_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a disciplinary case (only in DRAFT status)."""
     service = DisciplineService(db)
@@ -203,7 +190,7 @@ def issue_query(
     case_id: UUID,
     data: IssueQueryRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Issue a formal query to the employee."""
     service = DisciplineService(db)
@@ -218,7 +205,7 @@ def submit_response(
     case_id: UUID,
     data: CaseResponseCreate,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit employee response to a query."""
     service = DisciplineService(db)
@@ -233,7 +220,7 @@ def schedule_hearing(
     case_id: UUID,
     data: ScheduleHearingRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Schedule a disciplinary hearing."""
     service = DisciplineService(db)
@@ -248,7 +235,7 @@ def record_hearing_notes(
     case_id: UUID,
     data: RecordHearingNotesRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record hearing notes and mark hearing as completed."""
     service = DisciplineService(db)
@@ -263,7 +250,7 @@ def record_decision(
     case_id: UUID,
     data: RecordDecisionRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record the decision after hearing."""
     service = DisciplineService(db)
@@ -278,7 +265,7 @@ def file_appeal(
     case_id: UUID,
     data: FileAppealRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """File an appeal against the decision."""
     service = DisciplineService(db)
@@ -293,7 +280,7 @@ def decide_appeal(
     case_id: UUID,
     data: DecideAppealRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record the decision on an appeal."""
     service = DisciplineService(db)
@@ -307,7 +294,7 @@ def decide_appeal(
 def close_case(
     case_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Close a case after decision or appeal."""
     service = DisciplineService(db)
@@ -321,7 +308,7 @@ def close_case(
 def withdraw_case(
     case_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Withdraw a case."""
     service = DisciplineService(db)
@@ -345,7 +332,7 @@ def add_witness(
     case_id: UUID,
     data: CaseWitnessCreate,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a witness to a case."""
     service = DisciplineService(db)
@@ -366,7 +353,7 @@ def add_witness(
 def get_employee_active_actions(
     employee_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get active disciplinary actions for an employee."""
     service = DisciplineService(db)
@@ -387,7 +374,7 @@ def get_employee_active_actions(
 def check_active_investigation(
     employee_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Check if employee has an active disciplinary investigation."""
     service = DisciplineService(db)
@@ -409,7 +396,7 @@ def upload_document(
     description: str | None = Form(None),
     org_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Upload a document to a disciplinary case."""
     from app.models.people.discipline import DocumentType as DocType
@@ -462,7 +449,7 @@ def download_document(
     case_id: UUID,
     document_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Download a document from a disciplinary case."""
     import re
@@ -519,7 +506,7 @@ def delete_document(
     case_id: UUID,
     document_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a document from a disciplinary case."""
     from app.services.people.discipline.attachment_service import (
@@ -555,7 +542,7 @@ def generate_query_letter(
     response_instructions: str | None = Form(None),
     org_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate a query (show cause) letter PDF for a case."""
     from io import BytesIO
@@ -607,7 +594,7 @@ def generate_warning_letter(
     improvement_deadline: str | None = Form(None),
     org_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate a warning letter PDF for a specific action."""
     from datetime import datetime
@@ -674,7 +661,7 @@ def generate_termination_letter(
     organization_name: str | None = Form(None),
     org_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate a termination letter PDF for a disciplinary termination."""
     from io import BytesIO

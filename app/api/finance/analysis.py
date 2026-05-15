@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.services.finance.rpt.analysis_cube import AnalysisCubeService
 
 router = APIRouter(
@@ -19,18 +18,6 @@ router = APIRouter(
     tags=["analysis"],
     dependencies=[Depends(require_tenant_auth)],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 class AnalysisCubeRead(BaseModel):
@@ -60,7 +47,7 @@ class AnalysisQueryResponse(BaseModel):
 @router.get("/cubes", response_model=list[AnalysisCubeRead])
 def list_analysis_cubes(
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     service = AnalysisCubeService(db)
     cubes = service.list_cubes(org_id)
@@ -84,7 +71,7 @@ def query_analysis_cube(
     cube_code: str,
     payload: AnalysisQueryRequest,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     service = AnalysisCubeService(db)
     try:

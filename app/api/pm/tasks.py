@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.pm import TaskPriority, TaskStatus
 from app.schemas.pm import (
     TaskAssignRequest,
@@ -31,18 +30,6 @@ from app.services.pm import TaskService
 router = APIRouter(prefix="/tasks", tags=["pm-tasks"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # =============================================================================
 # Task CRUD
 # =============================================================================
@@ -58,7 +45,7 @@ def list_tasks(
     parent_task_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tasks with optional filtering."""
     from app.services.common import PaginationParams
@@ -99,7 +86,7 @@ def list_tasks(
 def create_task(
     data: TaskCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new task."""
     try:
@@ -114,7 +101,7 @@ def create_task(
 def get_task(
     task_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a task by ID."""
     svc = TaskService(db, organization_id)
@@ -130,7 +117,7 @@ def update_task(
     task_id: UUID,
     data: TaskUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a task."""
     svc = TaskService(db, organization_id)
@@ -147,7 +134,7 @@ def update_task(
 def delete_task(
     task_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a task (soft delete)."""
     svc = TaskService(db, organization_id)
@@ -166,7 +153,7 @@ def delete_task(
 def start_task(
     task_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Start a task (transition to IN_PROGRESS)."""
     svc = TaskService(db, organization_id)
@@ -189,7 +176,7 @@ def start_task(
 def complete_task(
     task_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Complete a task."""
     svc = TaskService(db, organization_id)
@@ -214,7 +201,7 @@ def update_progress(
     task_id: UUID,
     data: TaskProgressRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update task progress percentage."""
     svc = TaskService(db, organization_id)
@@ -232,7 +219,7 @@ def assign_task(
     task_id: UUID,
     data: TaskAssignRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Assign task to an employee."""
     svc = TaskService(db, organization_id)
@@ -252,7 +239,7 @@ def assign_task(
 def get_dependencies(
     task_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get all dependencies of a task."""
     svc = TaskService(db, organization_id)
@@ -284,7 +271,7 @@ def add_dependency(
     task_id: UUID,
     data: TaskDependencyCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a dependency to a task."""
     svc = TaskService(db, organization_id)
@@ -319,7 +306,7 @@ def remove_dependency(
     task_id: UUID,
     depends_on_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Remove a dependency from a task."""
     svc = TaskService(db, organization_id)

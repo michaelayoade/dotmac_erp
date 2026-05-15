@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.schemas.procurement.requisition import (
     RequisitionCreate,
     RequisitionResponse,
@@ -20,18 +19,6 @@ from app.services.procurement.requisition import RequisitionService
 router = APIRouter(prefix="/requisitions", tags=["procurement-requisitions"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=list[RequisitionResponse])
 def list_requisitions(
     organization_id: UUID = Depends(require_organization_id),
@@ -39,7 +26,7 @@ def list_requisitions(
     urgency_filter: str | None = Query(None, alias="urgency"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List requisitions."""
     service = RequisitionService(db)
@@ -57,7 +44,7 @@ def list_requisitions(
 def get_requisition(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a requisition by ID."""
     service = RequisitionService(db)
@@ -74,7 +61,7 @@ def create_requisition(
     data: RequisitionCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new requisition."""
     service = RequisitionService(db)
@@ -94,7 +81,7 @@ def update_requisition(
     requisition_id: UUID,
     data: RequisitionUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a requisition."""
     service = RequisitionService(db)
@@ -111,7 +98,7 @@ def update_requisition(
 def submit_requisition(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit a requisition."""
     service = RequisitionService(db)
@@ -129,7 +116,7 @@ def verify_budget(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Verify budget for a requisition."""
     service = RequisitionService(db)
@@ -151,7 +138,7 @@ def approve_requisition(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a requisition."""
     service = RequisitionService(db)
@@ -172,7 +159,7 @@ def approve_requisition(
 def reject_requisition(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Reject a requisition."""
     service = RequisitionService(db)

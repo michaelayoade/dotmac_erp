@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.training import (
     AttendeeStatus,
     TrainingEventStatus,
@@ -49,18 +48,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
@@ -86,7 +73,7 @@ def list_training_programs(
     is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List training programs."""
     svc = TrainingService(db)
@@ -113,7 +100,7 @@ def list_training_programs(
 def create_training_program(
     payload: TrainingProgramCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a training program."""
     svc = TrainingService(db)
@@ -143,7 +130,7 @@ def create_training_program(
 def get_training_program(
     program_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a training program by ID."""
     svc = TrainingService(db)
@@ -157,7 +144,7 @@ def update_training_program(
     program_id: UUID,
     payload: TrainingProgramUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a training program."""
     svc = TrainingService(db)
@@ -170,7 +157,7 @@ def update_training_program(
 def delete_training_program(
     program_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a training program."""
     svc = TrainingService(db)
@@ -192,7 +179,7 @@ def list_training_events(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List training events."""
     svc = TrainingService(db)
@@ -220,7 +207,7 @@ def list_training_events(
 def create_training_event(
     payload: TrainingEventCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a training event."""
     svc = TrainingService(db)
@@ -258,7 +245,7 @@ def create_training_event(
 def get_training_event(
     event_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a training event by ID."""
     svc = TrainingService(db)
@@ -270,7 +257,7 @@ def update_training_event(
     event_id: UUID,
     payload: TrainingEventUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a training event."""
     svc = TrainingService(db)
@@ -283,7 +270,7 @@ def update_training_event(
 def delete_training_event(
     event_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete a training event."""
     svc = TrainingService(db)
@@ -295,7 +282,7 @@ def delete_training_event(
 def start_event(
     event_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark event as started (in progress)."""
     svc = TrainingService(db)
@@ -308,7 +295,7 @@ def complete_event(
     event_id: UUID,
     payload: CompleteEventRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark event as completed."""
     svc = TrainingService(db)
@@ -323,7 +310,7 @@ def cancel_event(
     event_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     reason: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a training event."""
     svc = TrainingService(db)
@@ -335,7 +322,7 @@ def cancel_event(
 def training_event_summary(
     organization_id: UUID = Depends(require_organization_id),
     program_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get training event summary by status."""
     svc = TrainingService(db)
@@ -354,7 +341,7 @@ def list_attendees(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List attendees for a training event."""
     svc = TrainingService(db)
@@ -382,7 +369,7 @@ def add_attendee(
     event_id: UUID,
     payload: TrainingAttendeeCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add an attendee to a training event."""
     if payload.event_id != event_id:
@@ -399,7 +386,7 @@ def bulk_invite_attendees(
     event_id: UUID,
     payload: BulkInviteRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Bulk invite employees to a training event."""
     svc = TrainingService(db)
@@ -423,7 +410,7 @@ def remove_attendee(
     event_id: UUID,
     attendee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Remove an attendee from a training event."""
     svc = TrainingService(db)
@@ -439,7 +426,7 @@ def confirm_attendance(
     event_id: UUID,
     attendee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Confirm attendee attendance."""
     svc = TrainingService(db)
@@ -459,7 +446,7 @@ def mark_attended(
     attendee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     attendance_percentage: float | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark attendee as having attended."""
     svc = TrainingService(db)
@@ -479,7 +466,7 @@ def submit_feedback(
     attendee_id: UUID,
     payload: AttendeeFeedbackRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Submit attendee feedback."""
     svc = TrainingService(db)
@@ -504,7 +491,7 @@ def issue_certificate(
     attendee_id: UUID,
     payload: IssueCertificateRequest,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Issue certificate to attendee."""
     svc = TrainingService(db)
@@ -528,7 +515,7 @@ def issue_certificate(
 def get_employee_training_history(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get training history for an employee."""
     svc = TrainingService(db)
@@ -541,7 +528,7 @@ def get_employee_training_history(
 @router.get("/stats", response_model=TrainingStats)
 def get_training_stats(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get training dashboard statistics."""
     svc = TrainingService(db)

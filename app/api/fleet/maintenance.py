@@ -10,8 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.fleet.enums import MaintenanceStatus, MaintenanceType
 from app.schemas.fleet.maintenance import (
     MaintenanceBrief,
@@ -27,18 +26,6 @@ from app.services.fleet.maintenance_service import MaintenanceService
 router = APIRouter(prefix="/maintenance", tags=["fleet-maintenance"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("", response_model=MaintenanceListResponse)
 def list_maintenance(
     organization_id: UUID = Depends(require_organization_id),
@@ -49,7 +36,7 @@ def list_maintenance(
     to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List maintenance records with optional filtering."""
     status_enum = MaintenanceStatus(status) if status else None
@@ -77,7 +64,7 @@ def list_maintenance(
 def get_maintenance(
     maintenance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get maintenance record details."""
     service = MaintenanceService(db, organization_id)
@@ -92,7 +79,7 @@ def get_maintenance(
 def create_maintenance(
     data: MaintenanceCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Schedule a new maintenance record."""
     service = MaintenanceService(db, organization_id)
@@ -108,7 +95,7 @@ def update_maintenance(
     maintenance_id: UUID,
     data: MaintenanceUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a maintenance record."""
     service = MaintenanceService(db, organization_id)
@@ -125,7 +112,7 @@ def update_maintenance(
 def start_maintenance(
     maintenance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark maintenance as in progress."""
     service = MaintenanceService(db, organization_id)
@@ -143,7 +130,7 @@ def complete_maintenance(
     maintenance_id: UUID,
     data: MaintenanceComplete,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Complete a maintenance record."""
     service = MaintenanceService(db, organization_id)
@@ -161,7 +148,7 @@ def cancel_maintenance(
     maintenance_id: UUID,
     reason: str | None = None,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Cancel a maintenance record."""
     service = MaintenanceService(db, organization_id)

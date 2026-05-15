@@ -1,6 +1,6 @@
 """Modular AR API routers."""
 
-from app.api.finance.ar_routes.base import get_db, router
+from app.api.finance.ar_routes.base import router
 from app.api.finance.ar_routes import (
     aging,
     contracts,
@@ -15,7 +15,6 @@ __all__ = [
     "contracts",
     "credit_notes",
     "customers",
-    "get_db",
     "invoices",
     "receipts",
     "router",

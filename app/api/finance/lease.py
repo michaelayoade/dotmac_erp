@@ -12,9 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.api.finance.utils import parse_enum
-from app.db import SessionLocal
 from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.services.auth_dependencies import require_tenant_permission
@@ -34,18 +33,6 @@ router = APIRouter(
         Depends(require_feature(FEATURE_LEASES)),
     ],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -183,7 +170,7 @@ def create_lease_contract(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:contracts:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new lease contract."""
     classification_value = parse_enum(LeaseClassification, payload.classification)
@@ -247,7 +234,7 @@ def get_lease_contract(
     lease_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("lease:contracts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a lease contract by ID."""
     return lease_contract_service.get(db, str(lease_id), organization_id)
@@ -263,7 +250,7 @@ def list_lease_contracts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("lease:contracts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List lease contracts with filters."""
     leases = lease_contract_service.list(
@@ -294,7 +281,7 @@ def commence_lease(
     rou_asset_account_id: UUID = Query(...),
     depreciation_expense_account_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:contracts:commence")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Commence a lease (activate)."""
     lease_contract_service.approve_contract(
@@ -322,7 +309,7 @@ def terminate_lease(
     organization_id: UUID = Depends(require_organization_id),
     reason: str | None = None,
     auth: dict = Depends(require_tenant_permission("lease:contracts:terminate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Terminate a lease early."""
     return lease_contract_service.terminate_contract(
@@ -345,7 +332,7 @@ def calculate_lease(
     calculation_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("lease:calculations:calculate")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Calculate initial lease values (ROU asset, liability)."""
     try:
@@ -365,7 +352,7 @@ def get_lease_schedule(
     lease_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("lease:calculations:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get lease amortization schedule."""
     try:
@@ -400,7 +387,7 @@ def post_initial_recognition(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:postings:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post initial lease recognition to GL."""
     result = LeasePostingAdapter.post_initial_recognition(
@@ -426,7 +413,7 @@ def post_interest_accrual(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:postings:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post lease interest accrual to GL."""
     result = LeasePostingAdapter.post_interest_accrual(
@@ -454,7 +441,7 @@ def post_lease_payment(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:postings:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post lease payment to GL."""
     result = LeasePostingAdapter.post_lease_payment(
@@ -484,7 +471,7 @@ def post_rou_depreciation(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:postings:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post ROU asset depreciation to GL."""
     result = LeasePostingAdapter.post_rou_depreciation(
@@ -526,7 +513,7 @@ def modify_lease(
     organization_id: UUID = Depends(require_organization_id),
     modified_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:modifications:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Modify an existing lease."""
     effective_date = payload.effective_date or payload.modification_date
@@ -606,7 +593,7 @@ def process_lease_modification(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:modifications:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Process a lease modification per IFRS 16."""
     input_data = ModificationInput(
@@ -646,7 +633,7 @@ def list_lease_modifications(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("lease:modifications:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List lease modifications with filters."""
     mod_type = ModificationType(modification_type) if modification_type else None
@@ -672,7 +659,7 @@ def approve_lease_modification(
     organization_id: UUID = Depends(require_organization_id),
     approved_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:modifications:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a lease modification."""
     return lease_modification_service.approve_modification(
@@ -740,7 +727,7 @@ def record_variable_payment(
     payload: VariablePaymentCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("lease:payments:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record a variable payment on a scheduled payment."""
     input_data = VariablePaymentInput(
@@ -759,7 +746,7 @@ def apply_index_adjustment(
     organization_id: UUID = Depends(require_organization_id),
     adjusted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("lease:index:adjust")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Apply an index adjustment to a lease."""
     input_data = IndexAdjustmentInput(
@@ -787,7 +774,7 @@ def get_overdue_lease_payments(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("lease:payments:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get overdue lease payments."""
     overdue = lease_variable_payment_service.get_overdue_payments(
@@ -801,7 +788,7 @@ def get_payment_schedules(
     lease_id: UUID,
     include_paid: bool = Query(default=False),
     auth: dict = Depends(require_tenant_permission("lease:payments:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get scheduled payments for a lease."""
     schedules = lease_variable_payment_service.get_scheduled_payments(
@@ -819,7 +806,7 @@ def mark_payment_paid(
     actual_payment_amount: Decimal = Query(...),
     payment_reference: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("lease:payments:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark a scheduled payment as paid."""
     return lease_variable_payment_service.mark_payment_paid(

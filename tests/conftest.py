@@ -489,7 +489,7 @@ def client(db_session):
     from app.api.audit import router as audit_router
     from app.api.auth_flow import get_db as auth_flow_get_db
     from app.api.auth_flow import router as auth_flow_router
-    from app.api.people.discipline import get_db as discipline_get_db
+    from app.api.deps import get_db_with_org
     from app.api.people.discipline import router as discipline_router
     from app.api.persons import get_db as persons_get_db
     from app.api.persons import router as persons_router
@@ -559,7 +559,9 @@ def client(db_session):
     app.dependency_overrides[settings_get_db] = override_get_db
     app.dependency_overrides[scheduler_get_db] = override_get_db
     app.dependency_overrides[service_hooks_get_db] = override_get_db
-    app.dependency_overrides[discipline_get_db] = override_get_db
+    # discipline.py was migrated to get_db_with_org — overriding the
+    # shared dep covers every wave-1/wave-2 module that uses it.
+    app.dependency_overrides[get_db_with_org] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 
     # Optional: Convert sync endpoints to async wrappers to avoid threadpool usage.

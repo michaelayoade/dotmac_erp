@@ -6,8 +6,8 @@ from fastapi import Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ap_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ap_routes.base import router
 from app.models.finance.ap.payment_batch import APBatchStatus, APPaymentBatch
 from app.schemas.finance.ap import (
     BankFileResultRead,
@@ -28,7 +28,7 @@ def create_payment_batch(
     payload: PaymentBatchCreate,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new payment batch."""
     return payment_batch_service.create_batch_from_invoice_ids(
@@ -48,7 +48,7 @@ def get_payment_batch(
     batch_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a payment batch by ID."""
     return payment_batch_service.get(db, str(batch_id), organization_id)
@@ -61,7 +61,7 @@ def list_payment_batches(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List payment batches with filters."""
     status_value = None
@@ -100,7 +100,7 @@ def add_payment_to_batch(
     payment_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Add a payment to a batch."""
     return payment_batch_service.add_payment_to_batch(
@@ -113,7 +113,7 @@ def approve_payment_batch(
     batch_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:approve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Approve a payment batch."""
     approved_by_user_id = UUID(auth["person_id"])
@@ -127,7 +127,7 @@ def process_payment_batch(
     batch_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:process")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Process an approved payment batch."""
     processed_by_user_id = UUID(auth["person_id"])
@@ -144,7 +144,7 @@ def generate_bank_file(
     file_format: str = Query(default="NACHA"),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:export")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Generate bank file for a payment batch."""
     result = payment_batch_service.generate_bank_file(

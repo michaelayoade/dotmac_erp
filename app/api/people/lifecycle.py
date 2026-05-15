@@ -9,8 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.hr.lifecycle import BoardingStatus
 from app.schemas.people.lifecycle import (
     OnboardingCreate,
@@ -40,18 +39,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
@@ -75,7 +62,7 @@ def list_onboardings(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     status_enum = parse_enum(status, BoardingStatus, "status")
@@ -99,7 +86,7 @@ def list_onboardings(
 def create_onboarding(
     payload: OnboardingCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     onboarding = svc.create_onboarding(
@@ -121,7 +108,7 @@ def create_onboarding(
 def get_onboarding(
     onboarding_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     return OnboardingRead.model_validate(
@@ -134,7 +121,7 @@ def update_onboarding(
     onboarding_id: UUID,
     payload: OnboardingUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     update_data = payload.model_dump(exclude_unset=True)
@@ -148,7 +135,7 @@ def update_onboarding(
 def start_onboarding(
     onboarding_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     onboarding = svc.start_onboarding(organization_id, onboarding_id)
@@ -159,7 +146,7 @@ def start_onboarding(
 def complete_onboarding(
     onboarding_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     onboarding = svc.complete_onboarding(organization_id, onboarding_id)
@@ -178,7 +165,7 @@ def list_separations(
     status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     status_enum = parse_enum(status, BoardingStatus, "status")
@@ -202,7 +189,7 @@ def list_separations(
 def create_separation(
     payload: SeparationCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     separation = svc.create_separation(
@@ -226,7 +213,7 @@ def create_separation(
 def get_separation(
     separation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     return SeparationRead.model_validate(
@@ -239,7 +226,7 @@ def update_separation(
     separation_id: UUID,
     payload: SeparationUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     update_data = payload.model_dump(exclude_unset=True)
@@ -253,7 +240,7 @@ def update_separation(
 def start_separation(
     separation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     separation = svc.start_separation(organization_id, separation_id)
@@ -264,7 +251,7 @@ def start_separation(
 def complete_separation(
     separation_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     separation = svc.complete_separation(organization_id, separation_id)
@@ -282,7 +269,7 @@ def list_promotions(
     employee_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     result = svc.list_promotions(
@@ -304,7 +291,7 @@ def list_promotions(
 def create_promotion(
     payload: PromotionCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     promotion = svc.create_promotion(
@@ -321,7 +308,7 @@ def create_promotion(
 def get_promotion(
     promotion_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     return PromotionRead.model_validate(
@@ -334,7 +321,7 @@ def update_promotion(
     promotion_id: UUID,
     payload: PromotionUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     update_data = payload.model_dump(exclude_unset=True)
@@ -355,7 +342,7 @@ def list_transfers(
     employee_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     result = svc.list_transfers(
@@ -377,7 +364,7 @@ def list_transfers(
 def create_transfer(
     payload: TransferCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     transfer = svc.create_transfer(
@@ -394,7 +381,7 @@ def create_transfer(
 def get_transfer(
     transfer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     return TransferRead.model_validate(svc.get_transfer(organization_id, transfer_id))
@@ -405,7 +392,7 @@ def update_transfer(
     transfer_id: UUID,
     payload: TransferUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     svc = LifecycleService(db)
     update_data = payload.model_dump(exclude_unset=True)

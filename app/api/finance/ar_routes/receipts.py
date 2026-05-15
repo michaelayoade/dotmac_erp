@@ -6,8 +6,8 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.api.finance.ar_routes.base import get_db, router
+from app.api.deps import get_db_with_org, require_organization_id
+from app.api.finance.ar_routes.base import router
 from app.models.finance.ar.customer_payment import PaymentStatus
 from app.schemas.finance.ar import ARReceiptCreate, ARReceiptRead
 from app.schemas.finance.common import ListResponse, PostingResultSchema
@@ -23,7 +23,7 @@ def create_ar_receipt(
     organization_id: UUID = Depends(require_organization_id),
     created_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:receipts:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new AR receipt."""
     try:
@@ -55,7 +55,7 @@ def get_ar_receipt(
     receipt_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ar:receipts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get an AR receipt by ID."""
     return customer_payment_service.get(db, str(receipt_id), organization_id)
@@ -71,7 +71,7 @@ def list_ar_receipts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:receipts:read")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List AR receipts with filters."""
     status_value = None
@@ -105,7 +105,7 @@ def post_ar_receipt(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     auth: dict = Depends(require_tenant_permission("ar:receipts:post")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Post an AR receipt to the GL."""
     result = ar_posting_adapter.post_payment(

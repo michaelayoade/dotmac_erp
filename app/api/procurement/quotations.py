@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.schemas.procurement.quotation import (
     QuotationResponseCreate,
     QuotationResponseSchema,
@@ -20,23 +19,11 @@ from app.services.procurement.quotation import QuotationResponseService
 router = APIRouter(prefix="/quotations", tags=["procurement-quotations"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("/rfq/{rfq_id}", response_model=list[QuotationResponseSchema])
 def list_for_rfq(
     rfq_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List quotation responses for an RFQ."""
     service = QuotationResponseService(db)
@@ -48,7 +35,7 @@ def list_for_rfq(
 def get_quotation(
     response_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a quotation response by ID."""
     service = QuotationResponseService(db)
@@ -64,7 +51,7 @@ def get_quotation(
 def create_quotation(
     data: QuotationResponseCreate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Record a vendor quotation response."""
     service = QuotationResponseService(db)
@@ -77,7 +64,7 @@ def update_quotation(
     response_id: UUID,
     data: QuotationResponseUpdate,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a quotation response."""
     service = QuotationResponseService(db)
