@@ -33,13 +33,18 @@ def test_bootstrap_celery_observability_is_idempotent_per_process(
         celery_module, "setup_monitoring", lambda: calls.append("monitoring")
     )
     monkeypatch.setattr(celery_module, "setup_otel", lambda: calls.append("otel"))
+    monkeypatch.setattr(
+        celery_module,
+        "register_audit_listeners",
+        lambda: calls.append("audit"),
+    )
     monkeypatch.setattr(celery_module.os, "getpid", lambda: 2002)
     monkeypatch.setattr(celery_module, "_runtime_bootstrapped_pid", None)
 
     celery_module.bootstrap_celery_observability()
     celery_module.bootstrap_celery_observability()
 
-    assert calls == ["logging", "monitoring", "otel"]
+    assert calls == ["logging", "monitoring", "otel", "audit"]
     assert celery_module._runtime_bootstrapped_pid == 2002
 
 
@@ -59,6 +64,11 @@ def test_bootstrap_celery_observability_reinitializes_after_fork(
         celery_module, "setup_monitoring", lambda: calls.append("monitoring")
     )
     monkeypatch.setattr(celery_module, "setup_otel", lambda: calls.append("otel"))
+    monkeypatch.setattr(
+        celery_module,
+        "register_audit_listeners",
+        lambda: calls.append("audit"),
+    )
     monkeypatch.setattr(celery_module.os, "getpid", lambda: next(pids))
     monkeypatch.setattr(celery_module, "_runtime_bootstrapped_pid", None)
 
@@ -69,9 +79,11 @@ def test_bootstrap_celery_observability_reinitializes_after_fork(
         "logging",
         "monitoring",
         "otel",
+        "audit",
         "logging",
         "monitoring",
         "otel",
+        "audit",
     ]
     assert celery_module._runtime_bootstrapped_pid == 4004
 

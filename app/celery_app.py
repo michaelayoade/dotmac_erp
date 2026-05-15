@@ -16,6 +16,7 @@ from app.metrics import observe_job
 from app.monitoring import setup_monitoring
 from app.telemetry import setup_otel
 
+from app.services.audit_listener import register_audit_listeners
 from app.services.scheduler_config import build_beat_schedule, get_celery_config
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,12 @@ def bootstrap_celery_observability() -> None:
     configure_celery_runtime_logging()
     setup_monitoring()
     setup_otel()
+    # Register the ORM audit listener in this Celery process. Without this,
+    # task-driven data changes (Mono sync, payroll runs, statement imports,
+    # reminders) commit without producing audit_log rows because
+    # ``event.listen`` only attaches in the process that called it — and
+    # ``app/main.py`` is never imported by the worker or beat.
+    register_audit_listeners()
     _runtime_bootstrapped_pid = pid
     logger.info("Celery observability initialized")
 
