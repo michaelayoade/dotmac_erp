@@ -261,11 +261,14 @@ class Settings:
     # Multi-org session enforcement (see docs/superpowers/plans/2026-05-10-multi-org-listener.md, spec D5)
     # ==========================================================================
     # When True, attach the SQLAlchemy do_orm_execute listener that enforces
-    # organization_id filtering on tenant-scoped queries. Phase 1 ships with
-    # this disabled (audit-only); Phase 2 will flip the default to True.
-    enforce_org_filter: bool = (
-        os.getenv("ENFORCE_ORG_FILTER", "false").lower() == "true"
-    )
+    # organization_id filtering on tenant-scoped queries. Phase 2 default —
+    # enabled now that every authenticated API + web route primes its
+    # session.info["organization_id"] (via get_db_with_org / get_db_for_org)
+    # or wraps in allow_cross_org for genuinely cross-tenant operations.
+    # Set ENFORCE_ORG_FILTER=false in the environment to opt out during a
+    # rollback (e.g. if a route is found to be unprimed and crashes with
+    # MissingOrgContextError before it can be fixed).
+    enforce_org_filter: bool = os.getenv("ENFORCE_ORG_FILTER", "true").lower() == "true"
 
 
 settings = Settings()
