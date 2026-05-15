@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_audit_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_admin_bypass, require_audit_auth
 from app.schemas.audit import AuditEventRead
 from app.schemas.common import ListResponse
 from app.services import audit as audit_service
@@ -14,20 +13,8 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("/{event_id}", response_model=AuditEventRead)
-def get_audit_event(event_id: str, db: Session = Depends(get_db)):
+def get_audit_event(event_id: str, db: Session = Depends(get_db_admin_bypass)):
     return audit_service.audit_events.get(db, event_id)
 
 
@@ -45,7 +32,7 @@ def list_audit_events(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_admin_bypass),
 ):
     resolved_actor_type = audit_service.audit_events.parse_actor_type(actor_type)
     return audit_service.audit_events.list_response(
@@ -69,5 +56,5 @@ def list_audit_events(
     "/{event_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def delete_audit_event(event_id: str, db: Session = Depends(get_db)):
+def delete_audit_event(event_id: str, db: Session = Depends(get_db_admin_bypass)):
     audit_service.audit_events.delete(db, event_id)

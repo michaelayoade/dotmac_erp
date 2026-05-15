@@ -49,7 +49,6 @@ _CANONICAL = {
 # consistency, not just risk mitigation.
 _PRE_MIGRATION_BASELINE = {
     # ── Non-tenant or admin-scoped (won't fit get_db_with_org's auth dep) ──
-    "app/api/audit.py",  # require_audit_auth (admin/cross-tenant)
     "app/api/auth.py",  # auth flows, not tenant-scoped
     "app/api/auth_flow.py",
     "app/api/rbac.py",
@@ -229,12 +228,25 @@ def test_migrated_modules_use_get_db_with_org():
         "app/api/service_hooks.py",
         "app/api/support.py",
         "app/api/workflow_tasks.py",
+        # Wave 4B — admin/cross-tenant via get_db_admin_bypass (genuine
+        # cross-tenant access, app.bypass_rls + allow_cross_org).
+        "app/api/audit.py",
+    }
+    # Modules that legitimately use the admin-bypass variant instead of
+    # the tenant-scoped one (genuine cross-tenant access).
+    admin_bypass_modules = {
+        "app/api/audit.py",
     }
     regressions = []
     for rel in sorted(migrated):
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         if _DEF_GET_DB.search(text):
             regressions.append(f"{rel}: re-introduced local ``def get_db()``")
-        if "Depends(get_db_with_org)" not in text:
-            regressions.append(f"{rel}: no longer uses Depends(get_db_with_org)")
+        expected_dep = (
+            "Depends(get_db_admin_bypass)"
+            if rel in admin_bypass_modules
+            else "Depends(get_db_with_org)"
+        )
+        if expected_dep not in text:
+            regressions.append(f"{rel}: no longer uses {expected_dep}")
     assert not regressions, "\n".join(regressions)

@@ -485,11 +485,10 @@ def client(db_session):
     """Create a test client with database dependency override."""
     from fastapi import APIRouter, Depends, FastAPI
 
-    from app.api.audit import get_db as audit_get_db
     from app.api.audit import router as audit_router
     from app.api.auth_flow import get_db as auth_flow_get_db
     from app.api.auth_flow import router as auth_flow_router
-    from app.api.deps import get_db_with_org
+    from app.api.deps import get_db_admin_bypass, get_db_with_org
     from app.api.people.discipline import router as discipline_router
     from app.api.persons import get_db as persons_get_db
     from app.api.persons import router as persons_router
@@ -553,7 +552,9 @@ def client(db_session):
     app.dependency_overrides[persons_get_db] = override_get_db
     app.dependency_overrides[auth_flow_get_db] = override_get_db
     app.dependency_overrides[rbac_get_db] = override_get_db
-    app.dependency_overrides[audit_get_db] = override_get_db
+    # audit.py now uses get_db_admin_bypass (cross-tenant), overridden
+    # with the un-primed test session for the in-memory test DB.
+    app.dependency_overrides[get_db_admin_bypass] = override_get_db
     app.dependency_overrides[settings_get_db] = override_get_db
     # scheduler and service_hooks were migrated to get_db_with_org.
     # The shared dep override below covers them along with every other

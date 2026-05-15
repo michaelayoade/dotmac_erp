@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.db.session_context import prime_session
-from app.rls import set_current_organization_sync
+from app.rls import enable_rls_bypass_sync, set_current_organization_sync
 from app.services.auth_dependencies import (
     optional_web_session,
     require_admin_bypass,
@@ -43,6 +43,7 @@ __all__ = [
     "require_tenant_permission",
     "require_organization_id",
     "get_db_with_org",
+    "get_db_admin_bypass",
     "require_current_employee_id",
     "get_current_employee_id_optional",
     "require_admin_bypass",
@@ -102,6 +103,42 @@ def get_db_with_org(
     try:
         prime_session(db, organization_id)
         set_current_organization_sync(db, organization_id)
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def get_db_admin_bypass():
+    """DB session dependency for genuinely cross-tenant admin routes.
+
+    Yields a Session that bypasses tenant scoping at *both* layers:
+    - PostgreSQL: ``SET LOCAL app.bypass_rls = 'true'`` makes the RLS
+      policies return rows regardless of GUC (the policies are
+      ``should_bypass_rls() OR organization_id = get_current_org_id()``).
+    - Python: ``session.info["allow_cross_org"] = True`` tells the
+      ``do_orm_execute`` listener (when enabled) to skip its
+      WHERE-injection — otherwise it would raise
+      MissingOrgContextError on every org-scoped SELECT.
+
+    Use only for routes that genuinely operate across all tenants:
+    super-admin audit log views, system maintenance endpoints, etc.
+    Routes that operate within a single org should depend on
+    ``get_db_with_org`` instead — they get RLS protection for free.
+
+    Caller is responsible for authentication: this dep doesn't require
+    or check auth on its own. Pair with ``require_audit_auth`` or a
+    similar admin gate in the route signature.
+
+    Auto-commits on successful yield, rolls back on exception.
+    """
+    db = SessionLocal()
+    try:
+        enable_rls_bypass_sync(db)
+        db.info["allow_cross_org"] = True
         yield db
         db.commit()
     except Exception:
