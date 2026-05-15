@@ -14,9 +14,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.config import settings
 from app.db import SessionLocal
+from app.db.session_context import prime_session
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +136,7 @@ def trigger_sync(
     request_data: SyncRequest,
     organization_id: UUID = Depends(require_organization_id),
     _auth=Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Manually trigger a CRM sync operation.
@@ -251,7 +252,7 @@ def lookup_ticket_by_crm_id(
     crm_ticket_id: str,
     organization_id: UUID = Depends(require_organization_id),
     _auth=Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Look up synced ticket by CRM ticket ID.
@@ -283,7 +284,7 @@ def lookup_project_by_crm_id(
     crm_project_id: str,
     organization_id: UUID = Depends(require_organization_id),
     _auth=Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """
     Look up synced project by CRM project ID.
@@ -387,6 +388,12 @@ async def crm_webhook(
         )
 
     organization_id = UUID(settings.default_organization_id)
+
+    # Prime the webhook session so the planned do_orm_execute listener
+    # accepts subsequent ORM queries against org-scoped models. This is
+    # a no-op today (listener gated by ENFORCE_ORG_FILTER=false) but
+    # required for it to land.
+    prime_session(db, organization_id)
 
     logger.info(
         "Processing CRM webhook: %s.%s for %s",
