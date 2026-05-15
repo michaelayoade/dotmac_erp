@@ -286,6 +286,16 @@ def _write_audit_records(session: Session) -> None:
     user_id, correlation_id, ip_address, user_agent = _resolve_context()
     connection = session.connection()
 
+    # Capture the connection's current org GUC so we can restore it after the
+    # audit batch. The listener pins the GUC per-row to the audit row's own
+    # organization_id so the audit_log RLS WITH CHECK passes regardless of
+    # whether the request path set the GUC — webhooks set none, and authed
+    # API routes typically run their work on a different SQLAlchemy session
+    # than the auth dependency primed.
+    original_org_setting = connection.execute(
+        text("SELECT current_setting('app.current_organization_id', true)")
+    ).scalar()
+
     for rec in pending:
         try:
             # For INSERTs, snapshot values now that PK is generated
@@ -314,6 +324,16 @@ def _write_audit_records(session: Session) -> None:
             # SQLAlchemy text() parameter binding (colons are ambiguous).
             nested = connection.begin_nested()
             try:
+                # Pin app.current_organization_id to this row's own org so
+                # the audit_log RLS WITH CHECK (organization_id =
+                # get_current_organization_id()) passes. The UUID was
+                # captured from the dirty ORM row in _collect_changes — no
+                # user input — so direct interpolation is safe; uuid.UUID()
+                # validates the format defensively.
+                audit_org_id = uuid.UUID(str(rec["organization_id"]))
+                connection.execute(
+                    text(f"SET LOCAL app.current_organization_id = '{audit_org_id}'")
+                )
                 connection.execute(
                     text("""
                         INSERT INTO audit.audit_log (
@@ -357,6 +377,28 @@ def _write_audit_records(session: Session) -> None:
                 rec.get("record_id"),
                 exc_info=True,
             )
+
+    # Restore the connection's org GUC so subsequent queries in the outer
+    # transaction see the request-set context rather than the last audit
+    # row's org. The per-record `except` above swallows every failure, so
+    # no exception escapes the loop and this block always runs. Empty
+    # string from current_setting() means no value was active → RESET.
+    try:
+        if original_org_setting:
+            try:
+                restored = uuid.UUID(original_org_setting)
+                connection.execute(
+                    text(f"SET LOCAL app.current_organization_id = '{restored}'")
+                )
+            except (ValueError, TypeError):
+                connection.execute(text("RESET app.current_organization_id"))
+        else:
+            connection.execute(text("RESET app.current_organization_id"))
+    except Exception:
+        logger.warning(
+            "Auto-audit failed to restore app.current_organization_id GUC",
+            exc_info=True,
+        )
 
 
 # ── Event handlers ─────────────────────────────────────────────────────────

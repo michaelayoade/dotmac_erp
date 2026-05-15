@@ -9,10 +9,12 @@ from enum import Enum
 from unittest.mock import MagicMock, patch
 
 from app.services.audit_listener import (
+    _PENDING_KEY,
     _get_org_id,
     _get_pk_value,
     _serialise_value,
     _should_skip,
+    _write_audit_records,
     register_audit_listeners,
 )
 
@@ -159,3 +161,135 @@ class TestRegisterListeners:
         assert calls[0][0][1] == "before_flush"
         # Second call: after_flush
         assert calls[1][0][1] == "after_flush"
+
+
+# ── RLS context handling tests ─────────────────────────────────────────────
+
+
+def _make_fake_session(
+    pending_records: list[dict],
+    original_org_setting: str | None = "",
+) -> tuple[MagicMock, MagicMock, list[str]]:
+    """Build a MagicMock Session whose connection records every SQL it executes.
+
+    Returns (session, connection, executed_sql_list). The captured SQL list is
+    populated in order — including the leading current_setting() probe, every
+    SET LOCAL pin, the INSERT, and the trailing RESET / SET LOCAL restore.
+    """
+    executed_sql: list[str] = []
+
+    def _record_execute(stmt, params=None):
+        # SQLAlchemy text() instances stringify to the raw SQL
+        executed_sql.append(str(stmt))
+        result = MagicMock()
+        result.scalar.return_value = original_org_setting
+        return result
+
+    connection = MagicMock()
+    connection.execute.side_effect = _record_execute
+    # begin_nested() returns a context-managerlike object that supports
+    # .commit() / .rollback(). We don't need anything fancy.
+    connection.begin_nested.return_value = MagicMock()
+
+    session = MagicMock()
+    session.connection.return_value = connection
+    session.info = {_PENDING_KEY: pending_records}
+    return session, connection, executed_sql
+
+
+class TestWriteAuditRecordsRLSContext:
+    """Regression coverage for the RLS gap in the Mono webhook path.
+
+    The audit listener must pin app.current_organization_id to the audit
+    row's own org before each INSERT, so audit_log's RLS WITH CHECK passes
+    on sessions that never set the GUC (webhooks, two-session API routes).
+    """
+
+    def _make_record(self, org_id: uuid.UUID) -> dict:
+        return {
+            "obj": MagicMock(),
+            "mapper": MagicMock(),
+            "action": "UPDATE",
+            "schema": "banking",
+            "table_name": "bank_accounts",
+            "organization_id": org_id,
+            "record_id": "3f7fb574-6157-40d6-8a9d-60d2e2f3f5c3",
+            "old_values": {"mono_last_sync_error": None},
+            "new_values": {"mono_last_sync_error": "Bank connection expired."},
+        }
+
+    def test_sets_org_guc_before_insert(self) -> None:
+        """Per-row SET LOCAL must run before each INSERT so RLS passes."""
+        org_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
+        session, _conn, sql = _make_fake_session([self._make_record(org_id)])
+
+        _write_audit_records(session)
+
+        set_local_idx = next(
+            i
+            for i, s in enumerate(sql)
+            if f"SET LOCAL app.current_organization_id = '{org_id}'" in s
+        )
+        insert_idx = next(
+            i for i, s in enumerate(sql) if "INSERT INTO audit.audit_log" in s
+        )
+        assert set_local_idx < insert_idx, (
+            "SET LOCAL must precede the audit INSERT so the WITH CHECK passes"
+        )
+
+    def test_uses_row_org_not_request_org(self) -> None:
+        """The GUC is set from the row's own org_id, not the request's."""
+        row_org = uuid.UUID("22222222-2222-2222-2222-222222222222")
+        # Simulate a session where the request set a *different* org GUC
+        # (e.g. the auth dep primed Session A while we're writing on B).
+        session, _conn, sql = _make_fake_session(
+            [self._make_record(row_org)],
+            original_org_setting="99999999-9999-9999-9999-999999999999",
+        )
+
+        _write_audit_records(session)
+
+        assert any(
+            f"SET LOCAL app.current_organization_id = '{row_org}'" in s for s in sql
+        )
+
+    def test_restores_original_guc_after_batch(self) -> None:
+        """After the batch, the GUC must return to its pre-batch value."""
+        original = "33333333-3333-3333-3333-333333333333"
+        row_org = uuid.UUID("44444444-4444-4444-4444-444444444444")
+        session, _conn, sql = _make_fake_session(
+            [self._make_record(row_org)],
+            original_org_setting=original,
+        )
+
+        _write_audit_records(session)
+
+        # The restore must be the *last* GUC mutation
+        guc_mutations = [
+            s
+            for s in sql
+            if "SET LOCAL app.current_organization_id" in s
+            or "RESET app.current_organization_id" in s
+        ]
+        assert guc_mutations[-1] == (
+            f"SET LOCAL app.current_organization_id = '{original}'"
+        )
+
+    def test_resets_when_no_prior_guc(self) -> None:
+        """If no GUC was set on the session, the listener must RESET, not
+        leave the connection pinned to the last audit row's org."""
+        row_org = uuid.UUID("55555555-5555-5555-5555-555555555555")
+        session, _conn, sql = _make_fake_session(
+            [self._make_record(row_org)],
+            original_org_setting="",  # webhook path — nothing primed it
+        )
+
+        _write_audit_records(session)
+
+        guc_mutations = [
+            s
+            for s in sql
+            if "SET LOCAL app.current_organization_id" in s
+            or "RESET app.current_organization_id" in s
+        ]
+        assert guc_mutations[-1] == "RESET app.current_organization_id"
