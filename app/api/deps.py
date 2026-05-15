@@ -93,6 +93,34 @@ def get_db_with_org(
     Auto-commits on successful yield, rolls back on exception — matches
     the historical per-module ``get_db`` behavior so migrations don't
     change route semantics.
+
+    .. note:: Two sessions per request
+
+        ``get_db_with_org`` opens its own ``SessionLocal`` rather than
+        reusing the one inside ``require_tenant_auth``. The auth dep's
+        session validates the token + sets its own GUC, then closes;
+        the route's session — yielded by this function — is a *separate*
+        connection from the pool, primed independently.
+
+        This costs every authenticated API request two pool connections
+        instead of one. It's intentional: the two sessions serve
+        different lifetimes (auth dep is short-lived and read-only;
+        the route may run a long write transaction), and sharing them
+        would re-introduce the Bug A dual-session pathology this whole
+        dependency was designed to fix (FastAPI dep-cache deduplication
+        is keyed on callable identity — a single shared ``get_db`` is
+        exactly what got us silent-empty-results).
+
+        If pool pressure becomes a concern under load, the tradeoffs to
+        consider are:
+        - Raise ``DB_POOL_SIZE`` to absorb the extra connections.
+        - Make ``require_tenant_auth`` accept the route's session via
+          ``Depends(get_db_with_org)`` (cycle — would need careful
+          refactor).
+        - Accept the cost as defense-in-depth.
+
+        Measure first; don't optimize prematurely. The default pool
+        settings handle 2× connections fine in most deployments.
     """
     organization_id_str = auth.get("organization_id")
     if not organization_id_str:
