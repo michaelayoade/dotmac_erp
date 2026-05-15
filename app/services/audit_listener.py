@@ -296,87 +296,121 @@ def _write_audit_records(session: Session) -> None:
         text("SELECT current_setting('app.current_organization_id', true)")
     ).scalar()
 
-    for rec in pending:
+    import json
+    from itertools import groupby
+
+    # Group records by org so SET LOCAL fires once per org group instead
+    # of once per row. For batch operations (payroll run for 1000
+    # employees, mass import, end-of-day reconciliation), this cuts
+    # ~1000 round-trips down to one. groupby is stable so order within a
+    # group is preserved; cross-group order changes from insertion order
+    # to organization_id order, which doesn't affect correctness — each
+    # audit row carries its own occurred_at = now().
+    def _org_key(rec: dict[str, Any]) -> str:
+        return str(rec["organization_id"])
+
+    pending_sorted = sorted(pending, key=_org_key)
+
+    for org_id_str, group_iter in groupby(pending_sorted, key=_org_key):
         try:
-            # For INSERTs, snapshot values now that PK is generated
-            if rec["action"] == "INSERT":
-                obj = rec["obj"]
-                mapper = rec["mapper"]
-                rec["record_id"] = _get_pk_value(obj, mapper)
-                rec["new_values"] = _snapshot_values(obj, mapper)
+            audit_org_id = uuid.UUID(org_id_str)
+        except ValueError:
+            # _collect_changes already filtered to rows where
+            # _get_org_id returned a real UUID — this is purely defensive.
+            logger.warning("Auto-audit skipped: malformed org_id %r", org_id_str)
+            continue
 
-            if rec["record_id"] is None:
-                continue
-
-            import json
-
-            old_json = json.dumps(rec["old_values"]) if rec["old_values"] else None
-            new_json = json.dumps(rec["new_values"]) if rec["new_values"] else None
-
-            # Compute changed_fields for UPDATEs
-            changed_fields: list[str] | None = None
-            if rec["action"] == "UPDATE" and rec["old_values"] and rec["new_values"]:
-                all_keys = set(rec["old_values"].keys()) | set(rec["new_values"].keys())
-                changed_fields = sorted(all_keys)
-
-            # Use SAVEPOINT so audit failures don't abort the parent transaction.
-            # Use CAST() instead of ::jsonb — the :: shorthand conflicts with
-            # SQLAlchemy text() parameter binding (colons are ambiguous).
-            nested = connection.begin_nested()
-            try:
-                # Pin app.current_organization_id to this row's own org so
-                # the audit_log RLS WITH CHECK (organization_id =
-                # get_current_organization_id()) passes. The UUID was
-                # captured from the dirty ORM row in _collect_changes — no
-                # user input — so direct interpolation is safe; uuid.UUID()
-                # validates the format defensively.
-                audit_org_id = uuid.UUID(str(rec["organization_id"]))
-                connection.execute(
-                    text(f"SET LOCAL app.current_organization_id = '{audit_org_id}'")
-                )
-                connection.execute(
-                    text("""
-                        INSERT INTO audit.audit_log (
-                            audit_id, organization_id, table_schema, table_name,
-                            record_id, action, old_values, new_values,
-                            changed_fields, user_id, ip_address, user_agent,
-                            correlation_id, occurred_at
-                        ) VALUES (
-                            gen_random_uuid(), :org_id, :schema, :table_name,
-                            :record_id, :action,
-                            CAST(:old_values AS jsonb), CAST(:new_values AS jsonb),
-                            :changed_fields, :user_id, :ip_address, :user_agent,
-                            :correlation_id, now()
-                        )
-                    """),
-                    {
-                        "org_id": rec["organization_id"],
-                        "schema": rec["schema"],
-                        "table_name": rec["table_name"],
-                        "record_id": rec["record_id"],
-                        "action": rec["action"],
-                        "old_values": old_json,
-                        "new_values": new_json,
-                        "changed_fields": changed_fields,
-                        "user_id": user_id,
-                        "ip_address": ip_address,
-                        "user_agent": user_agent,
-                        "correlation_id": correlation_id,
-                    },
-                )
-                nested.commit()
-            except Exception:
-                nested.rollback()
-                raise
+        # SET LOCAL once for the whole group. Lives outside each row's
+        # SAVEPOINT, so a SAVEPOINT rollback (failed INSERT) leaves the
+        # GUC in place for subsequent rows in the same group.
+        try:
+            connection.execute(
+                text(f"SET LOCAL app.current_organization_id = '{audit_org_id}'")
+            )
         except Exception:
             logger.warning(
-                "Auto-audit failed: %s.%s %s %s",
-                rec["schema"],
-                rec["table_name"],
-                rec["action"],
-                rec.get("record_id"),
+                "Auto-audit failed to SET LOCAL for org=%s; skipping group",
+                audit_org_id,
                 exc_info=True,
             )
+            continue
+
+        for rec in group_iter:
+            try:
+                # For INSERTs, snapshot values now that PK is generated
+                if rec["action"] == "INSERT":
+                    obj = rec["obj"]
+                    mapper = rec["mapper"]
+                    rec["record_id"] = _get_pk_value(obj, mapper)
+                    rec["new_values"] = _snapshot_values(obj, mapper)
+
+                if rec["record_id"] is None:
+                    continue
+
+                old_json = json.dumps(rec["old_values"]) if rec["old_values"] else None
+                new_json = json.dumps(rec["new_values"]) if rec["new_values"] else None
+
+                # Compute changed_fields for UPDATEs
+                changed_fields: list[str] | None = None
+                if (
+                    rec["action"] == "UPDATE"
+                    and rec["old_values"]
+                    and rec["new_values"]
+                ):
+                    all_keys = set(rec["old_values"].keys()) | set(
+                        rec["new_values"].keys()
+                    )
+                    changed_fields = sorted(all_keys)
+
+                # SAVEPOINT so audit failures don't abort the parent
+                # transaction. CAST() instead of ::jsonb — the ::
+                # shorthand conflicts with SQLAlchemy text() parameter
+                # binding (colons are ambiguous).
+                nested = connection.begin_nested()
+                try:
+                    connection.execute(
+                        text("""
+                            INSERT INTO audit.audit_log (
+                                audit_id, organization_id, table_schema, table_name,
+                                record_id, action, old_values, new_values,
+                                changed_fields, user_id, ip_address, user_agent,
+                                correlation_id, occurred_at
+                            ) VALUES (
+                                gen_random_uuid(), :org_id, :schema, :table_name,
+                                :record_id, :action,
+                                CAST(:old_values AS jsonb), CAST(:new_values AS jsonb),
+                                :changed_fields, :user_id, :ip_address, :user_agent,
+                                :correlation_id, now()
+                            )
+                        """),
+                        {
+                            "org_id": rec["organization_id"],
+                            "schema": rec["schema"],
+                            "table_name": rec["table_name"],
+                            "record_id": rec["record_id"],
+                            "action": rec["action"],
+                            "old_values": old_json,
+                            "new_values": new_json,
+                            "changed_fields": changed_fields,
+                            "user_id": user_id,
+                            "ip_address": ip_address,
+                            "user_agent": user_agent,
+                            "correlation_id": correlation_id,
+                        },
+                    )
+                    nested.commit()
+                except Exception:
+                    nested.rollback()
+                    raise
+            except Exception:
+                logger.warning(
+                    "Auto-audit failed: %s.%s %s %s",
+                    rec["schema"],
+                    rec["table_name"],
+                    rec["action"],
+                    rec.get("record_id"),
+                    exc_info=True,
+                )
 
     # Restore the connection's org GUC so subsequent queries in the outer
     # transaction see the request-set context rather than the last audit

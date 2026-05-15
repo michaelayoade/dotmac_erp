@@ -275,6 +275,37 @@ class TestWriteAuditRecordsRLSContext:
             f"SET LOCAL app.current_organization_id = '{original}'"
         )
 
+    def test_batches_set_local_per_org_group(self) -> None:
+        """Multiple rows for the same org must produce ONE SET LOCAL,
+        not N. Locks in the batching optimization for high-volume
+        operations (payroll run, mass import, end-of-day recon)."""
+        org_a = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+        org_b = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+        # 3 rows for org A, 2 for org B, interleaved at insertion
+        records = [
+            self._make_record(org_a),
+            self._make_record(org_b),
+            self._make_record(org_a),
+            self._make_record(org_b),
+            self._make_record(org_a),
+        ]
+        session, _conn, sql = _make_fake_session(records)
+
+        _write_audit_records(session)
+
+        per_group_set_locals = [
+            s
+            for s in sql
+            if f"SET LOCAL app.current_organization_id = '{org_a}'" in s
+            or f"SET LOCAL app.current_organization_id = '{org_b}'" in s
+        ]
+        assert len(per_group_set_locals) == 2, (
+            f"Expected 1 SET LOCAL per org group (2 total), got "
+            f"{len(per_group_set_locals)}: {per_group_set_locals}"
+        )
+        inserts = [s for s in sql if "INSERT INTO audit.audit_log" in s]
+        assert len(inserts) == 5, f"Expected 5 INSERTs, got {len(inserts)}"
+
     def test_resets_when_no_prior_guc(self) -> None:
         """If no GUC was set on the session, the listener must RESET, not
         leave the connection pinned to the last audit row's org."""
