@@ -43,7 +43,17 @@ webhook_router = APIRouter(prefix="/payments", tags=["payments-webhook"])
 
 
 def get_db():
-    """Get database session."""
+    """Un-primed DB session for the Paystack webhook (unauth).
+
+    .. warning::
+        Tenant-scoped payment routes use ``get_db_with_org``. This
+        yielder exists only for ``paystack_webhook`` which has no auth
+        context to derive an org from — it resolves the org from the
+        ``reference`` field on the webhook payload (via
+        ``allow_cross_org`` + ``prime_session``). If RLS is ever
+        enabled on a payments schema, route the webhook through a
+        service-account auth context rather than this bare yielder.
+    """
     db = SessionLocal()
     try:
         yield db

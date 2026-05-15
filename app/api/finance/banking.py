@@ -66,6 +66,17 @@ def get_db():
     Tenant-scoped banking routes use ``get_db_with_org`` instead; this
     yielder exists only for the webhook handler at the bottom of this
     module, which has no auth context to derive an org from.
+
+    .. warning::
+        ``banking.*`` is not RLS-protected today, which is why this
+        un-primed session works for the webhook. If RLS is ever enabled
+        on a banking schema, route this webhook through a service-
+        account auth context (with an explicit ``allow_cross_org`` for
+        the initial mono_account_id → BankAccount lookup) rather than
+        this bare ``get_db``. The CI guard
+        ``tests/api/test_no_local_get_db_proliferation.py`` will catch
+        a structural regression but not the schema-change-makes-this-
+        silently-empty class.
     """
     db = SessionLocal()
     try:

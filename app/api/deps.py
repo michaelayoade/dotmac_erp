@@ -75,10 +75,12 @@ def get_db_with_org(
     """DB session dependency for tenant-scoped API routes.
 
     Yields a Session with the request's organization_id pinned in *both*
-    Python-side (``session.info["organization_id"]``, consumed by the
-    planned ``do_orm_execute`` listener for query auto-filtering) and
-    PostgreSQL-side (``app.current_organization_id`` GUC, consumed by
-    RLS policies).
+    Python-side (``session.info["organization_id"]``, read by the
+    ``do_orm_execute`` listener at ``app/db/org_listener.py`` when
+    ``settings.enforce_org_filter`` is on — currently False; the
+    listener is shipped but gated) and PostgreSQL-side
+    (``app.current_organization_id`` GUC, consumed by RLS policies on
+    every org-scoped table — active today).
 
     Use this in place of any per-module ``get_db``. Without it,
     ``select(Foo).where(Foo.organization_id == X)`` on an RLS-protected
@@ -119,13 +121,22 @@ def require_organization_id(auth: dict = Depends(require_tenant_auth)) -> UUID:
 
 def require_current_employee_id(
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(_get_db),
+    db: Session = Depends(get_db_with_org),
 ) -> UUID:
     """
     Return the employee_id for the authenticated user.
 
     Looks up the Employee record linked to the current Person (user).
     Raises 403 if the user is not linked to an employee record.
+
+    Uses ``get_db_with_org`` (not the bare ``_get_db``) so the SELECT
+    against RLS-protected ``hr.employee`` runs on an explicitly-primed
+    session. The previous ``Depends(_get_db)`` shape worked in
+    production via FastAPI's dep-cache shared session, but only by
+    accident — any future refactor that introduces another ``get_db``
+    variant would silently break this. ``require_tenant_auth`` is
+    deduplicated against the one inside ``get_db_with_org`` so this
+    still resolves to a single auth call per request.
     """
     from app.models.people.hr.employee import Employee
 
@@ -144,7 +155,7 @@ def require_current_employee_id(
 
 def get_current_employee_id_optional(
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(_get_db),
+    db: Session = Depends(get_db_with_org),
 ) -> UUID | None:
     """
     Return the employee_id for the authenticated user, or None if not linked.

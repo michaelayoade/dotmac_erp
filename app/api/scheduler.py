@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_tenant_auth
 from app.schemas.common import ListResponse
 from app.schemas.scheduler import (
     ScheduledTaskCreate,
@@ -18,18 +17,6 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 @router.get("/tasks", response_model=ListResponse[ScheduledTaskRead])
 def list_scheduled_tasks(
     enabled: bool | None = None,
@@ -37,7 +24,7 @@ def list_scheduled_tasks(
     order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     return scheduler_service.scheduled_tasks.list_response(
         db, enabled, order_by, order_dir, limit, offset
@@ -49,24 +36,26 @@ def list_scheduled_tasks(
     response_model=ScheduledTaskRead,
     status_code=status.HTTP_201_CREATED,
 )
-def create_scheduled_task(payload: ScheduledTaskCreate, db: Session = Depends(get_db)):
+def create_scheduled_task(
+    payload: ScheduledTaskCreate, db: Session = Depends(get_db_with_org)
+):
     return scheduler_service.scheduled_tasks.create(db, payload)
 
 
 @router.get("/tasks/{task_id}", response_model=ScheduledTaskRead)
-def get_scheduled_task(task_id: str, db: Session = Depends(get_db)):
+def get_scheduled_task(task_id: str, db: Session = Depends(get_db_with_org)):
     return scheduler_service.scheduled_tasks.get(db, task_id)
 
 
 @router.patch("/tasks/{task_id}", response_model=ScheduledTaskRead)
 def update_scheduled_task(
-    task_id: str, payload: ScheduledTaskUpdate, db: Session = Depends(get_db)
+    task_id: str, payload: ScheduledTaskUpdate, db: Session = Depends(get_db_with_org)
 ):
     return scheduler_service.scheduled_tasks.update(db, task_id, payload)
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_scheduled_task(task_id: str, db: Session = Depends(get_db)):
+def delete_scheduled_task(task_id: str, db: Session = Depends(get_db_with_org)):
     scheduler_service.scheduled_tasks.delete(db, task_id)
 
 
@@ -76,7 +65,7 @@ def refresh_schedule():
 
 
 @router.post("/tasks/{task_id}/enqueue", status_code=status.HTTP_202_ACCEPTED)
-def enqueue_scheduled_task(task_id: str, db: Session = Depends(get_db)):
+def enqueue_scheduled_task(task_id: str, db: Session = Depends(get_db_with_org)):
     task = scheduler_service.scheduled_tasks.get(db, task_id)
     return scheduler_service.enqueue_task(
         task.task_name, task.args_json or [], task.kwargs_json or {}

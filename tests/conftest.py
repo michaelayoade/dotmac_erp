@@ -495,9 +495,7 @@ def client(db_session):
     from app.api.persons import router as persons_router
     from app.api.rbac import get_db as rbac_get_db
     from app.api.rbac import router as rbac_router
-    from app.api.scheduler import get_db as scheduler_get_db
     from app.api.scheduler import router as scheduler_router
-    from app.api.service_hooks import get_db as service_hooks_get_db
     from app.api.service_hooks import router as service_hooks_router
     from app.api.settings import get_db as settings_get_db
     from app.api.settings import router as settings_router
@@ -557,10 +555,9 @@ def client(db_session):
     app.dependency_overrides[rbac_get_db] = override_get_db
     app.dependency_overrides[audit_get_db] = override_get_db
     app.dependency_overrides[settings_get_db] = override_get_db
-    app.dependency_overrides[scheduler_get_db] = override_get_db
-    app.dependency_overrides[service_hooks_get_db] = override_get_db
-    # discipline.py was migrated to get_db_with_org — overriding the
-    # shared dep covers every wave-1/wave-2 module that uses it.
+    # scheduler and service_hooks were migrated to get_db_with_org.
+    # The shared dep override below covers them along with every other
+    # wave-1/wave-2/wave-3 module that uses get_db_with_org.
     app.dependency_overrides[get_db_with_org] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 

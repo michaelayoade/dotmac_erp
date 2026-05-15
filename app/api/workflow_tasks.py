@@ -7,8 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_tenant_auth
 from app.models.workflow_task import WorkflowTaskPriority, WorkflowTaskStatus
 from app.schemas.workflow_task import (
     WorkflowTaskRead,
@@ -20,18 +19,6 @@ from app.services.people.hr.employees import EmployeeService
 from app.services.workflow_task_service import WorkflowTaskService
 
 router = APIRouter(prefix="/workflow-tasks", tags=["workflow-tasks"])
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def parse_enum(value: str | None, enum_type, field_name: str):
@@ -60,7 +47,7 @@ def list_my_tasks(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List workflow tasks assigned to current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -87,7 +74,7 @@ def list_my_tasks(
 @router.get("/my-tasks/summary")
 def my_tasks_summary(
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Summary of workflow tasks for current employee."""
     organization_id = UUID(auth["organization_id"])
@@ -102,7 +89,7 @@ def update_task_status(
     task_id: UUID,
     payload: WorkflowTaskStatusUpdate,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update workflow task status."""
     organization_id = UUID(auth["organization_id"])
@@ -115,7 +102,7 @@ def update_task_status(
 def complete_task(
     task_id: UUID,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark workflow task completed."""
     organization_id = UUID(auth["organization_id"])
@@ -129,7 +116,7 @@ def snooze_task(
     task_id: UUID,
     payload: WorkflowTaskSnoozeRequest,
     auth: dict = Depends(require_tenant_auth),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Snooze a workflow task."""
     organization_id = UUID(auth["organization_id"])

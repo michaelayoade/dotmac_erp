@@ -54,13 +54,8 @@ _PRE_MIGRATION_BASELINE = {
     "app/api/auth_flow.py",
     "app/api/rbac.py",
     "app/api/persons.py",
-    "app/api/scheduler.py",
     "app/api/settings.py",
-    "app/api/workflow_tasks.py",
-    "app/api/support.py",
-    "app/api/crm.py",
-    "app/api/files.py",
-    "app/api/service_hooks.py",
+    "app/api/crm.py",  # partial — has webhook_router; main router migrated separately
     "app/api/careers.py",  # public slug-resolved, RLS handled inside service
     "app/web/careers.py",
     "app/web/onboarding_portal.py",
@@ -226,6 +221,14 @@ def test_migrated_modules_use_get_db_with_org():
         "app/api/pm/resources.py",
         "app/api/pm/tasks.py",
         "app/api/pm/time_entries.py",
+        # Wave 4 — Category A non-tenant baseline that turned out to be
+        # genuinely tenant-scoped (every route uses require_tenant_auth or
+        # require_organization_id; just didn't fit the original scan).
+        "app/api/files.py",
+        "app/api/scheduler.py",
+        "app/api/service_hooks.py",
+        "app/api/support.py",
+        "app/api/workflow_tasks.py",
     }
     regressions = []
     for rel in sorted(migrated):

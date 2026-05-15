@@ -11,11 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
+    get_db_with_org,
     require_organization_id,
     require_tenant_auth,
     require_tenant_permission,
 )
-from app.db import SessionLocal
 from app.schemas.support import (
     TicketAssign,
     TicketCreate,
@@ -43,18 +43,6 @@ router = APIRouter(
 MANUAL_TICKET_CREATION_API_ENABLED = False
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 # ============================================================================
 # Ticket CRUD
 # ============================================================================
@@ -71,7 +59,7 @@ def list_tickets(
     date_to: date | None = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List tickets with filtering and pagination."""
     tickets, total = ticket_service.list_tickets(
@@ -114,7 +102,7 @@ def search_tickets(
     status_filter: str | None = Query(None, alias="status"),
     limit: int = Query(20, ge=1, le=100),
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Search tickets for typeahead/autocomplete."""
     # Parse status filter
@@ -144,7 +132,7 @@ def search_tickets(
 @router.get("/tickets/stats", response_model=TicketStats)
 def get_ticket_stats(
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get ticket statistics for dashboard."""
     stats = ticket_service.get_stats(db, organization_id)
@@ -155,7 +143,7 @@ def get_ticket_stats(
 def get_ticket(
     ticket_id: str,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a ticket by ID."""
     tid = coerce_uuid(ticket_id)
@@ -174,7 +162,7 @@ def get_ticket(
 def create_ticket(
     data: TicketCreate,
     auth: dict = Depends(require_tenant_permission("support:tickets:create")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create a new support ticket."""
     if not MANUAL_TICKET_CREATION_API_ENABLED:
@@ -208,7 +196,7 @@ def update_ticket(
     ticket_id: str,
     data: TicketUpdate,
     auth: dict = Depends(require_tenant_permission("support:tickets:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update a ticket."""
     org_id = coerce_uuid(auth["organization_id"])
@@ -248,7 +236,7 @@ def update_ticket_status(
     ticket_id: str,
     data: TicketStatusUpdate,
     auth: dict = Depends(require_tenant_permission("support:tickets:update")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update ticket status."""
     org_id = coerce_uuid(auth["organization_id"])
@@ -278,7 +266,7 @@ def assign_ticket(
     ticket_id: str,
     data: TicketAssign,
     auth: dict = Depends(require_tenant_permission("support:tickets:assign")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Assign a ticket to an employee."""
     org_id = coerce_uuid(auth["organization_id"])
@@ -307,7 +295,7 @@ def resolve_ticket(
     ticket_id: str,
     data: TicketResolve,
     auth: dict = Depends(require_tenant_permission("support:tickets:resolve")),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Mark a ticket as resolved."""
     org_id = coerce_uuid(auth["organization_id"])
@@ -340,7 +328,7 @@ def resolve_ticket(
 def get_ticket_expenses(
     ticket_id: str,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get expense claims linked to a ticket."""
     tid = coerce_uuid(ticket_id)

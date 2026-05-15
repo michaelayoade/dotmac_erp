@@ -17,8 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id
 from app.models.finance.automation.generated_document import GeneratedDocument
 from app.services.careers.resume_service import ResumeService
 from app.services.finance.common.attachment import attachment_service
@@ -36,18 +35,6 @@ _INLINE_SAFE_MIME_TYPES = frozenset(
 
 router = APIRouter(prefix="/files", tags=["files"])
 legacy_router = APIRouter(prefix="/uploads", tags=["files"])
-
-
-def get_db():  # noqa: ANN201
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 def _stream_s3_file(
@@ -151,7 +138,7 @@ def download_resume_by_id(
 def download_generated_document(
     document_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Download a generated document (authenticated)."""
     doc = db.get(GeneratedDocument, document_id)
@@ -181,7 +168,7 @@ def download_generated_document(
 def download_attachment(
     attachment_id: str,
     organization_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Download a finance attachment (authenticated)."""
     attachment = attachment_service.get(db, organization_id, attachment_id)

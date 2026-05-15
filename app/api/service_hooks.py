@@ -10,8 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_organization_id, require_tenant_auth
-from app.db import SessionLocal
+from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.finance.platform.service_hook import (
     HookExecutionMode,
     HookHandlerType,
@@ -30,18 +29,6 @@ router = APIRouter(
     tags=["service-hooks"],
     dependencies=[Depends(require_tenant_auth)],
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
 
 
 class ServiceHookCreate(BaseModel):
@@ -315,7 +302,7 @@ def list_service_hooks(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List service hooks for the current tenant (includes global hooks)."""
     items = ServiceHookService(db).list_for_org(
@@ -338,7 +325,7 @@ def list_service_hooks(
 def get_service_hook(
     hook_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get a service hook by ID if visible to current tenant."""
     hook = _get_visible_hook_or_404(db, org_id, hook_id)
@@ -350,7 +337,7 @@ def get_service_hook_stats(
     hook_id: UUID,
     days: int = Query(default=30, ge=1, le=365),
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get execution stats for a visible service hook."""
     hook = _get_visible_hook_or_404(db, org_id, hook_id)
@@ -367,7 +354,7 @@ def list_service_hook_executions(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """List recent executions for a visible service hook."""
     hook = _get_visible_hook_or_404(db, org_id, hook_id)
@@ -407,7 +394,7 @@ def get_service_hook_execution(
     hook_id: UUID,
     execution_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Get detailed execution payload/result for a visible hook execution."""
     _get_visible_hook_or_404(db, org_id, hook_id)
@@ -431,7 +418,7 @@ def retry_service_hook_execution(
     hook_id: UUID,
     execution_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Retry a FAILED/DEAD execution for a tenant-visible hook."""
     _get_visible_hook_or_404(db, org_id, hook_id)
@@ -456,7 +443,7 @@ def create_service_hook(
     payload: ServiceHookCreate,
     auth: dict = Depends(require_tenant_auth),
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Create an organization-scoped service hook."""
     handler_config = _merge_policy_config(
@@ -488,7 +475,7 @@ def update_service_hook(
     hook_id: UUID,
     payload: ServiceHookUpdate,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Update an organization-scoped service hook."""
     current_hook = _get_mutable_hook_or_404(db, org_id, hook_id)
@@ -513,7 +500,7 @@ def toggle_service_hook(
     hook_id: UUID,
     payload: ServiceHookToggle,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Enable or disable an organization-scoped service hook."""
     _get_mutable_hook_or_404(db, org_id, hook_id)
@@ -525,7 +512,7 @@ def toggle_service_hook(
 def bulk_toggle_service_hooks(
     payload: ServiceHookBulkToggle,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Toggle many organization-scoped hooks."""
     result = ServiceHookService(db).bulk_toggle(
@@ -544,7 +531,7 @@ def bulk_toggle_service_hooks(
 def delete_service_hook(
     hook_id: UUID,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete an organization-scoped service hook."""
     _get_mutable_hook_or_404(db, org_id, hook_id)
@@ -556,7 +543,7 @@ def delete_service_hook(
 def bulk_delete_service_hooks(
     payload: ServiceHookBulkDelete,
     org_id: UUID = Depends(require_organization_id),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
 ):
     """Delete many organization-scoped hooks."""
     result = ServiceHookService(db).bulk_delete(
