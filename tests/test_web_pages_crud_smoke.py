@@ -23,6 +23,7 @@ from starlette.routing import Mount
 from app.web.deps import (
     WebAuthContext,
     get_async_db,
+    get_async_db_for_org,
     get_db,
     optional_web_auth,
     require_discipline_access,
@@ -371,6 +372,7 @@ def smoke_client(db_session):
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_async_db] = override_async_db
+    app.dependency_overrides[get_async_db_for_org] = override_async_db
 
     for dep in auth_deps:
         app.dependency_overrides[dep] = _mock_web_auth
