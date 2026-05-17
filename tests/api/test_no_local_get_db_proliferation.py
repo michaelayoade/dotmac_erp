@@ -121,11 +121,9 @@ def test_no_unexpected_local_get_db_definitions():
 
 
 def test_admin_bypass_dep_pairs_with_admin_gate():
-    """``get_db_admin_bypass`` deliberately requires no auth itself —
-    its docstring puts the burden on the caller. Without a safety
-    check, a future module could ``Depends(get_db_admin_bypass)``
-    without pairing it with an admin auth gate and silently expose
-    cross-tenant data on an unauthenticated route.
+    """``get_db_admin_bypass`` requires authenticated callers, but a
+    future module could still pair it with no narrower authorization
+    gate and silently expose cross-tenant data to any logged-in user.
 
     Any API module that uses ``Depends(get_db_admin_bypass)`` MUST
     also reference one of the recognized admin auth gates in the same
@@ -275,7 +273,6 @@ def test_migrated_modules_use_get_db_with_org():
         # cross-tenant access, app.bypass_rls + allow_cross_org).
         "app/api/audit.py",
         "app/api/auth.py",
-        "app/api/auth_flow.py",
         "app/api/persons.py",
         "app/api/rbac.py",
         "app/api/settings.py",
@@ -285,7 +282,6 @@ def test_migrated_modules_use_get_db_with_org():
     admin_bypass_modules = {
         "app/api/audit.py",
         "app/api/auth.py",
-        "app/api/auth_flow.py",
         "app/api/persons.py",
         "app/api/rbac.py",
         "app/api/settings.py",

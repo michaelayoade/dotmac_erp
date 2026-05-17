@@ -278,7 +278,7 @@ class MockSettings:
     sso_jwt_secret = None
     sso_cookie_domain = None
     # Multi-org session listener (Phase 1; default off in tests)
-    enforce_org_filter = False
+    enforce_org_filter = True
     # Coach / Intelligence Engine
     coach_enabled = False
     coach_llm_backends = "llama,deepseek"
@@ -487,7 +487,7 @@ def client(db_session):
 
     from app.api.audit import router as audit_router
     from app.api.auth_flow import router as auth_flow_router
-    from app.api.deps import get_db_admin_bypass, get_db_with_org
+    from app.api.deps import get_db_admin_bypass, get_db_auth_bypass, get_db_with_org
     from app.api.people.discipline import router as discipline_router
     from app.api.persons import router as persons_router
     from app.api.rbac import router as rbac_router
@@ -545,11 +545,11 @@ def client(db_session):
     app.include_router(people_v1)
 
     # Override all get_db dependencies. Wave 4B migrated audit, auth,
-    # auth_flow, persons, rbac, settings to get_db_admin_bypass — and
-    # wave-1/2/3 modules to get_db_with_org. Overriding the two shared
-    # deps covers every migrated module with two lines instead of one
-    # per module.
+    # persons, rbac, settings to get_db_admin_bypass; auth bootstrap
+    # routes use get_db_auth_bypass; wave-1/2/3 modules use
+    # get_db_with_org.
     app.dependency_overrides[get_db_admin_bypass] = override_get_db
+    app.dependency_overrides[get_db_auth_bypass] = override_get_db
     app.dependency_overrides[get_db_with_org] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
 

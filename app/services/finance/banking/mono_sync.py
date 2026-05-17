@@ -343,14 +343,20 @@ class MonoSyncService:
 
     def process_webhook(self, header_secret: str, raw_body: bytes) -> dict:
         """Verify and process a Mono webhook payload."""
+        from app.db.session_context import allow_cross_org
+
         if not header_secret:
             raise ValueError("Missing webhook secret")
 
-        configured_secret = resolve_value(
-            self.db,
-            SettingDomain.banking,
-            "mono_webhook_secret",
-        )
+        # The webhook is unauthenticated, so the tenant is unknown until we
+        # inspect the signed payload. Read the global webhook secret without
+        # requiring a primed org-filter context.
+        with allow_cross_org(self.db):
+            configured_secret = resolve_value(
+                self.db,
+                SettingDomain.banking,
+                "mono_webhook_secret",
+            )
         if not configured_secret:
             raise RuntimeError("Mono webhook secret not configured")
 
@@ -530,7 +536,7 @@ class MonoSyncService:
         Recording it on ``mono_last_sync_error`` surfaces it in the UI
         health banner alongside API-level failures.
         """
-        from app.db.session_context import allow_cross_org, prime_session
+        from app.db.session_context import allow_cross_org, prime_tenant_context
 
         # Cross-org lookup: mono_account_id alone, no tenant context yet.
         with allow_cross_org(self.db):
@@ -544,7 +550,7 @@ class MonoSyncService:
                 "Mono FAILED webhook for unlinked account mono_id=%s", mono_account_id
             )
             return
-        prime_session(self.db, bank_account.organization_id)
+        prime_tenant_context(self.db, bank_account.organization_id)
         job_id = meta.get("job_id") or "unknown"
         sync_status = meta.get("sync_status") or "FAILED"
         retrieved_data = list(meta.get("retrieved_data") or [])
@@ -650,7 +656,7 @@ class MonoSyncService:
         ``sync_account_incremental`` so webhook-triggered and user-triggered
         syncs share the same stateful window logic.
         """
-        from app.db.session_context import allow_cross_org, prime_session
+        from app.db.session_context import allow_cross_org, prime_tenant_context
 
         # mono_account_id → org_id is the resolution we're doing right here.
         # The planned do_orm_execute listener can't filter by org because we
@@ -674,7 +680,7 @@ class MonoSyncService:
         # Now we know the tenant. Prime the session so subsequent queries in
         # sync_account_incremental (statement-line inserts, balance updates)
         # see the right org context.
-        prime_session(self.db, bank_account.organization_id)
+        prime_tenant_context(self.db, bank_account.organization_id)
         return self.sync_account_incremental(bank_account, user_id=None)
 
     def get_linked_accounts(

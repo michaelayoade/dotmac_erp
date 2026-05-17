@@ -1018,6 +1018,9 @@ class WebAuthContext:
         """
         from app.main import is_module_enabled
 
+        if not self.is_authenticated or self.organization_id is None:
+            return []
+
         modules = []
         scopes_set = set(self.scopes)
         roles_set = {r.strip().lower() for r in self.roles if r and r.strip()}

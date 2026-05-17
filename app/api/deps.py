@@ -44,6 +44,7 @@ __all__ = [
     "require_organization_id",
     "get_db_with_org",
     "get_db_admin_bypass",
+    "get_db_auth_bypass",
     "require_current_employee_id",
     "get_current_employee_id_optional",
     "require_admin_bypass",
@@ -112,7 +113,32 @@ def get_db_with_org(
         db.close()
 
 
-def get_db_admin_bypass():
+def _yield_bypass_session():
+    db = SessionLocal()
+    try:
+        enable_rls_bypass_sync(db)
+        db.info["allow_cross_org"] = True
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def get_db_auth_bypass():
+    """DB session dependency for authentication bootstrap flows.
+
+    Login, refresh, MFA verification, and password reset routes must look
+    up users/sessions before an authenticated tenant context exists. Keep
+    those flows explicit instead of using the admin bypass dependency, which
+    now requires an authenticated caller.
+    """
+    yield from _yield_bypass_session()
+
+
+def get_db_admin_bypass(auth: dict = Depends(require_user_auth)):
     """DB session dependency for genuinely cross-tenant admin routes.
 
     Yields a Session that bypasses tenant scoping at *both* layers:
@@ -129,23 +155,15 @@ def get_db_admin_bypass():
     Routes that operate within a single org should depend on
     ``get_db_with_org`` instead — they get RLS protection for free.
 
-    Caller is responsible for authentication: this dep doesn't require
-    or check auth on its own. Pair with ``require_audit_auth`` or a
-    similar admin gate in the route signature.
+    Requires an authenticated caller in its own signature so an accidental
+    route use cannot expose unauthenticated cross-tenant access. Callers
+    must still pair it with a narrower authorization gate such as
+    ``require_audit_auth`` or ``require_permission(...)``.
 
     Auto-commits on successful yield, rolls back on exception.
     """
-    db = SessionLocal()
-    try:
-        enable_rls_bypass_sync(db)
-        db.info["allow_cross_org"] = True
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+    _ = auth
+    yield from _yield_bypass_session()
 
 
 def require_organization_id(auth: dict = Depends(require_tenant_auth)) -> UUID:
