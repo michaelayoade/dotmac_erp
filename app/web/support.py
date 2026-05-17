@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.support.web import support_web_service
-from app.web.deps import WebAuthContext, get_db, require_support_access
+from app.web.deps import WebAuthContext, get_db_for_org, require_support_access
 
 router = APIRouter(prefix="/support", tags=["support-web"])
 
@@ -39,7 +39,7 @@ def sla_dashboard(
     auth: WebAuthContext = Depends(require_support_access),
     date_from: str | None = None,
     date_to: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """SLA dashboard with metrics and reports."""
     return support_web_service.sla_dashboard_response(
@@ -58,7 +58,7 @@ def breached_tickets(
     breach_type: str = Query(default="all"),
     include_resolved: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Breached tickets report."""
     return support_web_service.breached_tickets_response(
@@ -76,7 +76,7 @@ def aging_report(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
     status: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Ticket aging report."""
     return support_web_service.aging_report_response(
@@ -106,7 +106,7 @@ def list_tickets(
     date_to: str | None = None,
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=10, le=200),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Support tickets list page."""
     return support_web_service.list_tickets_response(
@@ -138,7 +138,7 @@ def archived_tickets(
     search: str | None = None,
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=10, le=200),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Archived tickets list page."""
     return support_web_service.archived_tickets_response(
@@ -155,7 +155,7 @@ def archived_tickets(
 def new_ticket_form(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New ticket form page."""
     return _manual_ticket_creation_disabled_response(request)
@@ -165,7 +165,7 @@ def new_ticket_form(
 async def create_ticket(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new support ticket."""
     return _manual_ticket_creation_disabled_response(request)
@@ -181,7 +181,7 @@ def view_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Ticket detail page."""
     return support_web_service.ticket_detail_response(request, auth, db, ticket_id)
@@ -192,7 +192,7 @@ def edit_ticket_form(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit ticket form page."""
     return support_web_service.ticket_form_response(
@@ -218,7 +218,7 @@ def update_ticket(
     contact_phone: str | None = Form(default=None),
     contact_address: str | None = Form(default=None),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a ticket."""
     return support_web_service.update_ticket_response(
@@ -254,7 +254,7 @@ def update_ticket_status(
     auth: WebAuthContext = Depends(require_support_access),
     status: str = Form(...),
     notes: str | None = Form(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update ticket status."""
     return support_web_service.update_status_response(
@@ -268,7 +268,7 @@ def assign_ticket(
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
     assigned_to_id: str | None = Form(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Assign ticket to an employee."""
     form_data = getattr(request.state, "csrf_form", None)
@@ -294,7 +294,7 @@ def resolve_ticket(
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
     resolution: str = Form(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Mark ticket as resolved."""
     return support_web_service.resolve_ticket_response(
@@ -307,7 +307,7 @@ def archive_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Archive (soft delete) a ticket."""
     return support_web_service.archive_ticket_response(request, auth, db, ticket_id)
@@ -318,7 +318,7 @@ def delete_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Hard delete a ticket."""
     if not auth.is_admin:
@@ -334,7 +334,7 @@ def restore_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Restore an archived ticket."""
     return support_web_service.restore_ticket_response(request, auth, db, ticket_id)
@@ -353,7 +353,7 @@ def add_comment(
     content: str = Form(...),
     is_internal: bool = Form(default=False),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Add a comment to a ticket."""
     return support_web_service.add_comment_response(
@@ -367,7 +367,7 @@ def delete_comment(
     ticket_id: str,
     comment_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a comment."""
     return support_web_service.delete_comment_response(
@@ -385,7 +385,7 @@ async def upload_attachment(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Upload an attachment to a ticket."""
     # Get the file from the multipart form
@@ -408,7 +408,7 @@ def download_attachment(
     ticket_id: str,
     attachment_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Download an attachment."""
     return support_web_service.download_attachment_response(
@@ -422,7 +422,7 @@ def delete_attachment(
     ticket_id: str,
     attachment_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete an attachment."""
     return support_web_service.delete_attachment_response(
@@ -439,7 +439,7 @@ def delete_attachment(
 def list_categories(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List ticket categories."""
     return support_web_service.list_categories_response(request, auth, db)
@@ -449,7 +449,7 @@ def list_categories(
 def new_category_form(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New category form."""
     return support_web_service.category_form_response(request, auth, db)
@@ -467,7 +467,7 @@ def create_category(
     default_priority: str | None = Form(default=None),
     response_hours: int | None = Form(default=None),
     resolution_hours: int | None = Form(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new category."""
     return support_web_service.create_category_response(
@@ -495,7 +495,7 @@ def edit_category_form(
     request: Request,
     category_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit category form."""
     return support_web_service.category_form_response(
@@ -516,7 +516,7 @@ def update_category(
     response_hours: int | None = Form(default=None),
     resolution_hours: int | None = Form(default=None),
     is_active: bool = Form(default=True),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a category."""
     return support_web_service.update_category_response(
@@ -544,7 +544,7 @@ def update_category(
 def list_teams(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List support teams."""
     return support_web_service.list_teams_response(request, auth, db)
@@ -554,7 +554,7 @@ def list_teams(
 def new_team_form(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New team form."""
     return support_web_service.team_form_response(request, auth, db)
@@ -569,7 +569,7 @@ def create_team(
     description: str | None = Form(default=None),
     lead_id: str | None = Form(default=None),
     auto_assign: bool = Form(default=False),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new team."""
     return support_web_service.create_team_response(
@@ -589,7 +589,7 @@ def view_team(
     request: Request,
     team_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Team detail page."""
     return support_web_service.team_detail_response(request, auth, db, team_id)
@@ -600,7 +600,7 @@ def edit_team_form(
     request: Request,
     team_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit team form."""
     return support_web_service.team_form_response(request, auth, db, team_id=team_id)
@@ -616,7 +616,7 @@ def update_team(
     lead_id: str | None = Form(default=None),
     auto_assign: bool = Form(default=False),
     is_active: bool = Form(default=True),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a team."""
     return support_web_service.update_team_response(
@@ -639,7 +639,7 @@ def add_team_member(
     auth: WebAuthContext = Depends(require_support_access),
     employee_id: str = Form(...),
     role: str | None = Form(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Add a member to a team."""
     return support_web_service.add_team_member_response(
@@ -653,7 +653,7 @@ def remove_team_member(
     team_id: str,
     member_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Remove a member from a team."""
     return support_web_service.remove_team_member_response(
@@ -667,7 +667,7 @@ def toggle_member_availability(
     team_id: str,
     member_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Toggle a team member's availability for ticket assignment."""
     return support_web_service.toggle_member_availability_response(
@@ -682,7 +682,7 @@ def update_member_weight(
     member_id: str,
     weight: int = Form(...),
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a team member's assignment weight."""
     return support_web_service.update_member_weight_response(
@@ -699,7 +699,7 @@ def update_member_weight(
 async def bulk_update_status(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Bulk update status for selected tickets."""
     form = await request.form()
@@ -721,7 +721,7 @@ async def bulk_update_status(
 async def bulk_assign(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Bulk assign selected tickets to an employee."""
     form = await request.form()
@@ -747,7 +747,7 @@ async def bulk_assign(
 async def bulk_archive(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Bulk archive selected tickets."""
     form = await request.form()

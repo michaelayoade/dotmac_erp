@@ -34,7 +34,12 @@ from app.services.fleet.web.fleet_web import FleetWebService
 from app.services.fleet.web.import_web import fleet_import_web_service
 from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context, get_db, require_fleet_access
+from app.web.deps import (
+    WebAuthContext,
+    base_context,
+    get_db_for_org,
+    require_fleet_access,
+)
 
 router = APIRouter(prefix="/fleet", tags=["fleet-web"])
 
@@ -48,7 +53,7 @@ router = APIRouter(prefix="/fleet", tags=["fleet-web"])
 def fleet_dashboard(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet management dashboard."""
     context = base_context(request, auth, "Fleet Dashboard", "fleet", db=db)
@@ -66,7 +71,7 @@ def fleet_dashboard(
 def fleet_reports_index(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet reports landing page."""
     context = base_context(request, auth, "Fleet Reports", "fleet", db=db)
@@ -79,7 +84,7 @@ def fleet_reports_index(
 def fleet_reports_expenses(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet expense reports (expense claims linked to vehicles)."""
     context = base_context(request, auth, "Fleet Expense Reports", "fleet", db=db)
@@ -97,7 +102,7 @@ def fleet_reports_expense_vehicle_detail(
     year: str | None = None,
     month: str | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet expense report detail for a single vehicle."""
     context = base_context(
@@ -150,7 +155,7 @@ def fleet_reports_expense_vehicle_detail(
 def fleet_reports_invoices(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet invoice reports (AP invoices linked to vehicles)."""
     context = base_context(request, auth, "Fleet Invoice Reports", "fleet", db=db)
@@ -168,7 +173,7 @@ def fleet_reports_invoice_vehicle_detail(
     year: str | None = None,
     month: str | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet invoice report detail for a single vehicle."""
     context = base_context(
@@ -231,7 +236,7 @@ def vehicle_list(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List all vehicles."""
     context = base_context(request, auth, "Vehicles", "fleet", db=db)
@@ -253,7 +258,7 @@ def vehicle_list(
 def vehicle_new(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New vehicle form."""
     context = base_context(request, auth, "Add Vehicle", "fleet", db=db)
@@ -266,7 +271,7 @@ def vehicle_new(
 async def vehicle_new_submit(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create new vehicle from form."""
     web_service = FleetWebService(db)
@@ -280,7 +285,7 @@ async def vehicle_edit_submit(
     request: Request,
     vehicle_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update existing vehicle from form."""
     web_service = FleetWebService(db)
@@ -293,7 +298,7 @@ async def vehicle_edit_submit(
 def vehicle_import_form(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Vehicle import form."""
     if not auth.has_all_permissions(["fleet:access", "fleet:dashboard"]):
@@ -316,7 +321,7 @@ def vehicle_import_form(
 async def vehicle_import_submit(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Handle vehicle CSV import."""
     if not auth.has_all_permissions(["fleet:access", "fleet:dashboard"]):
@@ -462,7 +467,7 @@ def vehicle_detail(
     request: Request,
     vehicle_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Vehicle detail view."""
     context = base_context(request, auth, "Vehicle Details", "fleet", db=db)
@@ -481,7 +486,7 @@ def vehicle_edit(
     request: Request,
     vehicle_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit vehicle form."""
     context = base_context(request, auth, "Edit Vehicle", "fleet", db=db)
@@ -509,7 +514,7 @@ def maintenance_list(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List maintenance records."""
     context = base_context(request, auth, "Maintenance", "fleet", db=db)
@@ -532,7 +537,7 @@ def maintenance_new(
     request: Request,
     vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New maintenance record form."""
     context = base_context(request, auth, "Schedule Maintenance", "fleet", db=db)
@@ -549,7 +554,7 @@ def maintenance_new(
 async def maintenance_create(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create maintenance record from form submission."""
     web_service = FleetWebService(db)
@@ -561,7 +566,7 @@ def maintenance_detail(
     request: Request,
     record_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Maintenance record detail view."""
     context = base_context(request, auth, "Maintenance Details", "fleet", db=db)
@@ -591,7 +596,7 @@ def fuel_list(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List fuel log entries."""
     context = base_context(request, auth, "Fuel Logs", "fleet", db=db)
@@ -612,7 +617,7 @@ def fuel_new(
     request: Request,
     vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New fuel log entry form."""
     context = base_context(request, auth, "Record Fuel Purchase", "fleet", db=db)
@@ -627,7 +632,7 @@ def fuel_new(
 async def fuel_create(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create fuel log from form submission."""
     web_service = FleetWebService(db)
@@ -639,7 +644,7 @@ def fleet_expense_claim_search(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=8, ge=1, le=20),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Search expense claims for fleet fuel/incident form linking."""
     payload = FleetWebService.expense_claim_typeahead(
@@ -665,7 +670,7 @@ def incident_list(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List incidents."""
     context = base_context(request, auth, "Incidents", "fleet", db=db)
@@ -688,7 +693,7 @@ def incident_new(
     request: Request,
     vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New incident report form."""
     context = base_context(request, auth, "Report Incident", "fleet", db=db)
@@ -703,7 +708,7 @@ def incident_new(
 async def incident_create(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create incident from form submission."""
     web_service = FleetWebService(db)
@@ -715,7 +720,7 @@ def incident_detail(
     request: Request,
     incident_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Incident detail view."""
     context = base_context(request, auth, "Incident Details", "fleet", db=db)
@@ -744,7 +749,7 @@ def reservation_list(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List reservations."""
     context = base_context(request, auth, "Reservations", "fleet", db=db)
@@ -765,7 +770,7 @@ def reservation_list(
 def reservation_new(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New reservation form."""
     context = base_context(request, auth, "New Reservation", "fleet", db=db)
@@ -778,7 +783,7 @@ def reservation_new(
 async def reservation_create(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create reservation from form submission."""
     web_service = FleetWebService(db)
@@ -790,7 +795,7 @@ def reservation_detail(
     request: Request,
     reservation_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Reservation detail view."""
     context = base_context(request, auth, "Reservation Details", "fleet", db=db)
@@ -813,7 +818,7 @@ async def reservation_cancel(
     request: Request,
     reservation_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Cancel a reservation from form submission."""
     web_service = FleetWebService(db)
@@ -837,7 +842,7 @@ def document_list(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List documents."""
     context = base_context(request, auth, "Documents", "fleet", db=db)
@@ -861,7 +866,7 @@ def document_new(
     request: Request,
     vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New document form."""
     context = base_context(request, auth, "Add Document", "fleet", db=db)
@@ -876,7 +881,7 @@ def document_new(
 async def document_create(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create document from form submission."""
     web_service = FleetWebService(db)
@@ -888,7 +893,7 @@ def document_detail(
     request: Request,
     document_id: UUID,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Document detail view."""
     context = base_context(request, auth, "Document Details", "fleet", db=db)
@@ -913,7 +918,7 @@ def document_detail(
 def fleet_import_dashboard(
     request: Request,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet import dashboard page."""
     context = base_context(request, auth, "Fleet Import", "fleet", db=db)
@@ -928,7 +933,7 @@ def fleet_import_form(
     request: Request,
     entity_type: str,
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Fleet import form for a specific entity type."""
     from app.services.finance.import_export.base import build_alias_map
@@ -972,7 +977,7 @@ async def fleet_import_preview(
     entity_type: str,
     file: UploadFile = File(...),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Preview fleet import with validation and column mapping."""
     try:
@@ -1001,7 +1006,7 @@ async def fleet_execute_import(
     dry_run: str | None = Form(default=None),
     column_mapping: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_fleet_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Execute fleet import operation (web route)."""
     import json

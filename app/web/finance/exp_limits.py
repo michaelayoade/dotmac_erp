@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.services.expense.limit_web import expense_limit_web_service
 from app.web.deps import (
     WebAuthContext,
-    get_db,
+    get_db_for_org,
     require_expense_access,
     require_web_permission,
 )
@@ -45,7 +45,7 @@ def limit_rules_list(
     search: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List expense limit rules."""
     return expense_limit_web_service.limit_rules_list_response(
@@ -63,7 +63,7 @@ def limit_rules_list(
 def new_limit_rule(
     request: Request,
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New expense limit rule form."""
     return expense_limit_web_service.new_limit_rule_form_response(
@@ -77,7 +77,7 @@ def new_limit_rule(
 async def create_limit_rule(
     request: Request,
     auth: WebAuthContext = Depends(_require_policies_manage),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create new expense limit rule."""
     return await expense_limit_web_service.create_limit_rule_response(
@@ -92,7 +92,7 @@ def edit_limit_rule(
     request: Request,
     rule_id: UUID,
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit expense limit rule form."""
     return expense_limit_web_service.edit_limit_rule_form_response(
@@ -108,7 +108,7 @@ async def update_limit_rule(
     request: Request,
     rule_id: UUID,
     auth: WebAuthContext = Depends(_require_policies_manage),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update expense limit rule."""
     return await expense_limit_web_service.update_limit_rule_response(
@@ -124,7 +124,7 @@ async def delete_limit_rule(
     request: Request,
     rule_id: UUID,
     auth: WebAuthContext = Depends(_require_policies_manage),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete expense limit rule."""
     return expense_limit_web_service.delete_limit_rule_response(
@@ -146,7 +146,7 @@ def approver_limits_list(
     is_active: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List expense approver limits."""
     return expense_limit_web_service.approver_limits_list_response(
@@ -163,7 +163,7 @@ def approver_limits_list(
 def new_approver_limit(
     request: Request,
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New expense approver limit form."""
     return expense_limit_web_service.new_approver_limit_form_response(
@@ -178,7 +178,7 @@ def edit_approver_limit(
     request: Request,
     approver_limit_id: UUID,
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit expense approver limit form."""
     return expense_limit_web_service.edit_approver_limit_form_response(
@@ -194,7 +194,7 @@ async def update_approver_limit(
     request: Request,
     approver_limit_id: UUID,
     auth: WebAuthContext = Depends(_require_policies_manage),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update expense approver limit."""
     return await expense_limit_web_service.update_approver_limit_response(
@@ -210,7 +210,7 @@ def approver_employee_search(
     q: str = Query(default=""),
     limit: int = Query(default=8, ge=1, le=20),
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Search active employees for approver limit typeahead."""
     if not q.strip():
@@ -229,7 +229,7 @@ def approver_limit_detail(
     request: Request,
     approver_limit_id: UUID,
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """View expense approver limit details."""
     return expense_limit_web_service.approver_limit_detail_response(
@@ -244,7 +244,7 @@ def approver_limit_detail(
 async def create_approver_limit(
     request: Request,
     auth: WebAuthContext = Depends(_require_policies_manage),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create new expense approver limit."""
     return await expense_limit_web_service.create_approver_limit_response(
@@ -261,7 +261,7 @@ async def delete_approver_limit(
     request: Request,
     approver_limit_id: UUID,
     auth: WebAuthContext = Depends(_require_policies_manage),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete expense approver limit."""
     return expense_limit_web_service.delete_approver_limit_response(
@@ -281,7 +281,7 @@ def reviewer_approvers(
     request: Request,
     q: str | None = None,
     auth: WebAuthContext = Depends(_require_limits_review),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List approvers for reviewer reset workflow."""
     return expense_limit_web_service.reviewer_approver_list_response(
@@ -299,7 +299,7 @@ def reviewer_approver_detail(
     from_date: str | None = None,
     to_date: str | None = None,
     auth: WebAuthContext = Depends(_require_limits_review),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Review all approval decisions for one approver."""
     return expense_limit_web_service.reviewer_approver_detail_response(
@@ -320,7 +320,7 @@ async def reviewer_reset_approver_budget(
     request: Request,
     approver_id: UUID,
     auth: WebAuthContext = Depends(_require_limits_review),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Reset consumed weekly budget for a single approver."""
     form = await request.form()
@@ -353,7 +353,7 @@ def usage_dashboard(
     request: Request,
     employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Employee expense usage dashboard."""
     return expense_limit_web_service.usage_dashboard_response(
@@ -372,7 +372,7 @@ def evaluations_list(
     to_date: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List expense limit evaluations (audit trail)."""
     return expense_limit_web_service.evaluations_list_response(

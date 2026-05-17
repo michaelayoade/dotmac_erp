@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.pm.web.project_web import project_web_service
-from app.web.deps import WebAuthContext, get_db, require_projects_access
+from app.web.deps import WebAuthContext, get_db_for_org, require_projects_access
 
 router = APIRouter(prefix="/projects", tags=["projects-web"])
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/projects", tags=["projects-web"])
 def projects_index(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Projects landing page."""
     return project_web_service.projects_index(request, auth, db)
@@ -31,7 +31,7 @@ def list_projects(
     search: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Projects list page."""
     return project_web_service.list_projects(request, auth, search, status, page, db)
@@ -41,7 +41,7 @@ def list_projects(
 def new_project_form(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New project form page."""
     return project_web_service.new_project_form(request, auth, db)
@@ -52,7 +52,7 @@ def edit_project_form(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit project form page."""
     return project_web_service.edit_project_form(request, project_id, auth, db)
@@ -63,7 +63,7 @@ def project_template_list(
     request: Request,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project template list page."""
     return project_web_service.project_template_list(request, page, auth, db)
@@ -73,7 +73,7 @@ def project_template_list(
 def new_project_template_form(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New project template form page."""
     return project_web_service.new_project_template_form(request, auth, db)
@@ -83,7 +83,7 @@ def new_project_template_form(
 async def create_project_template(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new project template with ordered tasks."""
     return await project_web_service.create_project_template(request, auth, db)
@@ -94,7 +94,7 @@ def project_template_detail(
     request: Request,
     template_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project template detail page."""
     return project_web_service.project_template_detail(request, template_id, auth, db)
@@ -105,7 +105,7 @@ def edit_project_template_form(
     request: Request,
     template_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit project template form page."""
     return project_web_service.edit_project_template_form(
@@ -118,7 +118,7 @@ async def update_project_template(
     request: Request,
     template_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a project template and its tasks."""
     return await project_web_service.update_project_template(
@@ -134,7 +134,7 @@ def global_task_list(
     priority: str | None = None,
     project_id: str | None = None,
     page: int = Query(1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Global task list page."""
     return project_web_service.global_task_list(
@@ -146,7 +146,7 @@ def global_task_list(
 def global_task_new_form(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Global new task form page."""
     return project_web_service.global_task_new_form(request, auth, db)
@@ -169,7 +169,7 @@ def create_global_task(
     ticket_id: str = Form(default=""),
     parent_task_id: str = Form(default=""),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new task from the global task form."""
     return project_web_service.create_global_task(
@@ -197,7 +197,7 @@ def project_dashboard(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project dashboard/detail page."""
     return project_web_service.project_dashboard(request, project_id, auth, db)
@@ -211,7 +211,7 @@ async def add_project_comment(
     content: str = Form(...),
     is_internal: bool = Form(default=False),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Add a comment to a project."""
     return await project_web_service.add_project_comment(
@@ -227,7 +227,7 @@ def delete_project_comment(
     project_id: str,
     comment_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a project comment."""
     return project_web_service.delete_project_comment(
@@ -254,7 +254,7 @@ async def create_project(
     budget_amount: str = Form(default=""),
     percent_complete: str = Form(default="0"),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new project."""
     return await project_web_service.create_project(
@@ -293,7 +293,7 @@ async def update_project(
     budget_amount: str = Form(default=""),
     percent_complete: str = Form(default="0"),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update an existing project."""
     return await project_web_service.update_project(
@@ -320,7 +320,7 @@ def delete_project(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a project (soft delete by setting status to CANCELLED)."""
     return project_web_service.delete_project(request, project_id, auth, db)
@@ -334,7 +334,7 @@ def project_tasks(
     status: str | None = None,
     priority: str | None = None,
     page: int = Query(default=1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project tasks list page."""
     return project_web_service.project_tasks(
@@ -348,7 +348,7 @@ def task_detail(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Task detail page."""
     return project_web_service.task_detail(request, project_id, task_id, auth, db)
@@ -363,7 +363,7 @@ async def add_task_comment(
     content: str = Form(...),
     is_internal: bool = Form(default=False),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Add a comment to a task."""
     return await project_web_service.add_task_comment(
@@ -381,7 +381,7 @@ def delete_task_comment(
     task_id: str,
     comment_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a task comment."""
     return project_web_service.delete_task_comment(
@@ -396,7 +396,7 @@ def download_task_attachment(
     task_id: str,
     attachment_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Download a task attachment."""
     return project_web_service.download_task_attachment(
@@ -413,7 +413,7 @@ async def upload_task_attachment(
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Upload attachments to a task."""
     return await project_web_service.upload_task_attachment(
@@ -431,7 +431,7 @@ def delete_task_attachment(
     task_id: str,
     attachment_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a task attachment."""
     return project_web_service.delete_task_attachment(
@@ -445,7 +445,7 @@ def new_task_form(
     project_id: str,
     parent_task_id: str | None = None,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New task form page."""
     return project_web_service.new_task_form(
@@ -470,7 +470,7 @@ def create_task(
     due_date: str = Form(default=""),
     estimated_hours: str = Form(default=""),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new task."""
     return project_web_service.create_task(
@@ -499,7 +499,7 @@ def edit_task_form(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit task form page."""
     return project_web_service.edit_task_form(request, project_id, task_id, auth, db)
@@ -524,7 +524,7 @@ def update_task(
     actual_hours: str = Form(default=""),
     progress_percent: str = Form(default="0"),
     files: list[UploadFile] = File(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update an existing task."""
     return project_web_service.update_task(
@@ -555,7 +555,7 @@ def delete_task(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a task (soft delete)."""
     return project_web_service.delete_task(request, project_id, task_id, auth, db)
@@ -567,7 +567,7 @@ def start_task(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Start a task (transition from OPEN to IN_PROGRESS)."""
     return project_web_service.start_task(request, project_id, task_id, auth, db)
@@ -579,7 +579,7 @@ def complete_task(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Complete a task (transition to COMPLETED)."""
     return project_web_service.complete_task(request, project_id, task_id, auth, db)
@@ -596,7 +596,7 @@ def add_task_dependency(
     depends_on_id: str = Form(...),
     dependency_type: str = Form(default="FINISH_TO_START"),
     lag_days: int = Form(default=0),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Add a dependency to a task."""
     return project_web_service.add_task_dependency(
@@ -614,7 +614,7 @@ def remove_task_dependency(
     task_id: str,
     depends_on_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Remove a dependency from a task."""
     return project_web_service.remove_task_dependency(
@@ -629,7 +629,7 @@ def bulk_update_task_status(
     auth: WebAuthContext = Depends(require_projects_access),
     task_ids: str = Form(...),
     status: str = Form(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update status for multiple tasks."""
     return project_web_service.bulk_update_task_status(
@@ -643,7 +643,7 @@ def bulk_delete_tasks(
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
     task_ids: str = Form(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete multiple tasks (soft delete)."""
     return project_web_service.bulk_delete_tasks(
@@ -656,7 +656,7 @@ def project_gantt(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project Gantt chart page."""
     return project_web_service.project_gantt(request, project_id, auth, db)
@@ -667,7 +667,7 @@ def project_team(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project team management page."""
     return project_web_service.project_team(request, project_id, auth, db)
@@ -685,7 +685,7 @@ def create_resource_allocation(
     end_date: str = Form(default=""),
     cost_rate_per_hour: str = Form(default=""),
     billing_rate_per_hour: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Add a team member to the project."""
     return project_web_service.create_resource_allocation(
@@ -716,7 +716,7 @@ def update_resource_allocation(
     cost_rate_per_hour: str = Form(default=""),
     billing_rate_per_hour: str = Form(default=""),
     is_active: str = Form(default="on"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a resource allocation."""
     return project_web_service.update_resource_allocation(
@@ -742,7 +742,7 @@ def end_resource_allocation(
     allocation_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
     end_date: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """End a resource allocation."""
     return project_web_service.end_resource_allocation(
@@ -758,7 +758,7 @@ def delete_resource_allocation(
     project_id: str,
     allocation_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a resource allocation."""
     return project_web_service.delete_resource_allocation(
@@ -772,7 +772,7 @@ def resource_utilization_report(
     auth: WebAuthContext = Depends(require_projects_access),
     start_date: str | None = None,
     end_date: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Resource utilization report across all projects."""
     return project_web_service.resource_utilization_report(
@@ -785,7 +785,7 @@ def project_milestones(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project milestones page."""
     return project_web_service.project_milestones(request, project_id, auth, db)
@@ -800,7 +800,7 @@ def create_milestone(
     description: str = Form(default=""),
     target_date: str = Form(...),
     linked_task_id: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new milestone."""
     return project_web_service.create_milestone(
@@ -819,7 +819,7 @@ def update_milestone(
     target_date: str = Form(...),
     status: str = Form(...),
     actual_date: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a milestone."""
     return project_web_service.update_milestone(
@@ -844,7 +844,7 @@ def achieve_milestone(
     project_id: str,
     milestone_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Mark a milestone as achieved."""
     return project_web_service.achieve_milestone(
@@ -860,7 +860,7 @@ def delete_milestone(
     project_id: str,
     milestone_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a milestone."""
     return project_web_service.delete_milestone(
@@ -878,7 +878,7 @@ def project_time_entries(
     end_date: str | None = None,
     billable: str | None = None,
     billing_status: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project time entries page."""
     return project_web_service.project_time_entries(
@@ -900,7 +900,7 @@ def new_time_entry_form(
     project_id: str,
     task_id: str | None = None,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New time entry form page."""
     return project_web_service.new_time_entry_form(
@@ -919,7 +919,7 @@ def create_time_entry(
     hours: str = Form(...),
     description: str = Form(default=""),
     is_billable: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Log a time entry."""
     return project_web_service.create_time_entry(
@@ -942,7 +942,7 @@ def edit_time_entry_form(
     project_id: str,
     entry_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit time entry form page."""
     return project_web_service.edit_time_entry_form(
@@ -961,7 +961,7 @@ def update_time_entry(
     hours: str = Form(...),
     description: str = Form(default=""),
     is_billable: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update a time entry."""
     return project_web_service.update_time_entry(
@@ -984,7 +984,7 @@ def delete_time_entry(
     project_id: str,
     entry_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete a time entry."""
     return project_web_service.delete_time_entry(
@@ -998,7 +998,7 @@ def bill_time_entry(
     project_id: str,
     entry_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Mark a single time entry as billed."""
     return project_web_service.bill_time_entry(request, project_id, entry_id, auth, db)
@@ -1010,7 +1010,7 @@ def bulk_bill_time_entries(
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
     entry_ids: str = Form(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Mark multiple time entries as billed."""
     return project_web_service.bulk_bill_time_entries(
@@ -1023,7 +1023,7 @@ def employee_timesheet(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
     week_start: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Employee weekly timesheet page."""
     return project_web_service.employee_timesheet(request, auth, week_start, db)
@@ -1038,7 +1038,7 @@ def log_timesheet_entry(
     task_id: str = Form(default=""),
     hours: str = Form(...),
     description: str = Form(default=""),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Log a time entry from the employee timesheet view."""
     return project_web_service.log_timesheet_entry(
@@ -1051,7 +1051,7 @@ def project_expenses(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project expenses page (read-only view)."""
     return project_web_service.project_expenses(request, project_id, auth, db)
@@ -1062,7 +1062,7 @@ def project_attachments(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List project attachments."""
     return project_web_service.project_attachments(request, project_id, auth, db)
@@ -1073,7 +1073,7 @@ async def upload_project_attachment(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Upload attachment to project."""
     return await project_web_service.upload_project_attachment(
@@ -1087,7 +1087,7 @@ def download_project_attachment(
     project_id: str,
     attachment_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Download project attachment."""
     return project_web_service.download_project_attachment(
@@ -1103,7 +1103,7 @@ def delete_project_attachment(
     project_id: str,
     attachment_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Delete project attachment."""
     return project_web_service.delete_project_attachment(
@@ -1115,7 +1115,7 @@ def delete_project_attachment(
 def project_import_dashboard(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project import dashboard page."""
     return project_web_service.project_import_dashboard(request, auth, db)
@@ -1126,7 +1126,7 @@ def project_import_form(
     request: Request,
     entity_type: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Project import form for a specific entity type."""
     return project_web_service.project_import_form(request, entity_type, auth, db)
@@ -1138,7 +1138,7 @@ async def project_import_preview(
     entity_type: str,
     file: UploadFile = File(...),
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Preview project import with validation and column mapping."""
     return await project_web_service.project_import_preview(
@@ -1155,7 +1155,7 @@ async def project_execute_import(
     dry_run: str | None = Form(default=None),
     column_mapping: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_projects_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Execute project import operation (web route)."""
     return await project_web_service.project_execute_import(

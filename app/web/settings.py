@@ -22,7 +22,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     get_async_db_for_org,
-    get_db,
+    get_db_for_org,
     require_finance_access,
     require_settings_access,
 )
@@ -100,7 +100,7 @@ def _normalize_form(form) -> dict[str, str]:
 def settings_index(
     request: Request,
     auth: WebAuthContext = Depends(require_settings_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Settings hub page."""
     context = base_context(request, auth, "Settings", "settings", db=db)
@@ -114,7 +114,7 @@ async def finance_numbering_sequences(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
     db: AsyncSession = Depends(get_async_db_for_org),
-    sync_db: Session = Depends(get_db),
+    sync_db: Session = Depends(get_db_for_org),
 ):
     """Finance numbering sequences page exposed from the shared settings URL."""
     result = await settings_web_service.get_numbering_list_context(
@@ -142,7 +142,7 @@ def module_settings(
     module_key: str,
     request: Request,
     auth: WebAuthContext = Depends(require_settings_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Module settings page."""
     config, handler = _get_module_config(module_key)
@@ -157,7 +157,7 @@ async def update_module_settings(
     module_key: str,
     request: Request,
     auth: WebAuthContext = Depends(require_settings_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Handle module settings update."""
     config, handler = _get_module_config(module_key)

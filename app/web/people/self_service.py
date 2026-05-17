@@ -18,7 +18,7 @@ from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     base_context,
-    get_db,
+    get_db_for_org,
     require_self_service_access,
     require_self_service_discipline_manager,
     require_self_service_expense_approver,
@@ -74,7 +74,7 @@ def _coerce_iso_date(value: object | None, field_name: str) -> date | None:
 def self_service_index(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service landing page."""
     context = base_context(request, auth, "Self Service", "self", db=db)
@@ -86,7 +86,7 @@ def my_attendance(
     request: Request,
     month: str | None = Query(None, description="Month in YYYY-MM format"),
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service attendance page with check-in/out actions."""
     return self_service_web_service.attendance_response(request, auth, db, month=month)
@@ -97,7 +97,7 @@ def my_schedules(
     request: Request,
     year_month: str | None = Query(None, description="Month in YYYY-MM format"),
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service schedule view."""
     return self_service_web_service.scheduling_schedules_response(
@@ -111,7 +111,7 @@ def my_swap_requests(
     year_month: str | None = Query(None, description="Month in YYYY-MM format"),
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service swap request page."""
     return self_service_web_service.scheduling_swaps_response(
@@ -123,7 +123,7 @@ def my_swap_requests(
 async def request_swap(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Create a shift swap request."""
     form = getattr(request.state, "csrf_form", None)
@@ -136,7 +136,7 @@ async def request_swap(
 async def accept_swap(
     request_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Accept a swap request as target employee."""
     return self_service_web_service.scheduling_accept_swap_response(
@@ -149,7 +149,7 @@ async def decline_swap(
     request_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Decline a swap request as target employee."""
     form = getattr(request.state, "csrf_form", None)
@@ -164,7 +164,7 @@ async def decline_swap(
 async def cancel_swap(
     request_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Cancel a swap request as requester."""
     return self_service_web_service.scheduling_cancel_swap_response(
@@ -176,7 +176,7 @@ async def cancel_swap(
 async def my_check_in(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Check in for the current employee."""
     form = getattr(request.state, "csrf_form", None)
@@ -199,7 +199,7 @@ async def my_check_in(
 async def my_check_out(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Check out for the current employee."""
     form = getattr(request.state, "csrf_form", None)
@@ -222,7 +222,7 @@ async def my_check_out(
 def my_leave(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service leave page."""
     return self_service_web_service.leave_response(request, auth, db)
@@ -233,7 +233,7 @@ def my_leave_detail(
     application_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """View a leave application for the current employee."""
     return self_service_web_service.leave_detail_response(
@@ -250,7 +250,7 @@ def my_tax_info(
     success: str | None = None,
     error: str | None = None,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service tax, bank, and personal info page."""
     return self_service_web_service.tax_info_response(
@@ -266,7 +266,7 @@ def my_tax_info(
 async def update_tax_info(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Submit a change request for tax, bank, and personal info."""
     form = getattr(request.state, "csrf_form", None)
@@ -311,7 +311,7 @@ async def update_tax_info(
 def cancel_leave(
     application_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Cancel a leave application for the current employee."""
     return self_service_web_service.leave_cancel_response(
@@ -325,7 +325,7 @@ def cancel_leave(
 async def apply_leave(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     leave_type_id: str | None = Form(default=None),
     from_date: date | None = Form(default=None),
     to_date: date | None = Form(default=None),
@@ -411,7 +411,7 @@ def my_payslips(
     year: int | None = Query(None, description="Filter by year"),
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service payslips page."""
     return self_service_web_service.payslips_response(
@@ -424,7 +424,7 @@ def my_payslip_detail(
     slip_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """View a payslip for the current employee."""
     return self_service_web_service.payslip_detail_response(
@@ -439,7 +439,7 @@ def my_payslip_detail(
 def my_expenses(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service expenses page."""
     return self_service_web_service.expenses_response(request, auth, db)
@@ -450,7 +450,7 @@ def my_tickets(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
     page: int = Query(default=1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service tickets page."""
     return self_service_web_service.tickets_response(request, auth, db, page=page)
@@ -461,7 +461,7 @@ def my_tasks(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
     page: int = Query(default=1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service tasks page."""
     return self_service_web_service.tasks_response(request, auth, db, page=page)
@@ -471,7 +471,7 @@ def my_tasks(
 async def create_expense_claim(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Create an expense claim with one or more line items."""
     form = getattr(request.state, "csrf_form", None)
@@ -624,7 +624,7 @@ def edit_expense_claim(
     claim_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit a draft expense claim."""
     return self_service_web_service.expense_claim_edit_response(
@@ -640,7 +640,7 @@ async def update_expense_claim(
     claim_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Update items on a draft expense claim."""
     form = getattr(request.state, "csrf_form", None)
@@ -782,7 +782,7 @@ async def submit_expense_claim(
     claim_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Submit a draft expense claim for approval."""
     form = getattr(request.state, "csrf_form", None)
@@ -801,7 +801,7 @@ async def delete_expense_claim(
     claim_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Delete a draft expense claim owned by the current employee."""
     form = getattr(request.state, "csrf_form", None)
@@ -821,7 +821,7 @@ def team_leave_requests(
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_leave_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Team leave approvals for direct reports."""
     return self_service_web_service.team_leave_response(
@@ -837,7 +837,7 @@ def team_leave_requests(
 def approve_team_leave(
     application_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_leave_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Approve a direct report leave request."""
     return self_service_web_service.team_leave_approve_response(
@@ -851,7 +851,7 @@ def approve_team_leave(
 def reject_team_leave(
     application_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_leave_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     reason: str | None = Form(default=None),
 ) -> RedirectResponse:
     """Reject a direct report leave request."""
@@ -869,7 +869,7 @@ def team_expense_requests(
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Expense approvals history for current approver."""
     return self_service_web_service.team_expenses_response(
@@ -887,7 +887,7 @@ def my_expense_approvals(
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """My approved/rejected expense decisions."""
     return self_service_web_service.team_expenses_response(
@@ -903,7 +903,7 @@ def my_expense_approvals(
 def approve_team_expense(
     claim_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Approve a direct report expense claim."""
     return self_service_web_service.team_expense_approve_response(
@@ -917,7 +917,7 @@ def approve_team_expense(
 def reject_team_expense(
     claim_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     reason: str | None = Form(default=None),
 ) -> RedirectResponse:
     """Reject a direct report expense claim."""
@@ -939,7 +939,7 @@ def my_discipline_cases(
     request: Request,
     include_closed: bool = Query(default=False),
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Self-service discipline cases page - view my disciplinary cases."""
     return self_service_web_service.discipline_cases_response(
@@ -952,7 +952,7 @@ def my_discipline_case_detail(
     case_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """View details of a specific disciplinary case."""
     return self_service_web_service.discipline_case_detail_response(
@@ -965,7 +965,7 @@ async def submit_discipline_response(
     case_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Submit employee response to a disciplinary query."""
     form = getattr(request.state, "csrf_form", None)
@@ -986,7 +986,7 @@ async def file_discipline_appeal(
     case_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """File an appeal against a disciplinary decision."""
     form = getattr(request.state, "csrf_form", None)
@@ -1008,7 +1008,7 @@ def team_discipline_cases(
     include_closed: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_discipline_manager),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """List disciplinary cases for direct reports."""
     return self_service_web_service.team_discipline_cases_response(
@@ -1024,7 +1024,7 @@ def team_discipline_cases(
 def team_discipline_new_case_form(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_discipline_manager),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Render form to create a discipline case for a direct report."""
     return self_service_web_service.team_discipline_new_form_response(
@@ -1038,7 +1038,7 @@ def team_discipline_new_case_form(
 async def team_discipline_create_case(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_discipline_manager),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a discipline case for a direct report and issue query."""
     form = getattr(request.state, "csrf_form", None)
@@ -1074,7 +1074,7 @@ def team_discipline_case_detail(
     case_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_discipline_manager),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """View a team discipline case for a direct report."""
     return self_service_web_service.team_discipline_case_detail_response(
@@ -1090,7 +1090,7 @@ async def team_discipline_issue_query(
     case_id: UUID,
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_discipline_manager),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Issue query on a team discipline case."""
     form = getattr(request.state, "csrf_form", None)

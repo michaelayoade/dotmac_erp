@@ -20,6 +20,7 @@ from app.web.deps import (
     WebAuthContext,
     base_context,
     get_db,
+    get_db_for_org,
     optional_web_auth,
     require_finance_access,
     require_web_auth,
@@ -76,7 +77,7 @@ def pay_invoice_page(
     request: Request,
     invoice_id: str,
     auth: WebAuthContext = Depends(require_finance_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """
     Pay invoice page with Paystack button.
@@ -106,7 +107,7 @@ def reimburse_expense_page(
     request: Request,
     expense_claim_id: str,
     auth: WebAuthContext = Depends(_require_expense_reimburse),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """
     Expense reimbursement page.
@@ -139,7 +140,7 @@ def reimburse_expense_reset_intent(
     reason: str | None = Form(None),
     force: bool = Form(False),
     auth: WebAuthContext = Depends(_require_expense_reimburse),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """
     Reset the latest failed/abandoned/expired reimbursement intent for retry.
@@ -180,7 +181,7 @@ def transfer_list(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=25, ge=1, le=200),
     auth: WebAuthContext = Depends(_require_expense_reimburse),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """
     Transfer management page.
@@ -207,7 +208,7 @@ def payment_history(
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(_require_expense_reimburse),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """
     Payment history page.

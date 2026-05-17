@@ -25,7 +25,7 @@ from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     base_context,
-    get_db,
+    get_db_for_org,
     require_fixed_assets_access,
 )
 
@@ -49,7 +49,7 @@ def _build_target_fields(
 def fa_landing(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Asset management landing dashboard."""
     context = base_context(request, auth, "Asset Management", "fixed_assets")
@@ -61,7 +61,7 @@ def fa_landing(
 def fa_reports(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     section: str = Query(default="overview"),
     discrepancy_status: str = Query(default="OPEN"),
 ):
@@ -81,7 +81,7 @@ def fa_reports(
 @router.get("/reports/gl-reconciliation/export")
 def export_fa_gl_reconciliation_report(
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     as_of: date | None = Query(default=None),
     format: str = Query(default="csv", pattern="^(csv|pdf)$"),
 ):
@@ -103,7 +103,7 @@ def export_fa_gl_reconciliation_report(
 def fa_gl_reconciliation_report(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     as_of: date | None = Query(default=None),
 ):
     """Asset register to GL control reconciliation report."""
@@ -123,7 +123,7 @@ def fa_gl_reconciliation_report(
 @router.get("/reports/count-sheets/export")
 def export_fa_count_sheets_report(
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     audit_plan_id: str | None = Query(default=None),
     location: str | None = Query(default=None),
     category: str | None = Query(default=None),
@@ -151,7 +151,7 @@ def export_fa_count_sheets_report(
 def fa_count_sheets_report(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     audit_plan_id: str | None = Query(default=None),
     location: str | None = Query(default=None),
     category: str | None = Query(default=None),
@@ -176,7 +176,7 @@ def fa_count_sheets_report(
 def fa_dashboard(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Asset management dashboard route."""
     return fa_landing(request, auth, db)
@@ -254,7 +254,7 @@ def fa_import_form(
 def list_count_plans(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     status: str | None = Query(default=None),
 ):
     """List fixed asset physical count plans."""
@@ -273,7 +273,7 @@ def list_count_plans(
 def new_count_plan_form(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New fixed asset physical count plan form."""
     context = base_context(request, auth, "New Asset Count Plan", "count_plans", db=db)
@@ -288,7 +288,7 @@ def new_count_plan_form(
 @router.post("/count-plans/new")
 def create_count_plan(
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     title: str = Form(...),
     planned_date: str = Form(...),
     scope_location_id: str | None = Form(default=None),
@@ -309,7 +309,7 @@ def count_plan_detail(
     request: Request,
     audit_plan_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     line_status: str | None = Query(default=None),
 ):
     """Fixed asset physical count plan detail and check screen."""
@@ -331,7 +331,7 @@ def count_plan_detail(
 def start_count_plan(
     audit_plan_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Start a fixed asset physical count plan."""
     return fa_web_service.start_count_plan_response(
@@ -345,7 +345,7 @@ def start_count_plan(
 def complete_count_plan(
     audit_plan_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Complete a fixed asset physical count plan."""
     return fa_web_service.complete_count_plan_response(
@@ -359,7 +359,7 @@ def complete_count_plan(
 def mark_count_plan_pending_found(
     audit_plan_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Mark all pending lines in a count plan as found."""
     return fa_web_service.mark_count_plan_pending_found_response(
@@ -375,7 +375,7 @@ def check_count_plan_line(
     audit_plan_id: str,
     audit_line_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
     action: str = Form(...),
     observed_location_id: str | None = Form(default=None),
     observed_status: str | None = Form(default=None),
@@ -401,7 +401,7 @@ async def fa_import_preview(
     entity_type: str,
     file: UploadFile = File(...),
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Preview fixed assets import with validation and column mapping."""
     try:
@@ -430,7 +430,7 @@ async def fa_execute_import(
     dry_run: str | None = Form(default=None),
     column_mapping: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Execute fixed assets import operation (web route)."""
     import json
@@ -479,7 +479,7 @@ def list_assets(
     location: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=10, le=200),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Assets list page."""
     context = base_context(request, auth, "Asset Management", "fixed_assets")
@@ -502,7 +502,7 @@ def list_assets(
 def new_asset_form(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New asset form page."""
     return fa_web_service.asset_new_form_response(request, auth, db)
@@ -525,7 +525,7 @@ def create_asset(
     status: str | None = Form(default=None),
     description: str | None = Form(default=None),
     depreciation_schedule_id: str | None = Form(default=None),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new fixed asset."""
     return fa_web_service.create_asset_response(
@@ -556,7 +556,7 @@ async def export_all_assets(
     category: str = "",
     location: str = "",
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Export all assets matching filters to CSV."""
     from app.services.fixed_assets.bulk import get_asset_bulk_service
@@ -578,7 +578,7 @@ def view_asset(
     request: Request,
     asset_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Asset detail page."""
     return fa_web_service.asset_detail_response(request, auth, db, asset_id)
@@ -589,7 +589,7 @@ def edit_asset_form(
     request: Request,
     asset_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit asset form page."""
     return fa_web_service.asset_edit_form_response(request, auth, db, asset_id)
@@ -600,7 +600,7 @@ async def update_asset(
     request: Request,
     asset_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update an existing fixed asset."""
     return await fa_web_service.update_asset_response(request, auth, db, asset_id)
@@ -611,7 +611,7 @@ async def dispose_asset(
     request: Request,
     asset_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Dispose a fixed asset."""
     return await fa_web_service.dispose_asset_response(request, auth, db, asset_id)
@@ -622,7 +622,7 @@ async def revalue_asset(
     request: Request,
     asset_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Revalue a fixed asset."""
     return await fa_web_service.revalue_asset_response(request, auth, db, asset_id)
@@ -633,7 +633,7 @@ async def impair_asset(
     request: Request,
     asset_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Record impairment for a fixed asset."""
     return await fa_web_service.impair_asset_response(request, auth, db, asset_id)
@@ -648,7 +648,7 @@ async def impair_asset(
 async def bulk_delete_assets(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Bulk delete assets (only DRAFT status)."""
     from app.schemas.bulk_actions import BulkActionRequest
@@ -664,7 +664,7 @@ async def bulk_delete_assets(
 async def bulk_export_assets(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Export selected assets to CSV."""
     from app.schemas.bulk_actions import BulkExportRequest
@@ -687,7 +687,7 @@ def list_categories(
     auth: WebAuthContext = Depends(require_fixed_assets_access),
     is_active: str | None = None,
     page: int = Query(default=1, ge=1),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Asset categories list page."""
     active_filter = None
@@ -709,7 +709,7 @@ def list_categories(
 def new_category_form(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """New asset category form page."""
     return fa_web_service.new_category_form_response(request, auth, db)
@@ -719,7 +719,7 @@ def new_category_form(
 async def create_category(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Create a new asset category."""
     return await fa_web_service.create_category_response(request, auth, db)
@@ -730,7 +730,7 @@ def edit_category_form(
     request: Request,
     category_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Edit asset category form page."""
     return fa_web_service.edit_category_form_response(request, auth, category_id, db)
@@ -741,7 +741,7 @@ async def update_category(
     request: Request,
     category_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Update an existing asset category."""
     return await fa_web_service.update_category_response(request, auth, category_id, db)
@@ -751,7 +751,7 @@ async def update_category(
 def toggle_category(
     category_id: str,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Toggle asset category active/inactive status."""
     return fa_web_service.toggle_category_response(auth, category_id, db)
@@ -768,7 +768,7 @@ def depreciation_schedule(
     auth: WebAuthContext = Depends(require_fixed_assets_access),
     asset_id: str | None = None,
     period: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Depreciation schedule page."""
     context = base_context(request, auth, "Depreciation Schedule", "fixed_assets")
@@ -789,7 +789,7 @@ def depreciation_schedule(
 async def run_depreciation(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Run depreciation for a period."""
     return await fa_web_service.run_depreciation_response(request, auth, db)
@@ -801,7 +801,7 @@ def new_depreciation_run(
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
     period: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Depreciation run creation page."""
     context = base_context(request, auth, "Create Depreciation Run", "fixed_assets")
@@ -822,7 +822,7 @@ def depreciation_run_detail(
     run_id: str,
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Depreciation run detail page."""
     context = base_context(request, auth, "Depreciation Run", "fixed_assets")
@@ -843,7 +843,7 @@ async def post_depreciation_run(
     run_id: str,
     request: Request,
     auth: WebAuthContext = Depends(require_fixed_assets_access),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_for_org),
 ):
     """Post a calculated depreciation run."""
     return await fa_web_service.post_depreciation_run_response(
