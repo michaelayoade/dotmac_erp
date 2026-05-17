@@ -254,23 +254,28 @@ def test_list_role_summaries_returns_typed_dataclass(db_session):
 
 
 def test_list_positions_orders_top_down_by_hierarchy_depth(db_session):
+    # Names are intentionally chosen so depth-order (Zenith→Yak→Xenon)
+    # disagrees with alphabetical order (Xenon→Yak→Zenith).  If the
+    # CTE join were silently dropped, every row would land at
+    # coalesce(NULL, 999) = 999 and tie-break by name, producing the
+    # alphabetical order — which would fail this assertion.
     _ensure_hr_position_tables(db_session.bind)
     org_id = uuid.uuid4()
     root = _make_position(
-        db_session, org_id, position_name="CEO", position_code="CEO-1"
+        db_session, org_id, position_name="Zenith", position_code="ROOT-1"
     )
     middle = _make_position(
         db_session,
         org_id,
-        position_name="Director",
-        position_code="DIR-1",
+        position_name="Yak",
+        position_code="MID-1",
         parent_position_id=root.position_id,
     )
     leaf = _make_position(
         db_session,
         org_id,
-        position_name="Engineer",
-        position_code="ENG-1",
+        position_name="Xenon",
+        position_code="LEAF-1",
         parent_position_id=middle.position_id,
     )
 
@@ -281,10 +286,17 @@ def test_list_positions_orders_top_down_by_hierarchy_depth(db_session):
 
 
 def test_list_positions_demotes_cycled_positions_to_bottom(db_session):
+    # The rooted position is named "Zenith" so it sorts alphabetically
+    # AFTER the cycled positions.  Under a working CTE it still comes
+    # first (depth=0 beats the cycled positions' depth=NULL→999); under
+    # a broken CTE all three would tie at 999 and "Zenith" would land
+    # last, failing the assertion.  Also locks in non-termination: if
+    # the recursive CTE's depth guard regresses, this test hangs rather
+    # than fails fast — both are observable.
     _ensure_hr_position_tables(db_session.bind)
     org_id = uuid.uuid4()
     rooted = _make_position(
-        db_session, org_id, position_name="Anchor", position_code="ANC-1"
+        db_session, org_id, position_name="Zenith", position_code="ROOT-1"
     )
     cycle_a = _make_position(
         db_session, org_id, position_name="CycleA", position_code="CYA-1"

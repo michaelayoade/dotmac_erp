@@ -280,7 +280,7 @@ async def create_position(
         )
 
     return RedirectResponse(
-        url="/people/hr/positions?success=Position+created", status_code=303
+        url="/people/hr/positions?success=Position+seat+created", status_code=303
     )
 
 
@@ -301,7 +301,7 @@ def edit_position_form(
         )
     except ServiceError:
         return RedirectResponse(
-            url="/people/hr/positions?error=Position+not+found",
+            url="/people/hr/positions?error=Position+seat+not+found",
             status_code=303,
         )
     context = _position_form_context(
@@ -379,7 +379,7 @@ async def update_position(
         )
 
     return RedirectResponse(
-        url="/people/hr/positions?success=Position+saved", status_code=303
+        url="/people/hr/positions?success=Position+seat+saved", status_code=303
     )
 
 
