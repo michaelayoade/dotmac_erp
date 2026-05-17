@@ -137,7 +137,7 @@ def list_positions(
         pagination=pagination,
     )
     context = {
-        **base_context(request, auth, "Positions", "positions", db=db),
+        **base_context(request, auth, "Position Seats", "positions", db=db),
         "positions": result.items,
         "search": search or "",
         "page": page,
@@ -217,7 +217,7 @@ def new_position_form(
         request,
         auth,
         db,
-        title="New Position",
+        title="New Position Seat",
     )
     return templates.TemplateResponse(request, "people/hr/position_form.html", context)
 
@@ -248,7 +248,7 @@ async def create_position(
             request,
             auth,
             db,
-            title="New Position",
+            title="New Position Seat",
             position=position,
             errors=errors,
             error="Enter a position name and select at least a designation or department.",
@@ -269,7 +269,7 @@ async def create_position(
             request,
             auth,
             db,
-            title="New Position",
+            title="New Position Seat",
             position=position,
             error=exc.message,
         )
@@ -308,7 +308,7 @@ def edit_position_form(
         request,
         auth,
         db,
-        title="Edit Position",
+        title="Edit Position Seat",
         position=position,
         success=success,
         error=form_error or error,
@@ -344,7 +344,7 @@ async def update_position(
             request,
             auth,
             db,
-            title="Edit Position",
+            title="Edit Position Seat",
             position=position,
             errors=errors,
             error="Enter a position name and select at least a designation or department.",
@@ -368,7 +368,7 @@ async def update_position(
             request,
             auth,
             db,
-            title="Edit Position",
+            title="Edit Position Seat",
             position=position,
             error=exc.message,
         )
