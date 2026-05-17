@@ -16,7 +16,7 @@ from app.web.deps import (
     get_db_for_org,
     WebAuthContext,
     base_context,
-    get_async_db,
+    get_async_db_for_org,
     require_hr_access,
 )
 
@@ -68,7 +68,7 @@ async def people_settings_index(
 async def hr_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """HR settings page - employee ID format, attendance mode, probation."""
@@ -86,7 +86,7 @@ async def hr_settings(
 async def update_hr_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Update HR settings."""
@@ -113,7 +113,7 @@ async def update_hr_settings(
 async def payroll_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Payroll settings page - frequency and payment configuration."""
@@ -131,7 +131,7 @@ async def payroll_settings(
 async def update_payroll_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Update payroll settings."""
@@ -162,7 +162,7 @@ async def update_payroll_settings(
 async def leave_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Leave settings page - leave year start and policies."""
@@ -180,7 +180,7 @@ async def leave_settings(
 async def update_leave_settings(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Update leave settings."""
@@ -209,7 +209,7 @@ async def update_leave_settings(
 async def organization_profile(
     request: Request,
     auth: WebAuthContext = Depends(require_hr_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Organization profile page (read-only for HR users)."""

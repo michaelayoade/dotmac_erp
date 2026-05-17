@@ -21,7 +21,7 @@ from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     base_context,
-    get_async_db,
+    get_async_db_for_org,
     get_db,
     require_finance_access,
     require_settings_access,
@@ -113,7 +113,7 @@ def settings_index(
 async def finance_numbering_sequences(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db),
 ):
     """Finance numbering sequences page exposed from the shared settings URL."""

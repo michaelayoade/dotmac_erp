@@ -30,7 +30,7 @@ from app.models.auth import SessionStatus
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
-from app.rls import set_current_organization_sync
+from app.rls import set_current_organization, set_current_organization_sync
 from app.services.auth_dependencies import is_session_inactive
 from app.services.auth_flow import (
     AuthFlow,
@@ -1536,6 +1536,46 @@ def get_db_for_org(
         yield db
     finally:
         db.close()
+
+
+async def get_async_db_for_org(
+    auth: WebAuthContext = Depends(require_web_auth),
+):
+    """Async sibling of ``get_db_for_org`` for routes that use AsyncSession.
+
+    Primes both layers (Python session.info for the ORM listener, PG GUC
+    for in-database RLS policies) before yielding the session. Raises 403
+    if the caller has no org context, mirroring ``require_organization_id``
+    in ``app/api/deps.py`` — silently downgrading to an unprimed session
+    is the original Bug A pattern and would let RLS-protected async
+    queries return empty rows.
+
+    Use in async routes::
+
+        @router.get("/numbering")
+        async def list_numbering(
+            auth: WebAuthContext = Depends(require_web_auth),
+            db: AsyncSession = Depends(get_async_db_for_org),
+        ):
+            ...
+
+    The plain ``get_async_db`` remains for async routes that legitimately
+    don't have a per-request org context.
+    """
+    if auth.organization_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Organization context required",
+        )
+    async with AsyncSessionLocal() as db:
+        # ``prime_session`` is typed as Session but writes only to
+        # ``.info``, which AsyncSession exposes via its underlying
+        # ``sync_session``. The ORM listener attaches to sync Session
+        # events, so writing the marker on ``sync_session.info`` is
+        # what the listener actually reads at flush time.
+        prime_session(db.sync_session, auth.organization_id)
+        await set_current_organization(db, auth.organization_id)
+        yield db
 
 
 def optional_web_auth(

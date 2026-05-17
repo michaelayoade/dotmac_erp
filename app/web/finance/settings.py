@@ -21,7 +21,7 @@ from app.web.deps import (
     get_db_for_org,
     WebAuthContext,
     base_context,
-    get_async_db,
+    get_async_db_for_org,
     require_finance_access,
 )
 
@@ -87,7 +87,7 @@ async def finance_settings_index(
 async def numbering_sequences_list(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """List all numbering sequences for the organization."""
@@ -108,7 +108,7 @@ async def edit_numbering_sequence(
     request: Request,
     sequence_id: uuid.UUID,
     auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
     sync_db: Session = Depends(get_db_for_org),
 ):
     """Edit a numbering sequence configuration."""
@@ -140,7 +140,7 @@ async def update_numbering_sequence(
     year_format: int = Form(4),
     reset_frequency: str = Form("MONTHLY"),
     auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
 ):
     """Update a numbering sequence configuration."""
     form_data = await request.form()
@@ -171,7 +171,7 @@ async def reset_numbering_sequence(
     sequence_id: uuid.UUID,
     new_value: int = Form(0),
     auth: WebAuthContext = Depends(require_finance_access),
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_db_for_org),
 ):
     """Reset a sequence counter to a specific value."""
     await settings_web_service.reset_numbering_sequence(db, sequence_id, new_value)
