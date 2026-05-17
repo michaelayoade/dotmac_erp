@@ -64,15 +64,30 @@ def test_get_db_for_org_sets_postgres_rls_guc(monkeypatch):
             pass
 
 
-def test_get_db_for_org_skips_rls_guc_when_no_org(monkeypatch):
-    """When auth has no organization (e.g. pre-org-selection state),
-    set_current_organization_sync must be skipped — passing None would
-    trip the UUID validator. prime_session still runs (it tolerates None
-    and the marker is just session.info)."""
+def test_get_db_for_org_raises_when_no_org_context(monkeypatch):
+    """When auth has no organization, the dep must raise 403 instead of
+    silently half-priming the session.
+
+    The previous behaviour was to call ``prime_session(db, None)`` (which
+    leaves a None marker on ``session.info``) but skip the PostgreSQL GUC
+    setter. That silent half-prime is the original Bug A pattern: the
+    ORM listener sees a primed session and proceeds, but RLS-protected
+    queries return empty rows because the GUC was never set. Failing
+    loudly at the dep boundary turns this programming bug (an org-scoped
+    route wired to a non-org-having context) into an observable 403,
+    matching ``require_organization_id`` in ``app/api/deps.py``.
+
+    Routes that may legitimately run without an org context (login,
+    healthcheck, org selector) must use the bare ``get_db`` instead.
+    """
+    import pytest
+    from fastapi import HTTPException
+
     from app.web import deps as web_deps
 
     auth = MagicMock(organization_id=None)
     calls: list[tuple[object, object]] = []
+    sessions_opened: list[object] = []
 
     monkeypatch.setattr(
         web_deps,
@@ -80,15 +95,27 @@ def test_get_db_for_org_skips_rls_guc_when_no_org(monkeypatch):
         lambda db, org: calls.append((db, org)),
     )
 
+    real_sessionlocal = web_deps.SessionLocal
+
+    def _spy_sessionlocal(*args, **kwargs):
+        s = real_sessionlocal(*args, **kwargs)
+        sessions_opened.append(s)
+        return s
+
+    monkeypatch.setattr(web_deps, "SessionLocal", _spy_sessionlocal)
+
     gen = web_deps.get_db_for_org(auth=auth)
-    next(gen)
-    try:
-        assert calls == [], "set_current_organization_sync must not run with org=None"
-    finally:
-        try:
-            next(gen)
-        except StopIteration:
-            pass
+    with pytest.raises(HTTPException) as excinfo:
+        next(gen)
+
+    assert excinfo.value.status_code == 403
+    assert "Organization" in excinfo.value.detail
+    assert calls == [], "GUC setter must not run when org is missing"
+    assert sessions_opened == [], (
+        "No session should be opened before the guard fires — "
+        "otherwise the finally-block would try to close a session that "
+        "was never yielded"
+    )
 
 
 def test_get_db_for_org_closes_session_on_completion():

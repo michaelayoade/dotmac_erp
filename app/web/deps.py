@@ -1520,6 +1520,18 @@ def get_db_for_org(
     The plain ``get_db`` remains for routes that legitimately don't have
     a per-request organization context (login, healthcheck, public pages).
     """
+    # A session primed with ``organization_id=None`` half-honours the
+    # contract this dep exists to make: ``session.info`` carries a None
+    # marker but the PostgreSQL GUC is never set, so RLS-protected
+    # queries silently return empty rows. Fail loudly at the dep
+    # boundary instead — wiring an org-scoped route to this dep without
+    # an authenticated org is a programming bug, not a runtime state.
+    # Mirrors ``require_organization_id`` in ``app/api/deps.py``.
+    if auth.organization_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Organization context required",
+        )
     db = SessionLocal()
     try:
         prime_session(db, auth.organization_id)
@@ -1529,10 +1541,7 @@ def get_db_for_org(
         # ``app.current_organization_id``. Without this, RLS-protected
         # SELECTs return empty result sets and (pre Bug A's per-row pin in
         # the audit listener) audit_log INSERTs tripped InsufficientPrivilege.
-        # Skip when no org is bound — callers must not route pre-org-selection
-        # pages through this dependency.
-        if auth.organization_id is not None:
-            set_current_organization_sync(db, auth.organization_id)
+        set_current_organization_sync(db, auth.organization_id)
         yield db
     finally:
         db.close()
