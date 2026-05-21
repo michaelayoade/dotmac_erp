@@ -2,8 +2,10 @@
 """RHI Nuitka build orchestrator.
 
 Compiles protected Python modules file-by-file so package directories stay
-importable in the hardened image. This avoids turning ``app.services`` or
-``app.models`` into flat extension modules that cannot resolve submodules.
+importable in the hardened image. The default profile only compiles the small
+licensing/error surface, which keeps the GitHub RHI build within the Actions
+timeout while preserving ``app.services`` and ``app.models`` as source packages
+for normal nested imports.
 
 Nuitka cannot compile ``__init__.py`` directly in module mode. Package
 ``__init__.py`` files are therefore kept as package entry points, while regular
@@ -18,7 +20,10 @@ import sys
 from pathlib import Path
 
 
-PACKAGE_TREES = (
+DEFAULT_PACKAGE_TREES = (
+    "app.licensing",
+)
+FULL_PACKAGE_TREES = (
     "app.services",
     "app.models",
     "app.licensing",
@@ -52,10 +57,14 @@ def resolve_conflicts(project_root: Path) -> None:
             legacy_file.unlink()
 
 
-def discover_python_files(project_root: Path, app_dir: Path) -> list[Path]:
+def discover_python_files(
+    project_root: Path,
+    app_dir: Path,
+    package_trees: tuple[str, ...],
+) -> list[Path]:
     files: list[Path] = []
 
-    for package in PACKAGE_TREES:
+    for package in package_trees:
         package_dir = dotted_to_path(project_root, package)
         if not package_dir.is_dir():
             raise FileNotFoundError(f"Package directory not found: {package_dir}")
@@ -142,17 +151,27 @@ def main() -> None:
         action="store_true",
         help="Compile in place but keep original .py files",
     )
+    parser.add_argument(
+        "--full-services-models",
+        action="store_true",
+        help=(
+            "Compile app.services and app.models as well. This is much slower "
+            "and can exceed the GitHub RHI timeout."
+        ),
+    )
     args = parser.parse_args()
 
     project_root = Path(args.project_root).resolve()
     app_dir = (project_root / args.app_dir).resolve()
+    package_trees = FULL_PACKAGE_TREES if args.full_services_models else DEFAULT_PACKAGE_TREES
 
     print("DotMac ERP RHI Nuitka build")
     print(f"Project root: {project_root}")
     print("Mode: file-by-file in-place compilation")
+    print(f"Package trees: {', '.join(package_trees)}")
 
     resolve_conflicts(project_root)
-    py_files = discover_python_files(project_root, app_dir)
+    py_files = discover_python_files(project_root, app_dir, package_trees)
     print(f"Python files selected: {len(py_files)}")
 
     compiled: list[tuple[Path, Path]] = []
