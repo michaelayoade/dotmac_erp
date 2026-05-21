@@ -37,6 +37,8 @@ from app.services.forms import FormEngineService
 
 logger = logging.getLogger(__name__)
 
+_SUPPRESSED_APPLICATION_CONFIRMATION_JOB_CODES = {"FA1"}
+
 
 @dataclass
 class OrganizationContext:
@@ -112,6 +114,11 @@ class CareersWebService:
             return raw_url
 
         return f"/careers/{org_slug}/branding/{filename}"
+
+    def _should_send_application_confirmation(self, job: JobOpening) -> bool:
+        """Return whether ERP should email the applicant for this opening."""
+        job_code = (job.job_code or "").strip().upper()
+        return job_code not in _SUPPRESSED_APPLICATION_CONFIRMATION_JOB_CODES
 
     def get_organization_context(self, slug: str) -> OrganizationContext | None:
         """
@@ -341,7 +348,7 @@ class CareersWebService:
 
             # Get org for confirmation email
             org = self.db.get(Organization, org_id)
-            if org:
+            if org and self._should_send_application_confirmation(job):
                 try:
                     self._careers_service.send_application_confirmation(applicant, org)
                 except Exception as e:
@@ -390,7 +397,7 @@ class CareersWebService:
                 org_id, job.job_opening_id, answers
             )
             org = self.db.get(Organization, org_id)
-            if org:
+            if org and self._should_send_application_confirmation(job):
                 try:
                     self._careers_service.send_application_confirmation(applicant, org)
                 except Exception as e:

@@ -106,7 +106,7 @@ def test_process_pending_notification_emails_routes_non_leave_to_admin() -> None
         execute_result = MagicMock()
         execute_result.scalars.return_value.all.side_effect = [
             [],
-            [_build_notification(entity_type=EntityType.EMPLOYEE)],
+            [_build_notification(entity_type=EntityType.TICKET)],
         ]
         db.execute.return_value = execute_result
 
@@ -116,6 +116,35 @@ def test_process_pending_notification_emails_routes_non_leave_to_admin() -> None
         assert result["sent"] == 1
         assert mock_send_email.call_args.kwargs["module"] == EmailModule.ADMIN
         assert "Open notification" in mock_send_email.call_args.kwargs["body_html"]
+
+
+def test_process_pending_notification_emails_routes_employee_to_people_payroll() -> (
+    None
+):
+    with (
+        patch("app.tasks.notifications.cross_org_session") as mock_session_local,
+        patch("app.tasks.notifications.person_can_receive_email", return_value=True),
+        patch(
+            "app.tasks.notifications.send_email", return_value=True
+        ) as mock_send_email,
+    ):
+        from app.tasks.notifications import process_pending_notification_emails
+
+        db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = db
+        mock_session_local.return_value.__exit__.return_value = False
+        execute_result = MagicMock()
+        execute_result.scalars.return_value.all.side_effect = [
+            [],
+            [_build_notification(entity_type=EntityType.EMPLOYEE)],
+        ]
+        db.execute.return_value = execute_result
+
+        result = process_pending_notification_emails(batch_size=1)
+
+        assert result["processed"] == 1
+        assert result["sent"] == 1
+        assert mock_send_email.call_args.kwargs["module"] == EmailModule.PEOPLE_PAYROLL
 
 
 def test_process_pending_notification_emails_skips_when_email_missing() -> None:

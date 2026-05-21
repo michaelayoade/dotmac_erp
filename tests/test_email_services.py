@@ -487,6 +487,32 @@ class TestSendPasswordResetEmail:
         assert "my_reset_token" in captured_message
         assert "Reset" in captured_message or "reset" in captured_message
 
+    def test_send_password_reset_email_includes_next_url(self, monkeypatch):
+        """Test password reset email can include a post-login destination."""
+        monkeypatch.setenv("APP_URL", "https://app.example.com")
+        monkeypatch.setenv("SMTP_USE_SSL", "false")
+
+        mock_smtp = MagicMock()
+        captured_message = None
+
+        def capture_sendmail(from_email, to_email, message):
+            nonlocal captured_message
+            captured_message = message
+
+        mock_smtp.sendmail.side_effect = capture_sendmail
+
+        with patch("app.services.email.smtplib.SMTP", return_value=mock_smtp):
+            send_password_reset_email(
+                None,
+                "user@example.com",
+                "my_reset_token",
+                "John",
+                next_url="/people/self/tax-info",
+            )
+
+        assert captured_message is not None
+        assert "next=/people/self/tax-info" in captured_message
+
 
 class TestEmailLogging:
     """Tests for email logging behavior."""

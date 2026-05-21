@@ -104,6 +104,7 @@ class TestPrimeTenantContext:
         org_id = uuid4()
         session = MagicMock()
         session.info = {}
+        session.get_bind.return_value.dialect.name = "postgresql"
         with (
             patch("app.db.session_context.prime_session") as mock_prime,
             patch(
@@ -113,6 +114,26 @@ class TestPrimeTenantContext:
             prime_tenant_context(session, org_id)
             mock_prime.assert_called_once_with(session, org_id)
             mock_set_guc.assert_called_once_with(session, org_id)
+
+    def test_skips_postgres_guc_for_sqlite(self):
+        """SQLite tests still need ORM scoping, but cannot set Postgres GUCs."""
+        from unittest.mock import patch
+
+        from app.db.session_context import prime_tenant_context
+
+        org_id = uuid4()
+        session = MagicMock()
+        session.info = {}
+        session.get_bind.return_value.dialect.name = "sqlite"
+        with (
+            patch("app.db.session_context.prime_session") as mock_prime,
+            patch(
+                "app.db.session_context.set_current_organization_sync"
+            ) as mock_set_guc,
+        ):
+            prime_tenant_context(session, org_id)
+            mock_prime.assert_called_once_with(session, org_id)
+            mock_set_guc.assert_not_called()
 
 
 class TestSessionForOrg:

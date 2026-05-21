@@ -14,6 +14,8 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
+import urllib3
+
 from app.config import settings
 
 if TYPE_CHECKING:
@@ -45,12 +47,21 @@ def _get_client() -> Minio:
         endpoint = parsed.netloc or parsed.path  # host:port
         secure = parsed.scheme == "https"
 
+        http_client = urllib3.PoolManager(
+            timeout=urllib3.Timeout(
+                connect=settings.s3_connect_timeout_s,
+                read=settings.s3_read_timeout_s,
+            ),
+            retries=False,
+        )
+
         _client = Minio(
             endpoint,
             access_key=settings.s3_access_key,
             secret_key=settings.s3_secret_key,
             region=settings.s3_region,
             secure=secure,
+            http_client=http_client,
         )
         logger.info(
             "MinIO client created (endpoint=%s, bucket=%s, secure=%s)",

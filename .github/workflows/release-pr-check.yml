@@ -1,0 +1,46 @@
+name: Release PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+    branches: [main]
+
+jobs:
+  release-pr-check:
+    name: Release version and changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Determine whether this is a release PR
+        id: release
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          LABELS_JSON: ${{ toJson(github.event.pull_request.labels) }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          head_ref = os.environ.get("HEAD_REF", "")
+          labels = json.loads(os.environ.get("LABELS_JSON", "[]"))
+          label_names = {label.get("name", "").lower() for label in labels}
+          is_release = head_ref.startswith("release/") or "release" in label_names
+          print(f"is_release={'true' if is_release else 'false'}")
+          PY
+
+      - name: Skip non-release PRs
+        if: steps.release.outputs.is_release != 'true'
+        run: echo "Not a release PR; version/changelog bump not required."
+
+      - uses: actions/checkout@v4
+        if: steps.release.outputs.is_release == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Validate release metadata
+        if: steps.release.outputs.is_release == 'true'
+        run: |
+          python3 scripts/check_release_pr.py \
+            --base-ref "${{ github.event.pull_request.base.sha }}" \
+            --head-ref "${{ github.event.pull_request.head.ref }}" \
+            --head-sha "${{ github.event.pull_request.head.sha }}"

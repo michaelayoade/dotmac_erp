@@ -46,6 +46,14 @@
                 </span>
             </div>
             <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-500 dark:text-slate-400">Manufacturer</span>
+                <span class="text-right text-slate-900 dark:text-white">{{ asset.manufacturer or "-" }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-slate-500 dark:text-slate-400">Model</span>
+                <span class="text-right text-slate-900 dark:text-white">{{ asset.model or "-" }}</span>
+            </div>
+            <div class="flex items-center justify-between text-sm">
                 <span class="text-slate-500 dark:text-slate-400">Serial Number</span>
                 <span class="text-slate-900 dark:text-white">{{ asset.serial_number or "-" }}</span>
             </div>

@@ -383,9 +383,17 @@ class AuthWebService:
         request: Request,
         token: str,
         auth: WebAuthContext,
+        next_url: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         if auth.is_authenticated:
             return RedirectResponse(url="/dashboard", status_code=302)
+
+        safe_next_url = _sanitize_redirect_url(
+            next_url or "/dashboard",
+            request,
+            default="/dashboard",
+        )
+        login_href = f"/login?{urlencode({'next': safe_next_url})}"
 
         return templates.TemplateResponse(
             request,
@@ -394,6 +402,7 @@ class AuthWebService:
                 "title": "Reset Password",
                 "brand": brand_context(),
                 "token": token,
+                "login_href": login_href,
             },
         )
 

@@ -694,6 +694,7 @@ class FixedAssetWebService:
         run: DepreciationRun,
         fiscal_period: FiscalPeriod | None,
         schedules: list[dict[str, object]],
+        current_user_id: UUID | None = None,
     ) -> dict[str, object] | None:
         if not schedules:
             return None
@@ -790,6 +791,18 @@ class FixedAssetWebService:
         if fiscal_period:
             suggested_posting_date = min(fiscal_period.end_date, date.today())
 
+        can_post = run.status == DepreciationRunStatus.CALCULATED and total_debits > 0
+        cannot_post_reason = None
+        if run.status == DepreciationRunStatus.CALCULATED and total_debits <= 0:
+            cannot_post_reason = "There are no depreciation amounts to post."
+        elif run.status == DepreciationRunStatus.CALCULATED and current_user_id:
+            if run.created_by_user_id == current_user_id:
+                can_post = False
+                cannot_post_reason = (
+                    "Segregation of duties: ask another authorized user to post "
+                    "this depreciation run."
+                )
+
         return {
             "currency_code": currency_code,
             "line_count": len(lines),
@@ -797,9 +810,8 @@ class FixedAssetWebService:
             "total_debits": _format_currency(total_debits, currency_code),
             "total_credits": _format_currency(total_credits, currency_code),
             "posting_date_default": suggested_posting_date.isoformat(),
-            "can_post": (
-                run.status == DepreciationRunStatus.CALCULATED and total_debits > 0
-            ),
+            "can_post": can_post,
+            "cannot_post_reason": cannot_post_reason,
         }
 
     @staticmethod
@@ -2824,6 +2836,7 @@ class FixedAssetWebService:
         db: Session,
         organization_id: str,
         run_id: str,
+        current_user_id: str | UUID | None = None,
     ) -> dict:
         """Build view context for a single depreciation run."""
         org_id = coerce_uuid(organization_id)
@@ -2881,6 +2894,7 @@ class FixedAssetWebService:
             run,
             fiscal_period,
             schedules,
+            coerce_uuid(current_user_id) if current_user_id else None,
         )
 
         return {
@@ -3016,6 +3030,8 @@ class FixedAssetWebService:
                     "asset_code": asset.asset_number,
                     "asset_name": asset.asset_name,
                     "serial_number": asset.serial_number,
+                    "manufacturer": getattr(asset, "manufacturer", None),
+                    "model": getattr(asset, "model", None),
                     "description": getattr(asset, "description", None),
                     "category_name": category.category_name if category else None,
                     "status": asset.status.value if asset.status else "IN_USE",

@@ -150,7 +150,8 @@ def prime_tenant_context(session: Session, organization_id: UUID) -> None:
        for the legitimately-public-with-resolved-org case only.
     """
     prime_session(session, organization_id)
-    set_current_organization_sync(session, organization_id)
+    if session.get_bind().dialect.name == "postgresql":
+        set_current_organization_sync(session, organization_id)
 
 
 @contextmanager

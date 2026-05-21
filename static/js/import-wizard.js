@@ -19,11 +19,17 @@
  */
 
 window.importWizard = function importWizard(config) {
-    const targetFieldList = (config.targetFields || []).map(f => ({
-        name: f.target_field || f.source_field,
-        label: (f.target_field || f.source_field).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-        required: !!f.required,
-    }));
+    const targetFieldMap = new Map();
+    for (const f of config.targetFields || []) {
+        const name = f.target_field || f.source_field;
+        if (!name || targetFieldMap.has(name)) continue;
+        targetFieldMap.set(name, {
+            name,
+            label: name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            required: !!f.required,
+        });
+    }
+    const targetFieldList = Array.from(targetFieldMap.values());
 
     return {
         // ── Config ──────────────────────────────────────────────

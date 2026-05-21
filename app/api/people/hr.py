@@ -8,7 +8,15 @@ import json
 from collections.abc import Set as AbstractSet
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
@@ -85,6 +93,7 @@ from app.services.people.hr.checklist_templates import ChecklistTemplateService
 from app.services.people.hr.employee_filter_engine import (
     parse_employee_filter_payload_json,
 )
+from app.services.people.hr.employees import send_employee_access_invite_background
 
 router = APIRouter(
     prefix="/hr",
@@ -762,6 +771,7 @@ def get_employee_stats(
 def create_employee(
     payload: EmployeeCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
 ):
@@ -789,9 +799,17 @@ def create_employee(
         notes=payload.notes,
     )
     emp = svc.create_employee(payload.person_id, data)
+    employee_id = emp.employee_id
+    response = EmployeeRead.model_validate(emp)
+    app_url = _resolve_app_url(request)
     db.commit()
-    svc.send_employee_access_invite(emp.employee_id, app_url=_resolve_app_url(request))
-    return EmployeeRead.model_validate(emp)
+    background_tasks.add_task(
+        send_employee_access_invite_background,
+        organization_id,
+        employee_id,
+        app_url,
+    )
+    return response
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeRead)

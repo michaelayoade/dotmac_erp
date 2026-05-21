@@ -76,6 +76,7 @@ from app.tasks.hr import (
     process_performance_review_reminders,
     process_probation_ending_notifications,
     process_work_anniversary_notifications,
+    send_hr_birthday_morning_email,
 )
 from app.tasks.notifications import (
     process_pending_nextcloud_notifications,
@@ -130,6 +131,7 @@ __all__ = [
     "process_contract_expiry_notifications",
     "process_work_anniversary_notifications",
     "process_birthday_notifications",
+    "send_hr_birthday_morning_email",
     "process_performance_review_reminders",
     "process_certification_expiry_notifications",
     "calculate_hr_analytics",

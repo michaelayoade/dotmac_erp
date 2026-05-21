@@ -114,6 +114,10 @@
         <div class="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
             <p class="text-sm text-slate-500 dark:text-slate-400">This run has already been posted.</p>
         </div>
+        {% elif posting_preview.cannot_post_reason %}
+        <div class="border-t border-slate-200 px-6 py-4 dark:border-slate-800">
+            <p class="text-sm text-slate-600 dark:text-slate-300">{{ posting_preview.cannot_post_reason }}</p>
+        </div>
         {% endif %}
     </div>
     {% endif %}

@@ -68,6 +68,44 @@ def test_asset_importer_duplicate_check_uses_serial_number(import_config, mock_d
     assert result == existing
 
 
+def test_asset_importer_duplicate_check_is_case_insensitive(import_config, mock_db):
+    importer = _make_importer(mock_db, import_config)
+
+    importer.check_duplicate({"Serial Number": "8CC9491MB2"})
+    result = importer.check_duplicate({"Serial": " 8cc9491mb2 "})
+
+    assert result is not None
+    assert mock_db.execute.call_count == 1
+
+
+def test_asset_importer_duplicate_check_ignores_placeholder_serials(
+    import_config, mock_db
+):
+    importer = _make_importer(mock_db, import_config)
+
+    result = importer.check_duplicate({"Serial Number": " NIL "})
+
+    assert result is None
+    mock_db.execute.assert_not_called()
+
+
+def test_asset_importer_create_entity_normalizes_placeholder_serial_to_none(
+    import_config, mock_db
+):
+    importer = _make_importer(mock_db, import_config)
+    importer._category_importer._category_cache["ICT_EQUIPMENT"] = uuid4()
+
+    asset = importer.create_entity(
+        {
+            "asset_name": "Mouse",
+            "category_name": "ICT Equipment",
+            "serial_number": "N/A",
+        }
+    )
+
+    assert asset.serial_number is None
+
+
 def test_asset_importer_import_rows_handles_uppercase_category_header(
     import_config, mock_db, monkeypatch
 ):

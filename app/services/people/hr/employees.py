@@ -25,6 +25,7 @@ from sqlalchemy import func, literal, or_, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session, selectinload
 
+from app.db.session_context import session_for_org
 from app.models.auth import AuthProvider, UserCredential
 from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_org.cost_center import CostCenter
@@ -69,6 +70,28 @@ from .errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def send_employee_access_invite_background(
+    organization_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    app_url: str | None,
+) -> None:
+    """Send an employee access invite outside the create request."""
+    try:
+        with session_for_org(organization_id) as db:
+            sent = EmployeeService(db, organization_id).send_employee_access_invite(
+                employee_id,
+                app_url=app_url,
+            )
+            if not sent:
+                logger.warning(
+                    "Employee access invite was not sent for %s", employee_id
+                )
+    except Exception:
+        logger.exception("Employee access invite failed for %s", employee_id)
+
+
 DEFAULT_NEW_LOCAL_PASSWORD = "Dotmac@123"  # noqa: S105  # nosec B105
 
 if TYPE_CHECKING:
@@ -879,6 +902,7 @@ class EmployeeService:
             person_name=invite["person_name"],
             app_url=app_url,
             organization_id=invite.get("organization_id"),
+            next_url="/people/self/tax-info",
         )
 
     def _ensure_default_employee_role(self, person_id: uuid.UUID) -> None:

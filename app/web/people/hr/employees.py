@@ -2,8 +2,8 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web import hr_web_service
@@ -66,6 +66,21 @@ def employee_stats(
     return hr_web_service.employee_stats_response(auth, db)
 
 
+@router.get("/employees/position-options", response_class=HTMLResponse)
+def employee_position_options(
+    selected_position_id: str | None = None,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Lazy-load vacant position options for employee forms."""
+    html = hr_web_service.employee_position_options_response(
+        auth,
+        db,
+        selected_position_id=selected_position_id,
+    )
+    return Response(content=html, media_type="text/html")
+
+
 @router.get("/employees/new", response_class=HTMLResponse)
 def new_employee_form(
     request: Request,
@@ -79,6 +94,7 @@ def new_employee_form(
 @router.post("/employees/new")
 async def create_employee(
     request: Request,
+    background_tasks: BackgroundTasks,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
@@ -87,6 +103,7 @@ async def create_employee(
         request=request,
         auth=auth,
         db=db,
+        background_tasks=background_tasks,
     )
 
 

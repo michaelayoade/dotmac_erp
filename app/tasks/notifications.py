@@ -52,7 +52,7 @@ class NotificationEmailDispatchResults(TypedDict):
 
 def _email_module_for_notification(notification: Notification) -> EmailModule:
     """Route notification emails through the appropriate email profile."""
-    if notification.entity_type == EntityType.LEAVE:
+    if notification.entity_type in {EntityType.LEAVE, EntityType.EMPLOYEE}:
         return EmailModule.PEOPLE_PAYROLL
     return EmailModule.ADMIN
 

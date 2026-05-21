@@ -169,5 +169,6 @@ def test_send_employee_access_invite_uses_password_reset_flow(
     assert captured["person_name"] == (person.display_name or person.first_name)
     assert captured["app_url"] == "https://erp.example.com"
     assert captured["organization_id"] == person.organization_id
+    assert captured["next_url"] == "/people/self/tax-info"
     assert isinstance(captured["reset_token"], str)
     assert captured["reset_token"]

@@ -12,15 +12,19 @@ Handles:
 
 import logging
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import func, select
+from sqlalchemy import extract, func, select
 
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
+from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.person import Person, PersonStatus
+from app.models.rbac import PersonRole, Role
+from app.services.notification import NotificationService
 from app.services.people.hr.org_resolver import OrgResolver
 
 logger = logging.getLogger(__name__)
@@ -33,6 +37,35 @@ def _resolve_manager(db, employee: Employee, organization_id) -> Employee | None
 def _list_organization_ids() -> list[uuid.UUID]:
     with cross_org_session() as db:
         return list(db.scalars(select(Organization.organization_id)).all())
+
+
+def _get_hr_manager_recipients(db, org_id: uuid.UUID) -> list[Person]:
+    """Return active HR managers for birthday notifications."""
+    recipient_ids = list(
+        db.scalars(
+            select(Person.id)
+            .join(PersonRole, PersonRole.person_id == Person.id)
+            .join(Role, Role.id == PersonRole.role_id)
+            .where(
+                Person.organization_id == org_id,
+                Person.is_active.is_(True),
+                Person.status == PersonStatus.active,
+                Role.name == "hr_manager",
+                Role.is_active.is_(True),
+            )
+            .distinct()
+        ).all()
+    )
+    if not recipient_ids:
+        return []
+
+    return list(
+        db.scalars(
+            select(Person)
+            .where(Person.id.in_(recipient_ids))
+            .order_by(Person.first_name, Person.last_name, Person.id)
+        ).all()
+    )
 
 
 @shared_task
@@ -423,6 +456,100 @@ def process_birthday_notifications() -> dict:
         "Birthday notifications complete: %d sent", results["notifications_sent"]
     )
 
+    return results
+
+
+@shared_task
+def send_hr_birthday_morning_email() -> dict:
+    """Create same-day birthday notifications for HR managers."""
+    today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+    results: dict[str, Any] = {
+        "notifications_created": 0,
+        "birthdays_found": 0,
+        "recipients_notified": 0,
+        "errors": [],
+    }
+
+    logger.info("Processing HR birthday morning emails")
+
+    for org_id in _list_organization_ids():
+        with session_for_org(org_id) as db:
+            try:
+                birthday_rows = db.execute(
+                    select(
+                        Employee.employee_id,
+                        Person.name_expr().label("employee_name"),
+                    )
+                    .join(Employee, Employee.person_id == Person.id)
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                        Person.date_of_birth.isnot(None),
+                        extract("month", Person.date_of_birth) == today.month,
+                        extract("day", Person.date_of_birth) == today.day,
+                    )
+                    .order_by(Person.first_name, Person.last_name)
+                ).all()
+
+                birthdays = [
+                    (employee_id, name)
+                    for employee_id, name in birthday_rows
+                    if employee_id and isinstance(name, str) and name
+                ]
+                if not birthdays:
+                    continue
+
+                results["birthdays_found"] += len(birthdays)
+
+                body_lines = [
+                    f"Today is {employee_name}'s birthday."
+                    for _, employee_name in birthdays
+                ]
+                message = "\n".join(body_lines)
+                entity_id = birthdays[0][0]
+                recipients = _get_hr_manager_recipients(db, org_id)
+                if not recipients:
+                    db.commit()
+                    continue
+
+                notification_service = NotificationService()
+                for recipient in recipients:
+                    notification = notification_service.create_if_not_sent_since(
+                        db,
+                        organization_id=org_id,
+                        recipient_id=recipient.id,
+                        entity_type=EntityType.EMPLOYEE,
+                        entity_id=entity_id,
+                        notification_type=NotificationType.REMINDER,
+                        title="Staff Birthday Reminder",
+                        message=message,
+                        since=today_start,
+                        channel=NotificationChannel.BOTH,
+                        action_url="/people",
+                    )
+                    if notification is not None:
+                        results["notifications_created"] += 1
+                        results["recipients_notified"] += 1
+                db.commit()
+            except Exception as exc:
+                logger.error(
+                    "Failed to create HR birthday notifications for organization %s: %s",
+                    org_id,
+                    exc,
+                )
+                results["errors"].append(
+                    {
+                        "organization_id": str(org_id),
+                        "error": str(exc),
+                    }
+                )
+
+    logger.info(
+        "HR birthday morning notifications complete: %d created (%d birthdays)",
+        results["notifications_created"],
+        results["birthdays_found"],
+    )
     return results
 
 

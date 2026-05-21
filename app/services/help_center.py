@@ -1621,6 +1621,52 @@ GLOSSARY: list[dict[str, Any]] = [
 
 RELEASE_NOTES: list[dict[str, Any]] = [
     {
+        "version": "1.1.4",
+        "date": "20 May 2026",
+        "type": "patch",
+        "summary": "Patch release for hardened image runtime imports.",
+        "features": [],
+        "improvements": [],
+        "fixes": [
+            "Fixed hardened Nuitka package layout so compiled app.services and app.models imports resolve at runtime.",
+        ],
+    },
+    {
+        "version": "1.1.3",
+        "date": "20 May 2026",
+        "type": "patch",
+        "summary": "Patch release for hardened image migration compatibility.",
+        "features": [],
+        "improvements": [],
+        "fixes": [
+            "Allowed Alembic migrations to run in hardened images after model source removal.",
+        ],
+    },
+    {
+        "version": "1.1.2",
+        "date": "20 May 2026",
+        "type": "patch",
+        "summary": "Patch release for the hardened release image migration health check.",
+        "features": [],
+        "improvements": [],
+        "fixes": [
+            "Fixed Alembic model imports so the hardened release image health check can run migrations.",
+        ],
+    },
+    {
+        "version": "1.1.1",
+        "date": "20 May 2026",
+        "type": "patch",
+        "summary": "Patch release with application email, employee edit feedback, and release metadata fixes.",
+        "features": [],
+        "improvements": [],
+        "fixes": [
+            "Suppressed FA1 application confirmation emails.",
+            "Fixed employee edit save toast feedback.",
+            "Fixed the version badge test fallback for release metadata.",
+        ],
+    },
+    {
         "version": "2026.3",
         "date": "07 Mar 2026",
         "type": "minor",

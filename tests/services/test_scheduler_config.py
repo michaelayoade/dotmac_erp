@@ -422,6 +422,11 @@ class TestBuildBeatSchedule:
         # Builtin tasks are always present
         assert "expense-approval-reminders" in schedule
         assert "expense-stuck-transfers" in schedule
+        assert "hr-birthday-morning-email" in schedule
+        assert (
+            schedule["hr-birthday-morning-email"]["task"]
+            == "app.tasks.hr.send_hr_birthday_morning_email"
+        )
         assert "notification-email-dispatch" in schedule
         assert (
             schedule["notification-email-dispatch"]["task"]

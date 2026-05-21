@@ -26,9 +26,6 @@ COMPILE_PACKAGES = [
     "app.errors",
 ]
 
-# Files to keep as .py stubs (importable entry points)
-KEEP_INIT_STUBS = True
-
 
 def run_nuitka(package: str, output_dir: Path) -> None:
     """Compile a single package with Nuitka."""
@@ -70,30 +67,57 @@ def run_nuitka(package: str, output_dir: Path) -> None:
     print(f"OK: {package} compiled successfully")
 
 
+def compiled_extension_for(package: str, output_dir: Path) -> Path:
+    """Return the Nuitka extension module generated for a package."""
+    module_name = package.rsplit(".", maxsplit=1)[-1]
+    matches = sorted(output_dir.glob(f"{module_name}*.so"))
+    if len(matches) != 1:
+        print(
+            f"ERROR: Expected one compiled extension for {package}, found {matches}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return matches[0]
+
+
+def compiled_destination_for(package: str, app_dir: Path, so_file: Path) -> Path:
+    """Place app.<module> extensions inside app/ so imports resolve correctly."""
+    parts = package.split(".")
+    if parts[0] != app_dir.name:
+        print(
+            f"ERROR: Unsupported package outside {app_dir}: {package}", file=sys.stderr
+        )
+        sys.exit(1)
+    return app_dir.joinpath(*parts[1:]).with_name(so_file.name)
+
+
+def copy_compiled_extension(package: str, output_dir: Path, app_dir: Path) -> None:
+    """Copy a compiled extension to the import path it replaces."""
+    so_file = compiled_extension_for(package, output_dir)
+    dest = compiled_destination_for(package, app_dir, so_file)
+    shutil.copy2(so_file, dest)
+    print(f"  {so_file.name} -> {dest}")
+
+
 def remove_source(package: str, app_dir: Path) -> None:
-    """Remove .py source files for a compiled package, keeping __init__.py stubs."""
+    """Remove source that would shadow the compiled package extension."""
     parts = package.split(".")
     pkg_dir = app_dir.parent
     for part in parts:
         pkg_dir = pkg_dir / part
 
-    if not pkg_dir.is_dir():
-        print(f"  Warning: {pkg_dir} not found, skipping source removal")
+    if pkg_dir.is_dir():
+        shutil.rmtree(pkg_dir)
+        print(f"  Removed source package directory {pkg_dir}")
         return
 
-    removed = 0
-    for py_file in pkg_dir.rglob("*.py"):
-        if KEEP_INIT_STUBS and py_file.name == "__init__.py":
-            # Replace with minimal stub
-            py_file.write_text(
-                "# Compiled module — see .so\n",
-                encoding="utf-8",
-            )
-            continue
+    py_file = pkg_dir.with_suffix(".py")
+    if py_file.is_file():
         py_file.unlink()
-        removed += 1
+        print(f"  Removed source module {py_file}")
+        return
 
-    print(f"  Removed {removed} .py files from {pkg_dir}")
+    print(f"  Warning: {pkg_dir} or {py_file} not found, skipping source removal")
 
 
 def main() -> None:
@@ -128,15 +152,13 @@ def main() -> None:
     for package in COMPILE_PACKAGES:
         run_nuitka(package, output_dir)
 
-    # Copy .so files to app directory
+    # Copy .so files to the import paths they replace.
     print(f"\n{'=' * 60}")
     print("Copying compiled .so files into app tree")
     print(f"{'=' * 60}")
 
-    for so_file in output_dir.glob("*.so"):
-        dest = app_dir.parent / so_file.name
-        shutil.copy2(so_file, dest)
-        print(f"  {so_file.name} -> {dest}")
+    for package in COMPILE_PACKAGES:
+        copy_compiled_extension(package, output_dir, app_dir)
 
     # Remove source files
     if args.remove_source:

@@ -156,6 +156,7 @@ class MockDepreciationRun:
         self.assets_processed = kwargs.get("assets_processed", 10)
         self.total_depreciation = kwargs.get("total_depreciation", Decimal("1000.00"))
         self.journal_entry_id = kwargs.get("journal_entry_id")
+        self.created_by_user_id = kwargs.get("created_by_user_id", uuid.uuid4())
         self.calculation_started_at = kwargs.get("calculation_started_at")
         self.calculation_completed_at = kwargs.get("calculation_completed_at")
         self.posted_at = kwargs.get("posted_at")
@@ -1171,6 +1172,87 @@ class TestFAWebServiceDepreciation:
         assert result["schedules"][0]["category_name"] == "ICT Equipment"
         assert result["posting_preview"]["line_count"] == 2
         assert result["posting_preview"]["can_post"] is True
+
+    def test_depreciation_run_detail_context_blocks_creator_posting(self):
+        """Creators should see why they cannot post their own depreciation run."""
+        from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
+        from app.services.fixed_assets.web import FixedAssetWebService
+
+        mock_db = MagicMock()
+        org_id = uuid.uuid4()
+        run_id = uuid.uuid4()
+        creator_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        category_id = uuid.uuid4()
+        expense_account_id = uuid.uuid4()
+        accum_account_id = uuid.uuid4()
+
+        mock_run = MockDepreciationRun(
+            run_id=run_id,
+            organization_id=org_id,
+            fiscal_period_id=uuid.uuid4(),
+            status=DepreciationRunStatus.CALCULATED,
+            created_by_user_id=creator_id,
+        )
+        mock_period = MockFiscalPeriod(period_name="April 2026")
+        mock_asset = MockAsset(
+            asset_id=asset_id,
+            organization_id=org_id,
+            asset_number="FA000001",
+            asset_name="All in One Desktop",
+            currency_code="NGN",
+            category_id=category_id,
+        )
+        mock_category = MockAssetCategory(
+            category_id=category_id,
+            organization_id=org_id,
+            category_name="ICT Equipment",
+        )
+        mock_schedule = MockDepreciationSchedule(
+            run_id=run_id,
+            asset_id=asset_id,
+            expense_account_id=expense_account_id,
+            accumulated_depreciation_account_id=accum_account_id,
+        )
+        schedule_scalars = MagicMock()
+        schedule_scalars.all.return_value = [mock_schedule]
+        account_scalars = MagicMock()
+        account_scalars.all.return_value = [
+            MockAccount(
+                account_id=expense_account_id,
+                organization_id=org_id,
+                account_code="6100",
+                account_name="Depreciation Expense",
+            ),
+            MockAccount(
+                account_id=accum_account_id,
+                organization_id=org_id,
+                account_code="1700",
+                account_name="Accumulated Depreciation",
+            ),
+        ]
+        mock_db.scalars.side_effect = [schedule_scalars, account_scalars]
+        mock_db.get.side_effect = [mock_run, mock_period]
+        mock_db.execute.return_value.all.return_value = [
+            (mock_schedule, mock_asset, mock_category)
+        ]
+
+        with patch(
+            "app.services.fixed_assets.web.org_context_service.get_functional_currency",
+            return_value="NGN",
+        ):
+            result = FixedAssetWebService.depreciation_run_detail_context(
+                mock_db,
+                str(org_id),
+                str(run_id),
+                current_user_id=creator_id,
+            )
+
+        assert result["posting_preview"]["can_post"] is False
+        assert (
+            "Segregation of duties"
+            in result["posting_preview"]["cannot_post_reason"]
+        )
 
 
 class TestFAWebServiceGLReconciliation:

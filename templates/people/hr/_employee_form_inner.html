@@ -289,14 +289,15 @@
                         </div>
                         {% else %}
                         <label for="position_id" class="form-label">Position Seat</label>
-                        <select name="position_id" id="position_id" class="form-input w-full">
-                            <option value="">Create a new position from employee details</option>
-                            {% for summary in position_options %}
-                            <option value="{{ summary.position.position_id }}" {{ 'selected' if form_data.position_id == summary.position.position_id | string }}>
-                                {{ summary.position.position_code }} - {{ summary.position.position_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        {% set selected_position_id = form_data.position_id if form_data and form_data.position_id else '' %}
+                        <div
+                            hx-get="/people/hr/employees/position-options{% if selected_position_id %}?selected_position_id={{ selected_position_id }}{% endif %}"
+                            hx-trigger="load"
+                            hx-swap="innerHTML">
+                            <select name="position_id" id="position_id" class="form-input w-full" disabled>
+                                <option value="">Loading positions...</option>
+                            </select>
+                        </div>
                         <p class="mt-1 text-xs text-slate-500">Assigns this employee to an existing vacant position seat.</p>
 
                         <label for="reports_to_id" class="form-label mt-4">Reports To</label>

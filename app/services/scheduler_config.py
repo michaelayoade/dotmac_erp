@@ -173,6 +173,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.coach.generate_daily_data_quality_insights",
             "schedule": crontab(hour=6, minute=0),  # Daily at 6 AM
         },
+        "hr-birthday-morning-email": {
+            "task": "app.tasks.hr.send_hr_birthday_morning_email",
+            "schedule": crontab(hour=6, minute=0),  # Daily at 6 AM
+        },
         "coach-daily-banking-health": {
             "task": "app.tasks.coach.generate_daily_banking_health_insights",
             "schedule": crontab(hour=6, minute=10),  # Daily at 6:10 AM

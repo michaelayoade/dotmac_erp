@@ -77,6 +77,9 @@ Test sheet - Sheet1 (3).csv
 test_statement_*.csv
 test_statement_*.xls
 test_statement_*.xlsx
+asset_list_current.csv
+tmp_asset_*.csv
+tmp_asset_*.sql
 
 # Screenshots / audit artifacts
 *.png

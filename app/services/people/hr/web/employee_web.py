@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timezone
+from html import escape
 
 try:
     from datetime import UTC  # type: ignore
@@ -17,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
-from fastapi import HTTPException, Request
+from fastapi import BackgroundTasks, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
@@ -46,7 +47,7 @@ from app.models.people.payroll.salary_assignment import SalaryStructureAssignmen
 from app.models.person import Gender, Person
 from app.net import get_request_host, get_request_scheme
 from app.schemas.person import PersonUpdate
-from app.services.common import PaginationParams, coerce_uuid
+from app.services.common import PaginationParams, ServiceError, coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.formatters import parse_bool
 from app.services.people.attendance.attendance_service import AttendanceService
@@ -61,12 +62,12 @@ from app.services.people.hr import (
     EmployeeUpdateData,
     EmploymentTypeFilters,
     OrganizationService,
-    PositionService,
     TerminationData,
 )
 from app.services.people.hr.employee_filter_engine import (
     parse_employee_filter_payload_json,
 )
+from app.services.people.hr.employees import send_employee_access_invite_background
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.recent_activity import get_recent_activity_for_record
@@ -239,10 +240,71 @@ class HRWebService:
     @staticmethod
     def _list_vacant_position_options(db: Session, org_id: UUID) -> list[Any]:
         """Return vacant positions that can receive a new employee assignment."""
-        summaries = PositionService(db, org_id).list_position_summaries(
-            pagination=PaginationParams(limit=DROPDOWN_LIMIT)
+        today = date.today()
+        current_active_incumbent = (
+            select(PositionAssignment.position_assignment_id)
+            .join(
+                Employee,
+                Employee.employee_id == PositionAssignment.employee_id,
+            )
+            .where(
+                Employee.organization_id == org_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+                PositionAssignment.organization_id == org_id,
+                PositionAssignment.position_id == Position.position_id,
+                PositionAssignment.start_date <= today,
+                (
+                    PositionAssignment.end_date.is_(None)
+                    | (PositionAssignment.end_date >= today)
+                ),
+            )
+            .exists()
         )
-        return [summary for summary in summaries.items if summary.incumbent is None]
+        positions = db.scalars(
+            select(Position)
+            .where(
+                Position.organization_id == org_id,
+                Position.is_active.is_(True),
+                ~current_active_incumbent,
+            )
+            .order_by(Position.position_code)
+            .limit(DROPDOWN_LIMIT)
+        ).all()
+        return [{"position": position} for position in positions]
+
+    def employee_position_options_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        selected_position_id: str | None = None,
+    ) -> str:
+        """Return the position-seat select for lazy employee-form loading."""
+        org_id = coerce_uuid(auth.organization_id)
+        try:
+            options = self._list_vacant_position_options(db, org_id)
+        except Exception:
+            logger.exception("Failed to lazy-load vacant employee positions")
+            options = []
+        selected = (
+            str(coerce_uuid(selected_position_id)) if selected_position_id else ""
+        )
+
+        rows = [
+            '<select name="position_id" id="position_id" class="form-input w-full">',
+            '<option value="">Create a new position from employee details</option>',
+        ]
+        if not options:
+            rows.append(
+                '<option value="" disabled>No vacant position seats available</option>'
+            )
+        for summary in options:
+            position = summary["position"]
+            position_id = str(position.position_id)
+            is_selected = " selected" if position_id == selected else ""
+            label = escape(f"{position.position_code} - {position.position_name}")
+            rows.append(f'<option value="{position_id}"{is_selected}>{label}</option>')
+        rows.append("</select>")
+        return "".join(rows)
 
     @staticmethod
     def _designation_is_nysc(designation_name: str | None) -> bool:
@@ -655,6 +717,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        background_tasks: BackgroundTasks | None = None,
     ) -> RedirectResponse | HTMLResponse:
         """Handle new employee form submission."""
         form = await self._request_form(request)
@@ -1055,14 +1118,30 @@ class HRWebService:
             raise HTTPException(status_code=400, detail="Person not found")
         employee = svc.create_employee(person.id, data)
         self._update_tax_profile(auth=auth, db=db, employee=employee, form=form)
+        employee_id = employee.employee_id
+        app_url = self._resolve_app_url(request)
         db.commit()
-        svc.send_employee_access_invite(
-            employee.employee_id,
-            app_url=self._resolve_app_url(request),
-        )
+        if background_tasks:
+            background_tasks.add_task(
+                send_employee_access_invite_background,
+                org_id,
+                employee_id,
+                app_url,
+            )
+        else:
+            try:
+                invite_sent = svc.send_employee_access_invite(
+                    employee_id, app_url=app_url
+                )
+                if not invite_sent:
+                    logger.warning(
+                        "Employee access invite was not sent for %s", employee_id
+                    )
+            except ServiceError:
+                logger.exception("Employee access invite failed for %s", employee_id)
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee.employee_id}?saved=1",
+            url=f"/people/hr/employees/{employee_id}?saved=1",
             status_code=303,
         )
 
@@ -1135,6 +1214,8 @@ class HRWebService:
                 status_enum = EmployeeStatus(status.upper())
             except ValueError:
                 pass
+        if status_enum == EmployeeStatus.TERMINATED:
+            status_enum = None
 
         joining_date = self._parse_date(date_of_joining)
         probation_date = self._parse_date(probation_end_date)
@@ -1302,25 +1383,25 @@ class HRWebService:
 
         self._update_linked_person(auth=auth, db=db, employee=employee, form=form)
 
-        svc.update_employee(coerce_uuid(employee_id), data)
+        updated_employee = svc.update_employee(coerce_uuid(employee_id), data)
         self._update_tax_profile(auth=auth, db=db, employee=employee, form=form)
+        assigned_location_log = (
+            str(getattr(updated_employee, "assigned_location_id", None))
+            if getattr(updated_employee, "assigned_location_id", None)
+            else None
+        )
         db.commit()
 
-        refreshed_employee = svc.get_employee(coerce_uuid(employee_id))
         logger.info(
             "Employee edit persisted",
             extra={
                 "employee_id": str(employee_id),
-                "assigned_location_id": (
-                    str(getattr(refreshed_employee, "assigned_location_id", None))
-                    if getattr(refreshed_employee, "assigned_location_id", None)
-                    else None
-                ),
+                "assigned_location_id": assigned_location_log,
             },
         )
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}?saved=1",
+            url=f"/people/hr/employees/{employee_id}/edit?success=Saved%20successfully.",
             status_code=303,
         )
 
@@ -1960,7 +2041,6 @@ class HRWebService:
                 db, org_id, [m.employee_id for m in managers]
             ).items()
         }
-        position_options = self._list_vacant_position_options(db, org_id)
         current_manager_id: UUID | None = None
         cost_centers = db.scalars(
             select(CostCenter)
@@ -2015,7 +2095,7 @@ class HRWebService:
             "grades": grades,
             "managers": managers,
             "manager_position_titles": manager_position_titles,
-            "position_options": position_options,
+            "position_options": [],
             "current_manager_id": current_manager_id,
             "employee_position": None,
             "employee_parent_position": None,
@@ -2024,7 +2104,9 @@ class HRWebService:
             "locations": locations,
             "shift_types": shift_types,
             "user_accounts": user_accounts,
-            "statuses": [s.value for s in EmployeeStatus],
+            "statuses": [
+                s.value for s in EmployeeStatus if s != EmployeeStatus.TERMINATED
+            ],
             "salary_modes": [m.value for m in SalaryMode],
             "genders": self._gender_options(),
             "error": error,
@@ -2237,7 +2319,9 @@ class HRWebService:
             "user_accounts": user_accounts,
             "pfas": pfas,
             "tax_profile": tax_profile,
-            "statuses": [s.value for s in EmployeeStatus],
+            "statuses": [
+                s.value for s in EmployeeStatus if s != EmployeeStatus.TERMINATED
+            ],
             "salary_modes": [m.value for m in SalaryMode],
             "genders": self._gender_options(),
             "error": error,

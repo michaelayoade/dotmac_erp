@@ -365,6 +365,16 @@
                         </template>
                     </ul>
                 </div>
+
+                <!-- Warning list -->
+                <div x-show="importResult.warnings && importResult.warnings.length > 0" x-cloak class="mt-4">
+                    <h4 class="text-sm font-medium text-amber-600 dark:text-amber-400 mb-2">Warnings:</h4>
+                    <ul class="space-y-1 text-sm text-amber-600 dark:text-amber-400 max-h-40 overflow-y-auto">
+                        <template x-for="(warning, i) in importResult.warnings.slice(0, 50)" :key="i">
+                            <li x-text="'- ' + warning"></li>
+                        </template>
+                    </ul>
+                </div>
             </div>
 
             <!-- Post-import actions -->

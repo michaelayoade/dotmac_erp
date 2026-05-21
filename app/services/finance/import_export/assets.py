@@ -12,7 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -29,6 +29,7 @@ from .base import BaseImporter, FieldMapping, ImportConfig
 
 logger = logging.getLogger(__name__)
 _CURRENCY_QUANTUM = Decimal("0.01")
+_PLACEHOLDER_SERIALS = frozenset({"nil", "n/a", "na", "none", "null"})
 
 
 def _normalize_header(header: str) -> str:
@@ -56,6 +57,16 @@ def _get_row_value(row: dict[str, Any], *candidates: str) -> Any:
         if value not in (None, ""):
             return value
     return None
+
+
+def _normalize_asset_serial(value: Any) -> str | None:
+    """Return a clean serial number, treating placeholders as missing."""
+    serial = str(value or "").strip()
+    if not serial:
+        return None
+    if serial.casefold() in _PLACEHOLDER_SERIALS:
+        return None
+    return serial
 
 
 class AssetCategoryImporter(BaseImporter[AssetCategory]):
@@ -430,7 +441,7 @@ class AssetImporter(BaseImporter[Asset]):
 
     def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is serial number when present."""
-        serial = str(_get_row_value(row, "Serial Number", "Serial") or "").strip()
+        serial = _normalize_asset_serial(_get_row_value(row, "Serial Number", "Serial"))
         if serial:
             return serial.casefold()
         return ""
@@ -468,7 +479,7 @@ class AssetImporter(BaseImporter[Asset]):
         existing = self.db.execute(
             select(Asset).where(
                 Asset.organization_id == self.config.organization_id,
-                Asset.serial_number == key,
+                func.lower(func.btrim(Asset.serial_number)) == key,
             )
         ).scalar_one_or_none()
 
@@ -570,6 +581,9 @@ class AssetImporter(BaseImporter[Asset]):
         # Determine status
         status_str = row.get("status_str") or "IN_USE"
         status = self._parse_status(status_str)
+        serial_number = _normalize_asset_serial(
+            row.get("serial_number") or row.get("serial_alt")
+        )
 
         asset = Asset(
             asset_id=uuid4(),
@@ -594,7 +608,7 @@ class AssetImporter(BaseImporter[Asset]):
             net_book_value=net_book_value,
             impairment_loss=Decimal("0"),
             status=status,
-            serial_number=row.get("serial_number") or row.get("serial_alt"),
+            serial_number=serial_number,
             barcode=row.get("barcode"),
             manufacturer=row.get("manufacturer"),
             model=row.get("model"),

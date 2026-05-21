@@ -12,6 +12,7 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import TypedDict
+from urllib.parse import quote
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -484,11 +485,14 @@ def send_password_reset_email(
     person_name: str | None = None,
     app_url: str | None = None,
     organization_id: UUID | None = None,
+    next_url: str | None = None,
 ) -> bool:
     name = person_name or "there"
     env_app_url = _env_value("APP_URL")
     resolved_app_url = env_app_url or app_url or "http://localhost:8000"
     reset_link = f"{resolved_app_url.rstrip('/')}/reset-password?token={reset_token}"
+    if next_url:
+        reset_link = f"{reset_link}&next={quote(next_url, safe='/')}"
     subject = "Reset your password"
     body_html = (
         f"<p>Hi {name},</p>"

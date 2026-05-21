@@ -77,12 +77,13 @@ def forgot_password_page(
 def reset_password_page(
     request: Request,
     token: str = Query(...),
+    next: str | None = Query(default=None),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
     """
     Display the reset password page.
     """
-    return auth_web_service.reset_password_response(request, token, auth)
+    return auth_web_service.reset_password_response(request, token, auth, next_url=next)
 
 
 @router.get("/reset-password-required", response_class=HTMLResponse)

@@ -831,6 +831,7 @@ def depreciation_run_detail(
             db,
             str(auth.organization_id),
             run_id,
+            current_user_id=auth.user_id,
         )
     )
     return templates.TemplateResponse(

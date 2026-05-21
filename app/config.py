@@ -65,6 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
+    app_version: str = os.getenv("APP_VERSION", "1.1.4")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -149,6 +150,8 @@ class Settings:
     s3_secret_key: str = os.getenv("S3_SECRET_KEY", "")
     s3_bucket_name: str = os.getenv("S3_BUCKET_NAME", "dotmac-erp")
     s3_region: str = os.getenv("S3_REGION", "us-east-1")
+    s3_connect_timeout_s: float = float(os.getenv("S3_CONNECT_TIMEOUT_S", "3.0"))
+    s3_read_timeout_s: float = float(os.getenv("S3_READ_TIMEOUT_S", "10.0"))
 
     # ==========================================================================
     # CRM Integration (crm.dotmac.io)

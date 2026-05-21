@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-05-20
+
+### Fixed
+- Fixed hardened Nuitka package layout so compiled `app.services` and `app.models` imports resolve at runtime.
+
+## [1.1.3] - 2026-05-20
+
+### Fixed
+- Allowed Alembic migrations to run in hardened images after model source removal.
+
+## [1.1.2] - 2026-05-20
+
+### Fixed
+- Fixed Alembic model imports so the hardened release image health check can run migrations.
+
+## [1.1.1] - 2026-05-20
+
+### Fixed
+- Suppressed FA1 application confirmation emails.
+- Fixed employee edit save toast feedback.
+- Fixed the version badge test fallback for release metadata.
+
+## [1.1.0] - 2026-05-19
+
+### Added
+- HR birthday email automation with scheduler wiring and task coverage.
+- Employee person-edit web/API test coverage for HR profile updates.
+
+### Changed
+- Release metadata now treats the live app as the `1.x` production line.
+- Storage configuration supports explicit S3 connection/read timeouts.
+- Email and password-reset flows include small reliability and presentation updates.
+
 ## [2026-02-28]
 
 ### Added
