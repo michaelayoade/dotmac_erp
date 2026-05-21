@@ -4,6 +4,10 @@
 Compiles protected Python modules file-by-file so package directories stay
 importable in the hardened image. This avoids turning ``app.services`` or
 ``app.models`` into flat extension modules that cannot resolve submodules.
+
+Nuitka cannot compile ``__init__.py`` directly in module mode. Package
+``__init__.py`` files are therefore kept as package entry points, while regular
+modules inside those packages are compiled and their source files are removed.
 """
 
 from __future__ import annotations
@@ -55,7 +59,11 @@ def discover_python_files(project_root: Path, app_dir: Path) -> list[Path]:
         package_dir = dotted_to_path(project_root, package)
         if not package_dir.is_dir():
             raise FileNotFoundError(f"Package directory not found: {package_dir}")
-        files.extend(sorted(package_dir.rglob("*.py")))
+        files.extend(
+            py_file
+            for py_file in sorted(package_dir.rglob("*.py"))
+            if py_file.name != "__init__.py"
+        )
 
     for module in SINGLE_MODULES:
         module_file = dotted_to_path(project_root, module).with_suffix(".py")
