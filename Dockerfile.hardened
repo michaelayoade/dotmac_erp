@@ -51,8 +51,8 @@ RUN pip install --no-cache-dir "pydyf==0.11.0" python-multipart nuitka ordered-s
 
 COPY . .
 
-# Compile protected packages
-RUN python scripts/compile.py --output-dir /build --app-dir app
+# Compile protected packages file-by-file while preserving package directories.
+RUN python scripts/build_rhi.py --app-dir app
 
 # ---------------------------------------------------------------------------
 # Stage 3: Production Runtime
@@ -81,9 +81,6 @@ RUN pip install --no-cache-dir poetry && poetry config virtualenvs.create false
 COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-interaction --no-ansi
 RUN pip install --no-cache-dir "pydyf==0.11.0" python-multipart
-
-# Copy compiled .so files from nuitka stage
-COPY --from=nuitka-compiler /build/*.so ./
 
 # Copy the full app tree (with source removed for compiled packages)
 COPY --from=nuitka-compiler /app/app ./app
