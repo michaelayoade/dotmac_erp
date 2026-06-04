@@ -603,8 +603,11 @@ class TestSyncSingleCreditNote:
         svc._sync_single_credit_note(cn, USER_ID, result)
 
         assert result.updated == 1
-        assert existing.total_amount == Decimal("6000.00")
-        assert existing.subtotal == Decimal("6000.00")
+        # Credit notes are stored with the canonical negative-amount convention
+        # (Splynx sends positive totals; the sync negates them to match
+        # app/services/finance/ar/invoice.py and the AR poster / day-book reports).
+        assert existing.total_amount == Decimal("-6000.00")
+        assert existing.subtotal == Decimal("-6000.00")
 
     def test_skip_credit_note_when_customer_missing(self) -> None:
         """Credit note should be skipped when customer is not synced."""
@@ -1782,10 +1785,25 @@ class TestInvoiceSyncWithTax:
                 break
 
         assert invoice_obj is not None
-        assert invoice_obj.total_amount == Decimal("5375.00")
-        # subtotal = 5375 / 1.075 = 5000
-        assert invoice_obj.subtotal == Decimal("5000.00")
-        assert invoice_obj.tax_amount == Decimal("375.00")
+        # Credit notes use the canonical negative-amount convention (Splynx sends
+        # +5375; the sync negates to match the AR poster / day-book reports).
+        assert invoice_obj.total_amount == Decimal("-5375.00")
+        # subtotal = -(5375 / 1.075) = -5000
+        assert invoice_obj.subtotal == Decimal("-5000.00")
+        assert invoice_obj.tax_amount == Decimal("-375.00")
+
+        # Line amounts must carry the same negative sign as the header.
+        from app.models.finance.ar.invoice_line import InvoiceLine as InvoiceLineModel
+
+        line_obj = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceLineModel):
+                line_obj = obj
+                break
+        assert line_obj is not None
+        assert line_obj.line_amount == Decimal("-5000.00")
+        assert line_obj.tax_amount == Decimal("-375.00")
 
     def test_no_tax_code_preserves_legacy_behaviour(self) -> None:
         """When no tax code is configured, behaviour matches legacy (zero tax)."""

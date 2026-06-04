@@ -10,7 +10,7 @@ services:
     - .env
     environment:
       APP_URL: https://erp.dotmac.io
-      APP_VERSION: ${APP_VERSION:-1.4.0}
+      APP_VERSION: ${APP_VERSION:-1.4.1}
       DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001
       TRUSTED_PROXY_IPS: 172.16.0.0/12,127.0.0.1
       DATABASE_URL: ${DATABASE_URL}
