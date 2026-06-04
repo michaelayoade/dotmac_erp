@@ -37,6 +37,12 @@ from app.services.finance.banking.reconciliation_parts.base import (
 )
 
 
+# Date-relation soft threshold for split legs. Timing differences (deposits in
+# transit, unpresented cheques) legitimately span a few days, so this is only a
+# review FLAG, never a hard block. Tune per banking policy.
+_SPLIT_DATE_SOFT_WINDOW_DAYS = 7
+
+
 class ReconciliationMatchingService:
     """Bank reconciliation methods for matching."""
 
@@ -690,6 +696,77 @@ class ReconciliationMatchingService:
 
         return suggestions
 
+    @staticmethod
+    def _customer_root(db: Session, customer_id: UUID) -> UUID:
+        """Walk ``parent_customer_id`` to the ultimate parent (cycle-safe).
+
+        A reseller/aggregator or multi-branch customer's child accounts resolve
+        to one root, so a single deposit settling several of its children is
+        treated as ONE counterparty (legitimate), not many.
+        """
+        from app.models.finance.ar.customer import Customer
+
+        seen: set[UUID] = set()
+        cid = customer_id
+        for _ in range(20):  # depth cap guards against bad cycles
+            if cid in seen:
+                break
+            seen.add(cid)
+            cust = db.get(Customer, cid)
+            if cust is None or cust.parent_customer_id is None:
+                break
+            cid = cust.parent_customer_id
+        return cid
+
+    @staticmethod
+    def _counterparty_key(
+        db: Session, journal_line: JournalEntryLine
+    ) -> tuple[str, UUID] | None:
+        """Resolve a GL line to its counterparty's ROOT ``(kind, id)``.
+
+        Customers resolve to their ultimate parent (so aggregator/branch
+        batches collapse to one key); suppliers resolve to themselves. Returns
+        ``None`` when the journal has no resolvable source document (legacy
+        imported entries carry a NULL ``source_document_id``) — so the
+        consistency guard treats such legs as unconstrained and never blocks
+        historical data.
+        """
+        je = db.get(JournalEntry, journal_line.journal_entry_id)
+        if je is None or je.source_document_id is None:
+            return None
+        sdt = (je.source_document_type or "").upper()
+        sid = je.source_document_id
+        cust_id: UUID | None = None
+        if sdt in {"CUSTOMER_PAYMENT", "RECEIPT", "AR_PAYMENT_RESTORE"}:
+            from app.models.finance.ar.customer_payment import CustomerPayment
+
+            cp = db.get(CustomerPayment, sid)
+            cust_id = cp.customer_id if cp else None
+        elif sdt in {"INVOICE", "AR_INVOICE_RESTORE"}:
+            from app.models.finance.ar.invoice import Invoice
+
+            inv = db.get(Invoice, sid)
+            cust_id = inv.customer_id if inv else None
+        elif sdt == "SUPPLIER_PAYMENT":
+            from app.models.finance.ap.supplier_payment import SupplierPayment
+
+            sp = db.get(SupplierPayment, sid)
+            return ("supplier", sp.supplier_id) if sp else None
+        elif sdt == "SUPPLIER_INVOICE":
+            from app.models.finance.ap.supplier_invoice import SupplierInvoice
+
+            si = db.get(SupplierInvoice, sid)
+            return ("supplier", si.supplier_id) if si else None
+        if cust_id is None:
+            return None
+        return ("customer", ReconciliationMatchingService._customer_root(db, cust_id))
+
+    @staticmethod
+    def _gl_posting_date(db: Session, journal_line: JournalEntryLine) -> date | None:
+        """Posting date of the GL line's journal entry (for the date-span flag)."""
+        je = db.get(JournalEntry, journal_line.journal_entry_id)
+        return je.posting_date if je else None
+
     def add_multi_match(
         self,
         db: Session,
@@ -776,6 +853,53 @@ class ReconciliationMatchingService:
                 ),
             )
 
+        # Counterparty-consistency guard (HARD — existence/accuracy assertion):
+        # a single bank movement settles ONE economic counterparty. For a
+        # one-to-many split, each GL leg resolves to its counterparty's ULTIMATE
+        # PARENT, so a reseller/aggregator or multi-branch customer paying for
+        # several of its own child accounts in one deposit is allowed. Reject
+        # only when legs roll up to genuinely DIFFERENT parents (the matcher
+        # grouping unrelated payers to force an amount tie). Legacy legs with no
+        # resolvable source document resolve to None and are skipped, so this
+        # never blocks historical data.
+        date_span_days = 0
+        if len(stmt_lines) == 1 and len(gl_lines_loaded) > 1:
+            parties = {
+                key
+                for key in (self._counterparty_key(db, gl) for gl in gl_lines_loaded)
+                if key is not None
+            }
+            if len(parties) > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Cannot match: the selected GL entries belong to "
+                        f"{len(parties)} unrelated counterparties (different "
+                        "parent customers). A single bank deposit settles one "
+                        "payer or its child accounts — match unrelated payers "
+                        "against their own bank lines."
+                    ),
+                )
+
+            # Date-relation soft check (NOT a block — existence of timing
+            # differences like deposits-in-transit / unpresented cheques is
+            # normal and is handled as reconciling items). A wide spread is a
+            # review flag, recorded for the audit trail.
+            leg_dates = [
+                d
+                for d in (self._gl_posting_date(db, gl) for gl in gl_lines_loaded)
+                if d is not None
+            ]
+            if len(leg_dates) > 1:
+                date_span_days = (max(leg_dates) - min(leg_dates)).days
+                if date_span_days > _SPLIT_DATE_SOFT_WINDOW_DAYS:
+                    logger.warning(
+                        "Split match on reconciliation %s spans %s days across "
+                        "GL legs (review: timing difference vs mis-match).",
+                        reconciliation_id,
+                        date_span_days,
+                    )
+
         now = datetime.now(tz=UTC)
         group_id = uuid4()
         created_lines: _list[BankReconciliationLine] = []
@@ -818,6 +942,9 @@ class ReconciliationMatchingService:
                 is_cleared=True,
                 cleared_at=now,
                 notes=notes,
+                match_details=(
+                    {"date_span_days": date_span_days} if date_span_days else None
+                ),
                 created_by=created_by,
             )
             db.add(recon_line)
