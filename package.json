@@ -1,6 +1,6 @@
 {
   "name": "dotmac-books",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "IFRS Accounting Application",
   "scripts": {
     "build:css": "postcss ./src/css/main.css -o ./static/css/app.css",

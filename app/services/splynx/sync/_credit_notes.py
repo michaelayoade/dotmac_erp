@@ -181,6 +181,14 @@ class CreditNoteSyncMixin:
             return
 
         cn_subtotal, cn_tax = self._extract_tax(splynx_cn.total)
+        # Credit notes follow the canonical negative-amount convention used by
+        # the native AR creator (app/services/finance/ar/invoice.py) and assumed
+        # by the AR poster and the day-book reports. Splynx sends positive
+        # totals, so negate the header amounts here (line amounts are negated in
+        # _create_invoice_lines / _replace_invoice_lines via is_credit_note).
+        cn_subtotal = -abs(cn_subtotal)
+        cn_tax = -abs(cn_tax)
+        cn_total = -abs(splynx_cn.total)
 
         if existing:
             existing.customer_id = customer_id
@@ -188,8 +196,8 @@ class CreditNoteSyncMixin:
             existing.due_date = cn_date
             existing.subtotal = cn_subtotal
             existing.tax_amount = cn_tax
-            existing.total_amount = splynx_cn.total
-            existing.functional_currency_amount = splynx_cn.total
+            existing.total_amount = cn_total
+            existing.functional_currency_amount = cn_total
             existing.notes = splynx_cn.note
             existing.splynx_id = str(splynx_cn.id)
             existing.splynx_number = splynx_cn.number
@@ -221,9 +229,9 @@ class CreditNoteSyncMixin:
                 currency_code=(settings.default_functional_currency_code),
                 subtotal=cn_subtotal,
                 tax_amount=cn_tax,
-                total_amount=splynx_cn.total,
+                total_amount=cn_total,
                 amount_paid=Decimal("0"),
-                functional_currency_amount=splynx_cn.total,
+                functional_currency_amount=cn_total,
                 status=InvoiceStatus.POSTED,
                 ar_control_account_id=(self.ar_control_account_id),
                 source_document_type="splynx_credit_note",
