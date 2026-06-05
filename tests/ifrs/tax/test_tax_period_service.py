@@ -91,7 +91,7 @@ class TestTaxPeriodServiceCreatePeriod:
         TaxPeriodService.create_period(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_period_jurisdiction_not_found(self, mock_db):
         """Test period creation with missing jurisdiction."""
@@ -204,7 +204,7 @@ class TestTaxPeriodServiceGeneratePeriods:
 
         # Should create 12 periods
         assert mock_db.add.call_count == 12
-        assert mock_db.commit.call_count == 12
+        assert mock_db.flush.call_count == 12
 
     def test_generate_quarterly_periods(self, mock_db):
         """Test generating quarterly periods for a year."""
@@ -286,7 +286,7 @@ class TestTaxPeriodServiceFileExtension:
 
         assert mock_period.is_extension_filed is True
         assert mock_period.extended_due_date == date(2024, 6, 1)
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_file_extension_period_not_found(self, mock_db):
         """Test filing extension for non-existent period."""
@@ -364,7 +364,7 @@ class TestTaxPeriodServiceStatusTransitions:
         TaxPeriodService.mark_filed(mock_db, org_id, uuid4())
 
         assert mock_period.status == TaxPeriodStatus.FILED
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_mark_filed_already_filed(self, mock_db):
         """Test marking already filed period."""

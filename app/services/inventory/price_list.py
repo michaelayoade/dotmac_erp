@@ -276,7 +276,7 @@ class PriceListService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Price list item not found")
 
         db.delete(item)
-        db.commit()
+        db.flush()
 
         return True
 

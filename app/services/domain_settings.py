@@ -328,7 +328,13 @@ class DomainSettings(ListResponseMixin):
             {"created_at": DomainSetting.created_at, "key": DomainSetting.key},
         )
         stmt = _apply_pagination(stmt, limit, offset)
-        return list(db.scalars(stmt))
+        tenant_context = (
+            nullcontext()
+            if db.info.get("organization_id") or db.info.get("allow_cross_org")
+            else allow_cross_org(db)
+        )
+        with tenant_context:
+            return list(db.scalars(stmt))
 
     def update(
         self,
@@ -447,12 +453,18 @@ class DomainSettings(ListResponseMixin):
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        setting = db.scalar(
-            select(DomainSetting).where(
-                DomainSetting.domain == self.domain,
-                DomainSetting.key == key,
-            )
+        tenant_context = (
+            nullcontext()
+            if db.info.get("organization_id") or db.info.get("allow_cross_org")
+            else allow_cross_org(db)
         )
+        with tenant_context:
+            setting = db.scalar(
+                select(DomainSetting).where(
+                    DomainSetting.domain == self.domain,
+                    DomainSetting.key == key,
+                )
+            )
         if setting:
             # Capture old values for audit/history
             old_value = setting.value_text or setting.value_json

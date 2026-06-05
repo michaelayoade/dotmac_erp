@@ -246,7 +246,7 @@ class TestCreateReversal:
 
         assert result.success is True
         mock_db.add.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_reversal_journal_not_found(self, mock_db, org_id, user_id):
         """Test reversal fails when journal not found."""

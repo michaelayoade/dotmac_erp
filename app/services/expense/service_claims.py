@@ -76,6 +76,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         search: str | None = None,
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseClaim]:
+        self._ensure_org_context(org_id)
         query = select(ExpenseClaim).where(ExpenseClaim.organization_id == org_id)
 
         if employee_id:
@@ -112,6 +113,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         )
 
     def get_claim(self, org_id: UUID, claim_id: UUID) -> ExpenseClaim:
+        self._ensure_org_context(org_id)
         claim = self.db.scalar(
             select(ExpenseClaim)
             .options(joinedload(ExpenseClaim.items))

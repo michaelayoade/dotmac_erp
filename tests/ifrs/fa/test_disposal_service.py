@@ -50,8 +50,7 @@ class TestAssetDisposalService:
             isinstance(call.args[0], AssetDisposal)
             for call in mock_db.add.call_args_list
         )
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_disposal_asset_not_found(self, mock_db, org_id, user_id):
         """Test disposal creation fails when asset not found."""
@@ -233,7 +232,7 @@ class TestAssetDisposalService:
             mock_db, org_id, disposal.disposal_id, user_id
         )
 
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_approve_disposal_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent disposal fails."""

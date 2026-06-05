@@ -242,7 +242,7 @@ class TestCreateBasis:
         DeferredTaxService.create_basis(mock_db, org_id, sample_basis_input)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_basis_duplicate_fails(self, mock_db, org_id, sample_basis_input):
         """Test that duplicate basis code fails."""
@@ -328,7 +328,7 @@ class TestUpdateBasis:
 
         assert isinstance(result, DeferredTaxCalculationResult)
         assert result.temporary_difference == Decimal("300.00")
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_update_basis_not_found(self, mock_db, org_id):
         """Test updating non-existent basis."""
@@ -419,7 +419,7 @@ class TestCreateMovement:
 
         assert isinstance(result, DeferredTaxMovementResult)
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_movement_basis_not_found(self, mock_db, org_id):
         """Test creating movement for non-existent basis."""

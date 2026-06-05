@@ -205,7 +205,7 @@ class AttachmentService:
 
         # Delete database record
         db.delete(attachment)
-        db.commit()
+        db.flush()
 
         return True
 

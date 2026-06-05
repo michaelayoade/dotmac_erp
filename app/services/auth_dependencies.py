@@ -15,13 +15,13 @@ from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.db import SessionLocal, get_auth_db_session
-from app.db.session_context import allow_cross_org, prime_session
+from app.db.session_context import allow_cross_org, prime_tenant_context
 from app.models.auth import ApiKey, SessionStatus
 from app.models.auth import Session as AuthSession
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
-from app.rls import enable_rls_bypass_sync, set_current_organization_sync
+from app.rls import enable_rls_bypass_sync
 from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.cache import cache_service
@@ -137,7 +137,7 @@ def _set_default_org_context(db: Session) -> UUID | None:
     if not app_settings.default_organization_id:
         return None
     organization_id = UUID(str(app_settings.default_organization_id))
-    set_current_organization_sync(db, organization_id)
+    prime_tenant_context(db, organization_id)
     return organization_id
 
 
@@ -749,8 +749,7 @@ def require_tenant_auth(
 
     # Set RLS context if user has an organization
     if organization_id:
-        prime_session(db, organization_id)
-        set_current_organization_sync(db, organization_id)
+        prime_tenant_context(db, organization_id)
         if request is not None:
             request.state.organization_id = str(organization_id)
 
@@ -1063,7 +1062,7 @@ def require_web_session(
 
     # Set RLS context if user has an organization
     if organization_id:
-        set_current_organization_sync(db, organization_id)
+        prime_tenant_context(db, organization_id)
         request.state.organization_id = str(organization_id)
 
     _set_actor_context(request, person.id)
@@ -1175,7 +1174,7 @@ def optional_web_session(
         organization_id = coerce_uuid(settings.default_organization_id)
 
     if organization_id:
-        set_current_organization_sync(db, organization_id)
+        prime_tenant_context(db, organization_id)
         request.state.organization_id = str(organization_id)
 
     _set_actor_context(request, person.id)

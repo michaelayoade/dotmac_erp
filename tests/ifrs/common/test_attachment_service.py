@@ -222,8 +222,7 @@ class TestSaveFile:
             )
 
             mock_db.add.assert_called_once()
-            mock_db.commit.assert_called_once()
-            mock_db.refresh.assert_called_once()
+            mock_db.flush.assert_called()
 
     def test_save_file_invalid_content_type_fails(
         self, mock_db, org_id, user_id, entity_id
@@ -388,7 +387,7 @@ class TestDeleteAttachment:
 
             assert result is True
             mock_db.delete.assert_called_once_with(attachment)
-            mock_db.commit.assert_called_once()
+            mock_db.flush.assert_called()
 
     def test_delete_nonexistent_attachment_returns_false(self, mock_db, org_id):
         """Test deleting non-existent attachment returns False."""

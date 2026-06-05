@@ -169,10 +169,6 @@ class ImportWebService:
                 f"{', '.join(missing)}. Configure accounts or import chart of accounts first."
             )
 
-        assert inventory_account is not None
-        assert cogs_account is not None
-        assert revenue_account is not None
-        assert adjustment_account is not None
         return inventory_account, cogs_account, revenue_account, adjustment_account
 
     @staticmethod
