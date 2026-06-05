@@ -174,12 +174,13 @@ def _sync_scheduler_connection(
     """
     from app.models.domain_settings import DomainSetting, SettingDomain
 
-    existing = db.scalar(
-        select(DomainSetting).where(
-            DomainSetting.domain == SettingDomain.scheduler,
-            DomainSetting.key == key,
+    with allow_cross_org(db):
+        existing = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == SettingDomain.scheduler,
+                DomainSetting.key == key,
+            )
         )
-    )
     if existing:
         if existing.value_text != value:
             logger.info("Updating stale scheduler setting: %s", key)

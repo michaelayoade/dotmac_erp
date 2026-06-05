@@ -263,7 +263,7 @@ class TestCreateCount:
         InventoryCountService.create_count(mock_db, org_id, input, user_id)
 
         mock_db.add.assert_called()
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
     def test_creates_count_for_warehouse(
         self, mock_db, org_id, user_id, fiscal_period_id, warehouse_id, mock_warehouse
@@ -680,7 +680,7 @@ class TestRecordCountBulk:
         assert line_one.variance_quantity == Decimal("-2")
         assert line_two.final_quantity == Decimal("9")
         assert line_two.variance_quantity == Decimal("3")
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
 
 # ============ Tests for complete_count ============
@@ -731,7 +731,7 @@ class TestCompleteCount:
         )
 
         assert result.status == CountStatus.COMPLETED
-        mock_db.commit.assert_called()
+        mock_db.flush.assert_called()
 
 
 # ============ Tests for approve_count ============

@@ -492,9 +492,7 @@ class InventoryCountService(ListResponseMixin):
             updated_lines.append(line)
 
         InventoryCountService._recalculate_count_stats(db, count)
-        db.commit()
-        for line in updated_lines:
-            db.refresh(line)
+        db.flush()
         return updated_lines
 
     @staticmethod

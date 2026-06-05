@@ -42,6 +42,20 @@ def _scalars_result(rows):
     return SimpleNamespace(unique=lambda: SimpleNamespace(all=lambda: rows))
 
 
+def _page_result():
+    return SimpleNamespace(
+        items=[],
+        total=0,
+        page=1,
+        limit=20,
+        offset=0,
+        per_page=20,
+        total_pages=0,
+        has_prev=False,
+        has_next=False,
+    )
+
+
 def test_loan_search_adds_person_joins():
     stubs = []
 
@@ -59,6 +73,7 @@ def test_loan_search_adds_person_joins():
 
     with (
         patch.object(loan_web, "select", _select),
+        patch.object(loan_web, "paginate", lambda *_args, **_kwargs: _page_result()),
         patch.object(loan_web, "base_context", lambda *args, **kwargs: {}),
         patch.object(
             loan_web.templates, "TemplateResponse", lambda *_args, **_kwargs: None
@@ -87,6 +102,7 @@ def test_loan_list_without_search_skips_person_joins():
 
     with (
         patch.object(loan_web, "select", _select),
+        patch.object(loan_web, "paginate", lambda *_args, **_kwargs: _page_result()),
         patch.object(loan_web, "base_context", lambda *args, **kwargs: {}),
         patch.object(
             loan_web.templates, "TemplateResponse", lambda *_args, **_kwargs: None

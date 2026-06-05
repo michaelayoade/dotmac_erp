@@ -404,6 +404,9 @@ _INFRA_ERRORS = (
     # SQLite dialect can't render PostgreSQL-only types (ARRAY, JSONB ops, etc.)
     "can't render element of type",
     "CompileError",
+    # Optional external services are not available in the SQLite smoke harness.
+    "Failed to resolve",
+    "Name or service not known",
     # Placeholder UUID entity not found (expected for detail/edit pages)
     "not found",
     "Not Found",

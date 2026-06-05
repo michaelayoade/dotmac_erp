@@ -35,7 +35,7 @@ class TestReportDefinitionServiceCreate:
         ReportDefinitionService.create_definition(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_definition_duplicate_code(self, mock_db, org_id, user_id):
         """Test creation with duplicate report code."""
@@ -83,7 +83,7 @@ class TestReportDefinitionServiceUpdate:
 
         assert mock_report_definition.report_name == "Updated Report Name"
         assert mock_report_definition.description == "Updated description"
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_update_definition_not_found(self, mock_db, org_id):
         """Test update of non-existent definition."""
@@ -140,7 +140,7 @@ class TestReportDefinitionServiceUpdateStructure:
 
         assert mock_report_definition.column_definitions == column_defs
         assert mock_report_definition.template_version == original_version + 1
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_update_structure_not_found(self, mock_db, org_id):
         """Test structure update of non-existent definition."""
@@ -180,7 +180,7 @@ class TestReportDefinitionServiceUpdateDataSource:
 
         assert mock_report_definition.data_source_type == "SQL"
         assert mock_report_definition.data_source_config == data_source_config
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
 
 class TestReportDefinitionServiceDeactivate:
@@ -197,7 +197,7 @@ class TestReportDefinitionServiceDeactivate:
         )
 
         assert mock_report_definition.is_active is False
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_deactivate_system_report_fails(self, mock_db, org_id, mock_system_report):
         """Test deactivation of system report fails."""
@@ -236,7 +236,7 @@ class TestReportDefinitionServiceClone:
         )
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_clone_definition_source_not_found(self, mock_db, org_id, user_id):
         """Test cloning non-existent source definition."""

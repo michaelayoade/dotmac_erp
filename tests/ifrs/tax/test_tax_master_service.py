@@ -39,8 +39,7 @@ class TestTaxCodeService:
         TaxCodeService.create_tax_code(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
-        mock_db.refresh.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_tax_code_duplicate(self, mock_db, org_id, mock_jurisdiction):
         """Test tax code creation with duplicate code fails."""
@@ -148,7 +147,7 @@ class TestTaxCodeService:
         TaxCodeService.create_tax_code(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_calculate_tax_success(self, mock_db, org_id, mock_tax_code):
         """Test successful tax calculation."""
@@ -356,7 +355,7 @@ class TestTaxJurisdictionService:
         TaxJurisdictionService.create_jurisdiction(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called()
 
     def test_create_jurisdiction_duplicate(self, mock_db, org_id):
         """Test jurisdiction creation with duplicate code fails."""

@@ -152,13 +152,13 @@ def journal_entry_view(entry: JournalEntry) -> dict:
     `<input type="date">`; templates that need the human-readable form should
     apply `format_date` themselves.
     """
+    fiscal_period_id = getattr(entry, "fiscal_period_id", None)
+    exchange_rate = getattr(entry, "exchange_rate", None)
     return {
         "journal_entry_id": str(entry.journal_entry_id)
         if entry.journal_entry_id
         else None,
-        "fiscal_period_id": str(entry.fiscal_period_id)
-        if entry.fiscal_period_id
-        else None,
+        "fiscal_period_id": str(fiscal_period_id) if fiscal_period_id else None,
         "journal_number": entry.journal_number,
         "journal_type": entry.journal_type.value,
         "entry_date": entry.entry_date.isoformat() if entry.entry_date else "",
@@ -178,9 +178,7 @@ def journal_entry_view(entry: JournalEntry) -> dict:
         if entry.total_credit is not None
         else 0.0,
         "currency_code": entry.currency_code,
-        "exchange_rate": float(entry.exchange_rate)
-        if entry.exchange_rate is not None
-        else 1.0,
+        "exchange_rate": float(exchange_rate) if exchange_rate is not None else 1.0,
         "created_at": entry.created_at.isoformat() if entry.created_at else "",
     }
 

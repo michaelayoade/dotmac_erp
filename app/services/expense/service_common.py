@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from app.db.session_context import prime_tenant_context
 from app.models.expense import (
     ExpenseClaim,
     ExpenseClaimAction,
@@ -183,6 +184,10 @@ class ExpenseServiceBase:
     def __init__(self, db: Session, ctx: WebAuthContext | None = None) -> None:
         self.db = db
         self.ctx = ctx
+
+    def _ensure_org_context(self, org_id: UUID) -> None:
+        if self.db.info.get("organization_id") != org_id:
+            prime_tenant_context(self.db, org_id)
 
     def _resolve_currency_code(
         self,
