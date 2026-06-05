@@ -216,26 +216,40 @@ class PaymentSyncMixin:
             result.skipped += 1
             return
 
+        payment: CustomerPayment | None = None
         if local_id:
             payment = self.db.get(CustomerPayment, local_id)
-            if not payment:
-                local_id = None
-            else:
-                self._update_existing_payment(
-                    payment,
-                    splynx_payment,
-                    invoice,
-                    customer_id,
-                    payment_date,
-                    payment_method,
-                    currency_code,
-                    bank_account_id,
-                    method_name,
-                    external_id,
-                    data_hash,
-                    result,
+
+        # Fallback idempotency guard: a prior sync run or data re-import may
+        # have created this payment without recording the ExternalSync
+        # mapping. Match on the Splynx natural key to avoid inserting a
+        # duplicate (mirrors the invoice sync). Taking the update path below
+        # also re-records the mapping via _update_existing_payment, so the
+        # next sync resolves it through _get_synced_entity directly.
+        if payment is None:
+            payment = self.db.scalar(
+                select(CustomerPayment).where(
+                    CustomerPayment.organization_id == self.organization_id,
+                    CustomerPayment.splynx_id == external_id,
                 )
-                return
+            )
+
+        if payment is not None:
+            self._update_existing_payment(
+                payment,
+                splynx_payment,
+                invoice,
+                customer_id,
+                payment_date,
+                payment_method,
+                currency_code,
+                bank_account_id,
+                method_name,
+                external_id,
+                data_hash,
+                result,
+            )
+            return
 
         self._create_new_payment(
             splynx_payment,
