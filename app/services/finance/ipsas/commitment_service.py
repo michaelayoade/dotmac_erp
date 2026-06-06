@@ -26,8 +26,10 @@ class CommitmentService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _commit_and_refresh(self, commitment: Commitment) -> None:
-        self.db.commit()
+    def _flush_and_refresh(self, commitment: Commitment) -> None:
+        # Flush (not commit): the request dependency owns the transaction;
+        # committing here would also drop the SET LOCAL RLS GUC mid-request.
+        self.db.flush()
         self.db.refresh(commitment)
 
     def list_for_org(
@@ -108,7 +110,7 @@ class CommitmentService:
             currency_code,
             committed_amount,
         )
-        self._commit_and_refresh(commitment)
+        self._flush_and_refresh(commitment)
         return commitment
 
     def create_commitment_from_po(
@@ -154,7 +156,7 @@ class CommitmentService:
             currency_code,
             amount,
         )
-        self._commit_and_refresh(commitment)
+        self._flush_and_refresh(commitment)
         return commitment
 
     def create_commitment_from_contract(
@@ -200,7 +202,7 @@ class CommitmentService:
             currency_code,
             amount,
         )
-        self._commit_and_refresh(commitment)
+        self._flush_and_refresh(commitment)
         return commitment
 
     def record_obligation(
@@ -232,7 +234,7 @@ class CommitmentService:
         self.db.flush()
 
         logger.info("Recorded obligation %s on commitment %s", amount, commitment_id)
-        self._commit_and_refresh(commitment)
+        self._flush_and_refresh(commitment)
         return commitment
 
     def record_expenditure(
@@ -268,7 +270,7 @@ class CommitmentService:
 
         self.db.flush()
         logger.info("Recorded expenditure %s on commitment %s", amount, commitment_id)
-        self._commit_and_refresh(commitment)
+        self._flush_and_refresh(commitment)
         return commitment
 
     def cancel_commitment(
@@ -313,7 +315,7 @@ class CommitmentService:
 
         self.db.flush()
         logger.info("Cancelled commitment %s (amount: %s)", commitment_id, amount)
-        self._commit_and_refresh(commitment)
+        self._flush_and_refresh(commitment)
         return commitment
 
     def count_for_org(self, organization_id: UUID) -> int:

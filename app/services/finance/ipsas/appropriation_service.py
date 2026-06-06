@@ -29,8 +29,10 @@ class AppropriationService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _commit_and_refresh(self, entity) -> None:
-        self.db.commit()
+    def _flush_and_refresh(self, entity) -> None:
+        # Flush (not commit): the request dependency owns the transaction;
+        # committing here would also drop the SET LOCAL RLS GUC mid-request.
+        self.db.flush()
         self.db.refresh(entity)
 
     # ─── Appropriations ───────────────────────────────────────────────
@@ -109,7 +111,7 @@ class AppropriationService:
             approp.appropriation_code,
             approp.appropriation_id,
         )
-        self._commit_and_refresh(approp)
+        self._flush_and_refresh(approp)
         return approp
 
     def approve(self, appropriation_id: UUID, approver_id: UUID) -> Appropriation:
@@ -133,7 +135,7 @@ class AppropriationService:
         self.db.flush()
 
         logger.info("Approved appropriation %s by %s", appropriation_id, approver_id)
-        self._commit_and_refresh(approp)
+        self._flush_and_refresh(approp)
         return approp
 
     def count_for_org(
@@ -199,5 +201,5 @@ class AppropriationService:
             allotment.allotment_code,
             approp.appropriation_code,
         )
-        self._commit_and_refresh(allotment)
+        self._flush_and_refresh(allotment)
         return allotment
