@@ -96,10 +96,8 @@ def variation_payload() -> CRMPurchaseOrderVariationPayload:
 class TestVariationIdempotency:
     """Test idempotency via variation_id."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_returns_existing_variation_po(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -135,10 +133,8 @@ class TestVariationIdempotency:
 class TestVariationBaselineLookup:
     """Test baseline PO resolution."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_no_baseline_mapping(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -160,10 +156,8 @@ class TestVariationBaselineLookup:
                 org_id, variation_payload, person_id
             )
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_baseline_cancelled(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -197,10 +191,8 @@ class TestVariationBaselineLookup:
                 org_id, variation_payload, person_id
             )
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_baseline_closed(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -234,10 +226,8 @@ class TestVariationBaselineLookup:
                 org_id, variation_payload, person_id
             )
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_baseline_superseded(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -275,10 +265,8 @@ class TestVariationBaselineLookup:
 class TestVariationAccountingSafety:
     """Test that received/invoiced POs cannot be superseded."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_baseline_has_received_quantity(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -314,10 +302,8 @@ class TestVariationAccountingSafety:
                 org_id, variation_payload, person_id
             )
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_baseline_has_invoiced_quantity(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -353,10 +339,8 @@ class TestVariationAccountingSafety:
                 org_id, variation_payload, person_id
             )
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_allows_amendment_when_zero_received_invoiced(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -418,10 +402,8 @@ class TestVariationAccountingSafety:
 class TestVariationCreation:
     """Test the full variation creation flow."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_creates_amendment_and_supersedes_baseline(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -632,10 +614,8 @@ class TestCRMPurchaseOrderResponseVariationFields:
 class TestVariationIntegrityErrorHandling:
     """Test DB-level conflict handling when concurrent requests race."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_integrity_error_returns_existing_po(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -723,10 +703,8 @@ class TestVariationIntegrityErrorHandling:
         assert result.is_amendment is True
         assert result.variation_id == "var-001-xyz"
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_non_variation_integrity_error_is_raised(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
