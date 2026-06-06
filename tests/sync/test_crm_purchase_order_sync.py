@@ -88,10 +88,8 @@ def sample_payload() -> CRMPurchaseOrderPayload:
 class TestCreatePurchaseOrderIdempotency:
     """Test idempotency via CRMSyncMapping and correlation_id."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_returns_existing_po_when_mapping_exists(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -124,10 +122,8 @@ class TestCreatePurchaseOrderIdempotency:
         # Should not create any new records
         mock_db.add.assert_not_called()
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_returns_existing_po_via_correlation_id_fallback(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -171,10 +167,8 @@ class TestCreatePurchaseOrderIdempotency:
 class TestSupplierResolution:
     """Test _resolve_supplier with different lookup strategies."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_resolve_by_erpnext_id(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -190,10 +184,8 @@ class TestSupplierResolution:
         # Only one DB call needed (erpnext_id lookup succeeded)
         assert mock_db.scalar.call_count == 1
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_resolve_fallback_to_supplier_code(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -218,10 +210,8 @@ class TestSupplierResolution:
         assert result == mock_supplier
         assert mock_db.scalar.call_count == 2
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_resolve_trims_identifiers_before_lookup(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -246,10 +236,8 @@ class TestSupplierResolution:
         assert result == mock_supplier
         assert mock_db.scalar.call_count == 2
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_resolve_fallback_to_supplier_name(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -274,10 +262,8 @@ class TestSupplierResolution:
         assert result == mock_supplier
         assert mock_db.scalar.call_count == 2
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_value_error_when_supplier_not_found(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -288,10 +274,8 @@ class TestSupplierResolution:
         with pytest.raises(ValueError, match="Supplier not found"):
             service._resolve_supplier(org_id, "GHOST", "PHANTOM")
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_when_both_identifiers_none(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -304,10 +288,8 @@ class TestSupplierResolution:
 class TestCreatePurchaseOrderHappyPath:
     """Test the full create flow when no existing PO."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_creates_po_with_lines_and_mapping(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -387,10 +369,8 @@ class TestCreatePurchaseOrderHappyPath:
         assert mapping.display_code == "PO-2026-00042"
         assert mapping.customer_name == "Acme Fiber Supplies"
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_uses_approver_person_id_when_email_resolved(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -439,10 +419,8 @@ class TestCreatePurchaseOrderHappyPath:
         actual_creator = mock_create_po.call_args[0][3]
         assert actual_creator == approver_person_id
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_falls_back_to_api_key_person_when_email_not_resolved(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -490,10 +468,8 @@ class TestCreatePurchaseOrderHappyPath:
 class TestCreatePurchaseOrderProjectLinkage:
     """Test that PO lines get project_id when CRM project is mapped."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_lines_get_project_id_when_omni_project_id_resolved(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -547,10 +523,8 @@ class TestCreatePurchaseOrderProjectLinkage:
 class TestCreatePurchaseOrderErrors:
     """Test error handling in create_purchase_order."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_raises_value_error_when_supplier_not_found(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         person_id: uuid.UUID,
@@ -568,10 +542,8 @@ class TestCreatePurchaseOrderErrors:
 class TestResolvePersonIdByEmail:
     """Test _resolve_person_id_by_email helper."""
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_returns_none_when_email_is_none(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
     ) -> None:
@@ -579,10 +551,8 @@ class TestResolvePersonIdByEmail:
         result = service._resolve_person_id_by_email(org_id, None)
         assert result is None
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_returns_person_id_from_work_email(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
@@ -597,10 +567,8 @@ class TestResolvePersonIdByEmail:
         # Only one DB call needed
         assert mock_db.scalar.call_count == 1
 
-    @patch("app.services.sync.dotmac_crm_sync_service.select")
     def test_falls_back_to_personal_email(
         self,
-        mock_select: MagicMock,
         service: DotMacCRMSyncService,
         org_id: uuid.UUID,
         mock_db: MagicMock,
