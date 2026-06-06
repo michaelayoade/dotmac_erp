@@ -35,14 +35,17 @@ import logging
 
 from sqlalchemy import text
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session
 
 logger = logging.getLogger(__name__)
 
 
 def run(*, dry_run: bool) -> int:
     """Return the row count shifted (or that would be shifted on dry-run)."""
-    with SessionLocal() as db:
+    # Cross-org by design: shifts every Mono-sourced banking row regardless of
+    # tenant. cross_org_session() makes that intent explicit and bypasses both
+    # tenant layers (the raw SQL here targets the non-RLS banking schema).
+    with cross_org_session() as db:
         before = db.execute(
             text(
                 "SELECT COUNT(*) FROM banking.bank_statement_lines "

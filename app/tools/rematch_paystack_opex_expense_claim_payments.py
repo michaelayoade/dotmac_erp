@@ -24,7 +24,7 @@ from uuid import UUID
 
 from sqlalchemy import select, text
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.banking.bank_statement import (
@@ -78,7 +78,7 @@ def main() -> None:
     svc = BankReconciliationService()
     stats = Stats()
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         db.execute(text("SET statement_timeout TO '600s'"))
         db.execute(text("SET lock_timeout TO '60s'"))
 

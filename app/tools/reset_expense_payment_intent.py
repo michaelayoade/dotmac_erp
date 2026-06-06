@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from uuid import UUID
 
-from app.db import SessionLocal
+from app.db.session_context import cross_org_session, session_for_org
 from app.models.expense.expense_claim import ExpenseClaim
 from app.services.finance.payments import PaymentService
 
@@ -36,7 +36,17 @@ def main() -> None:
 
     claim_id = UUID(args.claim_id)
 
-    with SessionLocal() as db:
+    # The claim's org isn't known up front and ExpenseClaim lives in the
+    # RLS-enforced `expense` schema, so resolve the org under a deliberately
+    # cross-tenant session first, then do the real work under a session that
+    # primes both tenant layers for that org.
+    with cross_org_session() as lookup_db:
+        claim = lookup_db.get(ExpenseClaim, claim_id)
+        if not claim:
+            raise SystemExit(f"Claim {claim_id} not found")
+        org_id = claim.organization_id
+
+    with session_for_org(org_id) as db:
         claim = db.get(ExpenseClaim, claim_id)
         if not claim:
             raise SystemExit(f"Claim {claim_id} not found")

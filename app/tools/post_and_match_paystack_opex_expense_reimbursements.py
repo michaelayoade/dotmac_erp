@@ -20,7 +20,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, select, text
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.banking.bank_statement import BankStatement, BankStatementLine
@@ -135,7 +135,7 @@ def main() -> None:
     stats = Stats()
     svc = BankReconciliationService()
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         # This is a backfill job; avoid app-level 30s timeouts.
         db.execute(text("SET statement_timeout TO '600s'"))
         # Keep this reasonably high; we prefer waiting over failing and leaving
