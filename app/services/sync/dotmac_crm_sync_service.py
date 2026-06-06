@@ -82,73 +82,26 @@ from app.schemas.sync.dotmac_crm import (
     WorkforceEmployeeRead,
 )
 
+# CRM → ERP translation policy lives in crm_mappings (pure, side-effect-free).
+# Re-imported here so the canonical import sites
+# (`from ...dotmac_crm_sync_service import PROJECT_STATUS_MAP`) and the in-class
+# references keep resolving against this module's namespace.
+from app.services.sync.crm_mappings import (  # noqa: E402
+    CRM_SYNC_STATUS_MAP,
+    PROJECT_STATUS_MAP,
+    TASK_STATUS_MAP,
+    TICKET_STATUS_MAP,
+    map_crm_material_request_status,
+    map_crm_material_request_type,
+    map_project_type,
+    map_task_priority,
+    map_ticket_priority,
+)
+from app.services.sync.crm_mappings import (  # noqa: E402
+    is_variation_id_conflict as _is_variation_id_conflict,
+)
+
 logger = logging.getLogger(__name__)
-
-
-# Status mapping from CRM status strings to ERP enums
-PROJECT_STATUS_MAP = {
-    "planned": ProjectStatus.PLANNING,
-    "active": ProjectStatus.ACTIVE,
-    "on_hold": ProjectStatus.ON_HOLD,
-    "completed": ProjectStatus.COMPLETED,
-    "cancelled": ProjectStatus.CANCELLED,
-    "canceled": ProjectStatus.CANCELLED,
-}
-
-TICKET_STATUS_MAP = {
-    "open": TicketStatus.OPEN,
-    "active": TicketStatus.OPEN,
-    "in_progress": TicketStatus.REPLIED,
-    "resolved": TicketStatus.RESOLVED,
-    "closed": TicketStatus.CLOSED,
-    "completed": TicketStatus.CLOSED,
-    "cancelled": TicketStatus.CLOSED,
-    "canceled": TicketStatus.CLOSED,
-}
-
-TASK_STATUS_MAP = {
-    "draft": TaskStatus.OPEN,
-    "scheduled": TaskStatus.OPEN,
-    "active": TaskStatus.IN_PROGRESS,
-    "in_progress": TaskStatus.IN_PROGRESS,
-    "completed": TaskStatus.COMPLETED,
-    "cancelled": TaskStatus.CANCELLED,
-    "canceled": TaskStatus.CANCELLED,
-}
-
-CRM_SYNC_STATUS_MAP = {
-    "active": CRMSyncStatus.ACTIVE,
-    "planned": CRMSyncStatus.ACTIVE,
-    "in_progress": CRMSyncStatus.ACTIVE,
-    "open": CRMSyncStatus.ACTIVE,
-    "completed": CRMSyncStatus.COMPLETED,
-    "resolved": CRMSyncStatus.COMPLETED,
-    "closed": CRMSyncStatus.COMPLETED,
-    "cancelled": CRMSyncStatus.CANCELLED,
-    "canceled": CRMSyncStatus.CANCELLED,
-    "archived": CRMSyncStatus.ARCHIVED,
-}
-
-
-def _is_variation_id_conflict(error: IntegrityError) -> bool:
-    """Return True when the IntegrityError is the PO variation unique conflict."""
-    orig = getattr(error, "orig", None)
-    diag = getattr(orig, "diag", None)
-    constraint_name = getattr(diag, "constraint_name", None)
-    if constraint_name == "uq_po_variation_id":
-        return True
-
-    error_text = " ".join(
-        str(part)
-        for part in (
-            getattr(orig, "pgcode", None),
-            getattr(orig, "sqlstate", None),
-            constraint_name,
-            orig,
-        )
-        if part
-    ).lower()
-    return "uq_po_variation_id" in error_text
 
 
 # Valid local_entity_type values for CRMSyncMapping
@@ -1615,42 +1568,12 @@ class DotMacCRMSyncService:
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def _map_crm_material_request_type(self, request_type: str):
-        """Map CRM request type to local MaterialRequestType."""
-        from app.models.inventory.material_request import MaterialRequestType
-
-        request_type_map = {
-            "PURCHASE": MaterialRequestType.PURCHASE,
-            "TRANSFER": MaterialRequestType.TRANSFER,
-            "ISSUE": MaterialRequestType.ISSUE,
-            "MANUFACTURE": MaterialRequestType.MANUFACTURE,
-        }
-        value = request_type_map.get((request_type or "").strip().upper())
-        if not value:
-            raise ValueError(
-                f"Invalid request_type: {request_type}. "
-                f"Must be one of: {', '.join(request_type_map)}"
-            )
-        return value
+        """Map CRM request type to local MaterialRequestType (via crm_mappings)."""
+        return map_crm_material_request_type(request_type)
 
     def _map_crm_material_request_status(self, status: str):
-        """Map CRM status string to local MaterialRequestStatus."""
-        from app.models.inventory.material_request import MaterialRequestStatus
-
-        status_map = {
-            "draft": MaterialRequestStatus.DRAFT,
-            "submitted": MaterialRequestStatus.SUBMITTED,
-            "partially_ordered": MaterialRequestStatus.PARTIALLY_ORDERED,
-            "ordered": MaterialRequestStatus.ORDERED,
-            "issued": MaterialRequestStatus.ISSUED,
-            "cancelled": MaterialRequestStatus.CANCELLED,
-            "canceled": MaterialRequestStatus.CANCELLED,
-        }
-        mapped = status_map.get((status or "").strip().lower())
-        if not mapped:
-            raise ValueError(
-                f"Invalid status: {status}. Must be one of: {', '.join(status_map)}"
-            )
-        return mapped
+        """Map CRM status string to local MaterialRequestStatus (via crm_mappings)."""
+        return map_crm_material_request_status(status)
 
     def _resolve_warehouse_id(
         self,
@@ -2841,42 +2764,16 @@ class DotMacCRMSyncService:
             raise  # Re-raise if still not found (unexpected)
 
     def _map_project_type(self, type_str: str | None) -> ProjectType:
-        """Map CRM project type to local enum."""
-        if not type_str:
-            return ProjectType.CLIENT
-        type_map = {
-            "internal": ProjectType.INTERNAL,
-            "client": ProjectType.CLIENT,
-            "fiber": ProjectType.FIBER_OPTICS_INSTALLATION,
-            "airfiber": ProjectType.AIR_FIBER_INSTALLATION,
-        }
-        return type_map.get(type_str.lower(), ProjectType.CLIENT)
+        """Map CRM project type to local enum (delegates to crm_mappings)."""
+        return map_project_type(type_str)
 
     def _map_ticket_priority(self, priority_str: str | None) -> TicketPriority:
-        """Map CRM priority to local enum."""
-        if not priority_str:
-            return TicketPriority.MEDIUM
-        priority_map = {
-            "low": TicketPriority.LOW,
-            "medium": TicketPriority.MEDIUM,
-            "high": TicketPriority.HIGH,
-            "urgent": TicketPriority.URGENT,
-            "critical": TicketPriority.URGENT,
-        }
-        return priority_map.get(priority_str.lower(), TicketPriority.MEDIUM)
+        """Map CRM priority to local enum (delegates to crm_mappings)."""
+        return map_ticket_priority(priority_str)
 
     def _map_task_priority(self, priority_str: str | None) -> TaskPriority:
-        """Map CRM priority to local enum."""
-        if not priority_str:
-            return TaskPriority.MEDIUM
-        priority_map = {
-            "low": TaskPriority.LOW,
-            "medium": TaskPriority.MEDIUM,
-            "high": TaskPriority.HIGH,
-            "urgent": TaskPriority.URGENT,
-            "critical": TaskPriority.URGENT,
-        }
-        return priority_map.get(priority_str.lower(), TaskPriority.MEDIUM)
+        """Map CRM priority to local enum (delegates to crm_mappings)."""
+        return map_task_priority(priority_str)
 
     def _calculate_expense_totals(
         self,
