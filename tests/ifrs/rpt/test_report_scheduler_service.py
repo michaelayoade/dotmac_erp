@@ -46,7 +46,7 @@ class TestReportSchedulerServiceCreate:
         ReportSchedulerService.create_schedule(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_create_schedule_definition_not_found(self, mock_db, org_id, user_id):
         """Test creation with missing report definition."""
@@ -146,7 +146,7 @@ class TestReportSchedulerServiceUpdate:
         assert mock_report_schedule.schedule_name == "Updated Schedule Name"
         assert mock_report_schedule.description == "Updated description"
         assert mock_report_schedule.email_recipients == ["user@example.com"]
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_update_schedule_not_found(self, mock_db, org_id):
         """Test update of non-existent schedule."""
@@ -188,7 +188,7 @@ class TestReportSchedulerServiceUpdateTiming:
         assert mock_report_schedule.frequency == ScheduleFrequency.WEEKLY
         assert mock_report_schedule.day_of_week == 1
         assert mock_report_schedule.time_of_day == "09:00"
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_update_timing_not_found(self, mock_db, org_id):
         """Test timing update of non-existent schedule."""
@@ -228,7 +228,7 @@ class TestReportSchedulerServiceActivation:
 
         assert mock_report_schedule.is_active is True
         assert mock_report_schedule.next_run_at is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_activate_schedule_not_found(self, mock_db, org_id):
         """Test activation of non-existent schedule."""
@@ -255,7 +255,7 @@ class TestReportSchedulerServiceActivation:
 
         assert mock_report_schedule.is_active is False
         assert mock_report_schedule.next_run_at is None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_deactivate_schedule_not_found(self, mock_db, org_id):
         """Test deactivation of non-existent schedule."""
@@ -288,7 +288,7 @@ class TestReportSchedulerServiceExecution:
 
         assert mock_report_schedule.last_run_at is not None
         assert mock_report_schedule.next_run_at is not None
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_record_execution_not_found(self, mock_db):
         """Test execution recording for non-existent schedule."""

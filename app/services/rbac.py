@@ -129,7 +129,7 @@ class Roles(ListResponseMixin):
         if not role:
             raise HTTPException(status_code=404, detail="Role not found")
         role.is_active = False
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 class Permissions(ListResponseMixin):
@@ -192,7 +192,7 @@ class Permissions(ListResponseMixin):
         if not permission:
             raise HTTPException(status_code=404, detail="Permission not found")
         permission.is_active = False
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 class RolePermissions(ListResponseMixin):
@@ -273,7 +273,7 @@ class RolePermissions(ListResponseMixin):
         if not link:
             raise HTTPException(status_code=404, detail="Role permission not found")
         db.delete(link)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 def get_users_with_permission(
@@ -379,7 +379,7 @@ class PersonRoles(ListResponseMixin):
         if not link:
             raise HTTPException(status_code=404, detail="Person role not found")
         db.delete(link)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 roles = Roles()

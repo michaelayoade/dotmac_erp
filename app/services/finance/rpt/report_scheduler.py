@@ -148,7 +148,7 @@ class ReportSchedulerService(ListResponseMixin):
         )
 
         db.add(schedule)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(schedule)
 
         return schedule
@@ -202,7 +202,7 @@ class ReportSchedulerService(ListResponseMixin):
         if retention_days is not None:
             schedule.retention_days = retention_days
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(schedule)
 
         return schedule
@@ -260,7 +260,7 @@ class ReportSchedulerService(ListResponseMixin):
             tz=tz,
         )
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(schedule)
 
         return schedule
@@ -291,7 +291,7 @@ class ReportSchedulerService(ListResponseMixin):
             tz=schedule.timezone,
         )
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(schedule)
 
         return schedule
@@ -313,7 +313,7 @@ class ReportSchedulerService(ListResponseMixin):
         schedule.is_active = False
         schedule.next_run_at = None
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(schedule)
 
         return schedule
@@ -353,7 +353,7 @@ class ReportSchedulerService(ListResponseMixin):
                 from_time=now,
             )
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(schedule)
 
         return schedule

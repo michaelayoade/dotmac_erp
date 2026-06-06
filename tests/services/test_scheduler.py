@@ -74,7 +74,7 @@ class TestScheduledTasksCreate:
             ScheduledTasks.create(mock_db, payload)
 
             mock_db.add.assert_called_once_with(mock_task)
-            mock_db.commit.assert_called_once()
+            mock_db.flush.assert_called_once()
             mock_db.refresh.assert_called_once_with(mock_task)
 
     def test_create_interval_seconds_zero_raises_400(self, mock_db):
@@ -303,7 +303,7 @@ class TestScheduledTasksUpdate:
         ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
 
         assert mock_scheduled_task.interval_seconds == 600
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_update_enabled(self, mock_db, mock_scheduled_task):
         """Should update enabled status."""
@@ -387,7 +387,7 @@ class TestScheduledTasksDelete:
         ScheduledTasks.delete(mock_db, str(mock_scheduled_task.id))
 
         mock_db.delete.assert_called_once_with(mock_scheduled_task)
-        mock_db.commit.assert_called_once()
+        mock_db.flush.assert_called_once()
 
     def test_delete_nonexistent_raises_404(self, mock_db):
         """Deleting nonexistent task should raise HTTPException."""

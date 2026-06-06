@@ -208,7 +208,7 @@ class TAXPostingAdapter:
 
         # Update transaction with journal reference
         transaction.journal_entry_id = journal.journal_entry_id
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         return TAXPostingResult(
             success=True,
@@ -590,7 +590,7 @@ class TAXPostingAdapter:
 
         # Update movement with journal reference
         movement.journal_entry_id = journal.journal_entry_id
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         return TAXPostingResult(
             success=True,
