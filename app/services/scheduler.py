@@ -52,7 +52,7 @@ class ScheduledTasks(ListResponseMixin):
             raise HTTPException(status_code=400, detail="interval_seconds must be >= 1")
         task = ScheduledTask(**payload.model_dump())
         db.add(task)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(task)
         return task
 
@@ -110,7 +110,7 @@ class ScheduledTasks(ListResponseMixin):
                 )
         for key, value in data.items():
             setattr(task, key, value)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         db.refresh(task)
         return task
 
@@ -120,7 +120,7 @@ class ScheduledTasks(ListResponseMixin):
         if not task:
             raise HTTPException(status_code=404, detail="Scheduled task not found")
         db.delete(task)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 scheduled_tasks = ScheduledTasks()

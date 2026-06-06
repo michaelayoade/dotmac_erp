@@ -378,7 +378,7 @@ class ConsolidationService(ListResponseMixin):
         )
         run.intercompany_differences = unmatched or Decimal("0")
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         return entries
 
     @staticmethod
@@ -470,7 +470,7 @@ class ConsolidationService(ListResponseMixin):
             )
             entries.append(entry)
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         return entries
 
     @staticmethod

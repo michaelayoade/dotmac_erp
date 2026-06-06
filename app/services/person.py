@@ -100,7 +100,7 @@ class People(ListResponseMixin):
         if not person:
             raise HTTPException(status_code=404, detail="Person not found")
         db.delete(person)
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
 
 people = People()

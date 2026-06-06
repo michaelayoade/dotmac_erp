@@ -274,7 +274,7 @@ class IntercompanyService(ListResponseMixin):
                 )
             )
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         return results
 
     @staticmethod
@@ -509,7 +509,7 @@ class IntercompanyService(ListResponseMixin):
                 balance.elimination_entry_id = elim_id
                 updated += 1
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
         return updated
 
     @staticmethod

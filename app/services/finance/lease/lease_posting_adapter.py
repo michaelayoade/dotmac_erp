@@ -846,7 +846,7 @@ class LeasePostingAdapter:
         # Zero out liability and asset balances
         liability.current_liability_balance = Decimal("0")
         asset.carrying_amount = Decimal("0")
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         return LeasePostingResult(
             success=True,

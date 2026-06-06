@@ -288,7 +288,7 @@ class FinancialStatementService(ListResponseMixin):
                 line.sequence_number = new_sequence
                 updated_lines.append(line)
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         for line in updated_lines:
             db.refresh(line)
@@ -463,7 +463,7 @@ class FinancialStatementService(ListResponseMixin):
             if source.parent_line_id and source.parent_line_id in id_map:
                 created_lines[i].parent_line_id = id_map[source.parent_line_id]
 
-        db.commit()
+        db.flush()  # caller owns the commit (auto-committing request dep)
 
         for line in created_lines:
             db.refresh(line)
