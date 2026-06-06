@@ -654,6 +654,22 @@ def _is_audit_path_skipped(path: str, skip_paths: list[str]) -> bool:
 
 
 def _include_api_router(router, dependencies=None):
+    """Mount an API router at both the bare path and ``/api/v1``.
+
+    Versioning policy:
+
+    - ``/api/v1/<path>`` is the **canonical** surface. New external clients,
+      docs, and integrations must use it.
+    - The bare ``/<path>`` mount is a **legacy compatibility alias** kept for
+      older in-tree callers and the server-rendered UI's fetches. Both mounts
+      share identical dependencies and response models, so they never diverge.
+    - When a breaking change is needed, introduce ``/api/v2`` as a *new* router
+      mounted with ``prefix="/api/v2"`` (do not re-point this helper), and
+      deprecate ``/api/v1`` on a published timeline rather than mutating it.
+
+    Web (HTML) routers are intentionally NOT routed through this helper — they
+    mount once at their module path.
+    """
     app.include_router(router, dependencies=dependencies)
     app.include_router(router, prefix="/api/v1", dependencies=dependencies)
 
