@@ -43,6 +43,12 @@ repos:
         types: [python]
         exclude: (tests/|alembic/|scripts/)
 
+      - id: session-context
+        name: session-context (no raw SessionLocal() in tasks)
+        language: system
+        entry: python3 scripts/check_session_context.py
+        files: ^app/tasks/.*\.py$
+
       - id: template-a11y
         name: template a11y (no new unlabeled controls / nameless icons)
         language: system

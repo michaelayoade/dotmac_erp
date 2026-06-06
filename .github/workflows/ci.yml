@@ -50,6 +50,9 @@ jobs:
       - name: Ruff format check
         run: poetry run ruff format --check app/
 
+      - name: Session-context guard (no raw SessionLocal() in tasks)
+        run: python3 scripts/check_session_context.py
+
   type-check:
     name: Type Check
     runs-on: ubuntu-latest
