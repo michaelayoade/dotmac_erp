@@ -539,12 +539,15 @@ def require_feature(feature_key: str) -> Callable:
     from app.services.auth_dependencies import require_tenant_auth
 
     def dependency(auth: dict = Depends(require_tenant_auth)) -> None:
-        from app.db import SessionLocal
+        from app.db.session_context import session_for_org
         from app.services.common import coerce_uuid
 
         org_id = coerce_uuid(auth["organization_id"])
-        db = SessionLocal()
-        try:
+        # Prime BOTH tenant layers: is_enabled() reads the org-scoped
+        # DomainSetting table, which the ORM org-filter listener rejects on an
+        # unprimed session (MissingOrgContextError). session_for_org sets the
+        # ORM listener context and the PostgreSQL RLS GUC, then closes on exit.
+        with session_for_org(org_id) as db:
             if not FeatureFlagService(db).is_enabled(org_id, feature_key):
                 label = feature_key.replace("_", " ").replace("enable ", "").title()
                 raise HTTPException(
@@ -552,8 +555,6 @@ def require_feature(feature_key: str) -> Callable:
                     detail=f"The '{label}' feature is not enabled. "
                     f"Enable it in Settings > Feature Flags.",
                 )
-        finally:
-            db.close()
 
     return dependency
 

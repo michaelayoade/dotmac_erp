@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy import text
 
 from app.config import settings
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.finance.gl.journal import JournalInput, JournalLineInput
 from app.services.finance.posting.base import BasePostingAdapter
@@ -42,7 +42,7 @@ def main() -> None:
     actor_id = UUID(args.actor_id)
     posting_date = date.fromisoformat(args.posting_date)
 
-    with SessionLocal() as db:
+    with session_for_org(org_id) as db:
         source = db.execute(
             text(
                 """

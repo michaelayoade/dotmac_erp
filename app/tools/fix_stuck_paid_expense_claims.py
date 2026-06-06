@@ -20,7 +20,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.db import SessionLocal
+from app.db.session_context import session_for_org
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.payments.payment_intent import (
     PaymentDirection,
@@ -56,7 +56,7 @@ def fix_stuck_claims(*, dry_run: bool = True) -> dict[str, Any]:
 
     results: dict[str, Any] = {"found": 0, "fixed": 0, "errors": []}
 
-    with SessionLocal() as db:
+    with session_for_org(ORG_ID) as db:
         pairs = find_stuck_claims(db)
         results["found"] = len(pairs)
 
