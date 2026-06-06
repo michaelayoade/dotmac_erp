@@ -25,8 +25,11 @@ class FundService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _commit_and_refresh(self, fund: Fund) -> None:
-        self.db.commit()
+    def _flush_and_refresh(self, fund: Fund) -> None:
+        # Flush (not commit): the request dependency (get_db_with_org /
+        # get_db_for_org) owns the transaction. Committing here would also
+        # drop the SET LOCAL RLS GUC mid-request.
+        self.db.flush()
         self.db.refresh(fund)
 
     def list_for_org(
@@ -85,7 +88,7 @@ class FundService:
         self.db.add(fund)
         self.db.flush()
         logger.info("Created fund %s: %s", fund.fund_code, fund.fund_id)
-        self._commit_and_refresh(fund)
+        self._flush_and_refresh(fund)
         return fund
 
     def update(self, fund_id: UUID, data: FundUpdate) -> Fund:
@@ -101,7 +104,7 @@ class FundService:
 
         self.db.flush()
         logger.info("Updated fund %s", fund_id)
-        self._commit_and_refresh(fund)
+        self._flush_and_refresh(fund)
         return fund
 
     def get_fund_balance(
