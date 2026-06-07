@@ -228,10 +228,16 @@ class PaymentSyncMixin:
         # next sync resolves it through _get_synced_entity directly.
         if payment is None:
             payment = self.db.scalar(
-                select(CustomerPayment).where(
+                select(CustomerPayment)
+                .where(
                     CustomerPayment.organization_id == self.organization_id,
                     CustomerPayment.splynx_id == external_id,
                 )
+                # If pre-cleanup duplicates still share this splynx_id, update
+                # the ORIGINAL (oldest) row deterministically rather than an
+                # arbitrary one; void_splynx_duplicate_payments.py removes the
+                # phantoms separately.
+                .order_by(CustomerPayment.created_at)
             )
 
         if payment is not None:

@@ -47,6 +47,7 @@ from sqlalchemy import text
 
 from app.db import SessionLocal
 from app.services.finance.ar.customer_payment import CustomerPaymentService
+from app.services.splynx.sync._constants import SYSTEM_USER_ID
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +56,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
-SYSTEM_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
+# voided_by flows into the reversal journal's created_by_user_id; use the same
+# canonical sync sentinel the original payment journals were created with
+# (app/services/splynx/sync/_constants.py) so the audit trail is consistent.
 VOID_REASON = (
     "Phantom Splynx double-sync duplicate (see void_splynx_duplicate_payments.py)"
 )
