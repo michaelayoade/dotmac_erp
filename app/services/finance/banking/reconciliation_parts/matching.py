@@ -35,12 +35,30 @@ from app.services.finance.banking.reconciliation_parts.base import (
     logger,
     select,
 )
+from app.services.finance.common.source_types import (
+    AP_INVOICE_SOURCE,
+    AR_INVOICE_SOURCE,
+)
 
 
 # Date-relation soft threshold for split legs. Timing differences (deposits in
 # transit, unpresented cheques) legitimately span a few days, so this is only a
 # review FLAG, never a hard block. Tune per banking policy.
 _SPLIT_DATE_SOFT_WINDOW_DAYS = 7
+
+# Canonical ``JournalEntry.source_document_type`` values whose journals carry a
+# resolvable trade counterparty, grouped by which side's document the guard
+# loads. Kept in sync with the live posters: the AR/AP payment posters write
+# ``CUSTOMER_PAYMENT`` / ``SUPPLIER_PAYMENT`` (ar/posting/payment.py,
+# ap/posting/payment.py), and the invoice posters write the ``source_types``
+# constants. Any OTHER tag — legacy imports (NULL source_document_id), inventory
+# ``RECEIPT`` / ``GOODS_RECEIPT``, tax/inventory sub-ledger legs — is not in
+# these sets, resolves to ``None``, and is treated as unconstrained, so the
+# guard fails open on it rather than blocking.
+_CUSTOMER_PAYMENT_SOURCES = frozenset({"CUSTOMER_PAYMENT"})
+_CUSTOMER_INVOICE_SOURCES = frozenset({AR_INVOICE_SOURCE})
+_SUPPLIER_PAYMENT_SOURCES = frozenset({"SUPPLIER_PAYMENT"})
+_SUPPLIER_INVOICE_SOURCES = frozenset({AP_INVOICE_SOURCE})
 
 
 class ReconciliationMatchingService:
@@ -737,22 +755,22 @@ class ReconciliationMatchingService:
         sdt = (je.source_document_type or "").upper()
         sid = je.source_document_id
         cust_id: UUID | None = None
-        if sdt in {"CUSTOMER_PAYMENT", "RECEIPT", "AR_PAYMENT_RESTORE"}:
+        if sdt in _CUSTOMER_PAYMENT_SOURCES:
             from app.models.finance.ar.customer_payment import CustomerPayment
 
             cp = db.get(CustomerPayment, sid)
             cust_id = cp.customer_id if cp else None
-        elif sdt in {"INVOICE", "AR_INVOICE_RESTORE"}:
+        elif sdt in _CUSTOMER_INVOICE_SOURCES:
             from app.models.finance.ar.invoice import Invoice
 
             inv = db.get(Invoice, sid)
             cust_id = inv.customer_id if inv else None
-        elif sdt == "SUPPLIER_PAYMENT":
+        elif sdt in _SUPPLIER_PAYMENT_SOURCES:
             from app.models.finance.ap.supplier_payment import SupplierPayment
 
             sp = db.get(SupplierPayment, sid)
             return ("supplier", sp.supplier_id) if sp else None
-        elif sdt == "SUPPLIER_INVOICE":
+        elif sdt in _SUPPLIER_INVOICE_SOURCES:
             from app.models.finance.ap.supplier_invoice import SupplierInvoice
 
             si = db.get(SupplierInvoice, sid)
