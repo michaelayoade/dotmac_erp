@@ -259,7 +259,23 @@
 
     <!-- Open Invoices Table with Allocation -->
     <div class="card p-6">
-        <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Open Invoices - Select to Allocate Payment</h3>
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <h3 class="text-lg font-medium text-slate-900 dark:text-white">Open Invoices - Select to Allocate Payment</h3>
+            <div class="w-44 flex-none">
+                <label for="open_invoice_search" class="sr-only">Search Open Invoices</label>
+                <div class="relative">
+                    <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                        {{ icon_svg("search", "h-4 w-4") }}
+                    </span>
+                    <input id="open_invoice_search"
+                           type="search"
+                           x-model.trim="invoiceSearch"
+                           class="form-input h-9 pl-9 text-sm"
+                           placeholder="Search invoices"
+                           autocomplete="off">
+                </div>
+            </div>
+        </div>
         <div class="table-container">
             <table class="table">
                 <thead>
@@ -278,9 +294,10 @@
                 <tbody>
                     {% for inv in open_invoices %}
                     <tr
+                        x-show="invoiceMatchesSearch('{{ inv.invoice_id }}')"
                         :class="{ 'bg-primary-50 dark:bg-primary-900/20': selectedInvoices.includes('{{ inv.invoice_id }}') }">
                         <td>
-                            <input aria-label="Select invoice {{ invoice.invoice_number }} for allocation" type="checkbox"
+                            <input aria-label="Select invoice {{ inv.invoice_number }} for allocation" type="checkbox"
                                    x-model="selectedInvoices"
                                    value="{{ inv.invoice_id }}"
                                    @change="updateAllocation('{{ inv.invoice_id }}', {{ inv.balance_raw }})"
@@ -307,6 +324,13 @@
                         </td>
                     </tr>
                     {% endfor %}
+                    {% if open_invoices %}
+                    <tr x-show="filteredOpenInvoiceCount === 0">
+                        <td colspan="7" class="py-12">
+                            {{ empty_state('No matching invoices', 'Try another supplier name or invoice number.', 'search') }}
+                        </td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
@@ -335,6 +359,7 @@ function paymentForm() {
     };
 
     const suppliers = {{ suppliers_list | tojson }};
+    const openInvoices = {{ open_invoices | tojson }};
 
     // Pre-selected invoice data
     const invoiceData = {{ invoice|tojson if invoice else 'null' }};
@@ -348,6 +373,7 @@ function paymentForm() {
         supplierResults: selectedSupplierData ? [selectedSupplierData] : [],
         selectedSupplier: selectedSupplierData,
         supplierSearchTimer: null,
+        invoiceSearch: '',
         paymentDate: new Date().toISOString().split('T')[0],
         bankAccountId: '',
         paymentMethod: 'BANK_TRANSFER',
@@ -390,6 +416,10 @@ function paymentForm() {
             }, 0);
         },
 
+        get filteredOpenInvoiceCount() {
+            return openInvoices.filter((invoice) => this.invoiceMatchesSearch(invoice.invoice_id)).length;
+        },
+
         get isValid() {
             return this.supplierId &&
                    this.bankAccountId &&
@@ -406,6 +436,20 @@ function paymentForm() {
 
         filteredSuppliers() {
             return this.supplierResults;
+        },
+
+        invoiceMatchesSearch(invoiceId) {
+            const query = (this.invoiceSearch || '').toLowerCase();
+            if (!query) return true;
+
+            const invoice = openInvoices.find((item) => item.invoice_id === invoiceId);
+            if (!invoice) return false;
+
+            return [
+                invoice.invoice_number,
+                invoice.invoice_id,
+                invoice.supplier_name,
+            ].some((value) => String(value || '').toLowerCase().includes(query));
         },
 
         async fetchSuppliers(query) {

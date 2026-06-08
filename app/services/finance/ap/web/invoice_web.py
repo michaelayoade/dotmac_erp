@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
@@ -30,6 +31,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
+from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import IFRSCategory
@@ -724,6 +726,35 @@ class InvoiceWebService:
                 inclusive_vat_total, invoice.currency_code
             )
 
+        payment_rows = db.execute(
+            select(SupplierPayment, APPaymentAllocation)
+            .join(
+                APPaymentAllocation,
+                APPaymentAllocation.payment_id == SupplierPayment.payment_id,
+            )
+            .where(
+                APPaymentAllocation.invoice_id == invoice.invoice_id,
+                SupplierPayment.organization_id == org_id,
+            )
+            .order_by(
+                SupplierPayment.payment_date.desc(),
+                SupplierPayment.payment_number.desc(),
+            )
+        ).all()
+        payments_view = [
+            {
+                "payment_id": payment.payment_id,
+                "payment_number": payment.payment_number,
+                "payment_date": format_date(payment.payment_date, format="%d %b %Y"),
+                "payment_method": payment.payment_method.value,
+                "amount": format_currency(
+                    allocation.allocated_amount,
+                    payment.currency_code,
+                ),
+            }
+            for payment, allocation in payment_rows
+        ]
+
         # Fetch org TIN for display on invoice document
         org_tin: str | None = None
         try:
@@ -740,6 +771,7 @@ class InvoiceWebService:
             "supplier": supplier_form_view(supplier) if supplier else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "payments": payments_view,
             "org_tin": org_tin,
             "recent_activity": recent_activity,
         }

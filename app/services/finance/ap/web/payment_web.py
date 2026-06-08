@@ -281,7 +281,13 @@ class PaymentWebService:
         if invoice_id:
             stmt = stmt.where(SupplierInvoice.invoice_id == coerce_uuid(invoice_id))
 
-        rows = db.execute(stmt.order_by(SupplierInvoice.due_date)).all()
+        rows = db.execute(
+            stmt.order_by(
+                SupplierInvoice.invoice_date.desc(),
+                SupplierInvoice.due_date.desc(),
+                SupplierInvoice.invoice_number.desc(),
+            )
+        ).all()
 
         open_invoices = []
         selected_invoice = None

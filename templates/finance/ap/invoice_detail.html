@@ -444,6 +444,48 @@
     </div>
     {% endif %}
 
+    {# Payment History - Only show if there are payments #}
+    {% if payments and payments|length > 0 %}
+    <div class="card print:break-inside-avoid">
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            {{ icon_svg("cash", "h-4 w-4") }}
+            Payment History
+        </h3>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Reference</th>
+                        <th scope="col">Method</th>
+                        <th scope="col" class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                    <tr>
+                        <td class="text-slate-600 dark:text-slate-300">{{ payment.payment_date }}</td>
+                        <td>
+                            <a href="/finance/ap/payments/{{ payment.payment_id }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
+                                {{ payment.payment_number }}
+                            </a>
+                        </td>
+                        <td class="text-slate-600 dark:text-slate-300">{{ payment.payment_method | default("-") }}</td>
+                        <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No payments found", "There are no payments to display.") }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     {# Comments Section #}
     <div id="comments" class="card print:hidden">
         <div class="flex items-center justify-between mb-4">
@@ -487,48 +529,6 @@
         </div>
         {% endif %}
     </div>
-
-    {# Payment History - Only show if there are payments #}
-    {% if payments and payments|length > 0 %}
-    <div class="card print:break-inside-avoid">
-        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            {{ icon_svg("cash", "h-4 w-4") }}
-            Payment History
-        </h3>
-        <div class="table-container">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">Reference</th>
-                        <th scope="col">Method</th>
-                        <th scope="col" class="text-right">Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for payment in payments %}
-                    <tr>
-                        <td class="text-slate-600 dark:text-slate-300">{{ payment.payment_date }}</td>
-                        <td>
-                            <a href="/finance/ap/payments/{{ payment.payment_id }}" class="text-primary-600 hover:text-primary-700 dark:text-primary-400">
-                                {{ payment.payment_number }}
-                            </a>
-                        </td>
-                        <td class="text-slate-600 dark:text-slate-300">{{ payment.payment_method | default("-") }}</td>
-                        <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="99" class="p-0">
-                            {{ empty_state("No payments found", "There are no payments to display.") }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
 
     {# Attachments Section #}
     <div class="card print:hidden" x-data="{ showUpload: false }">
