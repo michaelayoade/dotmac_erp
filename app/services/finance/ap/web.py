@@ -3084,6 +3084,7 @@ class APWebService:
                 for line in lines
             ],
             "auto_create_inventory_receipt": invoice.auto_create_inventory_receipt,
+            "inventory_receipt_mode": invoice.inventory_receipt_mode,
         }
 
         return templates.TemplateResponse(

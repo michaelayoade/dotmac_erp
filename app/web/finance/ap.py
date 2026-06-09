@@ -6,7 +6,7 @@ Goods Receipts, Payment Batches, and AP Aging.
 
 Permission mapping (see scripts/seed_rbac.py for definitions):
   - Suppliers:   ap:suppliers:{read,create,update,delete}
-  - Invoices:    ap:invoices:{read,create,update,submit,approve,post,void}
+  - Invoices:    ap:invoices:{read,create,update,submit,approve,reject,post,void}
   - Payments:    ap:payments:{read,create,update,delete,post,void,approve:tier1/2/3}
   - POs:         ap:purchase_orders:{read,create,update,delete,submit,approve,void}
   - GRN:         ap:goods_receipts:{read,create,update,approve}
@@ -400,6 +400,28 @@ def approve_invoice(
 ):
     """Approve AP invoice."""
     return ap_web_service.approve_invoice_response(request, auth, db, invoice_id)
+
+
+@router.get("/invoices/{invoice_id}/reject", response_class=HTMLResponse)
+def reject_invoice_form(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:reject")),
+    db: Session = Depends(get_db_for_org),
+):
+    """AP invoice rejection form page."""
+    return ap_web_service.reject_invoice_form_response(request, auth, db, invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/reject")
+async def reject_invoice(
+    request: Request,
+    invoice_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("ap:invoices:reject")),
+    db: Session = Depends(get_db_for_org),
+):
+    """Reject AP invoice."""
+    return await ap_web_service.reject_invoice_response(request, auth, db, invoice_id)
 
 
 @router.post("/invoices/{invoice_id}/post")

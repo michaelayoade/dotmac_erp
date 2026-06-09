@@ -62,12 +62,10 @@
             <span class="btn-hide-on-load">Approve</span>
         </button>
     </form>
-    <button type="button"
-            class="btn btn-secondary"
-            onclick="alert('There is no in-app rejection flow for AP invoices.');">
+    <a href="/finance/ap/invoices/{{ invoice.invoice_id }}/reject" class="btn btn-secondary">
         {{ icon_svg("x-mark", "h-4 w-4") }}
         <span>Reject</span>
-    </button>
+    </a>
     <form method="POST" action="/finance/ap/invoices/{{ invoice.invoice_id }}/void"
           onsubmit="return confirm('Are you sure you want to void this invoice?');">
         {{ request.state.csrf_form | safe }}
@@ -153,7 +151,7 @@
     {'key': 'PAID', 'label': 'Paid', 'icon': 'currency'}
 ] %}
 
-{% set status_order = {'DRAFT': 0, 'SUBMITTED': 1, 'APPROVED': 2, 'POSTED': 3, 'PARTIALLY_PAID': 3, 'OVERDUE': 3, 'PAID': 4, 'VOIDED': -1, 'CANCELLED': -1} %}
+{% set status_order = {'DRAFT': 0, 'SUBMITTED': 1, 'APPROVED': 2, 'POSTED': 3, 'PARTIALLY_PAID': 3, 'OVERDUE': 3, 'PAID': 4, 'REJECTED': -1, 'VOID': -1, 'VOIDED': -1, 'CANCELLED': -1} %}
 {% set current_status_index = status_order.get(invoice.status, 0) %}
 
 {# Workflow Stepper - Hidden on print #}
@@ -162,7 +160,7 @@
     {% set step_index = loop.index0 %}
     {% set is_complete = current_status_index > step_index or (loop.last and current_status_index == step_index) %}
     {% set is_current = current_status_index == step_index %}
-    {% set is_voided = invoice.status in ['VOIDED', 'CANCELLED'] %}
+    {% set is_voided = invoice.status in ['REJECTED', 'VOID', 'VOIDED', 'CANCELLED'] %}
     <div class="workflow-step {% if is_complete %}workflow-step-complete{% elif is_current and not is_voided %}workflow-step-current{% endif %}">
         <div class="workflow-step-number">
             {% if is_complete %}
@@ -179,8 +177,8 @@
     {% endfor %}
 </div>
 
-{# Voided/Cancelled Alert #}
-{% if invoice.status in ['VOIDED', 'CANCELLED'] %}
+{# Terminal Alert #}
+{% if invoice.status in ['REJECTED', 'VOID', 'VOIDED', 'CANCELLED'] %}
 <div class="mb-6 rounded-xl border-2 border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20 print:border print:border-red-400">
     <div class="flex items-center gap-3">
         {{ icon_svg("ban", "h-6 w-6 text-red-500") }}
@@ -327,6 +325,15 @@
                                     <div class="font-medium">{{ line.description }}</div>
                                     {% if line.account_code %}
                                     <div class="text-xs text-slate-500">GL: {{ line.account_code }}</div>
+                                    {% endif %}
+                                    {% if line.receipt_approval %}
+                                    <div class="mt-1 text-xs">
+                                        <a href="{{ line.receipt_approval.url }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                            Store receipt: {{ line.receipt_approval.status | replace('_', ' ') | title }}
+                                        </a>
+                                    </div>
+                                    {% elif line.auto_receipt_transaction_id %}
+                                    <div class="mt-1 text-xs text-emerald-600 dark:text-emerald-400">Inventory receipt posted</div>
                                     {% endif %}
                                 </td>
                                 <td class="table-cell-amount text-slate-600 dark:text-slate-300">{{ line.quantity }}</td>

@@ -154,25 +154,26 @@ class ImportWebService:
             db, org_id, ["inventory adjustment", "stock adjustment", "adjustment"]
         )
 
-        missing = []
-        if not inventory_account:
-            missing.append("inventory")
-        if not cogs_account:
-            missing.append("COGS")
-        if not revenue_account:
-            missing.append("revenue")
-        if not adjustment_account:
-            missing.append("inventory adjustment")
-        if missing:
+        if (
+            inventory_account is None
+            or cogs_account is None
+            or revenue_account is None
+            or adjustment_account is None
+        ):
+            missing = []
+            if inventory_account is None:
+                missing.append("inventory")
+            if cogs_account is None:
+                missing.append("COGS")
+            if revenue_account is None:
+                missing.append("revenue")
+            if adjustment_account is None:
+                missing.append("inventory adjustment")
             raise ValueError(
                 "Inventory import requires configured default accounts for: "
                 f"{', '.join(missing)}. Configure accounts or import chart of accounts first."
             )
 
-        assert inventory_account is not None
-        assert cogs_account is not None
-        assert revenue_account is not None
-        assert adjustment_account is not None
         return inventory_account, cogs_account, revenue_account, adjustment_account
 
     @staticmethod

@@ -334,6 +334,91 @@ class TestVoidSupplierInvoice:
         assert exc.value.status_code == 400
 
 
+class TestRejectSupplierInvoice:
+    """Tests for reject_invoice method."""
+
+    def test_reject_submitted_invoice(self, mock_db, org_id, user_id):
+        """Test rejecting a submitted invoice."""
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
+
+        invoice = MockSupplierInvoice(
+            organization_id=org_id,
+            status=MockSupplierInvoiceStatus.SUBMITTED,
+        )
+        mock_db.get.return_value = invoice
+
+        with (
+            patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"),
+            patch(
+                "app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus",
+                MockSupplierInvoiceStatus,
+            ),
+            patch(
+                "app.services.finance.ap.inventory_receipt_approval."
+                "ap_inventory_receipt_approval_service.reject_pending_for_invoice",
+                return_value=2,
+            ) as reject_receipts,
+        ):
+            result = SupplierInvoiceService.reject_invoice(
+                mock_db,
+                org_id,
+                invoice.invoice_id,
+                user_id,
+                "Wrong quantities",
+            )
+
+        assert result.status == MockSupplierInvoiceStatus.REJECTED
+        reject_receipts.assert_called_once()
+        mock_db.commit.assert_called()
+
+    def test_reject_requires_reason(self, mock_db, org_id, user_id):
+        """Test rejecting an invoice requires a reason."""
+        from fastapi import HTTPException
+
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
+
+        with pytest.raises(HTTPException) as exc:
+            SupplierInvoiceService.reject_invoice(
+                mock_db,
+                org_id,
+                uuid4(),
+                user_id,
+                " ",
+            )
+
+        assert exc.value.status_code == 400
+
+    def test_reject_posted_invoice_fails(self, mock_db, org_id, user_id):
+        """Test posted invoices cannot be rejected."""
+        from fastapi import HTTPException
+
+        from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
+
+        invoice = MockSupplierInvoice(
+            organization_id=org_id,
+            status=MockSupplierInvoiceStatus.POSTED,
+        )
+        mock_db.get.return_value = invoice
+
+        with (
+            patch("app.services.finance.ap.supplier_invoice.SupplierInvoice"),
+            patch(
+                "app.services.finance.ap.supplier_invoice.SupplierInvoiceStatus",
+                MockSupplierInvoiceStatus,
+            ),
+            pytest.raises(HTTPException) as exc,
+        ):
+            SupplierInvoiceService.reject_invoice(
+                mock_db,
+                org_id,
+                invoice.invoice_id,
+                user_id,
+                "Wrong quantities",
+            )
+
+        assert exc.value.status_code == 400
+
+
 class TestGetSupplierInvoice:
     """Tests for get method."""
 
