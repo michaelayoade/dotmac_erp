@@ -578,6 +578,64 @@ def test_approve_store_receipt_posts_inventory_and_links_line():
     assert txn_input.source_document_line_id == line.line_id
 
 
+def test_approve_store_receipt_posts_inventory_before_invoice_posting_or_payment():
+    db = MagicMock()
+    org_id = uuid4()
+    user_id = uuid4()
+    invoice = _invoice(
+        org_id,
+        status=SupplierInvoiceStatus.SUBMITTED,
+        auto=False,
+        receipt_mode=InventoryReceiptMode.STORE_APPROVAL,
+    )
+    item_id = uuid4()
+    warehouse_id = uuid4()
+    line = _line(invoice.invoice_id, item_id, warehouse_id)
+    item = _item(org_id, item_id)
+    item.costing_method = SimpleNamespace(name="FIFO")
+    warehouse = _warehouse(org_id, warehouse_id)
+    warehouse.is_receiving = True
+    approval = _approval(
+        org_id, invoice.invoice_id, line.line_id, item_id, warehouse_id
+    )
+    transaction = SimpleNamespace(transaction_id=uuid4())
+
+    def _get(model, _id):
+        if model.__name__ == "InvoiceInventoryReceiptApproval":
+            return approval
+        if model.__name__ == "SupplierInvoice":
+            return invoice
+        if model.__name__ == "SupplierInvoiceLine":
+            return line
+        if model.__name__ == "Item":
+            return item
+        if model.__name__ == "Warehouse":
+            return warehouse
+        return None
+
+    db.get.side_effect = _get
+    db.scalars.side_effect = [_ScalarResult([_period()])]
+
+    with patch(
+        "app.services.finance.ap.inventory_receipt_approval."
+        "InventoryTransactionService.create_receipt",
+        return_value=transaction,
+    ) as create_receipt:
+        result = APInventoryReceiptApprovalService.approve(
+            db,
+            org_id,
+            approval.approval_id,
+            user_id,
+            approved_quantity=Decimal("2"),
+        )
+
+    assert invoice.status == SupplierInvoiceStatus.SUBMITTED
+    assert result.status == InvoiceInventoryReceiptApprovalStatus.POSTED_TO_INVENTORY
+    assert result.inventory_transaction_id == transaction.transaction_id
+    assert line.auto_receipt_transaction_id == transaction.transaction_id
+    create_receipt.assert_called_once()
+
+
 def test_partial_store_receipt_keeps_remaining_quantity_pending():
     db = MagicMock()
     org_id = uuid4()

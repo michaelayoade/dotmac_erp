@@ -404,7 +404,11 @@ class APInventoryReceiptApprovalService:
         warehouse_id: UUID | None = None,
         serial_numbers: list[str] | None = None,
     ) -> InvoiceInventoryReceiptApproval:
-        """Approve a pending store receipt and post the inventory receipt."""
+        """Approve a pending store receipt and post stock immediately.
+
+        Store receipt approval represents physical goods received. It is intentionally
+        independent of AP invoice posting and payment status.
+        """
         org_id = coerce_uuid(organization_id)
         user_id = coerce_uuid(approved_by_user_id)
         approval = APInventoryReceiptApprovalService.get(db, org_id, approval_id)
