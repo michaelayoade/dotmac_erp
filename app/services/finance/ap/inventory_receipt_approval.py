@@ -109,7 +109,8 @@ class APInventoryReceiptApprovalService:
         return db.scalars(
             select(InvoiceInventoryReceiptApproval).where(
                 InvoiceInventoryReceiptApproval.organization_id == organization_id,
-                InvoiceInventoryReceiptApproval.supplier_invoice_line_id == line.line_id,
+                InvoiceInventoryReceiptApproval.supplier_invoice_line_id
+                == line.line_id,
             )
         ).first()
 
@@ -371,7 +372,9 @@ class APInventoryReceiptApprovalService:
         if APInventoryReceiptApprovalService._is_mock_like(db):
             return
         try:
-            for recipient_id in APInventoryReceiptApprovalService._invoice_notification_recipients(
+            for (
+                recipient_id
+            ) in APInventoryReceiptApprovalService._invoice_notification_recipients(
                 invoice,
                 actor_id,
             ):
@@ -474,7 +477,9 @@ class APInventoryReceiptApprovalService:
                 db, org_id, txn_input, user_id
             )
         except HTTPException as exc:
-            raise ValidationError(f"Cannot approve inventory receipt: {exc.detail}") from exc
+            raise ValidationError(
+                f"Cannot approve inventory receipt: {exc.detail}"
+            ) from exc
 
         approval.approved_quantity = qty
         approval.warehouse_id = wh_id

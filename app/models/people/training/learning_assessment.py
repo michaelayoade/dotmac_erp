@@ -427,7 +427,9 @@ class TrainingQuestionBank(Base):
     __tablename__ = "training_question_bank"
     __table_args__ = (
         Index("idx_training_question_bank_org_active", "organization_id", "is_active"),
-        Index("idx_training_question_bank_department", "organization_id", "department_id"),
+        Index(
+            "idx_training_question_bank_department", "organization_id", "department_id"
+        ),
         {"schema": "training"},
     )
 
@@ -489,7 +491,9 @@ class TrainingQuestion(Base):
     __table_args__ = (
         Index("idx_training_question_bank", "organization_id", "question_bank_id"),
         Index("idx_training_question_type", "organization_id", "question_type"),
-        Index("idx_training_question_difficulty", "organization_id", "difficulty_level"),
+        Index(
+            "idx_training_question_difficulty", "organization_id", "difficulty_level"
+        ),
         {"schema": "training"},
     )
 
@@ -710,7 +714,9 @@ class TrainingQuestionTag(Base):
 
     __tablename__ = "training_question_tag"
     __table_args__ = (
-        UniqueConstraint("organization_id", "name", name="uq_training_question_tag_name"),
+        UniqueConstraint(
+            "organization_id", "name", name="uq_training_question_tag_name"
+        ),
         Index("idx_training_question_tag_org", "organization_id"),
         {"schema": "training"},
     )
@@ -752,7 +758,9 @@ class TrainingQuestionTagMap(Base):
     __tablename__ = "training_question_tag_map"
     __table_args__ = (
         UniqueConstraint("question_id", "tag_id", name="uq_training_question_tag_map"),
-        Index("idx_training_question_tag_map_question", "organization_id", "question_id"),
+        Index(
+            "idx_training_question_tag_map_question", "organization_id", "question_id"
+        ),
         Index("idx_training_question_tag_map_tag", "organization_id", "tag_id"),
         {"schema": "training"},
     )

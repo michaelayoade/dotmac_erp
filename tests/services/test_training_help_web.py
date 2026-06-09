@@ -132,7 +132,9 @@ def test_help_center_includes_learning_assessment_guides():
         for item in section.get("items", [])
     )
 
-    assert facilitator["href"] == "/help/articles/people-facilitator-learning-app-workflow"
+    assert (
+        facilitator["href"] == "/help/articles/people-facilitator-learning-app-workflow"
+    )
     assert facilitator["related_links"][0]["href"] == "/people/training/courses"
     assert any(
         journey["label"] == "Review essay answers"

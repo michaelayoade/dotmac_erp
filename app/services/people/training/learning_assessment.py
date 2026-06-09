@@ -225,7 +225,9 @@ class LearningAssessmentBaseService:
 
     def _ensure_same_org(self, parent_org_id: UUID, child_org_id: UUID) -> None:
         if parent_org_id != child_org_id:
-            raise ValidationError("Related records must belong to the same organization")
+            raise ValidationError(
+                "Related records must belong to the same organization"
+            )
 
 
 class CourseService(LearningAssessmentBaseService):
@@ -388,7 +390,9 @@ class CourseService(LearningAssessmentBaseService):
     ) -> TrainingCourse:
         course = self.get_course(org_id, course_id)
         if not course.modules:
-            raise ValidationError("Course must have at least one module before publishing")
+            raise ValidationError(
+                "Course must have at least one module before publishing"
+            )
         course.status = TrainingCourseStatus.PUBLISHED
         course.is_active = True
         self.db.flush()
@@ -536,8 +540,9 @@ class ModuleService(LearningAssessmentBaseService):
         if sequence is None:
             sequence = (
                 self.db.scalar(
-                    select(func.coalesce(func.max(TrainingCourseModule.sequence), 0))
-                    .where(
+                    select(
+                        func.coalesce(func.max(TrainingCourseModule.sequence), 0)
+                    ).where(
                         TrainingCourseModule.organization_id == org_id,
                         TrainingCourseModule.course_id == course_id,
                     )
@@ -615,7 +620,9 @@ class ModuleService(LearningAssessmentBaseService):
             "training_course_module",
             course_id,
             AuditAction.UPDATE,
-            new_values={"ordered_module_ids": [str(value) for value in ordered_module_ids]},
+            new_values={
+                "ordered_module_ids": [str(value) for value in ordered_module_ids]
+            },
             user_id=actor_id,
             reason="Modules reordered",
         )
@@ -730,7 +737,9 @@ class LessonService(LearningAssessmentBaseService):
         resolved_type = lesson_type or lesson.lesson_type
         resolved_content = content if content is not None else lesson.content
         resolved_file_id = file_id if file_id is not None else lesson.file_id
-        resolved_youtube = youtube_url if youtube_url is not None else lesson.youtube_url
+        resolved_youtube = (
+            youtube_url if youtube_url is not None else lesson.youtube_url
+        )
         self._validate_lesson_payload(
             resolved_type,
             resolved_content,
@@ -1060,12 +1069,16 @@ class QuestionBankService(LearningAssessmentBaseService):
         actor_id: UUID | None = None,
     ) -> list[TrainingQuestionOption]:
         question = self._get_question(org_id, question_id)
-        if question.question_type in {
-            TrainingQuestionType.MULTIPLE_CHOICE,
-            TrainingQuestionType.MULTIPLE_SELECT,
-            TrainingQuestionType.TRUE_FALSE,
-            TrainingQuestionType.FILL_GAP,
-        } and not options:
+        if (
+            question.question_type
+            in {
+                TrainingQuestionType.MULTIPLE_CHOICE,
+                TrainingQuestionType.MULTIPLE_SELECT,
+                TrainingQuestionType.TRUE_FALSE,
+                TrainingQuestionType.FILL_GAP,
+            }
+            and not options
+        ):
             raise ValidationError("Objective questions require options")
         for option in list(question.options):
             self.db.delete(option)
@@ -1157,14 +1170,34 @@ class QuestionBankService(LearningAssessmentBaseService):
     ) -> None:
         source_options = options if options is not None else question.options
         correct_count = sum(1 for option in source_options if option.is_correct)
-        if question.question_type == TrainingQuestionType.MULTIPLE_CHOICE and correct_count != 1:
-            raise ValidationError("Multiple choice questions require exactly one correct option")
-        if question.question_type == TrainingQuestionType.TRUE_FALSE and correct_count != 1:
-            raise ValidationError("True/false questions require exactly one correct option")
-        if question.question_type == TrainingQuestionType.MULTIPLE_SELECT and correct_count < 1:
-            raise ValidationError("Multiple select questions require at least one correct option")
-        if question.question_type == TrainingQuestionType.FILL_GAP and correct_count < 1:
-            raise ValidationError("Fill-gap questions require at least one accepted answer")
+        if (
+            question.question_type == TrainingQuestionType.MULTIPLE_CHOICE
+            and correct_count != 1
+        ):
+            raise ValidationError(
+                "Multiple choice questions require exactly one correct option"
+            )
+        if (
+            question.question_type == TrainingQuestionType.TRUE_FALSE
+            and correct_count != 1
+        ):
+            raise ValidationError(
+                "True/false questions require exactly one correct option"
+            )
+        if (
+            question.question_type == TrainingQuestionType.MULTIPLE_SELECT
+            and correct_count < 1
+        ):
+            raise ValidationError(
+                "Multiple select questions require at least one correct option"
+            )
+        if (
+            question.question_type == TrainingQuestionType.FILL_GAP
+            and correct_count < 1
+        ):
+            raise ValidationError(
+                "Fill-gap questions require at least one accepted answer"
+            )
 
 
 class AssessmentService(LearningAssessmentBaseService):
@@ -1374,7 +1407,9 @@ class AssessmentService(LearningAssessmentBaseService):
         try:
             self.db.flush()
         except IntegrityError as exc:
-            raise ConflictError("Question is already attached or sequence is in use") from exc
+            raise ConflictError(
+                "Question is already attached or sequence is in use"
+            ) from exc
         self._audit(
             org_id,
             "training_assessment_question",
@@ -1528,7 +1563,9 @@ class AssignmentService(LearningAssessmentBaseService):
         assignment_source = assignment_source.strip().lower()
         if assignment_source not in self.VALID_ASSIGNMENT_SOURCES:
             raise ValidationError("Invalid assignment source")
-        resolved_mandatory = course.is_mandatory if is_mandatory is None else is_mandatory
+        resolved_mandatory = (
+            course.is_mandatory if is_mandatory is None else is_mandatory
+        )
         existing = self.db.scalar(
             select(TrainingCourseAssignment).where(
                 TrainingCourseAssignment.organization_id == org_id,
@@ -1650,7 +1687,9 @@ class AssignmentService(LearningAssessmentBaseService):
         due_date: date | None = None,
         is_mandatory: bool | None = None,
     ) -> list[TrainingCourseAssignment]:
-        role = self.db.scalar(select(Role).where(Role.id == role_id, Role.is_active.is_(True)))
+        role = self.db.scalar(
+            select(Role).where(Role.id == role_id, Role.is_active.is_(True))
+        )
         if not role:
             raise NotFoundError("Role not found")
         employee_ids = list(
@@ -1738,8 +1777,7 @@ class AssignmentService(LearningAssessmentBaseService):
                 notification_type=NotificationType.DUE_SOON,
                 title="Training course due",
                 message=(
-                    f"'{course.title}' is due on "
-                    f"{assignment.due_date.isoformat()}."
+                    f"'{course.title}' is due on {assignment.due_date.isoformat()}."
                 ),
                 channel=NotificationChannel.IN_APP,
                 action_url="/people/training",
@@ -1900,7 +1938,9 @@ class ProgressService(LearningAssessmentBaseService):
         if lesson_ids:
             completed_lessons = (
                 self.db.scalar(
-                    select(func.count()).select_from(TrainingLessonProgress).where(
+                    select(func.count())
+                    .select_from(TrainingLessonProgress)
+                    .where(
                         TrainingLessonProgress.organization_id == org_id,
                         TrainingLessonProgress.employee_id == employee_id,
                         TrainingLessonProgress.lesson_id.in_(lesson_ids),
@@ -2013,9 +2053,16 @@ class ProgressService(LearningAssessmentBaseService):
     ) -> TrainingLessonProgress:
         lesson = self.db.scalar(
             select(TrainingLesson)
-            .join(TrainingCourseModule, TrainingCourseModule.id == TrainingLesson.module_id)
+            .join(
+                TrainingCourseModule,
+                TrainingCourseModule.id == TrainingLesson.module_id,
+            )
             .join(TrainingCourse, TrainingCourse.id == TrainingCourseModule.course_id)
-            .options(joinedload(TrainingLesson.module).joinedload(TrainingCourseModule.course))
+            .options(
+                joinedload(TrainingLesson.module).joinedload(
+                    TrainingCourseModule.course
+                )
+            )
             .where(
                 TrainingLesson.organization_id == org_id,
                 TrainingLesson.id == lesson_id,
@@ -2098,7 +2145,9 @@ class ProgressService(LearningAssessmentBaseService):
                 course_version_number=course.version_number,
             )
             self.db.add(progress)
-        lesson_ids = [lesson.id for module in course.modules for lesson in module.lessons]
+        lesson_ids = [
+            lesson.id for module in course.modules for lesson in module.lessons
+        ]
         assessment_ids = [
             assessment.id
             for module in course.modules
@@ -2113,7 +2162,9 @@ class ProgressService(LearningAssessmentBaseService):
             return progress
         completed_count = (
             self.db.scalar(
-                select(func.count()).select_from(TrainingLessonProgress).where(
+                select(func.count())
+                .select_from(TrainingLessonProgress)
+                .where(
                     TrainingLessonProgress.organization_id == org_id,
                     TrainingLessonProgress.employee_id == employee_id,
                     TrainingLessonProgress.lesson_id.in_(lesson_ids),
@@ -2136,7 +2187,9 @@ class ProgressService(LearningAssessmentBaseService):
             if passed_attempt:
                 passed_assessments += 1
         completed_total = completed_count + passed_assessments
-        percentage = (Decimal(completed_total) / Decimal(required_count)) * Decimal("100")
+        percentage = (Decimal(completed_total) / Decimal(required_count)) * Decimal(
+            "100"
+        )
         progress.completion_percentage = percentage.quantize(Decimal("0.01"))
         if completed_total == 0:
             progress.status = TrainingProgressStatus.NOT_STARTED
@@ -2186,7 +2239,9 @@ class ExamService(LearningAssessmentBaseService):
         )
         attempt_count = (
             self.db.scalar(
-                select(func.count()).select_from(TrainingExamAttempt).where(
+                select(func.count())
+                .select_from(TrainingExamAttempt)
+                .where(
                     TrainingExamAttempt.organization_id == org_id,
                     TrainingExamAttempt.assessment_id == assessment_id,
                     TrainingExamAttempt.employee_id == employee_id,
@@ -2229,9 +2284,9 @@ class ExamService(LearningAssessmentBaseService):
         stmt = (
             select(TrainingExamAttempt)
             .options(
-                joinedload(TrainingExamAttempt.assessment).joinedload(
-                    TrainingAssessment.module
-                ).joinedload(TrainingCourseModule.course),
+                joinedload(TrainingExamAttempt.assessment)
+                .joinedload(TrainingAssessment.module)
+                .joinedload(TrainingCourseModule.course),
                 selectinload(TrainingExamAttempt.answers),
             )
             .where(
@@ -2281,17 +2336,26 @@ class ExamService(LearningAssessmentBaseService):
     ) -> PaginatedResult[TrainingExamAnswer]:
         stmt = (
             select(TrainingExamAnswer)
-            .join(TrainingExamAttempt, TrainingExamAttempt.id == TrainingExamAnswer.attempt_id)
-            .join(TrainingAssessment, TrainingAssessment.id == TrainingExamAttempt.assessment_id)
-            .join(TrainingCourseModule, TrainingCourseModule.id == TrainingAssessment.module_id)
+            .join(
+                TrainingExamAttempt,
+                TrainingExamAttempt.id == TrainingExamAnswer.attempt_id,
+            )
+            .join(
+                TrainingAssessment,
+                TrainingAssessment.id == TrainingExamAttempt.assessment_id,
+            )
+            .join(
+                TrainingCourseModule,
+                TrainingCourseModule.id == TrainingAssessment.module_id,
+            )
             .options(
                 joinedload(TrainingExamAnswer.attempt)
                 .joinedload(TrainingExamAttempt.assessment)
                 .joinedload(TrainingAssessment.module)
                 .joinedload(TrainingCourseModule.course),
-                joinedload(TrainingExamAnswer.attempt).joinedload(
-                    TrainingExamAttempt.employee
-                ).joinedload(Employee.person),
+                joinedload(TrainingExamAnswer.attempt)
+                .joinedload(TrainingExamAttempt.employee)
+                .joinedload(Employee.person),
             )
             .where(
                 TrainingExamAnswer.organization_id == org_id,
@@ -2390,8 +2454,7 @@ class ExamService(LearningAssessmentBaseService):
         total_score = Decimal("0.00")
         total_points = Decimal("0.00")
         links = {
-            link.question_id: link
-            for link in attempt.assessment.assessment_questions
+            link.question_id: link for link in attempt.assessment.assessment_questions
         }
         for answer in attempt.answers:
             link = links.get(answer.question_id)
@@ -2470,7 +2533,11 @@ class ExamService(LearningAssessmentBaseService):
             question = link.question
             raw_answer = answer_by_question.get(question.id)
             answer_text = self._serialize_answer(raw_answer)
-            points = link.points_override if link.points_override is not None else question.points
+            points = (
+                link.points_override
+                if link.points_override is not None
+                else question.points
+            )
             total_points += points
             is_correct, score_awarded = self._grade_answer(question, raw_answer, points)
             if is_correct is None:
@@ -2536,7 +2603,11 @@ class ExamService(LearningAssessmentBaseService):
         )
         if not link:
             return Decimal("0.00")
-        return link.points_override if link.points_override is not None else link.question.points
+        return (
+            link.points_override
+            if link.points_override is not None
+            else link.question.points
+        )
 
     def _load_assessment_for_exam(
         self,
@@ -2621,7 +2692,9 @@ class ExamService(LearningAssessmentBaseService):
         }:
             return None, None
         correct_options = [option for option in question.options if option.is_correct]
-        correct_texts = {_normalize_text(option.option_text) for option in correct_options}
+        correct_texts = {
+            _normalize_text(option.option_text) for option in correct_options
+        }
         correct_ids = {str(option.id) for option in correct_options}
         if question.question_type in {
             TrainingQuestionType.MULTIPLE_CHOICE,
@@ -2629,7 +2702,9 @@ class ExamService(LearningAssessmentBaseService):
             TrainingQuestionType.FILL_GAP,
         }:
             submitted_text = _normalize_text(answer)
-            is_correct = submitted_text in correct_texts or str(answer or "") in correct_ids
+            is_correct = (
+                submitted_text in correct_texts or str(answer or "") in correct_ids
+            )
             return is_correct, points if is_correct else Decimal("0.00")
         if question.question_type == TrainingQuestionType.MULTIPLE_SELECT:
             submitted_set = _as_answer_set(answer)
@@ -2650,62 +2725,88 @@ class LearningReportService(LearningAssessmentBaseService):
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> dict[str, Any]:
-        active_courses = self.db.scalar(
-            select(func.count()).select_from(TrainingCourse).where(
-                TrainingCourse.organization_id == org_id,
-                TrainingCourse.status == TrainingCourseStatus.PUBLISHED,
-                TrainingCourse.is_active.is_(True),
+        active_courses = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(TrainingCourse)
+                .where(
+                    TrainingCourse.organization_id == org_id,
+                    TrainingCourse.status == TrainingCourseStatus.PUBLISHED,
+                    TrainingCourse.is_active.is_(True),
+                )
             )
-        ) or 0
+            or 0
+        )
         assignment_stmt = select(TrainingCourseAssignment).where(
             TrainingCourseAssignment.organization_id == org_id
         )
         assignment_stmt = self._apply_assignment_dates(
             assignment_stmt, start_date, end_date
         )
-        assigned_courses = self.db.scalar(
-            select(func.count()).select_from(assignment_stmt.subquery())
-        ) or 0
-        completed_courses = self.db.scalar(
-            select(func.count()).select_from(TrainingCourseProgress).where(
-                TrainingCourseProgress.organization_id == org_id,
-                TrainingCourseProgress.status == TrainingProgressStatus.COMPLETED,
-            )
-        ) or 0
-        overdue_courses = self.db.scalar(
-            select(func.count()).select_from(TrainingCourseAssignment).join(
-                TrainingCourseProgress,
-                (
-                    TrainingCourseProgress.organization_id
-                    == TrainingCourseAssignment.organization_id
+        assigned_courses = (
+            self.db.scalar(select(func.count()).select_from(assignment_stmt.subquery()))
+            or 0
+        )
+        completed_courses = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(TrainingCourseProgress)
+                .where(
+                    TrainingCourseProgress.organization_id == org_id,
+                    TrainingCourseProgress.status == TrainingProgressStatus.COMPLETED,
                 )
-                & (TrainingCourseProgress.course_id == TrainingCourseAssignment.course_id)
-                & (
-                    TrainingCourseProgress.employee_id
-                    == TrainingCourseAssignment.employee_id
-                ),
-            ).where(
-                TrainingCourseAssignment.organization_id == org_id,
-                TrainingCourseAssignment.due_date < date.today(),
-                TrainingCourseProgress.status != TrainingProgressStatus.COMPLETED,
             )
-        ) or 0
-        pending_reviews = self.db.scalar(
-            select(func.count()).select_from(TrainingExamAnswer).join(
-                TrainingExamAttempt,
-                TrainingExamAttempt.id == TrainingExamAnswer.attempt_id,
-            ).where(
-                TrainingExamAnswer.organization_id == org_id,
-                TrainingExamAttempt.submitted_at.is_not(None),
-                TrainingExamAnswer.question_type_snapshot.in_(
-                    [
-                        TrainingQuestionType.SHORT_ANSWER.value,
-                        TrainingQuestionType.ESSAY.value,
-                    ]
-                ),
-                TrainingExamAnswer.score_awarded.is_(None),
+            or 0
+        )
+        overdue_courses = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(TrainingCourseAssignment)
+                .join(
+                    TrainingCourseProgress,
+                    (
+                        TrainingCourseProgress.organization_id
+                        == TrainingCourseAssignment.organization_id
+                    )
+                    & (
+                        TrainingCourseProgress.course_id
+                        == TrainingCourseAssignment.course_id
+                    )
+                    & (
+                        TrainingCourseProgress.employee_id
+                        == TrainingCourseAssignment.employee_id
+                    ),
+                )
+                .where(
+                    TrainingCourseAssignment.organization_id == org_id,
+                    TrainingCourseAssignment.due_date < date.today(),
+                    TrainingCourseProgress.status != TrainingProgressStatus.COMPLETED,
+                )
             )
-        ) or 0
+            or 0
+        )
+        pending_reviews = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(TrainingExamAnswer)
+                .join(
+                    TrainingExamAttempt,
+                    TrainingExamAttempt.id == TrainingExamAnswer.attempt_id,
+                )
+                .where(
+                    TrainingExamAnswer.organization_id == org_id,
+                    TrainingExamAttempt.submitted_at.is_not(None),
+                    TrainingExamAnswer.question_type_snapshot.in_(
+                        [
+                            TrainingQuestionType.SHORT_ANSWER.value,
+                            TrainingQuestionType.ESSAY.value,
+                        ]
+                    ),
+                    TrainingExamAnswer.score_awarded.is_(None),
+                )
+            )
+            or 0
+        )
         return {
             "active_courses": active_courses,
             "assigned_courses": assigned_courses,
@@ -2728,21 +2829,33 @@ class LearningReportService(LearningAssessmentBaseService):
         end_date: date | None = None,
     ) -> dict[str, Any]:
         stmt = (
-            select(TrainingCourseAssignment, TrainingCourseProgress, Employee, TrainingCourse)
+            select(
+                TrainingCourseAssignment,
+                TrainingCourseProgress,
+                Employee,
+                TrainingCourse,
+            )
             .join(
                 TrainingCourseProgress,
                 (
                     TrainingCourseProgress.organization_id
                     == TrainingCourseAssignment.organization_id
                 )
-                & (TrainingCourseProgress.course_id == TrainingCourseAssignment.course_id)
+                & (
+                    TrainingCourseProgress.course_id
+                    == TrainingCourseAssignment.course_id
+                )
                 & (
                     TrainingCourseProgress.employee_id
                     == TrainingCourseAssignment.employee_id
                 ),
             )
-            .join(Employee, Employee.employee_id == TrainingCourseAssignment.employee_id)
-            .join(TrainingCourse, TrainingCourse.id == TrainingCourseAssignment.course_id)
+            .join(
+                Employee, Employee.employee_id == TrainingCourseAssignment.employee_id
+            )
+            .join(
+                TrainingCourse, TrainingCourse.id == TrainingCourseAssignment.course_id
+            )
             .options(joinedload(Employee.person), joinedload(Employee.department))
             .where(TrainingCourseAssignment.organization_id == org_id)
         )
@@ -2832,18 +2945,25 @@ class LearningReportService(LearningAssessmentBaseService):
         if assessment_id:
             stmt = stmt.where(TrainingExamAttempt.assessment_id == assessment_id)
         if course_id:
-            stmt = stmt.join(
-                TrainingAssessment,
-                TrainingAssessment.id == TrainingExamAttempt.assessment_id,
-            ).join(TrainingCourseModule, TrainingCourseModule.id == TrainingAssessment.module_id).where(
-                TrainingCourseModule.course_id == course_id
+            stmt = (
+                stmt.join(
+                    TrainingAssessment,
+                    TrainingAssessment.id == TrainingExamAttempt.assessment_id,
+                )
+                .join(
+                    TrainingCourseModule,
+                    TrainingCourseModule.id == TrainingAssessment.module_id,
+                )
+                .where(TrainingCourseModule.course_id == course_id)
             )
         if start_date:
             stmt = stmt.where(func.date(TrainingExamAttempt.submitted_at) >= start_date)
         if end_date:
             stmt = stmt.where(func.date(TrainingExamAttempt.submitted_at) <= end_date)
         rows = []
-        for attempt in self.db.scalars(stmt.order_by(TrainingExamAttempt.submitted_at.desc())).all():
+        for attempt in self.db.scalars(
+            stmt.order_by(TrainingExamAttempt.submitted_at.desc())
+        ).all():
             rows.append(
                 {
                     "employee": attempt.employee.person.name,
@@ -2876,7 +2996,8 @@ class LearningReportService(LearningAssessmentBaseService):
                 start_date=start_date,
                 end_date=end_date,
             )["rows"]
-            if row["mandatory"] and row["status"] != TrainingProgressStatus.COMPLETED.value
+            if row["mandatory"]
+            and row["status"] != TrainingProgressStatus.COMPLETED.value
         ]
         return {"rows": rows}
 
@@ -2891,9 +3012,18 @@ class LearningReportService(LearningAssessmentBaseService):
     ) -> dict[str, Any]:
         stmt = (
             select(TrainingExamAnswer, TrainingExamAttempt, TrainingAssessment)
-            .join(TrainingExamAttempt, TrainingExamAttempt.id == TrainingExamAnswer.attempt_id)
-            .join(TrainingAssessment, TrainingAssessment.id == TrainingExamAttempt.assessment_id)
-            .join(TrainingCourseModule, TrainingCourseModule.id == TrainingAssessment.module_id)
+            .join(
+                TrainingExamAttempt,
+                TrainingExamAttempt.id == TrainingExamAnswer.attempt_id,
+            )
+            .join(
+                TrainingAssessment,
+                TrainingAssessment.id == TrainingExamAttempt.assessment_id,
+            )
+            .join(
+                TrainingCourseModule,
+                TrainingCourseModule.id == TrainingAssessment.module_id,
+            )
             .where(
                 TrainingExamAnswer.organization_id == org_id,
                 TrainingExamAttempt.submitted_at.is_not(None),
@@ -2941,7 +3071,9 @@ class LearningReportService(LearningAssessmentBaseService):
             )
         return {"rows": list(grouped.values())}
 
-    def _apply_assignment_dates(self, stmt, start_date: date | None, end_date: date | None):
+    def _apply_assignment_dates(
+        self, stmt, start_date: date | None, end_date: date | None
+    ):
         if start_date:
             stmt = stmt.where(TrainingCourseAssignment.assigned_date >= start_date)
         if end_date:

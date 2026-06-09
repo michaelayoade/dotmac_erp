@@ -34,7 +34,9 @@ class InvoiceInventoryReceiptApproval(Base):
     __table_args__ = (
         Index("idx_ap_inv_receipt_approval_org_status", "organization_id", "status"),
         Index("idx_ap_inv_receipt_approval_invoice", "supplier_invoice_id"),
-        Index("idx_ap_inv_receipt_approval_warehouse", "organization_id", "warehouse_id"),
+        Index(
+            "idx_ap_inv_receipt_approval_warehouse", "organization_id", "warehouse_id"
+        ),
         {"schema": "ap"},
     )
 
@@ -44,7 +46,9 @@ class InvoiceInventoryReceiptApproval(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     supplier_invoice_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
@@ -64,7 +68,9 @@ class InvoiceInventoryReceiptApproval(Base):
         nullable=True,
     )
     requested_quantity: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    approved_quantity: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    approved_quantity: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 6), nullable=True
+    )
     receipt_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
     receipt_serial_numbers: Mapped[list[str] | None] = mapped_column(
         ARRAY(String), nullable=True
@@ -78,15 +84,21 @@ class InvoiceInventoryReceiptApproval(Base):
         default=InvoiceInventoryReceiptApprovalStatus.PENDING,
         server_default=InvoiceInventoryReceiptApprovalStatus.PENDING.value,
     )
-    submitted_by_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    submitted_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False
+    )
     approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     rejected_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     inventory_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

@@ -187,7 +187,10 @@ MODULE_GUIDES: dict[str, dict[str, Any]] = {
             {"label": "Employees", "href": "/people/hr/employees"},
             {"label": "Payroll Runs", "href": "/people/payroll/runs"},
             {"label": "Training Programs", "href": "/people/training/programs"},
-            {"label": "Learning Dashboard", "href": "/people/training/learning-dashboard"},
+            {
+                "label": "Learning Dashboard",
+                "href": "/people/training/learning-dashboard",
+            },
             {"label": "My Courses", "href": "/people/training/my-courses"},
             {"label": "Learning Courses", "href": "/people/training/courses"},
         ],
