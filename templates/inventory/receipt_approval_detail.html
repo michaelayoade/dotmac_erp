@@ -189,7 +189,7 @@
                 <textarea id="receipt_serial_numbers" name="receipt_serial_numbers" rows="6" class="form-input font-mono text-sm">{{ approval.serial_text }}</textarea>
             </div>
             {% endif %}
-            <button type="submit" class="btn btn-primary w-full">Approve and Receive</button>
+            <button type="submit" class="btn btn-success w-full">Approve and Receive</button>
         </form>
 
         <form method="post" action="/inventory/receipt-approvals/{{ approval.approval_id }}/reject" class="card p-6 space-y-4">
