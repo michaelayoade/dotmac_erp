@@ -154,7 +154,7 @@
                                         "aria_label": "Make Payment",
                                         "class": "rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
                                     }
-                                ] if invoice.status not in ['PAID', 'VOIDED', 'CANCELLED'] else []
+                                ] if invoice.status not in ['PAID', 'REJECTED', 'VOID', 'VOIDED', 'CANCELLED'] else []
                             ) }}
                         </td>
                     </tr>

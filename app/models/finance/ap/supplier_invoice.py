@@ -43,6 +43,7 @@ class SupplierInvoiceStatus(str, enum.Enum):
     PARTIALLY_PAID = "PARTIALLY_PAID"
     PAID = "PAID"
     ON_HOLD = "ON_HOLD"
+    REJECTED = "REJECTED"
     VOID = "VOID"
     DISPUTED = "DISPUTED"
 
@@ -59,7 +60,7 @@ class SupplierInvoiceStatus(str, enum.Enum):
     @classmethod
     def terminal(cls) -> frozenset["SupplierInvoiceStatus"]:
         """Statuses where the invoice is fully settled or cancelled."""
-        return frozenset({cls.PAID, cls.VOID})
+        return frozenset({cls.PAID, cls.REJECTED, cls.VOID})
 
 
 class PostingStatus(str, enum.Enum):
@@ -73,6 +74,12 @@ class ThreeWayMatchStatus(str, enum.Enum):
     MATCHED = "MATCHED"
     UNMATCHED = "UNMATCHED"
     EXCEPTION = "EXCEPTION"
+
+
+class InventoryReceiptMode(str, enum.Enum):
+    NONE = "NONE"
+    AUTO_RECEIVE = "AUTO_RECEIVE"
+    STORE_APPROVAL = "STORE_APPROVAL"
 
 
 class SupplierInvoice(Base, VersionedMixin):
@@ -227,6 +234,12 @@ class SupplierInvoice(Base, VersionedMixin):
     # Inventory auto-receipt
     auto_create_inventory_receipt: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
+    )
+    inventory_receipt_mode: Mapped[InventoryReceiptMode] = mapped_column(
+        Enum(InventoryReceiptMode, name="supplier_invoice_inventory_receipt_mode"),
+        nullable=False,
+        default=InventoryReceiptMode.NONE,
+        server_default=InventoryReceiptMode.NONE.value,
     )
 
     # Intercompany

@@ -59,6 +59,7 @@ from app.services.finance.ap.web.goods_receipt_web import GoodsReceiptWebService
 from app.services.finance.ap.web.invoice_web import InvoiceWebService
 from app.services.finance.ap.web.payment_web import PaymentWebService
 from app.services.finance.ap.web.purchase_order_web import PurchaseOrderWebService
+from app.services.finance.ap.web.receipt_approval_web import ReceiptApprovalWebService
 
 # Import the modular service components
 from app.services.finance.ap.web.supplier_web import SupplierWebService
@@ -72,6 +73,7 @@ class APWebService(
     PaymentWebService,
     PurchaseOrderWebService,
     GoodsReceiptWebService,
+    ReceiptApprovalWebService,
 ):
     """
     Unified AP Web Service facade.
@@ -85,6 +87,7 @@ class APWebService(
     - PaymentWebService: Payment and aging reports
     - PurchaseOrderWebService: Purchase order management
     - GoodsReceiptWebService: Goods receipt management
+    - ReceiptApprovalWebService: AP invoice inventory receipt approvals
     """
 
     # =====================================================================

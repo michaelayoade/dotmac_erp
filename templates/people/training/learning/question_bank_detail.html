@@ -1,0 +1,75 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, empty_state %}
+
+{% block page_title %}{{ bank.name }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/question-banks" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Question Banks</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ bank.name }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/people/training/question-banks/{{ bank.id }}/edit" class="btn btn-secondary">{{ icon_svg("edit", "h-4 w-4 mr-1.5") }} Edit Bank</a>
+    <a href="/people/training/question-banks/{{ bank.id }}/questions/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New Question</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">{{ bank.name }}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ bank.description or "No description." }}</p>
+            </div>
+            <span class="text-sm text-slate-500 dark:text-slate-400">{{ bank.category or "Uncategorized" }}</span>
+        </div>
+    </div>
+
+    {% if bank.questions %}
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead><tr class="bg-slate-50 dark:bg-slate-800/50">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Question</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Type</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Difficulty</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Points</th>
+                    <th class="px-4 py-3 w-16"></th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for question in bank.questions %}
+                    <tr>
+                        <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+                            {{ question.question_text }}
+                            {% if question.tag_links %}
+                            <div class="mt-1 flex flex-wrap gap-1">
+                                {% for link in question.tag_links %}
+                                <span class="badge badge-sm badge-draft">{{ link.tag.name }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ question.question_type.value|replace('_', ' ')|title }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ question.difficulty_level.value|title }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ question.points }}</td>
+                        <td class="px-4 py-3 text-right"><a href="/people/training/questions/{{ question.id }}/edit" class="text-slate-500 hover:text-teal-600" title="Edit">{{ icon_svg("edit", "h-4 w-4") }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    {{ empty_state("No questions yet", "Add reusable questions to this bank.", "help-circle", "New Question", "/people/training/question-banks/" ~ bank.id ~ "/questions/new") }}
+    {% endif %}
+</div>
+{% endblock %}

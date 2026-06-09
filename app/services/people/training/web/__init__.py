@@ -19,11 +19,13 @@ from .base import (
     program_status_label,
 )
 from .event_web import EventWebService
+from .learning_assessment_web import LearningAssessmentWebService
 from .program_web import ProgramWebService
 from .report_web import ReportWebService
 
 
 class TrainingWebService(
+    LearningAssessmentWebService,
     ProgramWebService,
     EventWebService,
     ReportWebService,
@@ -59,6 +61,7 @@ __all__ = [
     "ProgramWebService",
     "EventWebService",
     "ReportWebService",
+    "LearningAssessmentWebService",
     "TrainingWebService",
     "training_web_service",
 ]

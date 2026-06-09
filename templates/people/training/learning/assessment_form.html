@@ -1,0 +1,63 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+
+{% block page_title %}{% if assessment %}Edit Assessment{% else %}New Assessment{% endif %}{% endblock %}
+
+{% block content %}
+{% set fd = form_data if form_data else {} %}
+<div class="max-w-3xl">
+    {% if error %}<div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+    <form method="post" action="{% if assessment %}/people/training/assessments/{{ assessment.id }}/edit{% else %}/people/training/modules/{{ module.id }}/assessments/new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="font-medium text-slate-900 dark:text-white">Assessment Details</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ course.title }} · {{ module.title }}</p>
+                </div>
+                {% if assessment %}{{ status_badge(assessment.status.value, "sm") }}{% endif %}
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="title" class="form-label required">Title</label>
+                    <input id="title" name="title" required class="form-input w-full" value="{{ fd.get('title', '') if fd else (assessment.title if assessment else '') }}">
+                </div>
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" rows="3" class="form-input w-full">{{ fd.get('description', '') if fd else (assessment.description if assessment and assessment.description else '') }}</textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="pass_mark" class="form-label">Pass Mark (%)</label>
+                        <input id="pass_mark" name="pass_mark" type="number" min="0" max="100" step="0.01" class="form-input w-full" value="{{ fd.get('pass_mark', '') if fd else (assessment.pass_mark if assessment else '70.00') }}">
+                    </div>
+                    <div>
+                        <label for="duration_minutes" class="form-label">Duration (Minutes)</label>
+                        <input id="duration_minutes" name="duration_minutes" type="number" min="0" class="form-input w-full" value="{{ fd.get('duration_minutes', '') if fd else (assessment.duration_minutes if assessment and assessment.duration_minutes else '') }}">
+                    </div>
+                    <div>
+                        <label for="max_attempts" class="form-label">Max Attempts</label>
+                        <input id="max_attempts" name="max_attempts" type="number" min="1" class="form-input w-full" value="{{ fd.get('max_attempts', '') if fd else (assessment.max_attempts if assessment else 1) }}">
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-6">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        {% set rq = fd.get('randomize_questions') if fd else (assessment.randomize_questions if assessment else false) %}
+                        <input type="checkbox" name="randomize_questions" class="form-checkbox" {{ 'checked' if rq }}>
+                        Randomize Questions
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        {% set ro = fd.get('randomize_options') if fd else (assessment.randomize_options if assessment else false) %}
+                        <input type="checkbox" name="randomize_options" class="form-checkbox" {{ 'checked' if ro }}>
+                        Randomize Options
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/training/courses/{{ course.id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Assessment</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

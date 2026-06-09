@@ -1,0 +1,61 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{{ assessment.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl space-y-6">
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">{{ assessment.title }}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Pass mark {{ assessment.pass_mark }}%{% if assessment.duration_minutes %} · {{ assessment.duration_minutes }} minutes{% endif %}</p>
+            </div>
+        </div>
+    </div>
+    <form method="post" action="/people/training/attempts/{{ attempt.id }}/submit" class="space-y-4">
+        {{ request.state.csrf_form | safe }}
+        {% for link in assessment.assessment_questions %}
+        {% set question = link.question %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Question {{ loop.index }}</h3>
+                <span class="text-sm text-slate-500 dark:text-slate-400">{{ link.points_override or question.points }} points</span>
+            </div>
+            <div class="card-body space-y-4">
+                <p class="text-sm text-slate-800 dark:text-slate-100">{{ question.question_text }}</p>
+                {% if question.question_type.value in ['multiple_choice', 'true_false'] %}
+                    <div class="space-y-2">
+                    {% for option in question.options %}
+                    <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <input type="radio" name="answer_{{ question.id }}" value="{{ option.option_text }}" class="form-radio" required>
+                        {{ option.option_text }}
+                    </label>
+                    {% endfor %}
+                    </div>
+                {% elif question.question_type.value == 'multiple_select' %}
+                    <div class="space-y-2">
+                    {% for option in question.options %}
+                    <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" name="answer_{{ question.id }}" value="{{ option.option_text }}" class="form-checkbox">
+                        {{ option.option_text }}
+                    </label>
+                    {% endfor %}
+                    </div>
+                {% elif question.question_type.value == 'fill_gap' %}
+                    <input name="answer_{{ question.id }}" class="form-input w-full" required>
+                {% elif question.question_type.value == 'short_answer' %}
+                    <textarea name="answer_{{ question.id }}" rows="3" class="form-input w-full" required></textarea>
+                {% elif question.question_type.value == 'essay' %}
+                    <textarea name="answer_{{ question.id }}" rows="8" class="form-input w-full" required></textarea>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        <div class="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-700">
+            <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Submit Assessment</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

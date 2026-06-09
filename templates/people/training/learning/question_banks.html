@@ -1,0 +1,71 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, icon_svg %}
+
+{% block page_title %}Question Banks{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/courses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">Question Banks</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/training/question-banks/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New Bank</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/training/question-banks",
+        active_filters=active_filters if active_filters else [],
+        show_search=true,
+        search=search,
+        search_placeholder="Search question banks..."
+    ) %}
+        <select aria-label="Department" name="department_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Departments</option>
+            {% for dept in departments %}
+            <option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string }}>{{ dept.department_name }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div id="results-container">
+    {% if banks %}
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Bank</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Category</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Department</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Questions</th>
+                        <th class="px-4 py-3 w-16"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for bank in banks %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3"><a href="/people/training/question-banks/{{ bank.id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">{{ bank.name }}</a><div class="text-xs text-slate-500">{{ bank.description or "" }}</div></td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ bank.category or "-" }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ bank.department.department_name if bank.department else "All departments" }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ question_counts.get(bank.id, 0) }}</td>
+                        <td class="px-4 py-3 text-right"><a href="/people/training/question-banks/{{ bank.id }}/edit" class="text-slate-500 hover:text-teal-600" title="Edit">{{ icon_svg("edit", "h-4 w-4") }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    {{ empty_state("No question banks found", "Create a bank for reusable assessment questions.", "help-circle", "New Bank", "/people/training/question-banks/new") }}
+    {% endif %}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, search=search) }}
+    </div>
+</div>
+{% endblock %}

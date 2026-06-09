@@ -1,0 +1,62 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, icon_svg %}
+
+{% block page_title %}Pending Essay Reviews{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    {% call(filter_attrs) compact_filters(base_url="/people/training/grading", active_filters=[], show_search=false) %}
+        <select name="course_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Courses</option>
+            {% for course in courses %}<option value="{{ course.id }}" {{ 'selected' if course_id == course.id|string }}>{{ course.title }}</option>{% endfor %}
+        </select>
+        <select name="assessment_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Assessments</option>
+            {% for assessment in assessments %}<option value="{{ assessment.id }}" {{ 'selected' if assessment_id == assessment.id|string }}>{{ assessment.title }}</option>{% endfor %}
+        </select>
+    {% endcall %}
+
+    {% if answers %}
+    <div class="space-y-4">
+        {% for answer in answers %}
+        <div id="attempt-{{ answer.attempt_id }}" class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="font-medium text-slate-900 dark:text-white">{{ answer.attempt.assessment.title }}</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ answer.attempt.employee.person.name }} · {{ answer.question_type_snapshot|replace('_', ' ')|title }}</p>
+                </div>
+                <form method="post" action="/people/training/attempts/{{ answer.attempt_id }}/finalize-grading">
+                    {{ request.state.csrf_form | safe }}
+                    <button type="submit" class="btn btn-secondary">Finalize Attempt</button>
+                </form>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-white">{{ answer.question_text_snapshot }}</p>
+                    <p class="mt-2 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{{ answer.answer or "-" }}</p>
+                </div>
+                <form method="post" action="/people/training/grading/answers/{{ answer.id }}" class="grid grid-cols-1 md:grid-cols-[160px_1fr_auto] gap-3 items-end">
+                    {{ request.state.csrf_form | safe }}
+                    <div>
+                        <label class="form-label required">Score</label>
+                        <input name="score_awarded" type="number" min="0" step="0.01" required class="form-input w-full">
+                    </div>
+                    <div>
+                        <label class="form-label">Feedback</label>
+                        <input name="feedback" class="form-input w-full">
+                    </div>
+                    <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state("No pending reviews", "Essay and short-answer submissions that need grading will appear here.", "clipboard-check") }}
+    {% endif %}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+</div>
+{% endblock %}

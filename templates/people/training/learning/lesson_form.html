@@ -1,0 +1,70 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{% if lesson %}Edit Lesson{% else %}New Lesson{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/courses/{{ course.id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ course.title }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ lesson.title if lesson else "New Lesson" }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% set fd = form_data if form_data else {} %}
+{% set selected_type = fd.get('lesson_type', '') if fd else (lesson.lesson_type.value if lesson else 'text') %}
+<div class="max-w-3xl" x-data="{ lessonType: '{{ selected_type }}' }">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="{% if lesson %}/people/training/lessons/{{ lesson.id }}/edit{% else %}/people/training/modules/{{ module.id }}/lessons/new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div class="card">
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Lesson Details</h3></div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="title" class="form-label required">Title</label>
+                        <input id="title" name="title" required class="form-input w-full" value="{{ fd.get('title', '') if fd else (lesson.title if lesson else '') }}">
+                    </div>
+                    <div>
+                        <label for="lesson_type" class="form-label required">Lesson Type</label>
+                        <select id="lesson_type" name="lesson_type" required class="form-input w-full" x-model="lessonType">
+                            {% for item in lesson_types %}
+                            <option value="{{ item }}">{{ item|replace('_', ' ')|title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" rows="3" class="form-input w-full">{{ fd.get('description', '') if fd else (lesson.description if lesson and lesson.description else '') }}</textarea>
+                </div>
+                <div>
+                    <label for="sequence" class="form-label">Sequence</label>
+                    <input id="sequence" name="sequence" type="number" min="1" class="form-input w-40" value="{{ fd.get('sequence', '') if fd else (lesson.sequence if lesson else '') }}">
+                </div>
+                <div x-show="lessonType === 'text' || lessonType === 'link'" x-cloak>
+                    <label for="content" class="form-label" x-text="lessonType === 'link' ? 'External URL' : 'Content'"></label>
+                    <textarea id="content" name="content" rows="7" class="form-input w-full" placeholder="Rich text, SOP notes, or external link">{{ fd.get('content', '') if fd else (lesson.content if lesson and lesson.content else '') }}</textarea>
+                </div>
+                <div x-show="lessonType === 'pdf' || lessonType === 'video'" x-cloak>
+                    <label for="file_id" class="form-label">Uploaded File ID</label>
+                    <input id="file_id" name="file_id" type="text" class="form-input w-full" value="{{ fd.get('file_id', '') if fd else (lesson.file_id if lesson and lesson.file_id else '') }}">
+                </div>
+                <div x-show="lessonType === 'video'" x-cloak>
+                    <label for="youtube_url" class="form-label">YouTube URL</label>
+                    <input id="youtube_url" name="youtube_url" type="url" class="form-input w-full" value="{{ fd.get('youtube_url', '') if fd else (lesson.youtube_url if lesson and lesson.youtube_url else '') }}">
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/training/courses/{{ course.id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Lesson</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

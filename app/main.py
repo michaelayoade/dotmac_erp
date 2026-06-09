@@ -123,6 +123,7 @@ _ALL_MODULES = frozenset(
         "expense",
         "inventory",
         "coach",
+        "training",
         "public_sector",
         "crm",
     }
@@ -182,10 +183,11 @@ async def lifespan(app: FastAPI):
         )
 
         register_payroll_handlers()
-        try:
-            _get_cached_openapi_schema()
-        except Exception:
-            logger.exception("Failed to precompute OpenAPI schema during startup")
+        if os.getenv("DOTMAC_PRECOMPUTE_OPENAPI", "false").lower() == "true":
+            try:
+                _get_cached_openapi_schema()
+            except Exception:
+                logger.exception("Failed to precompute OpenAPI schema during startup")
     finally:
         db.close()
     yield

@@ -443,6 +443,7 @@ def _load_rbac_claims(db: Session, person_id: str) -> tuple[list[str], list[str]
         "procurement:dashboard",
         "projects:access",
         "projects:dashboard",
+        "training:access",
         "settings:access",
         "settings:dashboard",
         "expense:access",
