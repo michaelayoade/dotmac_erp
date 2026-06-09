@@ -313,11 +313,13 @@ class ReceiptApprovalWebService:
                 else None,
                 serial_numbers=_serials_from_text(form.get("receipt_serial_numbers")),
             )
+            db.commit()
             return RedirectResponse(
                 url=f"/inventory/receipt-approvals/{approval_id}?success=Receipt+approved",
                 status_code=303,
             )
         except Exception as exc:
+            db.rollback()
             return RedirectResponse(
                 url=f"/inventory/receipt-approvals/{approval_id}?error={str(exc)}",
                 status_code=303,
@@ -339,11 +341,13 @@ class ReceiptApprovalWebService:
                 rejected_by_user_id=coerce_uuid(auth.user_id),
                 rejection_reason=str(form.get("rejection_reason") or ""),
             )
+            db.commit()
             return RedirectResponse(
                 url="/inventory/receipt-approvals?success=Receipt+approval+rejected",
                 status_code=303,
             )
         except Exception as exc:
+            db.rollback()
             return RedirectResponse(
                 url=f"/inventory/receipt-approvals/{approval_id}?error={str(exc)}",
                 status_code=303,
