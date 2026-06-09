@@ -7,10 +7,10 @@ Create Date: 2026-06-09
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision = "20260609_ap_store_receipt_approval"
 down_revision = "20260606_learning_assessment"
@@ -18,28 +18,47 @@ branch_labels = None
 depends_on = None
 
 
-receipt_mode_enum = sa.Enum(
+receipt_mode_enum = postgresql.ENUM(
     "NONE",
     "AUTO_RECEIVE",
     "STORE_APPROVAL",
     name="supplier_invoice_inventory_receipt_mode",
+    create_type=False,
 )
 
-approval_status_enum = sa.Enum(
+approval_status_enum = postgresql.ENUM(
     "PENDING",
     "APPROVED",
     "PARTIALLY_RECEIVED",
     "REJECTED",
     "POSTED_TO_INVENTORY",
     name="invoice_inventory_receipt_approval_status",
+    create_type=False,
 )
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
     op.execute("ALTER TYPE supplier_invoice_status ADD VALUE IF NOT EXISTS 'REJECTED'")
-    receipt_mode_enum.create(bind, checkfirst=True)
-    approval_status_enum.create(bind, checkfirst=True)
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            CREATE TYPE supplier_invoice_inventory_receipt_mode AS ENUM
+                ('NONE', 'AUTO_RECEIVE', 'STORE_APPROVAL');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+        """
+    )
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            CREATE TYPE invoice_inventory_receipt_approval_status AS ENUM
+                ('PENDING', 'APPROVED', 'PARTIALLY_RECEIVED', 'REJECTED', 'POSTED_TO_INVENTORY');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+        """
+    )
 
     op.add_column(
         "supplier_invoice",
@@ -86,7 +105,9 @@ def upgrade() -> None:
             server_default="PENDING",
             nullable=False,
         ),
-        sa.Column("submitted_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "submitted_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+        ),
         sa.Column("approved_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("rejected_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
@@ -154,6 +175,5 @@ def downgrade() -> None:
     op.drop_table("invoice_inventory_receipt_approval", schema="ap")
     op.drop_column("supplier_invoice", "inventory_receipt_mode", schema="ap")
 
-    bind = op.get_bind()
-    approval_status_enum.drop(bind, checkfirst=True)
-    receipt_mode_enum.drop(bind, checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS invoice_inventory_receipt_approval_status")
+    op.execute("DROP TYPE IF EXISTS supplier_invoice_inventory_receipt_mode")
