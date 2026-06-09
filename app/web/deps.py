@@ -1048,6 +1048,8 @@ class WebAuthContext:
             )
         ):
             modules.append("people")
+        if self.is_admin or "training:access" in scopes_set:
+            modules.append("training")
         if self.is_admin or "inventory:access" in scopes_set:
             modules.append("inventory")
         if self.is_admin or "fleet:access" in scopes_set:
@@ -1109,6 +1111,7 @@ class WebAuthContext:
             "expense": "expense",
             "expenses": "expense",
             "discipline": "discipline",
+            "training": "training",
             "coach": "coach",
             "public_sector": "public_sector",
             "public-sector": "public_sector",
@@ -1421,16 +1424,18 @@ def require_web_auth(
             if auth_db:
                 auth_db.close()
 
-        roles_value = payload.get("roles")
-        roles = (
-            [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-        )
+        # Web sessions must reflect admin RBAC edits without waiting for the
+        # existing access token to expire. Reload DB roles/scopes after the
+        # token's session has been validated, while preserving token-scoped
+        # module gates that may not have a granular DB permission in tests.
         scopes_value = payload.get("scopes")
-        scopes = (
+        token_scopes = (
             [str(scope) for scope in scopes_value]
             if isinstance(scopes_value, list)
             else []
         )
+        roles, db_scopes = _load_rbac_claims(db, str(person_uuid))
+        scopes = [*token_scopes, *db_scopes]
         roles, scopes = _normalize_roles_scopes(roles, scopes)
         roles = _ensure_admin_role(db, person_uuid, roles)
         scopes = _load_web_permission_scopes(db, person_uuid, scopes)
@@ -1669,16 +1674,18 @@ def optional_web_auth(
             if auth_db:
                 auth_db.close()
 
-        roles_value = payload.get("roles")
-        roles = (
-            [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-        )
+        # Web sessions must reflect admin RBAC edits without waiting for the
+        # existing access token to expire. Reload DB roles/scopes after the
+        # token's session has been validated, while preserving token-scoped
+        # module gates that may not have a granular DB permission in tests.
         scopes_value = payload.get("scopes")
-        scopes = (
+        token_scopes = (
             [str(scope) for scope in scopes_value]
             if isinstance(scopes_value, list)
             else []
         )
+        roles, db_scopes = _load_rbac_claims(db, str(person_uuid))
+        scopes = [*token_scopes, *db_scopes]
         roles, scopes = _normalize_roles_scopes(roles, scopes)
         roles = _ensure_admin_role(db, person_uuid, roles)
         scopes = _load_web_permission_scopes(db, person_uuid, scopes)
@@ -2009,6 +2016,20 @@ def require_self_service_access(
             detail="Self-service access required",
         )
     return auth
+
+
+def require_training_access(
+    auth: WebAuthContext = Depends(require_web_auth),
+) -> WebAuthContext:
+    """Require access to Training/Learning routes."""
+    if auth.is_admin or auth.has_permission("training:access"):
+        return auth
+    if auth.has_module_access("people"):
+        return auth
+    raise HTTPException(
+        status_code=403,
+        detail="Training access required",
+    )
 
 
 def require_discipline_access(

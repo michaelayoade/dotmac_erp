@@ -1,0 +1,150 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge, empty_state %}
+
+{% block page_title %}{{ course.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/courses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Courses</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ course.title }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/people/training/courses/{{ course.id }}/edit" class="btn btn-secondary">{{ icon_svg("edit", "h-4 w-4 mr-1.5") }} Edit</a>
+    {% if course.status.value != 'published' %}
+    <form method="post" action="/people/training/courses/{{ course.id }}/publish">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-primary">{{ icon_svg("check", "h-4 w-4 mr-1.5") }} Publish</button></form>
+    {% endif %}
+    {% if course.status.value != 'archived' %}
+    <form method="post" action="/people/training/courses/{{ course.id }}/archive">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-secondary">{{ icon_svg("archive", "h-4 w-4 mr-1.5") }} Archive</button></form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}
+    <div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>
+    {% endif %}
+    {% if error %}
+    <div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 card">
+            <div class="card-header">
+                <div>
+                    <h3 class="font-medium text-slate-900 dark:text-white">{{ course.title }}</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ course.description or "No description provided." }}</p>
+                </div>
+                {{ status_badge(course.status.value, "sm") }}
+            </div>
+            <div class="card-body grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div><span class="text-slate-500 dark:text-slate-400">Version</span><p class="font-mono text-slate-900 dark:text-white">{{ course.version_number }}</p></div>
+                <div><span class="text-slate-500 dark:text-slate-400">Pass Mark</span><p class="font-mono text-slate-900 dark:text-white">{{ course.pass_mark }}%</p></div>
+                <div><span class="text-slate-500 dark:text-slate-400">Retakes</span><p class="font-mono text-slate-900 dark:text-white">{{ course.retake_limit }}</p></div>
+                <div><span class="text-slate-500 dark:text-slate-400">Mandatory</span><p class="text-slate-900 dark:text-white">{{ "Yes" if course.is_mandatory else "No" }}</p></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Prerequisites</h3>
+            </div>
+            <div class="card-body space-y-3">
+                {% for prereq in course.prerequisites %}
+                <div class="flex items-center justify-between gap-2 text-sm">
+                    <span class="text-slate-700 dark:text-slate-300">{{ prereq.prerequisite_course.title }}</span>
+                    <form method="post" action="/people/training/courses/{{ course.id }}/prerequisites/{{ prereq.prerequisite_course_id }}/remove">
+                        {{ request.state.csrf_form | safe }}
+                        <button type="submit" class="text-slate-400 hover:text-rose-600" title="Remove">{{ icon_svg("x", "h-4 w-4") }}</button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400">No prerequisites.</p>
+                {% endfor %}
+                <form method="post" action="/people/training/courses/{{ course.id }}/prerequisites" class="flex gap-2">
+                    {{ request.state.csrf_form | safe }}
+                    <select name="prerequisite_course_id" class="form-input min-w-0 flex-1">
+                        <option value="">Select course</option>
+                        {% for item in available_prerequisites %}
+                        <option value="{{ item.id }}">{{ item.title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-secondary">{{ icon_svg("plus", "h-4 w-4") }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Course Builder</h2>
+        <a href="/people/training/courses/{{ course.id }}/modules/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} Add Module</a>
+    </div>
+
+    {% if course.modules %}
+    <form method="post" action="/people/training/courses/{{ course.id }}/modules/reorder" class="space-y-4">
+        {{ request.state.csrf_form | safe }}
+        {% for module in course.modules %}
+        <div class="card">
+            <div class="card-header">
+                <div class="flex items-center gap-3">
+                    <input type="hidden" name="module_ids" value="{{ module.id }}">
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-mono text-slate-600 dark:text-slate-300">{{ module.sequence }}</span>
+                    <div>
+                        <h3 class="font-medium text-slate-900 dark:text-white">{{ module.title }}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ module.description or "No description." }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="/people/training/modules/{{ module.id }}/lessons/new" class="btn btn-secondary">{{ icon_svg("document", "h-4 w-4 mr-1.5") }} Lesson</a>
+                    <a href="/people/training/modules/{{ module.id }}/assessments/new" class="btn btn-secondary">{{ icon_svg("clipboard-check", "h-4 w-4 mr-1.5") }} Assessment</a>
+                    <a href="/people/training/modules/{{ module.id }}/edit" class="text-slate-500 hover:text-teal-600" title="Edit">{{ icon_svg("edit", "h-4 w-4") }}</a>
+                </div>
+            </div>
+            <div class="card-body grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div>
+                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Lessons</h4>
+                    <div class="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                        {% for lesson in module.lessons %}
+                        <div class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                            <div><span class="font-medium text-slate-800 dark:text-slate-100">{{ lesson.title }}</span><div class="text-xs text-slate-500">{{ lesson.lesson_type.value|title }} · Sequence {{ lesson.sequence }}</div></div>
+                            <a href="/people/training/lessons/{{ lesson.id }}/edit" class="text-slate-500 hover:text-teal-600" title="Edit">{{ icon_svg("edit", "h-4 w-4") }}</a>
+                        </div>
+                        {% else %}
+                        <div class="px-3 py-4 text-sm text-slate-500 dark:text-slate-400">No lessons yet.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assessments</h4>
+                    <div class="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                        {% for assessment in module.assessments %}
+                        <div class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                            <div><span class="font-medium text-slate-800 dark:text-slate-100">{{ assessment.title }}</span><div class="text-xs text-slate-500">{{ assessment_counts.get(assessment.id, 0) }} questions · {{ assessment.status.value|title }}</div></div>
+                            <div class="flex items-center gap-2">
+                                <a href="/people/training/assessments/{{ assessment.id }}/questions" class="text-slate-500 hover:text-teal-600" title="Questions">{{ icon_svg("list", "h-4 w-4") }}</a>
+                                <a href="/people/training/assessments/{{ assessment.id }}/edit" class="text-slate-500 hover:text-teal-600" title="Edit">{{ icon_svg("edit", "h-4 w-4") }}</a>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="px-3 py-4 text-sm text-slate-500 dark:text-slate-400">No assessments yet.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        <div class="flex justify-end">
+            <button type="submit" class="btn btn-secondary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Module Order</button>
+        </div>
+    </form>
+    {% else %}
+    {{ empty_state("No modules yet", "Add modules to structure this course.", "folder", "Add Module", "/people/training/courses/" ~ course.id ~ "/modules/new") }}
+    {% endif %}
+</div>
+{% endblock %}

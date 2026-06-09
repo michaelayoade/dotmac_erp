@@ -32,6 +32,9 @@
 {% if "people" in modules %}
   {% set launcher_modules = launcher_modules + [{"key": "people", "label": "People", "href": "/people", "icon": "/static/img/illustrations/module-people.png", "accent": "bg-violet-500"}] %}
 {% endif %}
+{% if "training" in modules and "people" not in modules %}
+  {% set launcher_modules = launcher_modules + [{"key": "training", "label": "Training", "href": "/people/training", "icon": "/static/img/illustrations/module-people.png", "accent": "bg-violet-500"}] %}
+{% endif %}
 {% if "self_service" in modules %}
   {% set launcher_modules = launcher_modules + [{"key": "self_service", "label": "Self Service", "href": "/people/self", "icon": "/static/img/illustrations/module-people.png", "accent": "bg-emerald-500"}] %}
 {% endif %}

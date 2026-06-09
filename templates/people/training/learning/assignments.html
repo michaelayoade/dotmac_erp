@@ -1,0 +1,169 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, icon_svg, status_badge %}
+
+{% block page_title %}Course Assignments{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">Assignments</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/training/courses" class="btn btn-secondary">{{ icon_svg("book", "h-4 w-4 mr-1.5") }} Courses</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <form method="post" action="/people/training/assignments/employee" class="card">
+            {{ request.state.csrf_form | safe }}
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Assign Employees</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label class="form-label required">Course</label>
+                    <select name="course_id" required class="form-input w-full">
+                        <option value="">Select course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.id }}">{{ course.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label required">Employees</label>
+                    <select name="employee_ids" required multiple size="6" class="form-input w-full">
+                        {% for employee in employees %}
+                        <option value="{{ employee.employee_id }}">{{ employee.person.name }} · {{ employee.employee_code }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-input w-full"></div>
+                    <label class="inline-flex items-end gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_mandatory" class="form-checkbox"> Mandatory</label>
+                </div>
+                <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Assign</button>
+            </div>
+        </form>
+
+        <form method="post" action="/people/training/assignments/department" class="card">
+            {{ request.state.csrf_form | safe }}
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Assign Department</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label class="form-label required">Course</label>
+                    <select name="course_id" required class="form-input w-full">
+                        <option value="">Select course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.id }}">{{ course.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label required">Department</label>
+                    <select name="department_id" required class="form-input w-full">
+                        <option value="">Select department</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.department_id }}">{{ dept.department_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-input w-full"></div>
+                    <label class="inline-flex items-end gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_mandatory" class="form-checkbox"> Mandatory</label>
+                </div>
+                <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Assign</button>
+            </div>
+        </form>
+
+        <form method="post" action="/people/training/assignments/role" class="card">
+            {{ request.state.csrf_form | safe }}
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Assign Role</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label class="form-label required">Course</label>
+                    <select name="course_id" required class="form-input w-full">
+                        <option value="">Select course</option>
+                        {% for course in courses %}
+                        <option value="{{ course.id }}">{{ course.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label required">Role</label>
+                    <select name="role_id" required class="form-input w-full">
+                        <option value="">Select role</option>
+                        {% for role in roles %}
+                        <option value="{{ role.id }}">{{ role.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="form-label">Due Date</label><input type="date" name="due_date" class="form-input w-full"></div>
+                    <label class="inline-flex items-end gap-2 pb-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="is_mandatory" class="form-checkbox"> Mandatory</label>
+                </div>
+                <button type="submit" class="btn btn-primary">{{ icon_svg("send", "h-4 w-4 mr-1.5") }} Assign</button>
+            </div>
+        </form>
+    </div>
+
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/training/assignments",
+        active_filters=active_filters if active_filters else [],
+        show_search=false
+    ) %}
+        <select aria-label="Course" name="course_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Courses</option>
+            {% for course in courses %}
+            <option value="{{ course.id }}" {{ 'selected' if course_id == course.id|string }}>{{ course.title }}</option>
+            {% endfor %}
+        </select>
+        <select aria-label="Assignment source" name="assignment_source" class="form-select" {{ filter_attrs }}>
+            <option value="">All Sources</option>
+            {% for source in assignment_sources %}
+            <option value="{{ source }}" {{ 'selected' if assignment_source == source }}>{{ source|title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div id="results-container">
+    {% if assignments %}
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead><tr class="bg-slate-50 dark:bg-slate-800/50">
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Employee</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Course</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Source</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Assigned</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Due</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">Mandatory</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for assignment in assignments %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{{ assignment.employee.person.name }}<div class="text-xs text-slate-500">{{ assignment.employee.employee_code }}</div></td>
+                        <td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{{ assignment.course.title }}<div class="text-xs text-slate-500">Version {{ assignment.course_version_number }}</div></td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ assignment.assignment_source|title }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ assignment.assigned_at.strftime('%Y-%m-%d') if assignment.assigned_at else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ assignment.due_date.strftime('%Y-%m-%d') if assignment.due_date else '-' }}</td>
+                        <td class="px-4 py-3">{{ status_badge("mandatory" if assignment.is_mandatory else "optional", "sm") }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    {{ empty_state("No assignments found", "Assign published courses to employees, departments, or roles.", "academic-cap") }}
+    {% endif %}
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit) }}
+    </div>
+</div>
+{% endblock %}

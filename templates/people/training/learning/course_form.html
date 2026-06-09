@@ -1,0 +1,83 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{% if course %}Edit Course{% else %}New Course{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/courses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Courses</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ course.title if course else "New" }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% set fd = form_data if form_data else {} %}
+<div class="max-w-3xl space-y-6">
+    {% if error %}
+    <div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
+        <div class="flex items-center gap-2 text-rose-700 dark:text-rose-400">{{ icon_svg("exclamation-circle", "h-5 w-5") }}<span>{{ error }}</span></div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/people/training/courses/{% if course %}{{ course.id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Course Details</h3>
+                {% if course %}<p class="text-sm text-slate-500 dark:text-slate-400">Version {{ course.version_number }} · {{ course.status.value|title }}</p>{% endif %}
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="title" class="form-label required">Title</label>
+                    <input id="title" name="title" type="text" required class="form-input w-full" value="{{ fd.get('title', '') if fd else (course.title if course else '') }}">
+                </div>
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" rows="4" class="form-input w-full">{{ fd.get('description', '') if fd else (course.description if course and course.description else '') }}</textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        {% set selected_department = fd.get('department_id', '') if fd else (course.department_id|string if course and course.department_id else '') %}
+                        <select id="department_id" name="department_id" class="form-input w-full">
+                            <option value="">All Departments</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}" {{ 'selected' if selected_department == dept.department_id|string }}>{{ dept.department_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="thumbnail_file_id" class="form-label">Thumbnail File ID</label>
+                        <input id="thumbnail_file_id" name="thumbnail_file_id" type="text" class="form-input w-full" value="{{ fd.get('thumbnail_file_id', '') if fd else (course.thumbnail_file_id if course and course.thumbnail_file_id else '') }}">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="pass_mark" class="form-label">Pass Mark (%)</label>
+                        <input id="pass_mark" name="pass_mark" type="number" min="0" max="100" step="0.01" class="form-input w-full" value="{{ fd.get('pass_mark', '') if fd else (course.pass_mark if course else '70.00') }}">
+                    </div>
+                    <div>
+                        <label for="retake_limit" class="form-label">Retake Limit</label>
+                        <input id="retake_limit" name="retake_limit" type="number" min="0" class="form-input w-full" value="{{ fd.get('retake_limit', '') if fd else (course.retake_limit if course else 3) }}">
+                    </div>
+                    <div class="flex items-end">
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            {% set mandatory = fd.get('is_mandatory') if fd else (course.is_mandatory if course else false) %}
+                            <input type="checkbox" name="is_mandatory" class="form-checkbox" {{ 'checked' if mandatory }}>
+                            Mandatory
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/training/courses{% if course %}/{{ course.id }}{% endif %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ "Update" if course else "Create" }} Course</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
