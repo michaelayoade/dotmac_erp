@@ -1,0 +1,72 @@
+file_item_name,item_code,item_name,item_id,target_quantity,current_transaction_on_hand,transaction_adjustment,serial_count_from_file,serial_count_updated,track_serial_numbers,source_rows
+2 Core FOC,2Core FOC,2Core FOC,17023b64-c785-4137-b26d-4e2f179a89ad,10640,10640.000000,0.000000,0,0,False,1
+8 Core FOC,8Core FOC,8Core FOC,e6adcd2d-6610-42ba-bd35-3009706d43d6,7047,7047.000000,0.000000,0,0,False,1
+Mikrotic 80km,Mikrotic DDM SFP 80Km,Mikrotic DDM SFP 80Km,0526931b-3edc-4400-b0cd-699ed90ece04,3,3.000000,0.000000,0,0,False,1
+Mikrotic 10G DDM 10km,Mikrotic 10G DDM 10Km,Mikrotic 10G DDM 10Km,4318d3cb-2655-4ba4-8475-cdfe4ab7b7ea,1,1.000000,0.000000,0,0,False,1
+Mikrotic 20km,Mikrotic DDM SFP 20Km,Mikrotic DDM SFP 20Km,1dbceed3-6249-4402-8b45-e7e6305f2cce,1,1.000000,0.000000,0,0,False,1
+Dell DMC SFP + SR,Dell SFP-SR,Dell SFP-SR,f7a5e6f1-1110-4b7f-9e64-07b741e7f389,1,1.000000,0.000000,0,0,False,1
+Huawei 10km,SFP- Hauwei 10G-10Km,SFP- Hauwei 10G-10Km,0b49791a-dbb8-4b11-b1db-59e2b8428e4a,1,1.000000,0.000000,0,0,False,1
+Rocket Prism-5AC-GEN2,Rocket Prism -5AC-Gen2,Rocket Prism -5AC-Gen2,7e1b8c8f-df3c-4c18-bf09-3602eb735ec9,6,6.000000,0.000000,3,3,True,6
+Electrical Box,Electrical Box,Electrical Box,19295153-c684-4209-bd96-eb3b07a6b030,0,0.000000,0.000000,0,0,False,1
+Airfiber 5XHD,AirFiber-AF-5XHD,AirFiber-AF-5XHD,5ffecf11-ae24-4543-9874-7f94f5007060,8,8.000000,0.000000,8,8,True,8
+POE ADAPTER 24V,PoE Adapter 24V,PoE Adapter 24V,93dca5c7-82e6-49d4-887d-cf9b9472a065,1,1.000000,0.000000,0,0,False,1
+ADAPTER - Blue,ADAPTER - Blue,ADAPTER - Blue,04e8b1a2-686e-4615-8fbf-e3bb833a4af4,1406,1406.000000,0.000000,0,0,False,1
+ADAPTER - Green,ADAPTER - Green,ADAPTER - Green,7d5b26bb-d314-48e1-bde5-3df600c153ae,3361,3361.000000,0.000000,0,0,False,1
+LTU ROCKET,LTU Rocket,LTU Rocket,e15ca25e-1fab-4cee-a229-e23071913503,12,12.000000,0.000000,12,12,False,12
+AIR MAX ROCKET AC LITE,AirMAX Rocket AC Lite,AirMAX Rocket AC Lite,a34d00da-11ce-4478-bf2a-06ed2a4fc0ad,2,2.000000,0.000000,2,2,False,3
+22mm Clips,22mm Clip,22mm Clip,cb7e82f4-1540-4bab-93f3-cb0a8459c07e,18,18.000000,0.000000,0,0,False,1
+8mm Clips,8mm Clip,8mm Clip,58c80ae0-3651-4594-a771-b42b3f491c92,17,17.000000,0.000000,0,0,False,1
+Electrical Tapes,Electrical Tape,Electrical Tape,737031bd-1d70-4e61-b4b0-be427c6eac2c,0,0.000000,0.000000,0,0,False,1
+PVC Coupler,PVC Coupler,PVC Coupler,3e90ea75-b574-41f2-9ad5-9858175e80ed,1275,1275.000000,0.000000,0,0,False,1
+SC-APC Pigtail,SC-APC Pigtail,SC-APC Pigtail,dce1d9ef-49ab-429b-9af0-b67117591a3a,12387,12387.000000,0.000000,0,0,False,1
+Nuts,Nuts,Nuts,d5395aca-f9d6-4eab-8ebf-4cab513cf05b,359,359.000000,0.000000,0,0,False,1
+Bolt and Nuts,Bolt and Nuts,Bolt and Nuts,3ea769c7-6060-4d2d-a833-7752373041d7,0,0,0,0,0,False,1
+Flatbars,Flat Bars,Flat Bars,81af9415-184d-4d1d-b560-f1eaf3474e94,217,217.000000,0.000000,0,0,False,1
+Threaded Rods,Threaded Rod,Threaded Rod,96f99378-2807-4cac-99aa-f0d8a839b3ac,208,208.000000,0.000000,0,0,False,1
+Cable Tie X370,Cable Tie X 370,Cable Tie X 370,0c9f061d-165e-4664-9a6c-59cf48737cbf,2030,2030.000000,0.000000,0,0,False,1
+Cable Tie X200,Cable Tie X 200,Cable Tie X 200,e2082902-3b5f-413a-8a69-c7230d7d0039,0,0.000000,0.000000,0,0,False,1
+Airfiber-5G30-S4F-DISH,AirFiber -5G30-S45 -Dish,AirFiber -5G30-S45 -Dish,0becefe6-0b0e-4155-9a96-1adb50f28b30,2,2.000000,0.000000,0,0,False,1
+Mikrotik Dish,Mikrotik Dish - 5G-30DBI,Mikrotik Dish - 5G-30DBI,429d3d65-53f3-4518-9d72-02e343ac4f7c,0,0,0,0,0,False,1
+Rocket Dish,Rocket Dish -5G30 30dBi,Rocket Dish -5G30 30dBi,ea60b6d7-76ad-4018-9d1e-2628ff5a5c15,0,0,0,0,0,False,1
+Pattress Box-Fiber,Pattress Box - Fiber,Pattress Box - Fiber,2252edde-eada-4612-b677-52ff0aa1458d,939,939.000000,0.000000,0,0,False,1
+Pattress Box - 3x6 PVC,Pattress Box - 3x6 PVC,Pattress Box - 3x6 PVC,53ffe44b-125a-4f37-b816-4ce56456ade5,0,0,0,0,0,False,1
+Pattress Box Cover-PVC,Pattress Box Cover - PVC,Pattress Box Cover - PVC,8dac45c8-a2c3-4237-9b30-95031e4f77f6,0,0,0,0,0,False,1
+Fishure (s6),Fishure (s6),Fishure (s6),c9f6a9e9-a095-4f45-8436-82cd9b54a7f6,0,0,0,0,0,False,1
+Fishure (s12),Fishure(s12),Fishure(s12),c84a1852-1817-4a31-995d-e8afe6b01983,2,2.000000,0.000000,0,0,False,1
+Flexible Pipe- 20mm (Black),Flexible pipe - 20mm(Black Color),Flexible pipe - 20mm(Black Color),fb20359a-96b0-4d37-acb8-be7add304499,0,0,0,0,0,False,1
+Flexible Pipe- 20mm (White),Flexible pipe - 20mm(White Color),Flexible pipe - 20mm(White Color),005b6b6e-a461-445a-b4db-c03aabe84013,28,28.000000,0.000000,0,0,False,1
+Flexible Pipe- 25mm,Flexible pipe - 25mm,Flexible pipe - 25mm,59dc1576-e62e-4b3e-9e1d-43ca9887d016,0,0,0,0,0,False,1
+Heat Shrink,Heat Shrink,Heat Shrink,d7dfd322-08a6-4353-b95b-eab2cd58e181,2221,2221.000000,0.000000,0,0,False,1
+LTU Long Range Radio,LTU Long Range - Radio,LTU Long Range - Radio,0d879614-4010-43a9-8fe5-725d76282271,1,1.000000,0.000000,0,0,False,1
+LAP-GPS Antenna,LAP-GPS Antenna,LAP-GPS Antenna,a55f7d23-2d8c-4159-83a0-3c3ea68831c3,1,1.000000,0.000000,1,1,False,1
+LITEBEAM 5AC GEN2,LiteBeam - LBE-5AC-GEN2,LiteBeam - LBE-5AC-GEN2,377023f3-1986-48b3-8acf-72925dd4bd0f,16,16.000000,0.000000,16,16,True,16
+MOKO Spirit,Moko Spirit,Moko Spirit,dd385628-d034-4fb1-9a72-f598b01e206b,0,0.000000,0.000000,0,0,False,1
+Onwall Pole,Onwall Pole,Onwall Pole,428c67c9-7ad3-4af7-9eb7-5ef2242ff7ea,2,2.000000,0.000000,0,0,False,1
+"1"" Inch Steel Pole",1 inch Steel pole,1 inch Steel pole,ca5331ce-e5be-4d53-a215-aab68f3d91e3,2,2.000000,0.000000,0,0,False,1
+11/4 Steel Pole,11/4 Steel Pole,11/4 Steel Pole,bef98131-38cc-4b20-b9f7-a34e6af0554f,2,2.000000,0.000000,0,0,False,1
+Off wall 2ft,Offwall - 2Ft,Offwall - 2Ft,92d49d2e-092b-4c25-a034-28c71fb53001,0,0.000000,0.000000,0,0,False,1
+Indoor CAT6 cable (Full Copper),Indoor Cat 6 -Full Copper,Indoor Cat 6 -Full Copper,7f9007d5-1187-4d95-8653-b55ec33f91b6,198,198.000000,0.000000,0,0,False,1
+RJ45 Connector Outdoor (CAT6),Rj45 Connector Outdoor (CAT6),Rj45 Connector Outdoor (CAT6),a2a96fdf-36aa-4bb2-bb32-7b789b3ef1e9,1385,1385.000000,0.000000,0,0,False,1
+RJ45 Connector Indoor (CAT6),Rj45 connector indoor,Rj45 connector indoor,94de868c-2678-4ea3-879e-ec1f5bca8257,721,721.000000,0.000000,0,0,False,1
+RJ45 Union Connector,RJ45 Union Connector,RJ45 Union Connector,53a52024-dc00-4529-a5d4-e5316b0f58cd,4,4.000000,0.000000,0,0,False,1
+RJ45 Connector Outdoor (CAT7),Rj45 Connector Outdoor (CAT7),Rj45 Connector Outdoor (CAT7),9ca18c64-9eed-453d-9fc7-0293d6083e0e,0,0.000000,0.000000,0,0,False,1
+Outdoor CAT6 Cable,Outdoor Cat 6 cable,Outdoor Cat 6 cable,284adec5-7162-4a7e-9a62-7e8b58ec6eca,490,490.000000,0.000000,0,0,False,1
+Outdoor CAT7,Outdoor Cat 7 cable,Outdoor Cat 7 cable,99b5b36d-641e-41fc-9c05-8d310415e9be,16,16.000000,0.000000,0,0,False,1
+Patch Cord SC-SC (Blue),Patchcord - SC-SC (BLUE),Patchcord - SC-SC (BLUE),657ea041-0c36-4d02-b714-88ceaced5f86,85,85.000000,0.000000,0,0,False,1
+Patch Cord SC-LC (Green),Patchcord SC-LC GREEN,Patchcord SC-LC GREEN,36010f28-2e83-4594-8e9f-bdbdcc4b5df1,32,32.000000,0.000000,0,0,False,1
+Patch Cord SC-SC (Green),Patchcord - SC-SC (GREEN),Patchcord - SC-SC (GREEN),99263f5f-1730-4e59-9810-3fbac26bd829,54,54.000000,0.000000,0,0,False,1
+Patch Cord SC-LC (Blue),Patchcord SC-LC BLUE,Patchcord SC-LC BLUE,ffdc103f-a1a8-4f26-8349-a7aa02e241b4,18,18.000000,0.000000,0,0,False,1
+Cutter,Cutter,Cutter,5c7bce27-96ad-424f-9380-a75a9068a8db,6,6.000000,0.000000,0,0,False,1
+Power Meter + VFL,Power Meter,Power Meter,7721d33b-e82f-4767-a23b-0f3e5380d6ec,2,2.000000,0.000000,0,0,False,1
+Splitter 1:4,SPLITTER 1:4,SPLITTER 1:4,8fc55863-dade-4156-81bd-f88d009e785e,126,126.000000,0.000000,0,0,False,1
+Splitter 1:8,SPLITTER 1:8,SPLITTER 1:8,110724c0-5395-416d-a421-7c98b7dec36e,137,137.000000,0.000000,0,0,False,1
+Splitter 1:16,SPLITTER1:16,SPLITTER1:16,0bd64d18-d4c9-4e6c-82d5-b7ac3070a84e,160,160.000000,0.000000,0,0,False,1
+Splitter 1:32,SPLITTER 1:32,SPLITTER 1:32,df6c73ab-fec8-4dc7-a4a8-a467ad0df3d0,15,15.000000,0.000000,0,0,False,1
+Splitter 1:64,SPLITTER 1:64,SPLITTER 1:64,9cc462a6-c410-4a98-87ff-1051b4a68edf,36,36.000000,0.000000,0,0,False,1
+Stagger,Stagger,Stagger,166b1a3d-2312-484c-9a06-ebb68119733c,1,1.000000,0.000000,0,0,False,1
+DUCT PIPE,Duct Pipe,Duct Pipe,1563c96c-edf2-47d3-885d-6aac74f796bf,120,120.000000,0.000000,0,0,False,1
+48 CORE DOME CLOSURE,48Core Dome Closure,48Core Dome Closure,033fc299-42fb-47e0-8e6b-1896d18c8174,0,0.000000,0.000000,0,0,False,1
+Edge Switch 24Port,Edge Switch-24Port,Edge Switch-24Port,885bd6cd-02b7-48b4-afa1-340b684faef6,3,3.000000,0.000000,3,3,False,3
+Unifi Switch 24Port,Unifi Switch 24 Port,Unifi Switch 24 Port,76fc1e69-3239-41f6-8013-95f54f384b00,1,1.000000,0.000000,1,1,False,1
+Cloud Core Router (CCR1009-7G-1C-1S+PC),CCR1009-7G-1C-1S+PC,CCR1009-7G-1C-1S+PC,060b04f1-f393-4b14-9dd3-ea08babbdd30,1,1.000000,0.000000,1,1,False,1
+Cloud Core Router (CCR2004 -1G-12S+12XS),CCR2004-1G-12S+2XS,CCR2004-1G-12S+2XS,d8e097ad-36fa-4609-b8dd-4b46bffe6322,3,3.000000,0.000000,3,3,False,3

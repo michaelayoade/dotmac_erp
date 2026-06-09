@@ -1,0 +1,27 @@
+item_name,target_quantity,serials_from_file,reason,match_count
+Unknown SFP,3,0,unmatched,0
+Huawei Class C+,1,0,unmatched,0
+"Ubiquiti (SFP B+, 20km)",2,0,unmatched,0
+Fortinet,1,0,unmatched,0
+Air wave ML06,6,6,unmatched,0
+ROCKET M5,1,1,unmatched,0
+7mm Clips,6,0,unmatched,0
+Cleavers,4,0,unmatched,0
+Electrode,9,0,unmatched,0
+LITEAP AC,5,3,unmatched,0
+"1"" Inch Nail",0,0,unmatched,0
+"3"" Inch Nail",0,0,unmatched,0
+Huawei ONT EG8145V6,1,1,unmatched,0
+OLT Power Pack,2,0,unmatched,0
+Patch Cord LC-LC 3m,73,0,unmatched,0
+Patch Cord FC-LC 3m,15,0,unmatched,0
+Patch Cord FC-FC (Green),3,0,unmatched,0
+OTDR,1,0,unmatched,0
+PVC Pipe 20mm,12,0,unmatched,0
+TENDA F3 (4-in-1),0,0,unmatched,0
+TP-LINK,0,0,unmatched,0
+CISCO SG250-28 Port switch,1,1,unmatched,0
+Ufiber OLT GPON,5,5,unmatched,0
+Cloud Core Router (CCR1036-12G-4S),1,1,unmatched,0
+Cloud Core Router (CCR1072-1G-8S+),1,1,unmatched,0
+Cloud Core switch (CRS328-24P-4S-1RM),3,3,unmatched,0
