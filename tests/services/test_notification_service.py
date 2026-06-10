@@ -56,6 +56,7 @@ class TestNotificationServiceMarkRead:
         """mark_read should only update the current recipient within org scope."""
         db = MagicMock()
         notification = MagicMock()
+        notification.is_read = False
         db.scalar.return_value = notification
         service = NotificationService()
         notification_id = uuid.uuid4()
@@ -92,3 +93,21 @@ class TestNotificationServiceMarkRead:
         )
 
         assert marked is False
+
+    def test_mark_read_is_idempotent_for_already_read(self):
+        """Marking an already-read notification is a no-op success, not a miss."""
+        db = MagicMock()
+        notification = MagicMock()
+        notification.is_read = True
+        db.scalar.return_value = notification
+        service = NotificationService()
+
+        marked = service.mark_read(
+            db=db,
+            notification_id=uuid.uuid4(),
+            recipient_id=uuid.uuid4(),
+        )
+
+        assert marked is True
+        notification.mark_read.assert_not_called()
+        db.flush.assert_not_called()
