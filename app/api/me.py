@@ -7,7 +7,7 @@ Currently implements attendance self-service endpoints.
 from datetime import date, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,8 @@ from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
 from app.services.approvals_aggregator import ApprovalsAggregatorService
 from app.services.common import PaginationParams
+from app.services.expense.service_common import ExpenseClaimStatusError
+from app.services.file_upload import FileUploadError
 from app.services.notification import NotificationService
 from app.services.people.attendance import AttendanceService
 from app.services.people.expense import ExpenseService
@@ -681,6 +683,37 @@ def my_cash_advances(
         "offset": offset,
         "limit": limit,
     }
+
+
+@router.post("/expenses/claims/{claim_id}/items/{item_id}/receipt")
+def upload_my_receipt(
+    claim_id: UUID,
+    item_id: UUID,
+    receipt: UploadFile = File(...),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Attach a receipt photo/document to one of my draft claim items."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+    employee_id = _get_employee_id(db, organization_id, person_id)
+
+    file_data = receipt.file.read()
+    try:
+        item = ExpenseService(db).attach_receipt(
+            organization_id,
+            claim_id=claim_id,
+            item_id=item_id,
+            employee_id=employee_id,
+            file_data=file_data,
+            content_type=receipt.content_type,
+            original_filename=receipt.filename,
+        )
+    except FileUploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ExpenseClaimStatusError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"item_id": str(item.item_id), "receipt_url": item.receipt_url}
 
 
 # =============================================================================

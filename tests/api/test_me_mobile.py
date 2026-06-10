@@ -415,3 +415,70 @@ class TestMyApprovalsRoute:
     def test_limit_per_type_validation(self, svc_cls, me_client) -> None:
         resp = me_client.get("/api/v1/me/approvals", params={"limit_per_type": 0})
         assert resp.status_code == 422
+
+
+# =============================================================================
+# Receipt upload
+# =============================================================================
+
+
+class TestReceiptUpload:
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_upload_attaches_receipt(self, svc_cls, _get_emp, me_client) -> None:
+        item_id = uuid4()
+        svc_cls.return_value.attach_receipt.return_value = SimpleNamespace(
+            item_id=item_id,
+            receipt_url=f"expense-receipts/{ORG_ID}/abc.jpg",
+        )
+
+        resp = me_client.post(
+            f"/api/v1/me/expenses/claims/{uuid4()}/items/{item_id}/receipt",
+            files={"receipt": ("fuel.jpg", b"\xff\xd8\xff fake-jpeg", "image/jpeg")},
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["item_id"] == str(item_id)
+        assert body["receipt_url"].endswith("abc.jpg")
+        kwargs = svc_cls.return_value.attach_receipt.call_args.kwargs
+        assert kwargs["employee_id"] == EMPLOYEE_ID
+        assert kwargs["content_type"] == "image/jpeg"
+        assert kwargs["original_filename"] == "fuel.jpg"
+
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_upload_invalid_file_maps_to_400(
+        self, svc_cls, _get_emp, me_client
+    ) -> None:
+        from app.services.file_upload import FileUploadError
+
+        svc_cls.return_value.attach_receipt.side_effect = FileUploadError(
+            "File too large"
+        )
+
+        resp = me_client.post(
+            f"/api/v1/me/expenses/claims/{uuid4()}/items/{uuid4()}/receipt",
+            files={"receipt": ("big.jpg", b"x" * 10, "image/jpeg")},
+        )
+
+        assert resp.status_code == 400
+        assert "File too large" in resp.json()["detail"]
+
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_upload_on_submitted_claim_maps_to_400(
+        self, svc_cls, _get_emp, me_client
+    ) -> None:
+        from app.services.expense.service_common import ExpenseClaimStatusError
+
+        svc_cls.return_value.attach_receipt.side_effect = ExpenseClaimStatusError(
+            "SUBMITTED", "attach receipt"
+        )
+
+        resp = me_client.post(
+            f"/api/v1/me/expenses/claims/{uuid4()}/items/{uuid4()}/receipt",
+            files={"receipt": ("r.jpg", b"x", "image/jpeg")},
+        )
+
+        assert resp.status_code == 400
