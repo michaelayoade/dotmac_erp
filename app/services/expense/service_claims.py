@@ -29,6 +29,7 @@ from app.services.expense.service_common import (
     ExpenseClaimNotFoundError,
     ExpenseClaimStatusError,
     ExpenseLimitBlockedError,
+    ExpenseNotFoundError,
     ExpenseServiceBase,
     ExpenseServiceError,
     SubmitClaimResult,
@@ -294,6 +295,74 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         self.db.add(item)
         claim.total_claimed_amount += item.claimed_amount
         self.db.flush()
+        return item
+
+    @staticmethod
+    def _append_receipt_url(existing: str | None, new_path: str) -> str:
+        """Append a receipt path to the single-or-JSON-array receipt_url
+        convention used by the web self-service flow (see
+        web_common._parse_receipt_urls)."""
+        import json
+
+        urls: list[str] = []
+        if existing and existing.strip():
+            raw = existing.strip()
+            if raw.startswith("["):
+                try:
+                    urls = [str(u) for u in json.loads(raw) if u]
+                except (ValueError, TypeError):
+                    urls = [raw]
+            else:
+                urls = [raw]
+        urls.append(new_path)
+        return urls[0] if len(urls) == 1 else json.dumps(urls)
+
+    def attach_receipt(
+        self,
+        org_id: UUID,
+        *,
+        claim_id: UUID,
+        item_id: UUID,
+        employee_id: UUID,
+        file_data: bytes,
+        content_type: str | None,
+        original_filename: str | None,
+    ) -> ExpenseClaimItem:
+        """Store a receipt file for a claim item, appending to receipt_url.
+
+        Employee-scoped: the claim must belong to ``employee_id`` and be in
+        DRAFT (rejected claims go through resubmit_claim first, which resets
+        them to DRAFT). Existing receipts are preserved — receipt_url follows
+        the web flow's single-or-JSON-array convention. Raises FileUploadError
+        on invalid files.
+        """
+        from app.services.file_upload import get_expense_receipt_upload
+
+        claim = self.get_claim(org_id, claim_id)
+        if claim.employee_id != employee_id:
+            raise ExpenseClaimNotFoundError(claim_id)
+        if claim.status != ExpenseClaimStatus.DRAFT:
+            raise ExpenseClaimStatusError(claim.status.value, "attach receipt")
+
+        item = next((i for i in claim.items if i.item_id == item_id), None)
+        if item is None:
+            raise ExpenseNotFoundError(f"Claim item {item_id} not found")
+
+        result = get_expense_receipt_upload().save(
+            file_data=file_data,
+            content_type=content_type,
+            subdirs=(str(org_id),),
+            original_filename=original_filename,
+        )
+        item.receipt_url = self._append_receipt_url(
+            item.receipt_url, str(result.file_path)
+        )
+        self.db.flush()
+        logger.info(
+            "Attached receipt to expense claim item %s (claim %s)",
+            item_id,
+            claim_id,
+        )
         return item
 
     def update_claim_item(
