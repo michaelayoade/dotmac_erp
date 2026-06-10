@@ -44,6 +44,7 @@ from app.services.expense.service_common import (
 )
 from app.services.file_upload import FileUploadError, get_expense_receipt_upload
 from app.services.notification import NotificationService
+from app.services.push import PushService
 from app.services.people.attendance import AttendanceService
 from app.services.people.expense import ExpenseService
 from app.services.people.hr.employees import EmployeeService
@@ -901,3 +902,53 @@ def mark_all_my_notifications_read(
         organization_id=organization_id,
     )
     return {"marked_read": count}
+
+
+# =============================================================================
+# Devices (mobile push registration — FF-1)
+# =============================================================================
+
+
+class DeviceRegisterRequest(BaseModel):
+    """FCM device registration payload."""
+
+    token: str = Field(min_length=8, max_length=512)
+    platform: str = Field(pattern="^(android|ios|web)$")
+
+
+class DeviceUnregisterRequest(BaseModel):
+    """FCM device unregistration payload (on logout)."""
+
+    token: str = Field(min_length=8, max_length=512)
+
+
+@router.post("/devices", status_code=status.HTTP_201_CREATED)
+def register_my_device(
+    payload: DeviceRegisterRequest,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Register (or refresh) this device's push token for the current user."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    device = PushService(db).register_device(
+        organization_id,
+        person_id,
+        token=payload.token,
+        platform=payload.platform,
+    )
+    return {"device_token_id": str(device.device_token_id)}
+
+
+@router.post("/devices/unregister")
+def unregister_my_device(
+    payload: DeviceUnregisterRequest,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Stop push delivery to this device (idempotent; called on logout)."""
+    person_id = UUID(auth["person_id"])
+
+    revoked = PushService(db).unregister_device(person_id, token=payload.token)
+    return {"revoked": revoked}

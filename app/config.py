@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.6.1")
+    app_version: str = os.getenv("APP_VERSION", "1.7.0")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -237,6 +237,10 @@ class Settings:
         "COACH_LLM_DEEPSEEK_MODEL_STANDARD", ""
     )
     coach_llm_deepseek_model_deep: str = os.getenv("COACH_LLM_DEEPSEEK_MODEL_DEEP", "")
+
+    # Mobile push (FCM HTTP v1) — service-account JSON path OR inline JSON.
+    # Empty default = push disabled; in-app/polling remains the baseline.
+    fcm_service_account_json: str = os.getenv("FCM_SERVICE_ACCOUNT_JSON", "")
 
     # Reliability + safety
     coach_llm_timeout_s: int = int(os.getenv("COACH_LLM_TIMEOUT_S", "30"))
