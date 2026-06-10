@@ -268,6 +268,8 @@ class AttendanceRecordCheckIn(BaseModel):
 
     check_in_time: datetime | None = None
     notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class AttendanceRecordCheckOut(BaseModel):
@@ -275,6 +277,8 @@ class AttendanceRecordCheckOut(BaseModel):
 
     check_out_time: datetime | None = None
     notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class AttendanceSummary(BaseModel):

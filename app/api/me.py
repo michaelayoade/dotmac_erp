@@ -24,9 +24,12 @@ from app.schemas.people.attendance import (
 )
 from app.schemas.people.expense import CashAdvanceRead, ExpenseClaimRead
 from app.schemas.people.leave import LeaveApplicationRead
+from app.schemas.notification import NotificationListResponse, NotificationRead
 from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
+from app.services.approvals_aggregator import ApprovalsAggregatorService
 from app.services.common import PaginationParams
+from app.services.notification import NotificationService
 from app.services.people.attendance import AttendanceService
 from app.services.people.expense import ExpenseService
 from app.services.people.hr.employee_types import EmployeeFilters
@@ -477,6 +480,8 @@ def my_check_in(
         employee_id=employee_id,
         check_in_time=payload.check_in_time,
         notes=payload.notes,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
     )
     return AttendanceRead.model_validate(attendance)
 
@@ -502,6 +507,8 @@ def my_check_out(
         employee_id=employee_id,
         check_out_time=payload.check_out_time,
         notes=payload.notes,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
     )
     return AttendanceRead.model_validate(attendance)
 
@@ -674,3 +681,103 @@ def my_cash_advances(
         "offset": offset,
         "limit": limit,
     }
+
+
+# =============================================================================
+# Approvals inbox
+# =============================================================================
+
+
+@router.get("/approvals")
+def my_pending_approvals(
+    limit_per_type: int = Query(10, ge=1, le=50),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Aggregate pending approvals across every category the caller may action."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    svc = ApprovalsAggregatorService(db)
+    return svc.list_pending(
+        organization_id=organization_id,
+        person_id=person_id,
+        roles=set(auth.get("roles") or []),
+        scopes=set(auth.get("scopes") or []),
+        limit_per_type=limit_per_type,
+    )
+
+
+# =============================================================================
+# Notifications
+# =============================================================================
+
+
+@router.get("/notifications", response_model=NotificationListResponse)
+def my_notifications(
+    unread_only: bool = Query(False),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """List notifications for the current user (newest first)."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    svc = NotificationService()
+    items = svc.list_notifications(
+        db,
+        person_id,
+        organization_id=organization_id,
+        unread_only=unread_only,
+        offset=offset,
+        limit=limit + 1,
+    )
+    has_more = len(items) > limit
+    unread_count = svc.get_unread_count(db, person_id, organization_id=organization_id)
+    return NotificationListResponse(
+        items=[NotificationRead.model_validate(n) for n in items[:limit]],
+        unread_count=unread_count,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
+    )
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_my_notification_read(
+    notification_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Mark one of the current user's notifications as read."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    marked = NotificationService().mark_read(
+        db,
+        notification_id,
+        recipient_id=person_id,
+        organization_id=organization_id,
+    )
+    if not marked:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"marked_read": True}
+
+
+@router.post("/notifications/mark-all-read")
+def mark_all_my_notifications_read(
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Mark all of the current user's notifications as read."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+
+    count = NotificationService().mark_all_read(
+        db,
+        person_id,
+        organization_id=organization_id,
+    )
+    return {"marked_read": count}
