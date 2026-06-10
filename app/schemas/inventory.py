@@ -436,6 +436,61 @@ class BulkCountRecordRequest(BaseModel):
     lines: list[BulkCountLineRecord]
 
 
+# =============================================================================
+# Material Requests (mobile warehouse flows)
+# =============================================================================
+
+
+class MaterialRequestItemRead(BaseModel):
+    """Material request line response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    item_id: UUID
+    inventory_item_id: UUID
+    warehouse_id: UUID | None = None
+    requested_qty: Decimal
+    ordered_qty: Decimal
+    uom: str | None = None
+    schedule_date: date | None = None
+
+
+class MaterialRequestRead(BaseModel):
+    """Material request response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    request_id: UUID
+    request_number: str
+    request_type: str
+    status: str
+    schedule_date: date | None = None
+    default_warehouse_id: UUID | None = None
+    transfer_to_warehouse_id: UUID | None = None
+    remarks: str | None = None
+    items: list[MaterialRequestItemRead] = Field(default_factory=list)
+
+
+class MaterialRequestItemCreate(BaseModel):
+    """One requested line."""
+
+    inventory_item_id: UUID
+    requested_qty: Decimal = Field(gt=0)
+    warehouse_id: UUID | None = None
+    uom: str | None = None
+
+
+class MaterialRequestCreate(BaseModel):
+    """Create a material request (raise from the floor)."""
+
+    request_type: str = Field(pattern="^(PURCHASE|TRANSFER|ISSUE|MANUFACTURE)$")
+    schedule_date: date | None = None
+    default_warehouse_id: UUID | None = None
+    transfer_to_warehouse_id: UUID | None = None
+    remarks: str | None = None
+    items: list[MaterialRequestItemCreate] = Field(min_length=1)
+
+
 __all__ = [
     "ItemCategoryCreate",
     "ItemCategoryRead",
@@ -444,6 +499,10 @@ __all__ = [
     "CountLineRecordRequest",
     "BulkCountLineRecord",
     "BulkCountRecordRequest",
+    "MaterialRequestItemRead",
+    "MaterialRequestRead",
+    "MaterialRequestItemCreate",
+    "MaterialRequestCreate",
     "InventoryItemCreate",
     "InventoryItemRead",
     "InventoryItemWithBalanceRead",
