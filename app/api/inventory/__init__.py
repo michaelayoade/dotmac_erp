@@ -28,6 +28,8 @@ from app.schemas.inventory import (
     InventoryCountRead,
     InventoryItemCreate,
     InventoryItemRead,
+    MaterialRequestCreate,
+    MaterialRequestRead,
     ItemCategoryCreate,
     ItemCategoryRead,
     LotCreate,
@@ -990,3 +992,140 @@ def bulk_record_inventory_count(
     )
     items = [InventoryCountLineRead.model_validate(line) for line in lines]
     return ListResponse(items=items, count=len(items), limit=len(items) or 1, offset=0)
+
+
+# =============================================================================
+# Material Requests (mobile warehouse flows)
+# =============================================================================
+
+
+@router.get("/material-requests", response_model=ListResponse[MaterialRequestRead])
+def list_material_requests(
+    status_filter: str | None = Query(None, alias="status"),
+    mine: bool = Query(False, description="Only requests raised by the caller"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:material_requests:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """List material requests (optionally only the caller's own)."""
+    from app.models.inventory.material_request import MaterialRequestStatus
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    try:
+        status_value = parse_enum(MaterialRequestStatus, status_filter)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid status") from exc
+    requests = MaterialRequestWebService.list_requests(
+        db,
+        organization_id,
+        status=status_value,
+        requested_by_id=UUID(auth["person_id"]) if mine else None,
+        limit=limit,
+        offset=offset,
+    )
+    items = [MaterialRequestRead.model_validate(r) for r in requests]
+    return ListResponse(items=items, count=len(items), limit=limit, offset=offset)
+
+
+@router.get("/material-requests/{request_id}", response_model=MaterialRequestRead)
+def get_material_request(
+    request_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:material_requests:read")),
+    db: Session = Depends(get_db_with_org),
+):
+    """Get one material request (org-scoped in the service)."""
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    try:
+        request = MaterialRequestWebService.get_request(db, organization_id, request_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MaterialRequestRead.model_validate(request)
+
+
+@router.post(
+    "/material-requests",
+    response_model=MaterialRequestRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_material_request(
+    payload: MaterialRequestCreate,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(
+        require_tenant_permission("inventory:material_requests:create")
+    ),
+    db: Session = Depends(get_db_with_org),
+):
+    """Create a draft material request (raise from the floor)."""
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    person_id = UUID(auth["person_id"])
+    try:
+        request = MaterialRequestWebService.create_from_form(
+            db,
+            organization_id,
+            person_id,
+            request_type=payload.request_type,
+            schedule_date=payload.schedule_date.isoformat()
+            if payload.schedule_date
+            else None,
+            default_warehouse_id=str(payload.default_warehouse_id)
+            if payload.default_warehouse_id
+            else None,
+            transfer_to_warehouse_id=str(payload.transfer_to_warehouse_id)
+            if payload.transfer_to_warehouse_id
+            else None,
+            requested_by_id=str(person_id),
+            remarks=payload.remarks,
+            items=[
+                {
+                    "inventory_item_id": str(item.inventory_item_id),
+                    "requested_qty": str(item.requested_qty),
+                    "warehouse_id": str(item.warehouse_id)
+                    if item.warehouse_id
+                    else None,
+                    "uom": item.uom,
+                }
+                for item in payload.items
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MaterialRequestRead.model_validate(request)
+
+
+@router.post(
+    "/material-requests/{request_id}/submit",
+    response_model=MaterialRequestRead,
+)
+def submit_material_request(
+    request_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(
+        require_tenant_permission("inventory:material_requests:create")
+    ),
+    db: Session = Depends(get_db_with_org),
+):
+    """Submit a draft material request."""
+    from app.services.inventory.material_request_web import (
+        MaterialRequestWebService,
+    )
+
+    try:
+        request = MaterialRequestWebService.submit_request(
+            db, organization_id, UUID(auth["person_id"]), str(request_id)
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        code = 404 if "not found" in detail.lower() else 400
+        raise HTTPException(status_code=code, detail=detail) from exc
+    return MaterialRequestRead.model_validate(request)
