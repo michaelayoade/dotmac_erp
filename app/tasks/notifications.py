@@ -380,3 +380,105 @@ def process_pending_nextcloud_notifications(
         )
 
     return results
+
+
+# Push notifications older than this are stale (the user has seen the in-app
+# inbox by now); they are swept to push_sent without delivery so the queue
+# drains instead of blasting old backlog after first deploy/downtime.
+_PUSH_STALE_AGE = timedelta(hours=24)
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_jitter=True,
+)
+def process_pending_push_notifications(
+    self,
+    batch_size: int = 100,
+) -> dict:
+    """
+    Deliver pending mobile pushes (FCM) and mark delivery status.
+
+    Mirrors process_pending_notification_emails:
+    - Only channel IN_APP/BOTH/ALL with push_sent=False are selected.
+    - FOR UPDATE SKIP LOCKED prevents duplicate processing across workers.
+    - No-op (cheap) when FCM is unconfigured.
+    """
+    from app.services.push import PushService
+
+    results: dict = {"processed": 0, "sent": 0, "swept": 0, "failed": 0}
+
+    if not PushService.is_configured():
+        return results
+
+    try:
+        with _task_db_session() as db:
+            cutoff = datetime.now(UTC) - _PUSH_STALE_AGE
+
+            # Sweep stale backlog (e.g. rows pre-dating this feature) so the
+            # pending set stays bounded.
+            from sqlalchemy import update as sa_update
+
+            swept = db.execute(
+                sa_update(Notification)
+                .where(Notification.push_sent == False)  # noqa: E712
+                .where(Notification.created_at < cutoff)
+                .values(push_sent=True)
+            )
+            results["swept"] = swept.rowcount or 0
+
+            stmt = (
+                select(Notification)
+                .where(Notification.push_sent == False)  # noqa: E712
+                .where(
+                    Notification.channel.in_(
+                        [
+                            NotificationChannel.IN_APP,
+                            NotificationChannel.BOTH,
+                            NotificationChannel.ALL,
+                        ]
+                    )
+                )
+                .where(Notification.created_at >= cutoff)
+                .order_by(Notification.created_at.asc())
+                .limit(batch_size)
+                .with_for_update(of=Notification, skip_locked=True)
+            )
+            notifications = list(db.execute(stmt).scalars().all())
+
+            push_service = PushService(db)
+            for notification in notifications:
+                results["processed"] += 1
+                try:
+                    data = {"notification_id": str(notification.notification_id)}
+                    if notification.action_url:
+                        data["action_url"] = notification.action_url
+                    sent = push_service.send_to_person(
+                        notification.recipient_id,
+                        title=notification.title,
+                        body=notification.message,
+                        data=data,
+                    )
+                    results["sent"] += sent
+                except Exception:
+                    # Delivery problems never poison the batch; the row stays
+                    # marked sent — push is best-effort, in-app is canonical.
+                    logger.exception(
+                        "Push dispatch failed for notification %s",
+                        notification.notification_id,
+                    )
+                    results["failed"] += 1
+                notification.push_sent = True
+                notification.push_sent_at = datetime.now(UTC)
+
+            db.commit()
+    except _DB_RETRYABLE_ERRORS as exc:
+        logger.warning("Push dispatch DB error; retrying: %s", exc)
+        raise self.retry(exc=exc)
+
+    if results["processed"]:
+        logger.info("Push dispatch: %s", results)
+    return results

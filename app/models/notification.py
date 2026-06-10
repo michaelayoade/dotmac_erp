@@ -169,6 +169,12 @@ class Notification(Base):
     )
     nextcloud_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Mobile push (FCM) status
+    push_sent: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    push_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Actor who triggered the notification (optional)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -207,3 +213,52 @@ class Notification(Base):
 
     def __repr__(self) -> str:
         return f"<Notification {self.notification_id} {self.entity_type.value}:{self.notification_type.value}>"
+
+
+class DeviceToken(Base):
+    """A mobile device's FCM registration token for push delivery.
+
+    One person may hold several active tokens (phone + tablet). Tokens are
+    soft-revoked on logout/rotation so delivery history stays auditable.
+    """
+
+    __tablename__ = "device_token"
+    __table_args__ = (
+        Index("ix_device_token_person_active", "person_id", "revoked_at"),
+        {"schema": "public"},
+    )
+
+    device_token_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.organization.organization_id"),
+        nullable=False,
+        index=True,
+    )
+
+    person_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id"),
+        nullable=False,
+        index=True,
+    )
+
+    # FCM registration tokens are opaque strings (<= ~350 chars today).
+    token: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<DeviceToken {self.device_token_id} {self.platform}>"
