@@ -418,6 +418,134 @@ class TestMyApprovalsRoute:
 
 
 # =============================================================================
+# Create / submit own expense claim
+# =============================================================================
+
+
+def _fake_claim(claim_status: str = "DRAFT") -> SimpleNamespace:
+    from app.schemas.people.expense import ExpenseClaimRead
+
+    claim = SimpleNamespace(
+        claim_id=uuid4(),
+        organization_id=ORG_ID,
+        claim_number="EXP-00042",
+        employee_id=EMPLOYEE_ID,
+        claim_date=date(2026, 6, 10),
+        expense_period_start=None,
+        expense_period_end=None,
+        purpose="Site visit fuel",
+        project_id=None,
+        ticket_id=None,
+        task_id=None,
+        currency_code="NGN",
+        cost_center_id=None,
+        recipient_bank_code=None,
+        recipient_bank_name=None,
+        recipient_account_number=None,
+        recipient_name=None,
+        requested_approver_id=None,
+        notes=None,
+        status=claim_status,
+        total_claimed_amount=Decimal("15000.00"),
+        total_approved_amount=None,
+        submitted_at=None,
+        approved_at=None,
+        approver_id=None,
+        rejection_reason=None,
+        paid_at=None,
+        payment_reference=None,
+        advance_adjusted=Decimal("0"),
+        created_at=datetime(2026, 6, 10, 9, 0),
+        updated_at=None,
+        items=[],
+        employee=None,
+        approver=None,
+    )
+    # Sanity: fail fast here (not in the route) if the fake drifts from schema
+    ExpenseClaimRead.model_validate(claim)
+    return claim
+
+
+class TestCreateMyExpenseClaim:
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_create_resolves_employee_from_token(
+        self, svc_cls, _get_emp, me_client
+    ) -> None:
+        svc_cls.return_value.create_claim.return_value = _fake_claim()
+
+        resp = me_client.post(
+            "/api/v1/me/expenses/claims",
+            json={
+                "claim_date": "2026-06-10",
+                "purpose": "Site visit fuel",
+                "items": [
+                    {
+                        "expense_date": "2026-06-10",
+                        "category_id": str(uuid4()),
+                        "description": "Fuel",
+                        "claimed_amount": "15000.00",
+                    }
+                ],
+            },
+        )
+
+        assert resp.status_code == 201
+        kwargs = svc_cls.return_value.create_claim.call_args.kwargs
+        assert kwargs["employee_id"] == EMPLOYEE_ID
+        assert kwargs["created_by_id"] == PERSON_ID
+        assert len(kwargs["items"]) == 1
+
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_create_service_error_maps_to_400(
+        self, svc_cls, _get_emp, me_client
+    ) -> None:
+        from app.services.expense.service_common import ExpenseServiceError
+
+        svc_cls.return_value.create_claim.side_effect = ExpenseServiceError(
+            "Claimed amount exceeds category limit"
+        )
+
+        resp = me_client.post(
+            "/api/v1/me/expenses/claims",
+            json={"claim_date": "2026-06-10", "purpose": "x", "items": []},
+        )
+
+        assert resp.status_code == 400
+
+
+class TestSubmitMyExpenseClaim:
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_submit_own_claim(self, svc_cls, _get_emp, me_client) -> None:
+        claim = _fake_claim()
+        svc_cls.return_value.get_claim.return_value = claim
+        svc_cls.return_value.submit_claim.return_value = SimpleNamespace(
+            claim=_fake_claim("SUBMITTED")
+        )
+
+        resp = me_client.post(f"/api/v1/me/expenses/claims/{claim.claim_id}/submit")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "SUBMITTED"
+
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_submit_other_employees_claim_forbidden(
+        self, svc_cls, _get_emp, me_client
+    ) -> None:
+        other = _fake_claim()
+        other.employee_id = uuid4()
+        svc_cls.return_value.get_claim.return_value = other
+
+        resp = me_client.post(f"/api/v1/me/expenses/claims/{other.claim_id}/submit")
+
+        assert resp.status_code == 403
+        svc_cls.return_value.submit_claim.assert_not_called()
+
+
+# =============================================================================
 # Receipt upload
 # =============================================================================
 

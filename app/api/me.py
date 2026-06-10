@@ -22,14 +22,23 @@ from app.schemas.people.attendance import (
     AttendanceRecordCheckIn,
     AttendanceRecordCheckOut,
 )
-from app.schemas.people.expense import CashAdvanceRead, ExpenseClaimRead
+from app.schemas.people.expense import (
+    CashAdvanceRead,
+    ExpenseClaimItemCreate,
+    ExpenseClaimRead,
+)
 from app.schemas.people.leave import LeaveApplicationRead
 from app.schemas.notification import NotificationListResponse, NotificationRead
 from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
 from app.services.approvals_aggregator import ApprovalsAggregatorService
 from app.services.common import PaginationParams
-from app.services.expense.service_common import ExpenseClaimStatusError
+from app.services.expense.service_common import (
+    ExpenseClaimStatusError,
+    ExpenseLimitBlockedError,
+    ExpenseNotFoundError,
+    ExpenseServiceError,
+)
 from app.services.file_upload import FileUploadError
 from app.services.notification import NotificationService
 from app.services.people.attendance import AttendanceService
@@ -683,6 +692,69 @@ def my_cash_advances(
         "offset": offset,
         "limit": limit,
     }
+
+
+class MyExpenseClaimCreate(BaseModel):
+    """Create-own-claim payload — employee is resolved from the token."""
+
+    claim_date: date
+    purpose: str
+    currency_code: str | None = None
+    notes: str | None = None
+    items: list[ExpenseClaimItemCreate] = []
+
+
+@router.post("/expenses/claims", status_code=status.HTTP_201_CREATED)
+def create_my_expense_claim(
+    payload: MyExpenseClaimCreate,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Create an expense claim for the current employee (mobile self-service)."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+    employee_id = _get_employee_id(db, organization_id, person_id)
+
+    try:
+        claim = ExpenseService(db).create_claim(
+            org_id=organization_id,
+            employee_id=employee_id,
+            claim_date=payload.claim_date,
+            purpose=payload.purpose,
+            currency_code=payload.currency_code,
+            notes=payload.notes,
+            items=[item.model_dump() for item in payload.items],
+            created_by_id=person_id,
+        )
+    except ExpenseNotFoundError:
+        raise  # global handler maps these to 404
+    except ExpenseServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ExpenseClaimRead.model_validate(claim)
+
+
+@router.post("/expenses/claims/{claim_id}/submit")
+def submit_my_expense_claim(
+    claim_id: UUID,
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
+):
+    """Submit one of the current employee's own claims for approval."""
+    organization_id = UUID(auth["organization_id"])
+    person_id = UUID(auth["person_id"])
+    employee_id = _get_employee_id(db, organization_id, person_id)
+
+    svc = ExpenseService(db)
+    claim = svc.get_claim(organization_id, claim_id)
+    if claim.employee_id != employee_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        result = svc.submit_claim(organization_id, claim_id, actor_id=person_id)
+    except ExpenseClaimStatusError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ExpenseLimitBlockedError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ExpenseClaimRead.model_validate(result.claim)
 
 
 @router.post("/expenses/claims/{claim_id}/items/{item_id}/receipt")
