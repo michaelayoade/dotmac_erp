@@ -349,7 +349,18 @@ def fa_import_form(
                 "Acquisition Date",
                 "Acquisition Cost",
                 "Category",
+                "Category Name",
+                "Category Code",
+                "Category ID",
                 "Useful Life",
+                "Department Name",
+                "Department Code",
+                "Department ID",
+                "Employee Email",
+                "Employee Code",
+                "Employee ID",
+                "Location",
+                "Serial Number",
             ],
         }
     }
@@ -361,7 +372,23 @@ def fa_import_form(
     context["preview_url"] = f"/fixed-assets/import/{entity_type}/preview"
     context["import_url"] = f"/fixed-assets/import/{entity_type}"
     context["cancel_url"] = "/fixed-assets/import"
-    context["alias_map"] = build_alias_map()
+    alias_map = build_alias_map()
+    # The global alias map resolves bare "category" to account_type (first-
+    # wins across all importers), so the FA import UI must override the
+    # category aliases locally or the column mapper mis-suggests them.
+    alias_map.update(
+        {
+            "category": "category_name",
+            "category_name": "category_name",
+            "asset_category": "category_name",
+            "asset_class": "category_name",
+            "category_code": "category_code",
+            "asset_category_code": "category_code",
+            "category_id": "category_id",
+            "asset_category_id": "category_id",
+        }
+    )
+    context["alias_map"] = alias_map
     context["target_fields"] = _build_target_fields(columns[entity_type])
     context["accent_color"] = "emerald"
 
