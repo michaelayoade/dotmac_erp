@@ -259,7 +259,11 @@ ALL_CATEGORIES = {
 @pytest.fixture()
 def stubbed_aggregator(monkeypatch):
     """Aggregator whose per-category fetchers return one stub item each."""
-    svc = ApprovalsAggregatorService(MagicMock())
+    db = MagicMock()
+    # The _has_permission DB fallback must DENY by default in tests —
+    # a bare MagicMock would return truthy rows and grant everything.
+    db.scalar.return_value = None
+    svc = ApprovalsAggregatorService(db)
     base = datetime(2026, 6, 10, 12, 0)
     fetcher_names = {
         "leave": "_leave_items",
@@ -300,12 +304,44 @@ class TestApprovalsAggregatorGating:
         assert set(result["counts"]) == {"leave"}
         assert result["total"] == 1
 
-    def test_expense_prefix_scope_sees_only_expense(self, stubbed_aggregator) -> None:
+    def test_expense_tier1_scope_sees_only_expense(self, stubbed_aggregator) -> None:
+        # Mirrors the API approve endpoint, which requires exactly tier1.
+        result = stubbed_aggregator.list_pending(
+            organization_id=ORG_ID,
+            person_id=PERSON_ID,
+            roles=set(),
+            scopes={"expense:claims:approve:tier1"},
+        )
+        assert set(result["counts"]) == {"expense"}
+
+    def test_expense_tier2_scope_does_not_grant_api_inbox(
+        self, stubbed_aggregator
+    ) -> None:
+        # tier2/tier3 are honored only by web routes; the JSON approve
+        # endpoint requires tier1, so the inbox must not show the category.
         result = stubbed_aggregator.list_pending(
             organization_id=ORG_ID,
             person_id=PERSON_ID,
             roles=set(),
             scopes={"expense:claims:approve:tier2"},
+        )
+        assert "expense" not in result["counts"]
+
+    def test_db_role_grant_unlocks_category_without_scope(
+        self, stubbed_aggregator, monkeypatch
+    ) -> None:
+        # require_tenant_permission falls back to a DB role->permission
+        # lookup; the inbox mirrors that.
+        monkeypatch.setattr(
+            stubbed_aggregator,
+            "_has_permission",
+            lambda person, roles, scopes, key: key == "expense:claims:approve:tier1",
+        )
+        result = stubbed_aggregator.list_pending(
+            organization_id=ORG_ID,
+            person_id=PERSON_ID,
+            roles=set(),
+            scopes=set(),
         )
         assert set(result["counts"]) == {"expense"}
 
@@ -373,6 +409,76 @@ class TestApprovalsAggregatorBehavior:
         )
         assert "ap_invoice" not in result["counts"]
         assert set(result["counts"]) == ALL_CATEGORIES - {"ap_invoice"}
+
+
+class TestAppendReceiptUrl:
+    """attach_receipt must append to the single-or-JSON-array convention."""
+
+    def _append(self, existing, new):
+        from app.services.expense.service_claims import ExpenseClaimMixin
+
+        return ExpenseClaimMixin._append_receipt_url(existing, new)
+
+    def test_first_receipt_stored_as_plain_string(self) -> None:
+        assert self._append(None, "a/b.jpg") == "a/b.jpg"
+        assert self._append("", "a/b.jpg") == "a/b.jpg"
+
+    def test_second_receipt_upgrades_to_json_array(self) -> None:
+        import json
+
+        result = self._append("a/first.jpg", "a/second.jpg")
+        assert json.loads(result) == ["a/first.jpg", "a/second.jpg"]
+
+    def test_appends_to_existing_json_array(self) -> None:
+        import json
+
+        existing = json.dumps(["a/1.jpg", "a/2.jpg"])
+        result = self._append(existing, "a/3.jpg")
+        assert json.loads(result) == ["a/1.jpg", "a/2.jpg", "a/3.jpg"]
+
+    def test_malformed_json_treated_as_single_url(self) -> None:
+        import json
+
+        result = self._append("[not-json", "a/new.jpg")
+        assert json.loads(result) == ["[not-json", "a/new.jpg"]
+
+
+class TestPaymentBatchSegregationOfDuties:
+    def test_own_batches_are_filtered_out(self, monkeypatch) -> None:
+        from types import SimpleNamespace as NS
+
+        svc = ApprovalsAggregatorService(MagicMock())
+        mine = NS(
+            batch_id=uuid4(),
+            batch_number="PB-001",
+            total_payments=3,
+            total_amount=Decimal("100"),
+            currency_code="NGN",
+            status=SimpleNamespace(value="DRAFT"),
+            created_at=datetime(2026, 6, 10, 9, 0),
+            batch_date=date(2026, 6, 10),
+            created_by_user_id=PERSON_ID,
+        )
+        theirs = NS(
+            **{
+                **mine.__dict__,
+                "batch_id": uuid4(),
+                "batch_number": "PB-002",
+                "created_by_user_id": uuid4(),
+            }
+        )
+
+        import app.services.finance.ap.payment_batch as pb_module
+
+        monkeypatch.setattr(
+            pb_module.payment_batch_service,
+            "list",
+            lambda *a, **k: [mine, theirs],
+        )
+
+        items = svc._ap_payment_batch_items(ORG_ID, PERSON_ID, 10)
+
+        assert [i["reference"] for i in items] == ["PB-002"]
 
 
 class TestAggregatorHelpers:

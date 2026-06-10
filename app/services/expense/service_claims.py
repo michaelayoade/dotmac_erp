@@ -297,6 +297,26 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         self.db.flush()
         return item
 
+    @staticmethod
+    def _append_receipt_url(existing: str | None, new_path: str) -> str:
+        """Append a receipt path to the single-or-JSON-array receipt_url
+        convention used by the web self-service flow (see
+        web_common._parse_receipt_urls)."""
+        import json
+
+        urls: list[str] = []
+        if existing and existing.strip():
+            raw = existing.strip()
+            if raw.startswith("["):
+                try:
+                    urls = [str(u) for u in json.loads(raw) if u]
+                except (ValueError, TypeError):
+                    urls = [raw]
+            else:
+                urls = [raw]
+        urls.append(new_path)
+        return urls[0] if len(urls) == 1 else json.dumps(urls)
+
     def attach_receipt(
         self,
         org_id: UUID,
@@ -308,20 +328,20 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         content_type: str | None,
         original_filename: str | None,
     ) -> ExpenseClaimItem:
-        """Store a receipt file for a claim item and record it as receipt_url.
+        """Store a receipt file for a claim item, appending to receipt_url.
 
-        Employee-scoped: the claim must belong to ``employee_id`` and still be
-        editable (DRAFT or REJECTED). Raises FileUploadError on invalid files.
+        Employee-scoped: the claim must belong to ``employee_id`` and be in
+        DRAFT (rejected claims go through resubmit_claim first, which resets
+        them to DRAFT). Existing receipts are preserved — receipt_url follows
+        the web flow's single-or-JSON-array convention. Raises FileUploadError
+        on invalid files.
         """
         from app.services.file_upload import get_expense_receipt_upload
 
         claim = self.get_claim(org_id, claim_id)
         if claim.employee_id != employee_id:
             raise ExpenseClaimNotFoundError(claim_id)
-        if claim.status not in (
-            ExpenseClaimStatus.DRAFT,
-            ExpenseClaimStatus.REJECTED,
-        ):
+        if claim.status != ExpenseClaimStatus.DRAFT:
             raise ExpenseClaimStatusError(claim.status.value, "attach receipt")
 
         item = next((i for i in claim.items if i.item_id == item_id), None)
@@ -334,7 +354,9 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             subdirs=(str(org_id),),
             original_filename=original_filename,
         )
-        item.receipt_url = str(result.file_path)
+        item.receipt_url = self._append_receipt_url(
+            item.receipt_url, str(result.file_path)
+        )
         self.db.flush()
         logger.info(
             "Attached receipt to expense claim item %s (claim %s)",

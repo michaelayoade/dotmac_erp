@@ -618,13 +618,15 @@ class NotificationService:
         if organization_id:
             query = query.where(Notification.organization_id == organization_id)
 
-        query = query.where(Notification.is_read == False)  # noqa: E712
         notification = db.scalar(query)
         if not notification:
             return False
 
-        notification.mark_read()
-        db.flush()
+        # Idempotent: marking an already-read notification is a no-op success
+        # (mobile clients retry/double-tap; a 404 here would be spurious).
+        if not notification.is_read:
+            notification.mark_read()
+            db.flush()
         return True
 
     def mark_all_read(

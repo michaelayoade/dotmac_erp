@@ -1,14 +1,16 @@
 """
 Self-service API router for authenticated users.
 
-Currently implements attendance self-service endpoints.
+Covers attendance (incl. geo check-in/out), leave (own + team approvals),
+payslips, expenses (own claims, receipts, advances), the cross-module
+approvals inbox, and notifications.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_tenant_auth
@@ -19,8 +21,6 @@ from app.models.people.perf.appraisal import AppraisalStatus
 from app.schemas.people.attendance import (
     AttendanceListResponse,
     AttendanceRead,
-    AttendanceRecordCheckIn,
-    AttendanceRecordCheckOut,
 )
 from app.schemas.people.expense import (
     CashAdvanceRead,
@@ -31,7 +31,10 @@ from app.schemas.people.leave import LeaveApplicationRead
 from app.schemas.notification import NotificationListResponse, NotificationRead
 from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
-from app.services.approvals_aggregator import ApprovalsAggregatorService
+from app.services.approvals_aggregator import (
+    LEAVE_APPROVAL_PERMISSIONS,
+    ApprovalsAggregatorService,
+)
 from app.services.common import PaginationParams
 from app.services.expense.service_common import (
     ExpenseClaimStatusError,
@@ -39,11 +42,10 @@ from app.services.expense.service_common import (
     ExpenseNotFoundError,
     ExpenseServiceError,
 )
-from app.services.file_upload import FileUploadError
+from app.services.file_upload import FileUploadError, get_expense_receipt_upload
 from app.services.notification import NotificationService
 from app.services.people.attendance import AttendanceService
 from app.services.people.expense import ExpenseService
-from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.employees import EmployeeService
 from app.services.people.leave import LeaveService
 from app.services.people.payroll.salary_slip_service import salary_slip_service
@@ -64,11 +66,33 @@ def _get_employee_id(db: Session, organization_id: UUID, person_id: UUID) -> UUI
     return employee.employee_id
 
 
-LEAVE_APPROVAL_PERMISSIONS = {
-    "leave:applications:approve:tier1",
-    "leave:applications:approve:tier2",
-    "leave:applications:approve:tier3",
-}
+class MeCheckIn(BaseModel):
+    """Self-service check-in payload (geo optional, captured at clock moment)."""
+
+    check_in_time: datetime | None = None
+    notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class MeCheckOut(BaseModel):
+    """Self-service check-out payload (geo optional, captured at clock moment)."""
+
+    check_out_time: datetime | None = None
+    notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+def _get_direct_report_ids(
+    db: Session, organization_id: UUID, manager_employee_id: UUID
+) -> set[UUID]:
+    """Position-based direct reports via OrgResolver (hr-hierarchy rule:
+    never read Employee.reports_to_id for routing decisions)."""
+    from app.services.people.hr.org_resolver import OrgResolver
+
+    reports = OrgResolver(db).get_direct_reports(manager_employee_id, organization_id)
+    return {emp.employee_id for emp in reports}
 
 
 def _require_leave_approval_permission(auth: dict) -> None:
@@ -243,12 +267,7 @@ def team_leave_requests(
     person_id = UUID(auth["person_id"])
     manager_employee_id = _get_employee_id(db, organization_id, person_id)
 
-    employee_svc = EmployeeService(db, organization_id)
-    reports = employee_svc.list_employees(
-        filters=EmployeeFilters(reports_to_id=manager_employee_id),
-        pagination=PaginationParams(offset=0, limit=1000),
-    ).items
-    report_ids = [emp.employee_id for emp in reports]
+    report_ids = list(_get_direct_report_ids(db, organization_id, manager_employee_id))
     if not report_ids:
         return {"items": [], "total": 0, "offset": offset, "limit": limit}
 
@@ -291,12 +310,7 @@ def approve_team_leave(
     if application.employee_id == manager_employee_id:
         raise HTTPException(status_code=400, detail="Cannot approve own leave")
 
-    employee_svc = EmployeeService(db, organization_id)
-    reports = employee_svc.list_employees(
-        filters=EmployeeFilters(reports_to_id=manager_employee_id),
-        pagination=PaginationParams(offset=0, limit=1000),
-    ).items
-    report_ids = {emp.employee_id for emp in reports}
+    report_ids = _get_direct_report_ids(db, organization_id, manager_employee_id)
     if application.employee_id not in report_ids:
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -322,12 +336,7 @@ def reject_team_leave(
     manager_employee_id = _get_employee_id(db, organization_id, person_id)
 
     application = LeaveService(db).get_application(organization_id, application_id)
-    employee_svc = EmployeeService(db, organization_id)
-    reports = employee_svc.list_employees(
-        filters=EmployeeFilters(reports_to_id=manager_employee_id),
-        pagination=PaginationParams(offset=0, limit=1000),
-    ).items
-    report_ids = {emp.employee_id for emp in reports}
+    report_ids = _get_direct_report_ids(db, organization_id, manager_employee_id)
     if application.employee_id not in report_ids:
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -476,7 +485,7 @@ def my_attendance_today(
     status_code=status.HTTP_201_CREATED,
 )
 def my_check_in(
-    payload: AttendanceRecordCheckIn,
+    payload: MeCheckIn,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db_with_org),
 ):
@@ -503,7 +512,7 @@ def my_check_in(
     status_code=status.HTTP_201_CREATED,
 )
 def my_check_out(
-    payload: AttendanceRecordCheckOut,
+    payload: MeCheckOut,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db_with_org),
 ):
@@ -701,7 +710,7 @@ class MyExpenseClaimCreate(BaseModel):
     purpose: str
     currency_code: str | None = None
     notes: str | None = None
-    items: list[ExpenseClaimItemCreate] = []
+    items: list[ExpenseClaimItemCreate] = Field(default_factory=list)
 
 
 @router.post("/expenses/claims", status_code=status.HTTP_201_CREATED)
@@ -765,11 +774,17 @@ def upload_my_receipt(
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db_with_org),
 ):
-    """Attach a receipt photo/document to one of my draft claim items."""
+    """Attach a receipt to one of my DRAFT claim items (appends, never
+    replaces; rejected claims must be resubmitted to DRAFT first)."""
     organization_id = UUID(auth["organization_id"])
     person_id = UUID(auth["person_id"])
     employee_id = _get_employee_id(db, organization_id, person_id)
 
+    # Cheap early reject on the declared size before buffering the body;
+    # FileUploadService.save() remains the authoritative validator.
+    max_bytes = get_expense_receipt_upload().config.max_size_bytes
+    if receipt.size is not None and receipt.size > max_bytes:
+        raise HTTPException(status_code=400, detail="File too large")
     file_data = receipt.file.read()
     try:
         item = ExpenseService(db).attach_receipt(
