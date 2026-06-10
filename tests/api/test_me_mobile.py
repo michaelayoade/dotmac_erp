@@ -716,3 +716,76 @@ class TestReceiptUpload:
         )
 
         assert resp.status_code == 400
+
+
+# =============================================================================
+# Optional idempotency on create (offline-queue replay safety)
+# =============================================================================
+
+
+class TestCreateClaimIdempotency:
+    _payload = {
+        "claim_date": "2026-06-10",
+        "purpose": "Offline capture",
+        "items": [],
+    }
+
+    @patch("app.api.me.IdempotencyService")
+    @patch("app.api.me.check_or_reserve_idempotency", return_value=None)
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_key_reserves_and_records_response(
+        self, svc_cls, _emp, mock_reserve, idem_cls, me_client
+    ) -> None:
+        svc_cls.return_value.create_claim.return_value = _fake_claim()
+
+        resp = me_client.post(
+            "/api/v1/me/expenses/claims",
+            json=self._payload,
+            headers={"Idempotency-Key": "offline-abc-1"},
+        )
+
+        assert resp.status_code == 201
+        assert mock_reserve.call_args.kwargs["idempotency_key"] == "offline-abc-1"
+        record_kwargs = idem_cls.update_response.call_args.kwargs
+        assert record_kwargs["response_status"] == 201
+        assert record_kwargs["idempotency_key"] == "offline-abc-1"
+
+    @patch("app.api.me.build_cached_response")
+    @patch("app.api.me.check_or_reserve_idempotency")
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_replay_returns_cached_without_recreating(
+        self, svc_cls, _emp, mock_reserve, mock_cached, me_client
+    ) -> None:
+        from fastapi.responses import JSONResponse
+
+        mock_reserve.return_value = SimpleNamespace(
+            status_code=201, body={"claim_number": "EXP-00042"}
+        )
+        mock_cached.return_value = JSONResponse(
+            status_code=201, content={"claim_number": "EXP-00042"}
+        )
+
+        resp = me_client.post(
+            "/api/v1/me/expenses/claims",
+            json=self._payload,
+            headers={"Idempotency-Key": "offline-abc-1"},
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()["claim_number"] == "EXP-00042"
+        svc_cls.return_value.create_claim.assert_not_called()
+
+    @patch("app.api.me.check_or_reserve_idempotency")
+    @patch("app.api.me._get_employee_id", return_value=EMPLOYEE_ID)
+    @patch("app.api.me.ExpenseService")
+    def test_no_key_skips_idempotency_machinery(
+        self, svc_cls, _emp, mock_reserve, me_client
+    ) -> None:
+        svc_cls.return_value.create_claim.return_value = _fake_claim()
+
+        resp = me_client.post("/api/v1/me/expenses/claims", json=self._payload)
+
+        assert resp.status_code == 201
+        mock_reserve.assert_not_called()
