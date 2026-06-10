@@ -370,9 +370,80 @@ class LotTraceabilityRead(BaseModel):
     total_consumed: Decimal
 
 
+# =============================================================================
+# Inventory Counts (mobile warehouse flows)
+# =============================================================================
+
+
+class InventoryCountRead(BaseModel):
+    """Inventory count header response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    count_id: UUID
+    count_number: str
+    count_description: str | None = None
+    count_date: date
+    warehouse_id: UUID | None = None
+    location_id: UUID | None = None
+    is_full_count: bool
+    is_cycle_count: bool
+    status: str
+    total_items: int
+    items_counted: int
+    items_with_variance: int
+
+
+class InventoryCountLineRead(BaseModel):
+    """Inventory count line response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    line_id: UUID
+    count_id: UUID
+    item_id: UUID
+    warehouse_id: UUID
+    location_id: UUID | None = None
+    lot_id: UUID | None = None
+    system_quantity: Decimal
+    uom: str
+    counted_quantity: Decimal | None = None
+    variance_quantity: Decimal | None = None
+
+
+class CountLineRecordRequest(BaseModel):
+    """Record a counted quantity by item/warehouse (scan-driven flow)."""
+
+    item_id: UUID
+    warehouse_id: UUID
+    counted_quantity: Decimal
+    lot_id: UUID | None = None
+    location_id: UUID | None = None
+    reason_code: str | None = Field(default=None, max_length=50)
+    notes: str | None = None
+
+
+class BulkCountLineRecord(BaseModel):
+    """One line in a bulk count recording."""
+
+    line_id: UUID
+    counted_quantity: Decimal
+
+
+class BulkCountRecordRequest(BaseModel):
+    """Bulk-record counted quantities for existing lines."""
+
+    lines: list[BulkCountLineRecord]
+
+
 __all__ = [
     "ItemCategoryCreate",
     "ItemCategoryRead",
+    "InventoryCountRead",
+    "InventoryCountLineRead",
+    "CountLineRecordRequest",
+    "BulkCountLineRecord",
+    "BulkCountRecordRequest",
     "InventoryItemCreate",
     "InventoryItemRead",
     "InventoryItemWithBalanceRead",
