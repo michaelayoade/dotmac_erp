@@ -9,11 +9,27 @@ approvals inbox, and notifications.
 from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_tenant_auth
+from app.api.idempotency import (
+    build_cached_response,
+    build_request_hash,
+    check_or_reserve_idempotency,
+)
+from app.services.finance.platform.idempotency import IdempotencyService
 from app.models.people.exp import CashAdvanceStatus, ExpenseClaimStatus
 from app.models.people.leave import LeaveApplicationStatus
 from app.models.people.payroll.salary_slip import SalarySlipStatus
@@ -717,13 +733,51 @@ class MyExpenseClaimCreate(BaseModel):
 @router.post("/expenses/claims", status_code=status.HTTP_201_CREATED)
 def create_my_expense_claim(
     payload: MyExpenseClaimCreate,
+    request: Request,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db_with_org),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
-    """Create an expense claim for the current employee (mobile self-service)."""
+    """Create an expense claim for the current employee (mobile self-service).
+
+    The Idempotency-Key header is OPTIONAL here (unlike the back-office
+    route): when the mobile offline queue replays a create after a network
+    drop, providing the key returns the original response instead of
+    double-creating the draft.
+    """
     organization_id = UUID(auth["organization_id"])
     person_id = UUID(auth["person_id"])
     employee_id = _get_employee_id(db, organization_id, person_id)
+
+    if idempotency_key:
+        request_hash = build_request_hash(
+            payload,
+            {
+                "organization_id": str(organization_id),
+                "employee_id": str(employee_id),
+            },
+        )
+        replay = check_or_reserve_idempotency(
+            db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            request_hash=request_hash,
+        )
+        if replay:
+            return build_cached_response(replay)
+
+    def _record(status_code: int, body: dict) -> None:
+        if not idempotency_key:
+            return
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=status_code,
+            response_body=body,
+        )
 
     try:
         claim = ExpenseService(db).create_claim(
@@ -739,8 +793,11 @@ def create_my_expense_claim(
     except ExpenseNotFoundError:
         raise  # global handler maps these to 404
     except ExpenseServiceError as exc:
+        _record(400, {"detail": str(exc)})
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return ExpenseClaimRead.model_validate(claim)
+    response = ExpenseClaimRead.model_validate(claim)
+    _record(status.HTTP_201_CREATED, response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/expenses/claims/{claim_id}/submit")
