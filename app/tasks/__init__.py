@@ -81,6 +81,7 @@ from app.tasks.hr import (
     process_work_anniversary_notifications,
     send_hr_birthday_morning_email,
 )
+from app.tasks.inventory import auto_issue_pending_stock_material_requests
 from app.tasks.notifications import (
     process_pending_nextcloud_notifications,
     process_pending_notification_emails,
@@ -178,6 +179,8 @@ __all__ = [
     "process_monthly_depreciation_runs",
     # Banking tasks
     "auto_match_unreconciled_statements",
+    # Inventory tasks
+    "auto_issue_pending_stock_material_requests",
     # Analytics tasks
     "refresh_cash_flow_metrics",
     "refresh_compliance_metrics",

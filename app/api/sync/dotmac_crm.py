@@ -34,6 +34,7 @@ from app.schemas.sync.dotmac_crm import (
     BulkSyncRequest,
     BulkSyncResponse,
     CompanyListResponse,
+    CRMAvailableSerialListResponse,
     CRMInventoryItemPayload,
     CRMInventoryItemResponse,
     CRMMaterialRequestPayload,
@@ -502,6 +503,38 @@ def list_warehouses(
     org_id = auth["organization_id"]
     service = DotMacCRMSyncService(db)
     return service.get_warehouses(org_id)
+
+
+@router.get(
+    "/inventory/serials/available",
+    response_model=CRMAvailableSerialListResponse,
+)
+def list_available_inventory_serials(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+    item_code: str = Query(..., min_length=1, max_length=50),
+    warehouse_code: str = Query(..., min_length=1, max_length=100),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> CRMAvailableSerialListResponse:
+    """
+    List available serial numbers for CRM material request selection.
+
+    CRM should call this before submitting a serial-tracked ISSUE material
+    request, then send the selected serial_numbers on the matching request line.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    try:
+        return service.list_available_serials_for_crm(
+            org_id,
+            item_code=item_code,
+            warehouse_code=warehouse_code,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/inventory/{item_id}", response_model=InventoryItemDetail)

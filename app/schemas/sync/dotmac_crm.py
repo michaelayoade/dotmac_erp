@@ -354,6 +354,29 @@ class InventoryItemDetail(BaseModel):
     warehouses: list[WarehouseStock] = Field(default_factory=list)
 
 
+class CRMAvailableSerialRead(BaseModel):
+    """Available serial unit for CRM material request selection."""
+
+    serial_id: UUID
+    serial_number: str
+    status: str
+    item_code: str
+    warehouse_code: str
+
+
+class CRMAvailableSerialListResponse(BaseModel):
+    """Available serials for one item and warehouse."""
+
+    item_code: str
+    item_name: str
+    warehouse_code: str
+    warehouse_name: str
+    track_serial_numbers: bool
+    serials: list[CRMAvailableSerialRead] = Field(default_factory=list)
+    total_count: int = 0
+    has_more: bool = False
+
+
 class InventoryListResponse(BaseModel):
     """Response with inventory items and stock levels."""
 
@@ -473,6 +496,13 @@ class CRMMaterialRequestItemPayload(BaseModel):
     quantity: Decimal = Field(..., gt=0)
     uom: str | None = Field(None, max_length=20)
     from_warehouse_code: str = Field(..., max_length=100)
+    serial_numbers: list[str] | None = Field(
+        default=None,
+        description=(
+            "Selected serial numbers for serial-tracked ISSUE lines. "
+            "Required when the item tracks serial numbers and the request is submitted/issued."
+        ),
+    )
 
 
 class CRMMaterialRequestPayload(BaseModel):
@@ -516,6 +546,7 @@ class CRMMaterialRequestItemRead(BaseModel):
     requested_qty: Decimal
     ordered_qty: Decimal
     uom: str | None = None
+    serial_numbers: list[str] | None = None
 
 
 class CRMMaterialRequestStatusRead(BaseModel):
