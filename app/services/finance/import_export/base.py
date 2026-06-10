@@ -553,6 +553,22 @@ COLUMN_ALIASES: dict[str, list[str]] = {
         "Project Manager Email",
         "Manager Email",
     ],
+    # Fixed asset category fields
+    "category_id": [
+        "Category ID",
+        "Asset Category ID",
+    ],
+    "category_code": [
+        "Category Code",
+        "Asset Category Code",
+        "Asset Class Code",
+    ],
+    "category_name": [
+        "Category Name",
+        "Asset Category",
+        "Asset Class",
+        "Category",
+    ],
     "business_unit_code": [
         "Business Unit Code",
         "Business Unit",

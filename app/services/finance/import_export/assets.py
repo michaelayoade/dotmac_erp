@@ -94,6 +94,10 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         self.depreciation_expense_account_id = depreciation_expense_account_id
         self.gain_loss_disposal_account_id = gain_loss_disposal_account_id
         self._category_cache: dict[str, UUID] = {}
+        self._category_lookup_loaded = False
+        self._category_by_id: dict[str, tuple[UUID, str, str]] = {}
+        self._category_by_code: dict[str, tuple[UUID, str, str]] = {}
+        self._category_by_normalized_name: dict[str, list[tuple[UUID, str, str]]] = {}
 
     def get_field_mappings(self) -> list[FieldMapping]:
         return []
@@ -184,6 +188,79 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         code = self._make_category_code(category_name)
         return self._category_cache.get(code)
 
+    def _load_category_lookup(self) -> None:
+        if self._category_lookup_loaded:
+            return
+
+        categories = (
+            self.db.execute(
+                select(AssetCategory).where(
+                    AssetCategory.organization_id == self.config.organization_id,
+                    AssetCategory.is_active.is_(True),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for category in categories:
+            display_name = category.category_name
+            entry = (category.category_id, display_name, category.category_code)
+            self._category_by_id[str(category.category_id)] = entry
+            self._category_by_code[category.category_code.casefold()] = entry
+            normalized_name = _normalize_match_text(display_name)
+            self._category_by_normalized_name.setdefault(normalized_name, []).append(
+                entry
+            )
+            self._category_cache.setdefault(
+                category.category_code, category.category_id
+            )
+        self._category_lookup_loaded = True
+
+    def resolve_category_id(
+        self,
+        *,
+        category_id_value: Any = None,
+        category_code: Any = None,
+        category_name: Any = None,
+    ) -> UUID | None:
+        self._load_category_lookup()
+
+        raw_id = str(category_id_value or "").strip()
+        if raw_id:
+            match = self._category_by_id.get(raw_id)
+            if match:
+                return match[0]
+            raise ValueError(f'Asset category ID "{raw_id}" not found.')
+
+        raw_code = str(category_code or "").strip()
+        if raw_code:
+            match = self._category_by_code.get(raw_code.casefold())
+            if match:
+                return match[0]
+            if not str(category_name or "").strip():
+                raise ValueError(f'Asset category code "{raw_code}" not found.')
+
+        raw_name = str(category_name or "").strip()
+        if not raw_name:
+            return None
+
+        normalized_name = _normalize_match_text(raw_name)
+        matches = self._category_by_normalized_name.get(normalized_name, [])
+        if len(matches) == 1:
+            return matches[0][0]
+        if len(matches) > 1:
+            options = ", ".join(
+                sorted(
+                    f"{name} ({code}, {category_id})"
+                    for category_id, name, code in matches
+                )
+            )
+            raise ValueError(
+                f'Ambiguous asset category "{raw_name}". Matches: {options}'
+            )
+
+        return self.get_category_id(raw_name)
+
     @staticmethod
     def _extract_category_name(row: dict[str, Any]) -> str:
         return str(
@@ -191,8 +268,10 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
             or row.get("Asset Class")
             or row.get("Category")
             or row.get("category_name")
+            or row.get("category_name_alt")
             or row.get("asset_class_alt")
             or row.get("category_alt")
+            or row.get("category_code")
             or "General Assets"
         ).strip()
 
@@ -257,7 +336,7 @@ class AssetImporter(BaseImporter[Asset]):
         self._department_lookup_loaded = False
         self._department_by_id: dict[str, tuple[UUID, str]] = {}
         self._department_by_code: dict[str, tuple[UUID, str]] = {}
-        self._department_by_normalized_name: dict[str, list[tuple[UUID, str]]] = {}
+        self._department_by_normalized_name: dict[str, list[tuple[UUID, str, str]]] = {}
         self._employee_lookup_loaded = False
         self._employee_by_id: dict[str, tuple[UUID, str, str | None]] = {}
         self._employee_by_code: dict[str, tuple[UUID, str, str | None]] = {}
@@ -282,6 +361,11 @@ class AssetImporter(BaseImporter[Asset]):
             FieldMapping("category_name", "category_name", required=False),
             FieldMapping("Asset Class", "asset_class_alt", required=False),
             FieldMapping("Category", "category_alt", required=False),
+            FieldMapping("Category Name", "category_name_alt", required=False),
+            FieldMapping("Category Code", "category_code", required=False),
+            FieldMapping("Category ID", "category_id", required=False),
+            FieldMapping("Asset Category Code", "category_code", required=False),
+            FieldMapping("Asset Category ID", "category_id", required=False),
             # Acquisition
             FieldMapping(
                 "Acquisition Date",
@@ -597,7 +681,11 @@ class AssetImporter(BaseImporter[Asset]):
 
         # Get category
         category_name = self._category_importer._extract_category_name(row)
-        category_id = self._category_importer.get_category_id(category_name)
+        category_id = self._category_importer.resolve_category_id(
+            category_id_value=row.get("category_id"),
+            category_code=row.get("category_code"),
+            category_name=category_name,
+        )
         if category_id is None:
             category_row = {"Asset Category": category_name}
             category = self._category_importer.check_duplicate(category_row)
@@ -721,9 +809,16 @@ class AssetImporter(BaseImporter[Asset]):
 
         departments = (
             self.db.execute(
-                select(Department).where(
+                select(Department)
+                .where(
                     Department.organization_id == self.config.organization_id,
                     Department.is_active.is_(True),
+                )
+                .order_by(
+                    Department.department_name.asc(),
+                    Department.department_code.asc(),
+                    Department.created_at.asc(),
+                    Department.department_id.asc(),
                 )
             )
             .scalars()
@@ -741,7 +836,7 @@ class AssetImporter(BaseImporter[Asset]):
             )
             normalized_name = _normalize_match_text(display_name)
             self._department_by_normalized_name.setdefault(normalized_name, []).append(
-                (department.department_id, display_name)
+                (department.department_id, display_name, department.department_code)
             )
         self._department_lookup_loaded = True
 
@@ -812,7 +907,16 @@ class AssetImporter(BaseImporter[Asset]):
         if len(matches) == 1:
             return matches[0][0]
         if len(matches) > 1:
-            options = ", ".join(sorted(name for _, name in matches))
+            exact_names = {name.strip().casefold() for _, name, _ in matches}
+            if len(exact_names) == 1:
+                return matches[0][0]
+
+            options = ", ".join(
+                sorted(
+                    f"{name} ({code}, {department_id})"
+                    for department_id, name, code in matches
+                )
+            )
             raise ValueError(f'Ambiguous department "{raw_name}". Matches: {options}')
 
         suggestions = self._closest_department_suggestions(normalized_name)
@@ -901,7 +1005,7 @@ class AssetImporter(BaseImporter[Asset]):
         )
         suggestions: list[str] = []
         for key in suggestion_keys:
-            for _, display_name in self._department_by_normalized_name.get(key, []):
+            for _, display_name, _ in self._department_by_normalized_name.get(key, []):
                 if display_name not in suggestions:
                     suggestions.append(display_name)
         return suggestions[:3]
