@@ -9,7 +9,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
@@ -852,6 +852,8 @@ def get_lot_traceability(
 
 # =============================================================================
 # Inventory Counts (mobile warehouse flows)
+# NOTE: any future static sibling (e.g. /counts/summary) must be declared
+# BEFORE /counts/{count_id} or it will be shadowed.
 # =============================================================================
 
 
@@ -862,11 +864,10 @@ def list_inventory_counts(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:read")),
     db: Session = Depends(get_db_with_org),
 ):
     """List inventory counts (filter by status for the mobile count queue)."""
-    from fastapi import HTTPException
-
     from app.models.inventory.inventory_count import CountStatus
     from app.services.inventory import inventory_count_service
 
@@ -890,16 +891,13 @@ def list_inventory_counts(
 def get_inventory_count(
     count_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:read")),
     db: Session = Depends(get_db_with_org),
 ):
-    """Get one inventory count header."""
-    from fastapi import HTTPException
-
+    """Get one inventory count header (org-scoped in the service)."""
     from app.services.inventory import inventory_count_service
 
-    count = inventory_count_service.get(db, str(count_id))
-    if count.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Count not found")
+    count = inventory_count_service.get(db, str(count_id), organization_id)
     return InventoryCountRead.model_validate(count)
 
 
@@ -914,16 +912,13 @@ def list_inventory_count_lines(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     organization_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:read")),
     db: Session = Depends(get_db_with_org),
 ):
     """List lines of a count (e.g. is_counted=false for the remaining queue)."""
-    from fastapi import HTTPException
-
     from app.services.inventory import inventory_count_service
 
-    count = inventory_count_service.get(db, str(count_id))
-    if count.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Count not found")
+    inventory_count_service.get(db, str(count_id), organization_id)
     lines = inventory_count_service.list_lines(
         db,
         str(count_id),
@@ -941,7 +936,7 @@ def record_inventory_count_line(
     count_id: UUID,
     payload: CountLineRecordRequest,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_auth),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:create")),
     db: Session = Depends(get_db_with_org),
 ):
     """Record a counted quantity for an item (scan -> qty -> next)."""
@@ -974,7 +969,7 @@ def bulk_record_inventory_count(
     count_id: UUID,
     payload: BulkCountRecordRequest,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_auth),
+    auth: dict = Depends(require_tenant_permission("inventory:counts:create")),
     db: Session = Depends(get_db_with_org),
 ):
     """Bulk-record counted quantities for existing count lines."""

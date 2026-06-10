@@ -44,11 +44,28 @@ def inv_client():
     app.dependency_overrides[require_tenant_auth] = _auth
     app.dependency_overrides[require_organization_id] = lambda: ORG_ID
     app.dependency_overrides[get_db_with_org] = lambda: MagicMock()
-    # Router-level deps (tenant auth, inventory:access permission, feature
-    # flag) are closure instances — override them by reference, not by
-    # re-calling their factories (which would produce different objects).
+    # Router-level AND parameter-level deps (tenant auth, permission
+    # closures, feature flag) are closure instances — override them by
+    # reference from the resolved dependant tree, not by re-calling their
+    # factories (which would produce different objects).
     for dep in inventory_router.dependencies:
         app.dependency_overrides[dep.dependency] = _auth
+    from fastapi.routing import APIRoute
+
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        stack = list(route.dependant.dependencies)
+        while stack:
+            dependant = stack.pop()
+            stack.extend(dependant.dependencies)
+            call = dependant.call
+            qualname = getattr(call, "__qualname__", "")
+            if (
+                "_require_tenant_permission" in qualname
+                or "require_feature" in qualname
+            ):
+                app.dependency_overrides[call] = _auth
     return TestClient(app)
 
 
@@ -123,14 +140,30 @@ class TestGetCount:
         assert resp.json()["items_counted"] == 45
 
     @patch("app.services.inventory.inventory_count_service")
-    def test_get_other_org_count_is_404(self, svc, inv_client) -> None:
+    def test_get_passes_org_for_service_side_scoping(self, svc, inv_client) -> None:
+        count = _fake_count()
+        svc.get.return_value = count
+
+        resp = inv_client.get(f"/api/v1/inventory/counts/{count.count_id}")
+
+        assert resp.status_code == 200
+        # Org scoping lives in the service now — the route must pass the org.
+        assert svc.get.call_args.args[2] == ORG_ID
+
+    def test_service_get_rejects_foreign_org_count(self) -> None:
+        from fastapi import HTTPException
+
+        from app.services.inventory.count import InventoryCountService
+
         foreign = _fake_count()
         foreign.organization_id = uuid4()
-        svc.get.return_value = foreign
+        db = MagicMock()
+        db.get.return_value = foreign
 
-        resp = inv_client.get(f"/api/v1/inventory/counts/{foreign.count_id}")
+        with pytest.raises(HTTPException) as exc_info:
+            InventoryCountService.get(db, str(foreign.count_id), ORG_ID)
 
-        assert resp.status_code == 404
+        assert exc_info.value.status_code == 404
 
 
 class TestListCountLines:
@@ -202,3 +235,18 @@ class TestBulkRecord:
         inputs = svc.record_count_bulk.call_args.kwargs["inputs"]
         assert [i.line_id for i in inputs] == [l1, l2]
         assert inputs[1].counted_quantity == Decimal("7.5")
+
+
+class TestQuantityValidation:
+    @patch("app.services.inventory.inventory_count_service")
+    def test_negative_counted_quantity_rejected(self, svc, inv_client) -> None:
+        resp = inv_client.post(
+            f"/api/v1/inventory/counts/{uuid4()}/lines/record",
+            json={
+                "item_id": str(uuid4()),
+                "warehouse_id": str(uuid4()),
+                "counted_quantity": "-3",
+            },
+        )
+        assert resp.status_code == 422
+        svc.record_count.assert_not_called()

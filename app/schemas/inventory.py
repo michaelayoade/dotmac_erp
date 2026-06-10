@@ -416,7 +416,7 @@ class CountLineRecordRequest(BaseModel):
 
     item_id: UUID
     warehouse_id: UUID
-    counted_quantity: Decimal
+    counted_quantity: Decimal = Field(ge=0)
     lot_id: UUID | None = None
     location_id: UUID | None = None
     reason_code: str | None = Field(default=None, max_length=50)
@@ -427,7 +427,7 @@ class BulkCountLineRecord(BaseModel):
     """One line in a bulk count recording."""
 
     line_id: UUID
-    counted_quantity: Decimal
+    counted_quantity: Decimal = Field(ge=0)
 
 
 class BulkCountRecordRequest(BaseModel):
