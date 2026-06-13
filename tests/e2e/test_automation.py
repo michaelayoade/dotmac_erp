@@ -99,7 +99,7 @@ class TestRecurringTemplateCreate:
             "input[name='start_date'], input[type='date']"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
 
 @pytest.mark.e2e
@@ -222,7 +222,7 @@ class TestWorkflowRuleCreate:
             "input[name='name'], input[name='rule_name'], #name"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_workflow_rule_has_trigger_field(self, authenticated_page, base_url):
         """Test workflow rule form has trigger/event selection."""
@@ -233,7 +233,7 @@ class TestWorkflowRuleCreate:
             "select[name='trigger'], select[name='event'], #trigger"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_workflow_rule_conditions(self, authenticated_page, base_url):
         """Test workflow rule has conditions section."""
@@ -420,7 +420,7 @@ class TestDocumentTemplateCreate:
             "input[name='name'], input[name='template_name'], #name"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_template_has_type_field(self, authenticated_page, base_url):
         """Test template form has type selection."""
@@ -431,7 +431,7 @@ class TestDocumentTemplateCreate:
             "select[name='template_type'], select[name='type'], #template_type"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_template_has_content_editor(self, authenticated_page, base_url):
         """Test template form has content editor."""

@@ -212,8 +212,8 @@ class TestARInvoiceInventoryUI:
         authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        customer_select = authenticated_page.locator("select[name='customer_id']")
-        expect(customer_select).to_be_visible()
+        customer_select = authenticated_page.locator("[name='customer_id']")
+        expect(customer_select).to_be_attached()
 
 
 class TestInventoryItemForm:

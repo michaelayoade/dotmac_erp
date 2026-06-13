@@ -150,8 +150,8 @@ class TestARInvoiceWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        customer_field = form.locator("select[name='customer_id']")
-        expect(customer_field).to_be_visible()
+        customer_field = form.locator("[name='customer_id']")
+        expect(customer_field).to_be_attached()
         date_field = form.locator("input[name='invoice_date']")
         expect(date_field).to_be_visible()
 

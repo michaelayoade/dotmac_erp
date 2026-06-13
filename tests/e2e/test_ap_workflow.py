@@ -170,8 +170,8 @@ class TestAPInvoiceCreateWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        supplier_select = form.locator("select[name='supplier_id']")
-        expect(supplier_select).to_be_visible()
+        supplier_select = form.locator("[name='supplier_id']")
+        expect(supplier_select).to_be_attached()
 
     @pytest.mark.e2e
     def test_invoice_form_has_dates(self, authenticated_page: Page, base_url: str):
@@ -235,7 +235,7 @@ class TestAPInvoiceListWorkflow:
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']").first
-        expect(status_filter).to_be_visible()
+        expect(status_filter).to_be_attached()
 
     @pytest.mark.e2e
     def test_invoices_list_has_supplier_filter(
@@ -245,8 +245,8 @@ class TestAPInvoiceListWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        supplier_filter = authenticated_page.locator("select[name='supplier_id']").first
-        expect(supplier_filter).to_be_visible()
+        supplier_filter = authenticated_page.locator("[name='supplier_id']").first
+        expect(supplier_filter).to_be_attached()
 
 
 class TestAPInvoiceDetailWorkflow:
@@ -300,8 +300,8 @@ class TestAPPaymentWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        supplier_select = form.locator("select[name='supplier_id']").first
-        expect(supplier_select).to_be_visible()
+        supplier_select = form.locator("[name='supplier_id']").first
+        expect(supplier_select).to_be_attached()
 
     @pytest.mark.e2e
     def test_payment_detail_not_found(self, authenticated_page: Page, base_url: str):

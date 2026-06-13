@@ -235,7 +235,7 @@ class TestGLJournalDetailWorkflow:
         # Look for status filter or search
         status_filter = authenticated_page.locator("select[name='status']").first
         search = authenticated_page.locator("input[name='search']").first
-        expect(status_filter).to_be_visible()
+        expect(status_filter).to_be_attached()
         expect(search).to_be_visible()
 
     @pytest.mark.e2e

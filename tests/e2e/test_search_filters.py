@@ -235,7 +235,7 @@ class TestFilterFunctionality:
 
         # Apply supplier filter
         supplier_filter = authenticated_page.locator(
-            "select[name='supplier_id'], select[name='supplier'], #supplier"
+            "[name='supplier_id'], [name='supplier'], #supplier"
         )
         if supplier_filter.count() > 0:
             options = supplier_filter.first.locator("option")
