@@ -28,6 +28,7 @@
         </select>
     {% endcall %}
 
+    <div id="results-container">
     {% if report.rows %}
     <div class="card overflow-hidden">
         <div class="table-container">
@@ -54,5 +55,6 @@
     {% else %}
     {{ empty_state("No report data", "No records match the selected filters.", "chart") }}
     {% endif %}
+    </div>
 </div>
 {% endblock %}

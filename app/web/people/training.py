@@ -523,9 +523,7 @@ def edit_question_bank_form(
     auth: WebAuthContext = Depends(require_training_access),
     db: Session = Depends(get_db_for_org),
 ):
-    return training_web_service.question_bank_form_response(
-        request, auth, db, bank_id
-    )
+    return training_web_service.question_bank_form_response(request, auth, db, bank_id)
 
 
 @router.post("/question-banks/{bank_id}/edit", response_class=HTMLResponse)
@@ -713,7 +711,9 @@ async def update_assessment_question(
     )
 
 
-@router.post("/assessments/{assessment_id}/questions/reorder", response_class=HTMLResponse)
+@router.post(
+    "/assessments/{assessment_id}/questions/reorder", response_class=HTMLResponse
+)
 async def reorder_assessment_questions(
     request: Request,
     assessment_id: str,

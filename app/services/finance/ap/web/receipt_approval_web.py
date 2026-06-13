@@ -133,7 +133,9 @@ class ReceiptApprovalWebService:
         invoice_ids = {approval.supplier_invoice_id for approval in approvals}
         line_ids = {approval.supplier_invoice_line_id for approval in approvals}
         item_ids = {approval.item_id for approval in approvals}
-        warehouse_ids = {approval.warehouse_id for approval in approvals if approval.warehouse_id}
+        warehouse_ids = {
+            approval.warehouse_id for approval in approvals if approval.warehouse_id
+        }
         person_ids = {
             person_id
             for approval in approvals
@@ -145,60 +147,84 @@ class ReceiptApprovalWebService:
             if person_id
         }
 
-        invoices = {
-            invoice.invoice_id: invoice
-            for invoice in db.scalars(
-                select(SupplierInvoice).where(
-                    SupplierInvoice.organization_id == org_id,
-                    SupplierInvoice.invoice_id.in_(invoice_ids),
-                )
-            ).all()
-        } if invoice_ids else {}
+        invoices = (
+            {
+                invoice.invoice_id: invoice
+                for invoice in db.scalars(
+                    select(SupplierInvoice).where(
+                        SupplierInvoice.organization_id == org_id,
+                        SupplierInvoice.invoice_id.in_(invoice_ids),
+                    )
+                ).all()
+            }
+            if invoice_ids
+            else {}
+        )
         supplier_ids = {invoice.supplier_id for invoice in invoices.values()}
-        suppliers = {
-            supplier.supplier_id: supplier
-            for supplier in db.scalars(
-                select(Supplier).where(
-                    Supplier.organization_id == org_id,
-                    Supplier.supplier_id.in_(supplier_ids),
-                )
-            ).all()
-        } if supplier_ids else {}
-        lines = {
-            line.line_id: line
-            for line in db.scalars(
-                select(SupplierInvoiceLine).where(
-                    SupplierInvoiceLine.line_id.in_(line_ids)
-                )
-            ).all()
-        } if line_ids else {}
-        items = {
-            item.item_id: item
-            for item in db.scalars(
-                select(Item).where(
-                    Item.organization_id == org_id,
-                    Item.item_id.in_(item_ids),
-                )
-            ).all()
-        } if item_ids else {}
-        warehouses = {
-            warehouse.warehouse_id: warehouse
-            for warehouse in db.scalars(
-                select(Warehouse).where(
-                    Warehouse.organization_id == org_id,
-                    Warehouse.warehouse_id.in_(warehouse_ids),
-                )
-            ).all()
-        } if warehouse_ids else {}
-        people = {
-            person.id: person
-            for person in db.scalars(
-                select(Person).where(
-                    Person.organization_id == org_id,
-                    Person.id.in_(person_ids),
-                )
-            ).all()
-        } if person_ids else {}
+        suppliers = (
+            {
+                supplier.supplier_id: supplier
+                for supplier in db.scalars(
+                    select(Supplier).where(
+                        Supplier.organization_id == org_id,
+                        Supplier.supplier_id.in_(supplier_ids),
+                    )
+                ).all()
+            }
+            if supplier_ids
+            else {}
+        )
+        lines = (
+            {
+                line.line_id: line
+                for line in db.scalars(
+                    select(SupplierInvoiceLine).where(
+                        SupplierInvoiceLine.line_id.in_(line_ids)
+                    )
+                ).all()
+            }
+            if line_ids
+            else {}
+        )
+        items = (
+            {
+                item.item_id: item
+                for item in db.scalars(
+                    select(Item).where(
+                        Item.organization_id == org_id,
+                        Item.item_id.in_(item_ids),
+                    )
+                ).all()
+            }
+            if item_ids
+            else {}
+        )
+        warehouses = (
+            {
+                warehouse.warehouse_id: warehouse
+                for warehouse in db.scalars(
+                    select(Warehouse).where(
+                        Warehouse.organization_id == org_id,
+                        Warehouse.warehouse_id.in_(warehouse_ids),
+                    )
+                ).all()
+            }
+            if warehouse_ids
+            else {}
+        )
+        people = (
+            {
+                person.id: person
+                for person in db.scalars(
+                    select(Person).where(
+                        Person.organization_id == org_id,
+                        Person.id.in_(person_ids),
+                    )
+                ).all()
+            }
+            if person_ids
+            else {}
+        )
 
         rows: list[dict] = []
         for approval in approvals:
@@ -266,7 +292,9 @@ class ReceiptApprovalWebService:
         db: Session,
         status: str | None,
     ):
-        context = base_context(request, auth, "Receipt Approvals", "receipt-approvals", db=db)
+        context = base_context(
+            request, auth, "Receipt Approvals", "receipt-approvals", db=db
+        )
         context.update(
             self.receipt_approvals_context(
                 db, str(auth.organization_id), status=status or "PENDING"
@@ -283,7 +311,9 @@ class ReceiptApprovalWebService:
         db: Session,
         approval_id: str,
     ):
-        context = base_context(request, auth, "Receipt Approval", "receipt-approvals", db=db)
+        context = base_context(
+            request, auth, "Receipt Approval", "receipt-approvals", db=db
+        )
         context.update(
             self.receipt_approval_detail_context(
                 db, str(auth.organization_id), approval_id

@@ -18,20 +18,26 @@ branch_labels = None
 depends_on = None
 
 
-receipt_mode_enum = sa.Enum(
+# create_type=False: these enums are created explicitly below via
+# .create(bind, checkfirst=True). Without this flag, using the same Enum as a
+# column type makes create_table/add_column auto-emit a second CREATE TYPE
+# (without checkfirst) → DuplicateObject on a fresh DB. See .claude/rules.
+receipt_mode_enum = postgresql.ENUM(
     "NONE",
     "AUTO_RECEIVE",
     "STORE_APPROVAL",
     name="supplier_invoice_inventory_receipt_mode",
+    create_type=False,
 )
 
-approval_status_enum = sa.Enum(
+approval_status_enum = postgresql.ENUM(
     "PENDING",
     "APPROVED",
     "PARTIALLY_RECEIVED",
     "REJECTED",
     "POSTED_TO_INVENTORY",
     name="invoice_inventory_receipt_approval_status",
+    create_type=False,
 )
 
 
@@ -86,7 +92,9 @@ def upgrade() -> None:
             server_default="PENDING",
             nullable=False,
         ),
-        sa.Column("submitted_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "submitted_by_user_id", postgresql.UUID(as_uuid=True), nullable=False
+        ),
         sa.Column("approved_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("rejected_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
