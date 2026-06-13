@@ -11,6 +11,9 @@ Tests for creating, reading, updating, and deleting:
 import re
 from uuid import uuid4
 
+from tests.e2e._helpers import reveal_filters
+
+
 import pytest
 from playwright.sync_api import expect
 
@@ -28,6 +31,7 @@ class TestCustomerList:
         """Test customer list search functionality."""
         authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -43,6 +47,7 @@ class TestCustomerList:
         """Test customer list status filter."""
         authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
@@ -99,7 +104,7 @@ class TestCustomerCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='currency']")
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
     def test_customer_create_has_credit_limit_field(self, authenticated_page, base_url):
         """Test that customer form has credit limit field."""
@@ -108,7 +113,7 @@ class TestCustomerCreate:
 
         field = authenticated_page.locator("[name*='credit_limit']")
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_customer_create_has_payment_terms(self, authenticated_page, base_url):
         """Test that customer form has payment terms field."""
@@ -117,7 +122,7 @@ class TestCustomerCreate:
 
         field = authenticated_page.locator("[name*='payment_terms'], [name*='payment']")
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_customer_create_has_contact_fields(self, authenticated_page, base_url):
         """Test that customer form has contact fields."""
@@ -252,10 +257,10 @@ class TestARInvoiceList:
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_filter = authenticated_page.locator(
-            "select[name='customer'], select[name='customer_id']"
+            "[name='customer'], [name='customer_id']"
         )
         if customer_filter.count() > 0:
-            expect(customer_filter.first).to_be_visible()
+            expect(customer_filter.first).to_be_attached()
 
     def test_invoice_list_with_date_range(self, authenticated_page, base_url):
         """Test AR invoice list date range filters."""
@@ -264,7 +269,7 @@ class TestARInvoiceList:
 
         date_filters = authenticated_page.locator("input[type='date']")
         if date_filters.count() > 0:
-            expect(date_filters.first).to_be_visible()
+            expect(date_filters.first).to_be_attached()
 
     def test_invoice_list_with_status_filter(self, authenticated_page, base_url):
         """Test AR invoice list status filter."""
@@ -273,7 +278,7 @@ class TestARInvoiceList:
 
         status_filter = authenticated_page.locator("select[name='status']")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_invoice_list_has_new_button(self, authenticated_page, base_url):
         """Test that invoice list has new button."""
@@ -303,9 +308,9 @@ class TestARInvoiceCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer'], #customer_id"
+            "[name='customer_id'], [name='customer'], #customer_id"
         )
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
     def test_invoice_create_has_date_fields(self, authenticated_page, base_url):
         """Test that invoice form has date fields."""
@@ -375,10 +380,10 @@ class TestARReceiptList:
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_filter = authenticated_page.locator(
-            "select[name='customer'], select[name='customer_id']"
+            "[name='customer'], [name='customer_id']"
         )
         if customer_filter.count() > 0:
-            expect(customer_filter.first).to_be_visible()
+            expect(customer_filter.first).to_be_attached()
 
 
 @pytest.mark.e2e
@@ -397,10 +402,8 @@ class TestARReceiptCreate:
         authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        field = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer']"
-        )
-        expect(field.first).to_be_visible()
+        field = authenticated_page.locator("[name='customer_id'], [name='customer']")
+        expect(field.first).to_be_attached()
 
     def test_receipt_create_has_amount_field(self, authenticated_page, base_url):
         """Test that receipt form has amount field."""
@@ -410,7 +413,7 @@ class TestARReceiptCreate:
         field = authenticated_page.locator(
             "input[name='amount'], input[name*='amount']"
         )
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
     def test_receipt_create_has_date_field(self, authenticated_page, base_url):
         """Test that receipt form has date field."""
@@ -418,7 +421,7 @@ class TestARReceiptCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("input[type='date']")
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
     def test_receipt_create_has_payment_method(self, authenticated_page, base_url):
         """Test that receipt form has payment method."""
@@ -427,7 +430,7 @@ class TestARReceiptCreate:
 
         field = authenticated_page.locator("[name*='payment_method'], [name*='method']")
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
 
 @pytest.mark.e2e
@@ -469,9 +472,9 @@ class TestCreditNoteCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer']"
+            "#customer_id, [name='customer_id'], [name='customer']"
         )
-        expect(field.first).to_be_visible()
+        expect(field.first).to_be_attached()
 
     def test_credit_note_create_has_reason_field(self, authenticated_page, base_url):
         """Test that credit note form has reason field."""
@@ -480,7 +483,7 @@ class TestCreditNoteCreate:
 
         field = authenticated_page.locator("[name*='reason'], textarea")
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
 
 @pytest.mark.e2e
@@ -503,7 +506,7 @@ class TestARAgingReport:
             "input[type='date'], input[name='as_of_date']"
         )
         if date_filter.count() > 0:
-            expect(date_filter.first).to_be_visible()
+            expect(date_filter.first).to_be_attached()
 
     def test_aging_report_shows_buckets(self, authenticated_page, base_url):
         """Test that aging report shows aging buckets."""

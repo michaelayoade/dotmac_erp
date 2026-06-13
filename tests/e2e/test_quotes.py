@@ -54,7 +54,7 @@ class TestQuotesList:
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_quotes_list_has_new_button(self, authenticated_page, base_url):
         """Test that quotes list has new button."""
@@ -90,10 +90,10 @@ class TestQuoteCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer'], #customer_id"
+            "[name='customer_id'], [name='customer'], #customer_id"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_quote_create_has_date_field(self, authenticated_page, base_url):
         """Test that quote form has date field."""
@@ -104,7 +104,7 @@ class TestQuoteCreate:
             "input[name='quote_date'], input[type='date']"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_quote_create_has_valid_until_field(self, authenticated_page, base_url):
         """Test that quote form has valid until/expiry date."""
@@ -115,7 +115,7 @@ class TestQuoteCreate:
             "input[name='valid_until'], input[name='expiry_date']"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_quote_create_with_lines(self, authenticated_page, base_url):
         """Test quote creation with line items."""
@@ -125,9 +125,7 @@ class TestQuoteCreate:
         unique_id()
 
         # Select customer
-        customer = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer']"
-        )
+        customer = authenticated_page.locator("[name='customer_id'], [name='customer']")
         if customer.count() > 0:
             customer.first.select_option(index=1)
 

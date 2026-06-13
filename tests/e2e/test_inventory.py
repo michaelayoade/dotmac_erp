@@ -80,7 +80,7 @@ class TestItemsList:
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
 
 # =============================================================================

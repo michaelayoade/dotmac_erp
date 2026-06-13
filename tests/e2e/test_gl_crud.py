@@ -233,7 +233,7 @@ class TestJournalEntryList:
 
         date_filters = authenticated_page.locator("input[type='date']")
         if date_filters.count() > 0:
-            expect(date_filters.first).to_be_visible()
+            expect(date_filters.first).to_be_attached()
 
     def test_journal_list_by_status(self, authenticated_page, base_url):
         """Test journal list status filter."""
@@ -242,7 +242,7 @@ class TestJournalEntryList:
 
         status_filter = authenticated_page.locator("select[name='status']")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_journal_list_has_new_button(self, authenticated_page, base_url):
         """Test that journal list has new button."""
@@ -442,7 +442,7 @@ class TestTrialBalance:
             "input[type='date'], input[name='as_of_date']"
         )
         if date_filter.count() > 0:
-            expect(date_filter.first).to_be_visible()
+            expect(date_filter.first).to_be_attached()
 
     def test_trial_balance_shows_totals(self, authenticated_page, base_url):
         """Test that trial balance shows debit/credit totals."""

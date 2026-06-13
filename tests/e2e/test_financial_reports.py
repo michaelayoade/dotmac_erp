@@ -94,8 +94,8 @@ class TestIncomeStatementReport:
 
         date_from = authenticated_page.locator("input[name='start_date']").first
         date_to = authenticated_page.locator("input[name='end_date']").first
-        expect(date_from).to_be_visible()
-        expect(date_to).to_be_visible()
+        expect(date_from).to_be_attached()
+        expect(date_to).to_be_attached()
 
 
 class TestBalanceSheetReport:

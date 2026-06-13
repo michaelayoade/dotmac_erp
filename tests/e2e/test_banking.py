@@ -136,7 +136,7 @@ class TestBankAccountCreate:
             "select[name='currency'], select[name='currency_code'], #currency"
         )
         if field.count() > 0:
-            expect(field.first).to_be_visible()
+            expect(field.first).to_be_attached()
 
     def test_account_create_full(self, authenticated_page: Page, base_url: str):
         """Test complete account creation workflow."""

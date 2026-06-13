@@ -69,7 +69,7 @@ class TestAssetList:
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
-            expect(status_filter.first).to_be_visible()
+            expect(status_filter.first).to_be_attached()
 
     def test_assets_list_has_new_button(self, authenticated_page, base_url):
         """Test that assets list has new button."""

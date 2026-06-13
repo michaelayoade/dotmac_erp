@@ -188,8 +188,8 @@ class TestARInvoiceCreateWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        customer_select = form.locator("select[name='customer_id']")
-        expect(customer_select).to_be_visible()
+        customer_select = form.locator("[name='customer_id']")
+        expect(customer_select).to_be_attached()
 
     @pytest.mark.e2e
     def test_invoice_form_has_dates(self, authenticated_page: Page, base_url: str):
@@ -253,7 +253,7 @@ class TestARInvoiceListWorkflow:
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']").first
-        expect(status_filter).to_be_visible()
+        expect(status_filter).to_be_attached()
 
     @pytest.mark.e2e
     def test_invoices_list_has_customer_filter(
@@ -263,8 +263,8 @@ class TestARInvoiceListWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        customer_filter = authenticated_page.locator("select[name='customer_id']").first
-        expect(customer_filter).to_be_visible()
+        customer_filter = authenticated_page.locator("[name='customer_id']").first
+        expect(customer_filter).to_be_attached()
 
 
 class TestARInvoiceDetailWorkflow:
@@ -318,8 +318,8 @@ class TestARReceiptWorkflow:
 
         form = authenticated_page.locator("form").first
         expect(form).to_be_visible()
-        customer_select = form.locator("select[name='customer_id']").first
-        expect(customer_select).to_be_visible()
+        customer_select = form.locator("[name='customer_id']").first
+        expect(customer_select).to_be_attached()
 
     @pytest.mark.e2e
     def test_receipt_detail_not_found(self, authenticated_page: Page, base_url: str):

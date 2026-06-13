@@ -297,7 +297,7 @@ class TestBusinessRuleValidation:
 
         # Select customer and enter large amount
         customer_select = authenticated_page.locator(
-            "select[name='customer_id'], select[name='customer']"
+            "[name='customer_id'], [name='customer']"
         )
         if customer_select.count() > 0:
             customer_select.first.select_option(index=1)
