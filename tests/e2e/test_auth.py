@@ -216,7 +216,7 @@ class TestProtectedRoutes:
         """Test that GL accounts requires authentication."""
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/gl/accounts")
+        goto_auth_page(page, f"{base_url}/finance/gl/accounts")
 
         expect(page).to_have_url(re.compile(r".*login.*"))
 
@@ -224,7 +224,7 @@ class TestProtectedRoutes:
         """Test that AP suppliers requires authentication."""
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/ap/suppliers")
+        goto_auth_page(page, f"{base_url}/finance/ap/suppliers")
 
         expect(page).to_have_url(re.compile(r".*login.*"))
 
@@ -232,7 +232,7 @@ class TestProtectedRoutes:
         """Test that AR customers requires authentication."""
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/ar/customers")
+        goto_auth_page(page, f"{base_url}/finance/ar/customers")
 
         expect(page).to_have_url(re.compile(r".*login.*"))
 

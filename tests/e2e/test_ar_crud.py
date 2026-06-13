@@ -26,7 +26,7 @@ class TestCustomerList:
 
     def test_customer_list_with_search(self, authenticated_page, base_url):
         """Test customer list search functionality."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -41,7 +41,7 @@ class TestCustomerList:
 
     def test_customer_list_with_status_filter(self, authenticated_page, base_url):
         """Test customer list status filter."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -53,7 +53,7 @@ class TestCustomerList:
 
     def test_customer_list_has_new_button(self, authenticated_page, base_url):
         """Test that customer list has new button."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -68,14 +68,14 @@ class TestCustomerCreate:
 
     def test_customer_create_page_loads(self, authenticated_page, base_url):
         """Test that customer create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/customers/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         assert response.ok, f"Customer create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_customer_create_has_code_field(self, authenticated_page, base_url):
         """Test that customer form has code field."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -85,7 +85,7 @@ class TestCustomerCreate:
 
     def test_customer_create_has_name_field(self, authenticated_page, base_url):
         """Test that customer form has name field."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -95,7 +95,7 @@ class TestCustomerCreate:
 
     def test_customer_create_has_currency_field(self, authenticated_page, base_url):
         """Test that customer form has currency field."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='currency']")
@@ -103,7 +103,7 @@ class TestCustomerCreate:
 
     def test_customer_create_has_credit_limit_field(self, authenticated_page, base_url):
         """Test that customer form has credit limit field."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='credit_limit']")
@@ -112,7 +112,7 @@ class TestCustomerCreate:
 
     def test_customer_create_has_payment_terms(self, authenticated_page, base_url):
         """Test that customer form has payment terms field."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='payment_terms'], [name*='payment']")
@@ -121,7 +121,7 @@ class TestCustomerCreate:
 
     def test_customer_create_has_contact_fields(self, authenticated_page, base_url):
         """Test that customer form has contact fields."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         email = authenticated_page.locator("[name*='email']")
@@ -130,7 +130,7 @@ class TestCustomerCreate:
 
     def test_customer_create_minimal(self, authenticated_page, base_url):
         """Test creating customer with minimal data."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         uid = unique_id()
@@ -157,7 +157,7 @@ class TestCustomerCreate:
 
     def test_customer_create_full_details(self, authenticated_page, base_url):
         """Test creating customer with full details."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         uid = unique_id()
@@ -203,7 +203,7 @@ class TestCustomerEdit:
 
     def test_customer_edit_accessible_from_list(self, authenticated_page, base_url):
         """Test that customer edit is accessible from list."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first customer link
@@ -218,7 +218,7 @@ class TestCustomerEdit:
 
     def test_customer_detail_has_edit_button(self, authenticated_page, base_url):
         """Test that customer detail has edit button."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_link = authenticated_page.locator(
@@ -241,14 +241,14 @@ class TestARInvoiceList:
 
     def test_invoice_list_page_loads(self, authenticated_page, base_url):
         """Test that AR invoice list loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/invoices")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         assert response.ok, f"AR invoice list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_invoice_list_with_customer_filter(self, authenticated_page, base_url):
         """Test AR invoice list customer filter."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_filter = authenticated_page.locator(
@@ -259,7 +259,7 @@ class TestARInvoiceList:
 
     def test_invoice_list_with_date_range(self, authenticated_page, base_url):
         """Test AR invoice list date range filters."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filters = authenticated_page.locator("input[type='date']")
@@ -268,7 +268,7 @@ class TestARInvoiceList:
 
     def test_invoice_list_with_status_filter(self, authenticated_page, base_url):
         """Test AR invoice list status filter."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']")
@@ -277,7 +277,7 @@ class TestARInvoiceList:
 
     def test_invoice_list_has_new_button(self, authenticated_page, base_url):
         """Test that invoice list has new button."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -292,14 +292,14 @@ class TestARInvoiceCreate:
 
     def test_invoice_create_page_loads(self, authenticated_page, base_url):
         """Test that AR invoice create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         assert response.ok, f"AR invoice create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_invoice_create_has_customer_field(self, authenticated_page, base_url):
         """Test that invoice form has customer selection."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -309,7 +309,7 @@ class TestARInvoiceCreate:
 
     def test_invoice_create_has_date_fields(self, authenticated_page, base_url):
         """Test that invoice form has date fields."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         dates = authenticated_page.locator("input[type='date']")
@@ -317,17 +317,17 @@ class TestARInvoiceCreate:
 
     def test_invoice_create_has_line_items_section(self, authenticated_page, base_url):
         """Test that invoice form has line items section."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         lines = authenticated_page.locator(
-            "text=Line, text=Items, button:has-text('Add'), [class*='line']"
+            ":text('Line'), :text('Items'), button:has-text('Add'), [class*='line']"
         )
         expect(lines.first).to_be_visible()
 
     def test_invoice_create_has_add_line_button(self, authenticated_page, base_url):
         """Test that invoice form has add line button."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         add_btn = authenticated_page.locator(
@@ -338,11 +338,11 @@ class TestARInvoiceCreate:
 
     def test_invoice_create_shows_totals(self, authenticated_page, base_url):
         """Test that invoice form shows totals."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         totals = authenticated_page.locator(
-            "text=Total, text=Subtotal, [class*='total']"
+            ":text('Total'), :text('Subtotal'), [class*='total']"
         )
         if totals.count() > 0:
             expect(totals.first).to_be_visible()
@@ -354,14 +354,14 @@ class TestARReceiptList:
 
     def test_receipt_list_page_loads(self, authenticated_page, base_url):
         """Test that AR receipt list loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/receipts")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/receipts")
         assert response.ok, f"AR receipt list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_receipt_list_has_new_button(self, authenticated_page, base_url):
         """Test that receipt list has new button."""
-        authenticated_page.goto(f"{base_url}/ar/receipts")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -371,7 +371,7 @@ class TestARReceiptList:
 
     def test_receipt_list_by_customer(self, authenticated_page, base_url):
         """Test receipt list customer filter."""
-        authenticated_page.goto(f"{base_url}/ar/receipts")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_filter = authenticated_page.locator(
@@ -387,14 +387,14 @@ class TestARReceiptCreate:
 
     def test_receipt_create_page_loads(self, authenticated_page, base_url):
         """Test that AR receipt create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         assert response.ok, f"AR receipt create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_receipt_create_has_customer_field(self, authenticated_page, base_url):
         """Test that receipt form has customer field."""
-        authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -404,7 +404,7 @@ class TestARReceiptCreate:
 
     def test_receipt_create_has_amount_field(self, authenticated_page, base_url):
         """Test that receipt form has amount field."""
-        authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -414,7 +414,7 @@ class TestARReceiptCreate:
 
     def test_receipt_create_has_date_field(self, authenticated_page, base_url):
         """Test that receipt form has date field."""
-        authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("input[type='date']")
@@ -422,7 +422,7 @@ class TestARReceiptCreate:
 
     def test_receipt_create_has_payment_method(self, authenticated_page, base_url):
         """Test that receipt form has payment method."""
-        authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='payment_method'], [name*='method']")
@@ -436,14 +436,14 @@ class TestCreditNoteList:
 
     def test_credit_note_list_page_loads(self, authenticated_page, base_url):
         """Test that credit note list loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/credit-notes")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/credit-notes")
         assert response.ok, f"Credit note list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_credit_note_list_has_new_button(self, authenticated_page, base_url):
         """Test that credit note list has new button."""
-        authenticated_page.goto(f"{base_url}/ar/credit-notes")
+        authenticated_page.goto(f"{base_url}/finance/ar/credit-notes")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -458,14 +458,14 @@ class TestCreditNoteCreate:
 
     def test_credit_note_create_page_loads(self, authenticated_page, base_url):
         """Test that credit note create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/credit-notes/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/credit-notes/new")
         assert response.ok, f"Credit note create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_credit_note_create_has_customer_field(self, authenticated_page, base_url):
         """Test that credit note form has customer field."""
-        authenticated_page.goto(f"{base_url}/ar/credit-notes/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/credit-notes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -475,7 +475,7 @@ class TestCreditNoteCreate:
 
     def test_credit_note_create_has_reason_field(self, authenticated_page, base_url):
         """Test that credit note form has reason field."""
-        authenticated_page.goto(f"{base_url}/ar/credit-notes/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/credit-notes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='reason'], textarea")
@@ -489,14 +489,14 @@ class TestARAgingReport:
 
     def test_aging_report_loads(self, authenticated_page, base_url):
         """Test that AR aging report loads."""
-        response = authenticated_page.goto(f"{base_url}/ar/aging")
+        response = authenticated_page.goto(f"{base_url}/finance/ar/aging")
         assert response.ok, f"AR aging report failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_aging_report_has_date_filter(self, authenticated_page, base_url):
         """Test that aging report has date filter."""
-        authenticated_page.goto(f"{base_url}/ar/aging")
+        authenticated_page.goto(f"{base_url}/finance/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filter = authenticated_page.locator(
@@ -507,11 +507,11 @@ class TestARAgingReport:
 
     def test_aging_report_shows_buckets(self, authenticated_page, base_url):
         """Test that aging report shows aging buckets."""
-        authenticated_page.goto(f"{base_url}/ar/aging")
+        authenticated_page.goto(f"{base_url}/finance/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         buckets = authenticated_page.locator(
-            "text=Current, text=30, text=60, text=90, th:has-text('Days')"
+            ":text('Current'), :text('30'), :text('60'), :text('90'), th:has-text('Days')"
         )
         if buckets.count() > 0:
             expect(buckets.first).to_be_visible()

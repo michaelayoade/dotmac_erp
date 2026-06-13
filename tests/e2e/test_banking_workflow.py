@@ -17,7 +17,7 @@ class TestBankAccountListWorkflow:
     @pytest.mark.e2e
     def test_accounts_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that bank accounts page loads."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/banking/accounts.*"))
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -27,7 +27,7 @@ class TestBankAccountListWorkflow:
     @pytest.mark.e2e
     def test_accounts_page_has_title(self, authenticated_page: Page, base_url: str):
         """Test that accounts page shows title."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -39,7 +39,7 @@ class TestBankAccountListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that accounts page has new account button."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.get_by_test_id("bank-accounts-new")
@@ -48,7 +48,7 @@ class TestBankAccountListWorkflow:
     @pytest.mark.e2e
     def test_accounts_page_has_search(self, authenticated_page: Page, base_url: str):
         """Test that accounts page has search functionality."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.get_by_test_id("bank-accounts-search")
@@ -59,7 +59,7 @@ class TestBankAccountListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that accounts page has status filter."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.get_by_test_id("bank-accounts-status")
@@ -68,7 +68,7 @@ class TestBankAccountListWorkflow:
     @pytest.mark.e2e
     def test_accounts_page_has_table(self, authenticated_page: Page, base_url: str):
         """Test that accounts page has data table."""
-        authenticated_page.goto(f"{base_url}/banking/accounts")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         table = authenticated_page.get_by_test_id("bank-accounts-table")
@@ -81,14 +81,14 @@ class TestBankAccountCreateWorkflow:
     @pytest.mark.e2e
     def test_new_account_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that new account form loads."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/banking/accounts/new.*"))
 
     @pytest.mark.e2e
     def test_new_account_form_has_fields(self, authenticated_page: Page, base_url: str):
         """Test that new account form has required fields."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -102,7 +102,7 @@ class TestBankAccountCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that new account form has GL account selection."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -115,7 +115,7 @@ class TestBankAccountCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test full create bank account workflow."""
-        authenticated_page.goto(f"{base_url}/banking/accounts/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         unique_id = str(uuid4())[:8]
@@ -155,14 +155,14 @@ class TestBankStatementWorkflow:
     @pytest.mark.e2e
     def test_statements_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that statements page loads."""
-        authenticated_page.goto(f"{base_url}/banking/statements")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/banking/statements.*"))
 
     @pytest.mark.e2e
     def test_statements_page_has_filters(self, authenticated_page: Page, base_url: str):
         """Test that statements page has filter options."""
-        authenticated_page.goto(f"{base_url}/banking/statements")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Account filter
@@ -172,7 +172,7 @@ class TestBankStatementWorkflow:
     @pytest.mark.e2e
     def test_new_statement_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that new statement form loads."""
-        authenticated_page.goto(f"{base_url}/banking/statements/import")
+        authenticated_page.goto(f"{base_url}/finance/banking/statements/import")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -185,7 +185,7 @@ class TestBankReconciliationListWorkflow:
     @pytest.mark.e2e
     def test_reconciliations_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that reconciliations page loads."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(
             re.compile(r".*/banking/reconciliations.*")
@@ -196,7 +196,7 @@ class TestBankReconciliationListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that reconciliations page shows statistics."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         stats = authenticated_page.get_by_test_id("bank-reconciliations-stats")
@@ -207,7 +207,7 @@ class TestBankReconciliationListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that reconciliations page has new reconciliation button."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -221,7 +221,7 @@ class TestBankReconciliationListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that reconciliations page has account filter."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         account_filter = authenticated_page.get_by_test_id(
@@ -234,7 +234,7 @@ class TestBankReconciliationListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that reconciliations page has status filter."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.get_by_test_id("bank-reconciliations-status")
@@ -245,7 +245,7 @@ class TestBankReconciliationListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that reconciliations page has date range filters."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Start date
@@ -263,7 +263,7 @@ class TestBankReconciliationListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that reconciliations page has data table."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
         authenticated_page.wait_for_load_state("networkidle")
 
         table = authenticated_page.get_by_test_id("bank-reconciliations-table")
@@ -278,7 +278,7 @@ class TestBankReconciliationCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that new reconciliation form loads."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(
             re.compile(r".*/banking/reconciliations/new.*")
@@ -289,7 +289,7 @@ class TestBankReconciliationCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that new reconciliation form has account selection."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -302,7 +302,7 @@ class TestBankReconciliationCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that new reconciliation form has date fields."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -315,7 +315,7 @@ class TestBankReconciliationCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that new reconciliation form has balance fields."""
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/new")
+        authenticated_page.goto(f"{base_url}/finance/banking/reconciliations/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -335,7 +335,9 @@ class TestBankReconciliationDetailWorkflow:
     ):
         """Test that non-existent reconciliation shows appropriate message."""
         recon_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/banking/reconciliations/{recon_id}")
+        authenticated_page.goto(
+            f"{base_url}/finance/banking/reconciliations/{recon_id}"
+        )
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should show not found or handle gracefully
@@ -349,7 +351,7 @@ class TestBankAccountDetailWorkflow:
     def test_account_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent account shows appropriate message."""
         account_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/banking/accounts/{account_id}")
+        authenticated_page.goto(f"{base_url}/finance/banking/accounts/{account_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Should show not found or handle gracefully
@@ -364,7 +366,7 @@ class TestBankingResponsiveDesign:
         """Test banking accounts on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(
-            f"{base_url}/banking/accounts", wait_until="domcontentloaded"
+            f"{base_url}/finance/banking/accounts", wait_until="domcontentloaded"
         )
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -375,7 +377,7 @@ class TestBankingResponsiveDesign:
         """Test banking reconciliations on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(
-            f"{base_url}/banking/reconciliations", wait_until="domcontentloaded"
+            f"{base_url}/finance/banking/reconciliations", wait_until="domcontentloaded"
         )
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -384,7 +386,7 @@ class TestBankingResponsiveDesign:
         """Test banking accounts on tablet viewport."""
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
         authenticated_page.goto(
-            f"{base_url}/banking/accounts", wait_until="domcontentloaded"
+            f"{base_url}/finance/banking/accounts", wait_until="domcontentloaded"
         )
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -393,6 +395,6 @@ class TestBankingResponsiveDesign:
         """Test new account form on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
         authenticated_page.goto(
-            f"{base_url}/banking/accounts/new", wait_until="domcontentloaded"
+            f"{base_url}/finance/banking/accounts/new", wait_until="domcontentloaded"
         )
         expect(authenticated_page.locator("main")).to_be_visible()

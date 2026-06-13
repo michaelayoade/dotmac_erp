@@ -31,7 +31,9 @@ class TestItemsList:
 
     def test_items_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that items list page loads successfully."""
-        authenticated_page.goto(f"{base_url}/inv/items", wait_until="domcontentloaded")
+        authenticated_page.goto(
+            f"{base_url}/inventory/items", wait_until="domcontentloaded"
+        )
 
         expect(
             authenticated_page.locator("h1", has_text="Inventory Items").first
@@ -39,13 +41,15 @@ class TestItemsList:
 
     def test_items_page_has_cta(self, authenticated_page: Page, base_url: str):
         """Ensure items page loads and shows the new item CTA."""
-        authenticated_page.goto(f"{base_url}/inv/items", wait_until="domcontentloaded")
+        authenticated_page.goto(
+            f"{base_url}/inventory/items", wait_until="domcontentloaded"
+        )
 
         expect(authenticated_page.locator("a[href='/inv/items/new']")).to_be_visible()
 
     def test_items_list_with_search(self, authenticated_page: Page, base_url: str):
         """Test items list search functionality."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -60,7 +64,7 @@ class TestItemsList:
 
     def test_items_list_by_category(self, authenticated_page: Page, base_url: str):
         """Test items list category filter."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         category_filter = authenticated_page.locator(
@@ -71,7 +75,7 @@ class TestItemsList:
 
     def test_items_list_by_status(self, authenticated_page: Page, base_url: str):
         """Test items list status filter."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -90,14 +94,14 @@ class TestItemCreate:
 
     def test_item_create_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that item create page loads."""
-        response = authenticated_page.goto(f"{base_url}/inv/items/new")
+        response = authenticated_page.goto(f"{base_url}/inventory/items/new")
         assert response.ok, f"Item create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_item_create_has_code_field(self, authenticated_page: Page, base_url: str):
         """Test that item form has code field."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -108,7 +112,7 @@ class TestItemCreate:
 
     def test_item_create_has_name_field(self, authenticated_page: Page, base_url: str):
         """Test that item form has name field."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -121,7 +125,7 @@ class TestItemCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that item form has description field."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -134,7 +138,7 @@ class TestItemCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that item form has unit of measure field."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -145,7 +149,7 @@ class TestItemCreate:
 
     def test_item_create_full_form(self, authenticated_page: Page, base_url: str):
         """Test complete item creation workflow."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         uid = unique_id()
@@ -180,7 +184,7 @@ class TestItemCreate:
         self, authenticated_page: Page, base_url: str
     ):
         """Test item creation with unit of measure."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         uom_field = authenticated_page.locator(
@@ -198,7 +202,7 @@ class TestItemDetail:
 
     def test_item_detail_page_accessible(self, authenticated_page: Page, base_url: str):
         """Test that item detail is accessible."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first item link
@@ -215,7 +219,7 @@ class TestItemDetail:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that item detail shows stock information."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         item_link = authenticated_page.locator(
@@ -227,7 +231,7 @@ class TestItemDetail:
 
             # Look for stock-related content
             stock_info = authenticated_page.locator(
-                "text=Stock, text=Quantity, text=On Hand, text=Available"
+                ":text('Stock'), :text('Quantity'), :text('On Hand'), :text('Available')"
             )
             if stock_info.count() > 0:
                 expect(stock_info.first).to_be_visible()
@@ -239,7 +243,7 @@ class TestItemEdit:
 
     def test_item_edit_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that item edit page loads."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to first item then edit
@@ -261,7 +265,7 @@ class TestItemEdit:
 
     def test_item_update_success(self, authenticated_page: Page, base_url: str):
         """Test successful item update."""
-        authenticated_page.goto(f"{base_url}/inv/items")
+        authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
 
         item_link = authenticated_page.locator(
@@ -303,7 +307,7 @@ class TestInventoryTransactions:
     def test_transactions_page_loads(self, authenticated_page: Page, base_url: str):
         """Ensure transactions page loads and shows content."""
         authenticated_page.goto(
-            f"{base_url}/inv/transactions", wait_until="domcontentloaded"
+            f"{base_url}/inventory/transactions", wait_until="domcontentloaded"
         )
 
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -319,7 +323,7 @@ class TestInventoryTransactions:
         self, authenticated_page: Page, base_url: str
     ):
         """Test transactions list has filter options."""
-        authenticated_page.goto(f"{base_url}/inv/transactions")
+        authenticated_page.goto(f"{base_url}/inventory/transactions")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for type filter
@@ -331,7 +335,7 @@ class TestInventoryTransactions:
 
     def test_transaction_create_receipt(self, authenticated_page: Page, base_url: str):
         """Test creating a receipt transaction."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Select receipt type
@@ -349,7 +353,7 @@ class TestInventoryTransactions:
 
     def test_transaction_create_issue(self, authenticated_page: Page, base_url: str):
         """Test creating an issue transaction."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Select issue type
@@ -369,7 +373,7 @@ class TestInventoryTransactions:
         self, authenticated_page: Page, base_url: str
     ):
         """Test creating an adjustment transaction."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Select adjustment type
@@ -387,7 +391,7 @@ class TestInventoryTransactions:
 
     def test_transaction_detail_page(self, authenticated_page: Page, base_url: str):
         """Test transaction detail page."""
-        authenticated_page.goto(f"{base_url}/inv/transactions")
+        authenticated_page.goto(f"{base_url}/inventory/transactions")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first transaction link
@@ -414,14 +418,14 @@ class TestStockLevels:
 
     def test_stock_levels_page_loads(self, authenticated_page: Page, base_url: str):
         """Test stock levels page loads."""
-        response = authenticated_page.goto(f"{base_url}/inv/stock-levels")
+        response = authenticated_page.goto(f"{base_url}/inventory/stock-levels")
         if response.ok:
             authenticated_page.wait_for_load_state("networkidle")
             expect(authenticated_page.locator("main")).to_be_visible()
 
     def test_stock_by_location(self, authenticated_page: Page, base_url: str):
         """Test stock levels by location view."""
-        authenticated_page.goto(f"{base_url}/inv/stock-levels")
+        authenticated_page.goto(f"{base_url}/inventory/stock-levels")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for location filter
@@ -433,12 +437,12 @@ class TestStockLevels:
 
     def test_stock_valuation(self, authenticated_page: Page, base_url: str):
         """Test stock valuation display."""
-        authenticated_page.goto(f"{base_url}/inv/stock-levels")
+        authenticated_page.goto(f"{base_url}/inventory/stock-levels")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for valuation column/section
         valuation = authenticated_page.locator(
-            "th:has-text('Value'), th:has-text('Valuation'), text=Total Value"
+            "th:has-text('Value'), th:has-text('Valuation'), :text('Total Value')"
         )
         if valuation.count() > 0:
             expect(valuation.first).to_be_visible()

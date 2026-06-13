@@ -27,7 +27,7 @@ class TestSupplierList:
 
     def test_supplier_list_with_search(self, authenticated_page, base_url):
         """Test supplier list search functionality."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -43,7 +43,7 @@ class TestSupplierList:
 
     def test_supplier_list_with_status_filter(self, authenticated_page, base_url):
         """Test supplier list status filter."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -55,7 +55,7 @@ class TestSupplierList:
 
     def test_supplier_list_pagination(self, authenticated_page, base_url):
         """Test supplier list pagination if present."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         pagination = authenticated_page.locator(
@@ -71,14 +71,14 @@ class TestSupplierCreate:
 
     def test_supplier_create_page_loads(self, authenticated_page, base_url):
         """Test that supplier create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         assert response.ok, f"Supplier create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_supplier_create_has_code_field(self, authenticated_page, base_url):
         """Test that supplier form has code field."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -88,7 +88,7 @@ class TestSupplierCreate:
 
     def test_supplier_create_has_name_field(self, authenticated_page, base_url):
         """Test that supplier form has name field."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -98,7 +98,7 @@ class TestSupplierCreate:
 
     def test_supplier_create_has_currency_field(self, authenticated_page, base_url):
         """Test that supplier form has currency field."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='currency']")
@@ -106,7 +106,7 @@ class TestSupplierCreate:
 
     def test_supplier_create_has_payment_terms(self, authenticated_page, base_url):
         """Test that supplier form has payment terms field."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("[name*='payment_terms'], [name*='payment']")
@@ -115,7 +115,7 @@ class TestSupplierCreate:
 
     def test_supplier_create_has_contact_fields(self, authenticated_page, base_url):
         """Test that supplier form has contact fields."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         email = authenticated_page.locator("[name*='email']")
@@ -124,7 +124,7 @@ class TestSupplierCreate:
 
     def test_supplier_create_minimal(self, authenticated_page, base_url):
         """Test creating supplier with minimal data."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         uid = unique_id()
@@ -151,7 +151,7 @@ class TestSupplierCreate:
 
     def test_supplier_create_full_details(self, authenticated_page, base_url):
         """Test creating supplier with full details."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         uid = unique_id()
@@ -192,7 +192,7 @@ class TestSupplierEdit:
 
     def test_supplier_edit_accessible_from_list(self, authenticated_page, base_url):
         """Test that supplier edit is accessible from list."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click first supplier link
@@ -208,7 +208,7 @@ class TestSupplierEdit:
 
     def test_supplier_detail_has_edit_button(self, authenticated_page, base_url):
         """Test that supplier detail has edit button."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to first supplier
@@ -233,14 +233,14 @@ class TestAPInvoiceList:
 
     def test_invoice_list_page_loads(self, authenticated_page, base_url):
         """Test that AP invoice list loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/invoices")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         assert response.ok, f"AP invoice list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_invoice_list_with_supplier_filter(self, authenticated_page, base_url):
         """Test AP invoice list supplier filter."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         supplier_filter = authenticated_page.locator(
@@ -251,7 +251,7 @@ class TestAPInvoiceList:
 
     def test_invoice_list_with_date_range(self, authenticated_page, base_url):
         """Test AP invoice list date range filters."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filters = authenticated_page.locator("input[type='date']")
@@ -260,7 +260,7 @@ class TestAPInvoiceList:
 
     def test_invoice_list_with_status_filter(self, authenticated_page, base_url):
         """Test AP invoice list status filter."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']")
@@ -274,14 +274,14 @@ class TestAPInvoiceCreate:
 
     def test_invoice_create_page_loads(self, authenticated_page, base_url):
         """Test that AP invoice create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         assert response.ok, f"AP invoice create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_invoice_create_has_supplier_field(self, authenticated_page, base_url):
         """Test that invoice form has supplier selection."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -291,7 +291,7 @@ class TestAPInvoiceCreate:
 
     def test_invoice_create_has_date_fields(self, authenticated_page, base_url):
         """Test that invoice form has date fields."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         dates = authenticated_page.locator("input[type='date']")
@@ -299,18 +299,18 @@ class TestAPInvoiceCreate:
 
     def test_invoice_create_has_line_items_section(self, authenticated_page, base_url):
         """Test that invoice form has line items section."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for line items or add line button
         lines = authenticated_page.locator(
-            "text=Line, text=Items, button:has-text('Add'), [class*='line']"
+            ":text('Line'), :text('Items'), button:has-text('Add'), [class*='line']"
         )
         expect(lines.first).to_be_visible()
 
     def test_invoice_create_has_add_line_button(self, authenticated_page, base_url):
         """Test that invoice form has add line button."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         add_btn = authenticated_page.locator(
@@ -321,11 +321,11 @@ class TestAPInvoiceCreate:
 
     def test_invoice_create_shows_totals(self, authenticated_page, base_url):
         """Test that invoice form shows totals."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         totals = authenticated_page.locator(
-            "text=Total, text=Subtotal, [class*='total']"
+            ":text('Total'), :text('Subtotal'), [class*='total']"
         )
         if totals.count() > 0:
             expect(totals.first).to_be_visible()
@@ -337,14 +337,14 @@ class TestAPPaymentList:
 
     def test_payment_list_page_loads(self, authenticated_page, base_url):
         """Test that AP payment list loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/payments")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/payments")
         assert response.ok, f"AP payment list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_payment_list_has_new_button(self, authenticated_page, base_url):
         """Test that payment list has new button."""
-        authenticated_page.goto(f"{base_url}/ap/payments")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -359,14 +359,14 @@ class TestAPPaymentCreate:
 
     def test_payment_create_page_loads(self, authenticated_page, base_url):
         """Test that AP payment create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/payments/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         assert response.ok, f"AP payment create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_payment_create_has_supplier_field(self, authenticated_page, base_url):
         """Test that payment form has supplier field."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -376,7 +376,7 @@ class TestAPPaymentCreate:
 
     def test_payment_create_has_amount_field(self, authenticated_page, base_url):
         """Test that payment form has amount field."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -386,7 +386,7 @@ class TestAPPaymentCreate:
 
     def test_payment_create_has_date_field(self, authenticated_page, base_url):
         """Test that payment form has date field."""
-        authenticated_page.goto(f"{base_url}/ap/payments/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator("input[type='date']")
@@ -399,14 +399,14 @@ class TestPurchaseOrderList:
 
     def test_po_list_page_loads(self, authenticated_page, base_url):
         """Test that PO list loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/purchase-orders")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders")
         assert response.ok, f"PO list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_po_list_has_new_button(self, authenticated_page, base_url):
         """Test that PO list has new button."""
-        authenticated_page.goto(f"{base_url}/ap/purchase-orders")
+        authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -421,14 +421,14 @@ class TestPurchaseOrderCreate:
 
     def test_po_create_page_loads(self, authenticated_page, base_url):
         """Test that PO create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/purchase-orders/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders/new")
         assert response.ok, f"PO create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_po_create_has_supplier_field(self, authenticated_page, base_url):
         """Test that PO form has supplier field."""
-        authenticated_page.goto(f"{base_url}/ap/purchase-orders/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -438,11 +438,11 @@ class TestPurchaseOrderCreate:
 
     def test_po_create_has_line_items(self, authenticated_page, base_url):
         """Test that PO form has line items section."""
-        authenticated_page.goto(f"{base_url}/ap/purchase-orders/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         lines = authenticated_page.locator(
-            "text=Line, text=Items, button:has-text('Add')"
+            ":text('Line'), :text('Items'), button:has-text('Add')"
         )
         expect(lines.first).to_be_visible()
 
@@ -453,14 +453,14 @@ class TestGoodsReceiptList:
 
     def test_gr_list_page_loads(self, authenticated_page, base_url):
         """Test that goods receipt list loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/goods-receipts")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts")
         assert response.ok, f"GR list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_gr_list_has_new_button(self, authenticated_page, base_url):
         """Test that goods receipt list has new button."""
-        authenticated_page.goto(f"{base_url}/ap/goods-receipts")
+        authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -475,14 +475,14 @@ class TestGoodsReceiptCreate:
 
     def test_gr_create_page_loads(self, authenticated_page, base_url):
         """Test that goods receipt create page loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/goods-receipts/new")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts/new")
         assert response.ok, f"GR create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_gr_create_has_po_field(self, authenticated_page, base_url):
         """Test that goods receipt form has PO selection."""
-        authenticated_page.goto(f"{base_url}/ap/goods-receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -498,14 +498,14 @@ class TestAPAgingReport:
 
     def test_aging_report_loads(self, authenticated_page, base_url):
         """Test that AP aging report loads."""
-        response = authenticated_page.goto(f"{base_url}/ap/aging")
+        response = authenticated_page.goto(f"{base_url}/finance/ap/aging")
         assert response.ok, f"AP aging report failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_aging_report_has_date_filter(self, authenticated_page, base_url):
         """Test that aging report has date filter."""
-        authenticated_page.goto(f"{base_url}/ap/aging")
+        authenticated_page.goto(f"{base_url}/finance/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filter = authenticated_page.locator(
@@ -516,12 +516,12 @@ class TestAPAgingReport:
 
     def test_aging_report_shows_buckets(self, authenticated_page, base_url):
         """Test that aging report shows aging buckets."""
-        authenticated_page.goto(f"{base_url}/ap/aging")
+        authenticated_page.goto(f"{base_url}/finance/ap/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for aging bucket columns
         buckets = authenticated_page.locator(
-            "text=Current, text=30, text=60, text=90, th:has-text('Days')"
+            ":text('Current'), :text('30'), :text('60'), :text('90'), th:has-text('Days')"
         )
         if buckets.count() > 0:
             expect(buckets.first).to_be_visible()

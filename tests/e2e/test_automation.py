@@ -241,7 +241,7 @@ class TestWorkflowRuleCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         conditions = authenticated_page.locator(
-            "text=Conditions, text=When, .conditions-section"
+            ":text('Conditions'), :text('When'), .conditions-section"
         )
         if conditions.count() > 0:
             expect(conditions.first).to_be_visible()
@@ -252,7 +252,7 @@ class TestWorkflowRuleCreate:
         authenticated_page.wait_for_load_state("networkidle")
 
         actions = authenticated_page.locator(
-            "text=Actions, text=Then, .actions-section"
+            ":text('Actions'), :text('Then'), .actions-section"
         )
         if actions.count() > 0:
             expect(actions.first).to_be_visible()

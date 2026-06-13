@@ -124,7 +124,7 @@ class TestMobileViewport:
             ]
         )
 
-        page.goto(f"{base_url}/ap/suppliers")
+        page.goto(f"{base_url}/finance/ap/suppliers")
         page.wait_for_load_state("networkidle")
 
         # Tables should be in a scrollable container
@@ -159,7 +159,7 @@ class TestMobileViewport:
             ]
         )
 
-        page.goto(f"{base_url}/ap/suppliers/new")
+        page.goto(f"{base_url}/finance/ap/suppliers/new")
         page.wait_for_load_state("networkidle")
 
         # Form should be visible
@@ -302,7 +302,7 @@ class TestTabletViewport:
             ]
         )
 
-        page.goto(f"{base_url}/gl/accounts")
+        page.goto(f"{base_url}/finance/gl/accounts")
         page.wait_for_load_state("networkidle")
 
         # Tables should show more columns on tablet
@@ -416,7 +416,7 @@ class TestDesktopViewport:
             ]
         )
 
-        page.goto(f"{base_url}/ap/suppliers")
+        page.goto(f"{base_url}/finance/ap/suppliers")
         page.wait_for_load_state("networkidle")
 
         # Tables should use available width

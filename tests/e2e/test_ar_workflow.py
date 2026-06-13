@@ -17,7 +17,7 @@ class TestARCustomerCreateWorkflow:
     @pytest.mark.e2e
     def test_customer_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that customer form loads successfully."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/customers/new.*"))
 
@@ -26,7 +26,7 @@ class TestARCustomerCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that customer form has all required fields."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -40,7 +40,7 @@ class TestARCustomerCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that customer form has credit management fields."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -53,7 +53,7 @@ class TestARCustomerCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that customer form has GL account dropdowns."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -70,7 +70,7 @@ class TestARCustomerCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that customer form has contact information fields."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -82,7 +82,7 @@ class TestARCustomerCreateWorkflow:
     @pytest.mark.e2e
     def test_create_customer_workflow(self, authenticated_page: Page, base_url: str):
         """Test full create customer workflow."""
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         unique_id = str(uuid4())[:6].upper()
@@ -140,7 +140,7 @@ class TestARCustomerListWorkflow:
     @pytest.mark.e2e
     def test_customers_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that customers list loads."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/customers.*"))
 
@@ -149,7 +149,7 @@ class TestARCustomerListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that customers list has new button."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator("a[href='/ar/customers/new']").first
@@ -158,7 +158,7 @@ class TestARCustomerListWorkflow:
     @pytest.mark.e2e
     def test_customers_search(self, authenticated_page: Page, base_url: str):
         """Test customers list search."""
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator("input[name='search']").first
@@ -174,7 +174,7 @@ class TestARInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that invoice form loads."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/invoices/new.*"))
 
@@ -183,7 +183,7 @@ class TestARInvoiceCreateWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoice form has customer selection."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -194,7 +194,7 @@ class TestARInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_form_has_dates(self, authenticated_page: Page, base_url: str):
         """Test that invoice form has date fields."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -205,7 +205,7 @@ class TestARInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_form_has_line_items(self, authenticated_page: Page, base_url: str):
         """Test that invoice form has line items section."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for line items section
@@ -215,7 +215,7 @@ class TestARInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_add_line_button(self, authenticated_page: Page, base_url: str):
         """Test that invoice has add line button."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         add_btn = authenticated_page.locator(
@@ -227,7 +227,7 @@ class TestARInvoiceCreateWorkflow:
     @pytest.mark.e2e
     def test_invoice_totals_section(self, authenticated_page: Page, base_url: str):
         """Test that invoice shows totals section."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         totals = authenticated_page.locator(".totals-section").first
@@ -240,7 +240,7 @@ class TestARInvoiceListWorkflow:
     @pytest.mark.e2e
     def test_invoices_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that invoices list loads."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/invoices.*"))
 
@@ -249,7 +249,7 @@ class TestARInvoiceListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoices list has status filter."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status']").first
@@ -260,7 +260,7 @@ class TestARInvoiceListWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoices list has customer filter."""
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_filter = authenticated_page.locator("select[name='customer_id']").first
@@ -274,7 +274,7 @@ class TestARInvoiceDetailWorkflow:
     def test_invoice_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent invoice shows not found."""
         invoice_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/ar/invoices/{invoice_id}")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/{invoice_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Invoice not found")).to_be_visible()
@@ -283,7 +283,7 @@ class TestARInvoiceDetailWorkflow:
     def test_customer_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent customer shows not found."""
         customer_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/ar/customers/{customer_id}")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/{customer_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Customer not found")).to_be_visible()
@@ -295,14 +295,14 @@ class TestARReceiptWorkflow:
     @pytest.mark.e2e
     def test_receipts_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that receipts list loads."""
-        authenticated_page.goto(f"{base_url}/ar/receipts")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/receipts.*"))
 
     @pytest.mark.e2e
     def test_new_receipt_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that new receipt form loads."""
-        authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -313,7 +313,7 @@ class TestARReceiptWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that receipt form has customer selection."""
-        authenticated_page.goto(f"{base_url}/ar/receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -325,7 +325,7 @@ class TestARReceiptWorkflow:
     def test_receipt_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Test that non-existent receipt shows not found."""
         receipt_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/ar/receipts/{receipt_id}")
+        authenticated_page.goto(f"{base_url}/finance/ar/receipts/{receipt_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Receipt not found")).to_be_visible()
@@ -337,14 +337,14 @@ class TestARAgingReport:
     @pytest.mark.e2e
     def test_aging_report_loads(self, authenticated_page: Page, base_url: str):
         """Test that aging report loads."""
-        authenticated_page.goto(f"{base_url}/ar/aging")
+        authenticated_page.goto(f"{base_url}/finance/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/ar/aging.*"))
 
     @pytest.mark.e2e
     def test_aging_report_has_title(self, authenticated_page: Page, base_url: str):
         """Test that aging report has a title."""
-        authenticated_page.goto(f"{base_url}/ar/aging")
+        authenticated_page.goto(f"{base_url}/finance/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -354,7 +354,7 @@ class TestARAgingReport:
     @pytest.mark.e2e
     def test_aging_report_shows_buckets(self, authenticated_page: Page, base_url: str):
         """Test that aging report shows aging buckets."""
-        authenticated_page.goto(f"{base_url}/ar/aging")
+        authenticated_page.goto(f"{base_url}/finance/ar/aging")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("No aging data yet")).to_be_visible()
@@ -366,7 +366,7 @@ class TestARCreditNoteWorkflow:
     @pytest.mark.e2e
     def test_credit_notes_list_loads(self, authenticated_page: Page, base_url: str):
         """Test that credit notes list loads."""
-        authenticated_page.goto(f"{base_url}/ar/credit-notes")
+        authenticated_page.goto(f"{base_url}/finance/ar/credit-notes")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
             "AR Credit Notes"
@@ -375,7 +375,7 @@ class TestARCreditNoteWorkflow:
     @pytest.mark.e2e
     def test_new_credit_note_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that new credit note form loads."""
-        authenticated_page.goto(f"{base_url}/ar/credit-notes/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/credit-notes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -392,7 +392,7 @@ class TestARResponsiveDesign:
     def test_ar_customers_mobile(self, authenticated_page: Page, base_url: str):
         """Test AR customers on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/ar/customers")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -400,7 +400,7 @@ class TestARResponsiveDesign:
     def test_ar_invoices_mobile(self, authenticated_page: Page, base_url: str):
         """Test AR invoices on mobile viewport."""
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/ar/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -408,6 +408,6 @@ class TestARResponsiveDesign:
     def test_customer_form_tablet(self, authenticated_page: Page, base_url: str):
         """Test customer form on tablet viewport."""
         authenticated_page.set_viewport_size({"width": 768, "height": 1024})
-        authenticated_page.goto(f"{base_url}/ar/customers/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("main")).to_be_visible()

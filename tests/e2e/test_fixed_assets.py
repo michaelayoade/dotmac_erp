@@ -274,7 +274,7 @@ class TestAssetDetail:
 
             # Look for depreciation-related content
             depreciation_info = authenticated_page.locator(
-                "text=Depreciation, text=Book Value, text=Accumulated, [class*='depreciation']"
+                ":text('Depreciation'), :text('Book Value'), :text('Accumulated'), [class*='depreciation']"
             )
             if depreciation_info.count() > 0:
                 expect(depreciation_info.first).to_be_visible()

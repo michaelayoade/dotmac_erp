@@ -65,7 +65,7 @@ class TestGLJournals:
     @pytest.mark.e2e
     def test_journals_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that journals page loads."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/gl/journals.*"))
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -75,7 +75,7 @@ class TestGLJournals:
     @pytest.mark.e2e
     def test_journals_page_has_content(self, authenticated_page: Page, base_url: str):
         """Test that journals page has content."""
-        authenticated_page.goto(f"{base_url}/gl/journals")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.locator("table")).to_be_visible()
 
@@ -86,7 +86,7 @@ class TestGLPeriods:
     @pytest.mark.e2e
     def test_periods_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that periods page loads."""
-        authenticated_page.goto(f"{base_url}/gl/periods")
+        authenticated_page.goto(f"{base_url}/finance/gl/periods")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/gl/periods.*"))
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -100,7 +100,7 @@ class TestGLTrialBalance:
     @pytest.mark.e2e
     def test_trial_balance_page_loads(self, authenticated_page: Page, base_url: str):
         """Test that trial balance page loads."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page).to_have_url(re.compile(r".*/gl/trial-balance.*"))
         expect(authenticated_page.get_by_test_id("page-title")).to_contain_text(
@@ -112,7 +112,7 @@ class TestGLTrialBalance:
         self, authenticated_page: Page, base_url: str
     ):
         """Test trial balance page has date filter."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         date_filter = authenticated_page.locator("input[name='as_of_date']").first
@@ -121,7 +121,7 @@ class TestGLTrialBalance:
     @pytest.mark.e2e
     def test_trial_balance_shows_totals(self, authenticated_page: Page, base_url: str):
         """Test trial balance displays debit/credit totals."""
-        authenticated_page.goto(f"{base_url}/gl/trial-balance")
+        authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for total row or summary
@@ -137,7 +137,7 @@ class TestGLJournalWorkflow:
         self, authenticated_page: Page, base_url: str
     ):
         """Test journal form has all required fields."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -150,7 +150,7 @@ class TestGLJournalWorkflow:
     @pytest.mark.e2e
     def test_journal_line_entry(self, authenticated_page: Page, base_url: str):
         """Test journal line entry interface."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for add line button
@@ -164,7 +164,7 @@ class TestGLJournalWorkflow:
     @pytest.mark.e2e
     def test_journal_balance_validation(self, authenticated_page: Page, base_url: str):
         """Test journal shows balance validation."""
-        authenticated_page.goto(f"{base_url}/gl/journals/new")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for balance indicator
@@ -178,7 +178,7 @@ class TestGLPeriodClose:
     @pytest.mark.e2e
     def test_period_close_page_loads(self, authenticated_page: Page, base_url: str):
         """Test period close page loads."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_test_id("page-title")).to_be_visible()
@@ -188,7 +188,7 @@ class TestGLPeriodClose:
         self, authenticated_page: Page, base_url: str
     ):
         """Test period close shows close checklist."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for checklist or steps
@@ -200,7 +200,7 @@ class TestGLPeriodClose:
     @pytest.mark.e2e
     def test_period_close_button_exists(self, authenticated_page: Page, base_url: str):
         """Test close period button exists."""
-        authenticated_page.goto(f"{base_url}/gl/period-close")
+        authenticated_page.goto(f"{base_url}/finance/gl/period-close")
         authenticated_page.wait_for_load_state("networkidle")
 
         close_btn = authenticated_page.locator(
@@ -217,7 +217,7 @@ class TestGLDetailPages:
     def test_account_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Ensure account detail shows not found state."""
         account_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/gl/accounts/{account_id}")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts/{account_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page.get_by_text("Account not found")).to_be_visible()
@@ -226,7 +226,7 @@ class TestGLDetailPages:
     def test_journal_detail_not_found(self, authenticated_page: Page, base_url: str):
         """Ensure journal detail shows not found state."""
         entry_id = str(uuid4())
-        authenticated_page.goto(f"{base_url}/gl/journals/{entry_id}")
+        authenticated_page.goto(f"{base_url}/finance/gl/journals/{entry_id}")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(
