@@ -1,0 +1,100 @@
+{% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, icon_svg %}
+
+{% block page_title %}Reject AP Invoice{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Finance</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Accounts Payable</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/invoices" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">AP Invoices</a></li>
+        {% if invoice %}
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/finance/ap/invoices/{{ invoice.invoice_id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ invoice.invoice_number }}</a></li>
+        {% endif %}
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Reject</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% if invoice %}
+<div class="mx-auto max-w-3xl space-y-6">
+    <div class="card p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-xl font-semibold text-slate-900 dark:text-white">Reject AP Invoice</h1>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ invoice.invoice_number }} from {{ invoice.supplier_name or "Supplier" }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_badge(invoice.status | default('submitted'), 'sm') }}
+                <div class="text-right">
+                    <p class="text-xs uppercase text-slate-500">Amount</p>
+                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ invoice.total_amount }}</p>
+                </div>
+            </div>
+        </div>
+
+        <dl class="mt-6 grid gap-4 border-y border-slate-200 py-4 dark:border-slate-700 sm:grid-cols-3">
+            <div>
+                <dt class="text-xs uppercase text-slate-500">Supplier invoice</dt>
+                <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ invoice.supplier_invoice_number or "Not provided" }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase text-slate-500">Invoice date</dt>
+                <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ invoice.invoice_date or "Not available" }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase text-slate-500">Due date</dt>
+                <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ invoice.due_date or "Not available" }}</dd>
+            </div>
+        </dl>
+
+        {% if invoice.status not in ['SUBMITTED', 'PENDING'] %}
+        <div class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex gap-3">
+                {{ icon_svg("exclamation-triangle", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
+                <p class="text-sm text-amber-800 dark:text-amber-200">Only submitted invoices can be rejected.</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/finance/ap/invoices/{{ invoice.invoice_id }}/reject" class="mt-6 space-y-4">
+            {{ request.state.csrf_form | safe }}
+            <div>
+                <label for="rejection_reason" class="form-label">Reason <span class="text-rose-500">*</span></label>
+                <textarea id="rejection_reason"
+                          name="rejection_reason"
+                          rows="5"
+                          required
+                          class="form-input"
+                          placeholder="Enter the reason for rejecting this invoice."></textarea>
+            </div>
+            <div class="flex flex-wrap items-center justify-end gap-3">
+                <a href="/finance/ap/invoices/{{ invoice.invoice_id }}" class="btn btn-secondary">
+                    {{ icon_svg("arrow-left", "h-4 w-4") }}
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-danger" {% if invoice.status not in ['SUBMITTED', 'PENDING'] %}disabled{% endif %}>
+                    <span class="btn-spinner"></span>
+                    {{ icon_svg("x-mark", "h-4 w-4 btn-hide-on-load") }}
+                    <span class="btn-hide-on-load">Reject Invoice</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="mx-auto max-w-2xl">
+    <div class="card p-6">
+        <h1 class="text-xl font-semibold text-slate-900 dark:text-white">Invoice not found</h1>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">The invoice could not be loaded for this organization.</p>
+        <a href="/finance/ap/invoices" class="btn btn-secondary mt-6">
+            {{ icon_svg("arrow-left", "h-4 w-4") }}
+            Back to Invoices
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

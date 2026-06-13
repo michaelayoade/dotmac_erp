@@ -8,6 +8,7 @@ import pytest
 from app.models.people.training import TrainingEventStatus, TrainingProgramStatus
 from app.services.common import PaginatedResult
 from app.services.help_center import build_help_center_payload
+from app.services.help_center import search_help_articles
 from app.services.people.training import TrainingService
 from app.services.people.training.training_service import TrainingEventStatusError
 from app.services.people.training.web.event_web import EventWebService
@@ -103,5 +104,54 @@ def test_help_center_people_content_includes_training_resources():
     playbook_titles = {item["title"] for item in payload["role_playbooks"]}
 
     assert "/people/training/programs" in manual_hrefs
+    assert "/people/training/my-courses" in manual_hrefs
+    assert "/people/training/courses" in manual_hrefs
     assert "/people/training/programs" in journey_hrefs
+    assert "/people/training/my-courses" in journey_hrefs
+    assert "/people/training/courses" in journey_hrefs
     assert "Learning & Development" in playbook_titles
+
+
+def test_help_center_includes_learning_assessment_guides():
+    payload = build_help_center_payload(
+        accessible_modules=["people"],
+        roles=[],
+        scopes=[],
+        is_admin=False,
+    )
+
+    article_by_slug = {article["slug"]: article for article in payload["articles"]}
+    learner = article_by_slug["people-taking-assigned-learning-courses"]
+    facilitator = article_by_slug["people-facilitator-learning-app-workflow"]
+
+    assert learner["href"] == "/help/articles/people-taking-assigned-learning-courses"
+    assert learner["related_links"][0]["href"] == "/people/training/my-courses"
+    assert any(
+        "Submit the assessment" in item
+        for section in learner["sections"]
+        for item in section.get("items", [])
+    )
+
+    assert (
+        facilitator["href"] == "/help/articles/people-facilitator-learning-app-workflow"
+    )
+    assert facilitator["related_links"][0]["href"] == "/people/training/courses"
+    assert any(
+        journey["label"] == "Review essay answers"
+        for playbook in payload["role_playbooks"]
+        if playbook["title"] == "Learning & Development"
+        for journey in playbook["journeys"]
+    )
+
+    results = search_help_articles(
+        accessible_modules=["people"],
+        roles=[],
+        scopes=[],
+        is_admin=False,
+        query="facilitator",
+        module_key="people",
+    )
+    assert any(
+        item["slug"] == "people-facilitator-learning-app-workflow"
+        for item in results["results"]
+    )

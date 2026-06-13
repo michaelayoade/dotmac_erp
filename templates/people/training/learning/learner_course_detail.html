@@ -1,0 +1,80 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg, status_badge %}
+
+{% block page_title %}{{ course.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/people/training/my-courses" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">My Courses</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ course.title }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">{{ course.title }}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ course.description or "No description." }}</p>
+            </div>
+            {{ status_badge(progress.status.value, "sm") }}
+        </div>
+        <div class="card-body">
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400"><span>Progress</span><span class="font-mono">{{ progress.completion_percentage }}%</span></div>
+            <div class="mt-2 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div class="h-full bg-teal-500" style="width: {{ progress.completion_percentage }}%"></div></div>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        {% for module in course.modules %}
+        {% set unlocked = module_unlocked.get(module.id) %}
+        <div class="card {{ 'opacity-70' if not unlocked }}">
+            <div class="card-header">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-mono">{{ module.sequence }}</span>
+                    <div>
+                        <h3 class="font-medium text-slate-900 dark:text-white">{{ module.title }}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ module.description or "" }}</p>
+                    </div>
+                </div>
+                {% if not unlocked %}<span class="text-slate-500">{{ icon_svg("lock", "h-5 w-5") }}</span>{% elif module_completed.get(module.id) %}{{ status_badge("completed", "sm") }}{% endif %}
+            </div>
+            <div class="card-body grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Lessons</h4>
+                    <div class="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                        {% for lesson in module.lessons %}
+                        {% set lp = lesson_progress.get(lesson.id) %}
+                        <a {% if unlocked %}href="/people/training/lessons/{{ lesson.id }}"{% endif %} class="flex items-center justify-between gap-3 px-3 py-2 text-sm {{ 'hover:bg-slate-50 dark:hover:bg-slate-800/50' if unlocked else 'cursor-not-allowed' }}">
+                            <span class="font-medium text-slate-800 dark:text-slate-100">{{ lesson.title }}</span>
+                            {{ status_badge("completed" if lp and lp.completed else "pending", "sm") }}
+                        </a>
+                        {% else %}<div class="px-3 py-4 text-sm text-slate-500">No lessons.</div>{% endfor %}
+                    </div>
+                </div>
+                <div>
+                    <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assessments</h4>
+                    <div class="divide-y divide-slate-200 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                        {% for assessment in module.assessments if assessment.status.value == 'published' %}
+                        {% set attempt = latest_attempts.get(assessment.id) %}
+                        <div class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                            <div><span class="font-medium text-slate-800 dark:text-slate-100">{{ assessment.title }}</span><div class="text-xs text-slate-500">{{ attempt.score ~ '%' if attempt and attempt.submitted_at else 'Not submitted' }}</div></div>
+                            {% if unlocked %}
+                            {% if attempt and attempt.submitted_at %}<a href="/people/training/attempts/{{ attempt.id }}/result" class="btn btn-secondary">Result</a>{% endif %}
+                            <form method="post" action="/people/training/assessments/{{ assessment.id }}/start">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-primary">Start</button></form>
+                            {% else %}<span class="text-slate-400">{{ icon_svg("lock", "h-4 w-4") }}</span>{% endif %}
+                        </div>
+                        {% else %}<div class="px-3 py-4 text-sm text-slate-500">No published assessments.</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

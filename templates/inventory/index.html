@@ -44,6 +44,22 @@
                 <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Transactions</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review receipts, issues, transfers, and stock adjustments.</p></div>
             </div>
         </a>
+        {% if auth.has_permission("inventory:receipt_approvals:read") %}
+        <a href="/inventory/receipt-approvals" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+            <div class="flex items-start gap-3">
+                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">{{ icon_svg("clipboard-check", "h-5 w-5") }}</div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-base font-semibold text-slate-900 dark:text-white">Receipt Approvals</h3>
+                        {% if pending_receipt_approval_count %}
+                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ pending_receipt_approval_count }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Confirm AP invoice stock received before inventory is posted.</p>
+                </div>
+            </div>
+        </a>
+        {% endif %}
         <a href="/inventory/counts" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
             <div class="flex items-start gap-3">
                 <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">{{ icon_svg("clipboard-check", "h-5 w-5") }}</div>

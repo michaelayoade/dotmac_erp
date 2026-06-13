@@ -1,0 +1,95 @@
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import empty_state, icon_svg %}
+
+{% block page_title %}Receipt Approvals{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Receipt Approvals</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 page-enter">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <h1 class="text-xl font-semibold text-slate-900 dark:text-white">Store Receipt Approvals</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">AP invoice stock receipts waiting for store confirmation.</p>
+        </div>
+        <form method="get" action="/inventory/receipt-approvals" class="flex items-center gap-2">
+            <label for="status" class="sr-only">Status</label>
+            <select id="status" name="status" class="form-input min-w-44" onchange="this.form.submit()">
+                {% for option in ["PENDING", "PARTIALLY_RECEIVED", "POSTED_TO_INVENTORY", "REJECTED", "ALL"] %}
+                <option value="{{ option }}" {% if status == option %}selected{% endif %}>{{ option | replace("_", " ") | title }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    <div id="results-container">
+        <div class="card">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Invoice</th>
+                            <th scope="col">Supplier</th>
+                            <th scope="col">Item</th>
+                            <th scope="col" class="text-right">Qty</th>
+                            <th scope="col" class="text-right">Received</th>
+                            <th scope="col">Warehouse</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Submitted</th>
+                            <th scope="col" class="text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for approval in approvals %}
+                        <tr>
+                            <td>
+                                <span class="font-mono text-sm font-semibold text-slate-900 dark:text-white">{{ approval.invoice_number }}</span>
+                                <div class="text-xs text-slate-500">Line {{ approval.line_number }}</div>
+                            </td>
+                            <td class="text-sm text-slate-700 dark:text-slate-200">{{ approval.supplier_name }}</td>
+                            <td>
+                                <div class="text-sm font-medium text-slate-900 dark:text-white">{{ approval.item_code }}</div>
+                                <div class="text-xs text-slate-500">{{ approval.item_name }}</div>
+                            </td>
+                            <td class="text-right font-mono text-sm">{{ approval.requested_quantity }}</td>
+                            <td class="text-right font-mono text-sm">{{ approval.approved_quantity if approval.approved_quantity else "-" }}</td>
+                            <td class="text-sm text-slate-700 dark:text-slate-200">{{ approval.warehouse_name if approval.warehouse_name else "Unassigned" }}</td>
+                            <td>
+                                {% set status_classes = {
+                                    "PENDING": "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-800",
+                                    "PARTIALLY_RECEIVED": "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:ring-blue-800",
+                                    "POSTED_TO_INVENTORY": "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-800",
+                                    "REJECTED": "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:ring-rose-800"
+                                } %}
+                                <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 {{ status_classes.get(approval.status, 'bg-slate-50 text-slate-700 ring-slate-200') }}">{{ approval.status | replace("_", " ") | title }}</span>
+                            </td>
+                            <td>
+                                <div class="text-sm text-slate-700 dark:text-slate-200">{{ approval.submitted_by_name if approval.submitted_by_name else "Unknown" }}</div>
+                                <div class="text-xs text-slate-500">{{ approval.created_at }}</div>
+                            </td>
+                            <td class="text-right">
+                                <a href="/inventory/receipt-approvals/{{ approval.approval_id }}" class="btn btn-secondary btn-sm">Review</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="py-10">
+                                {{ empty_state("No receipt approvals", "There are no AP invoice stock receipts in this queue.", "check-circle") }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

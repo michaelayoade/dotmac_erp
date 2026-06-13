@@ -21,8 +21,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
+from app.models.finance.ap.invoice_inventory_receipt_approval import (
+    InvoiceInventoryReceiptApproval,
+)
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -31,6 +35,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
+from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import IFRSCategory
@@ -564,6 +569,18 @@ class InvoiceWebService:
         vat_labels_by_line: dict[UUID, set[str]] = {}
         line_ids = [line.line_id for line in lines]
         if line_ids:
+            receipt_approvals = db.scalars(
+                select(InvoiceInventoryReceiptApproval).where(
+                    InvoiceInventoryReceiptApproval.organization_id == org_id,
+                    InvoiceInventoryReceiptApproval.supplier_invoice_line_id.in_(
+                        line_ids
+                    ),
+                )
+            ).all()
+            receipt_approval_by_line = {
+                approval.supplier_invoice_line_id: approval
+                for approval in receipt_approvals
+            }
             line_taxes = db.execute(
                 select(SupplierInvoiceLineTax, TaxCode)
                 .join(
@@ -604,6 +621,22 @@ class InvoiceWebService:
 
         for idx, line in enumerate(lines):
             line_view = lines_view[idx]
+            receipt_approval = (
+                receipt_approval_by_line.get(line.line_id) if line_ids else None
+            )
+            if receipt_approval:
+                line_view["receipt_approval"] = {
+                    "approval_id": str(receipt_approval.approval_id),
+                    "status": receipt_approval.status.value,
+                    "url": f"/inventory/receipt-approvals/{receipt_approval.approval_id}",
+                }
+            else:
+                line_view["receipt_approval"] = None
+            line_view["auto_receipt_transaction_id"] = (
+                str(line.auto_receipt_transaction_id)
+                if getattr(line, "auto_receipt_transaction_id", None)
+                else ""
+            )
             account_id = (
                 line.asset_account_id
                 if getattr(line, "capitalize_flag", False) and line.asset_account_id
@@ -729,6 +762,35 @@ class InvoiceWebService:
                 inclusive_vat_total, invoice.currency_code
             )
 
+        payment_rows = db.execute(
+            select(SupplierPayment, APPaymentAllocation)
+            .join(
+                APPaymentAllocation,
+                APPaymentAllocation.payment_id == SupplierPayment.payment_id,
+            )
+            .where(
+                APPaymentAllocation.invoice_id == invoice.invoice_id,
+                SupplierPayment.organization_id == org_id,
+            )
+            .order_by(
+                SupplierPayment.payment_date.desc(),
+                SupplierPayment.payment_number.desc(),
+            )
+        ).all()
+        payments_view = [
+            {
+                "payment_id": payment.payment_id,
+                "payment_number": payment.payment_number,
+                "payment_date": format_date(payment.payment_date, format="%d %b %Y"),
+                "payment_method": payment.payment_method.value,
+                "amount": format_currency(
+                    allocation.allocated_amount,
+                    payment.currency_code,
+                ),
+            }
+            for payment, allocation in payment_rows
+        ]
+
         # Fetch org TIN for display on invoice document
         org_tin: str | None = None
         try:
@@ -745,6 +807,7 @@ class InvoiceWebService:
             "supplier": supplier_form_view(supplier) if supplier else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "payments": payments_view,
             "org_tin": org_tin,
             "recent_activity": recent_activity,
         }
@@ -1044,6 +1107,7 @@ class InvoiceWebService:
                 for line in lines
             ],
             "auto_create_inventory_receipt": invoice.auto_create_inventory_receipt,
+            "inventory_receipt_mode": invoice.inventory_receipt_mode,
         }
 
         return templates.TemplateResponse(
@@ -1272,6 +1336,56 @@ class InvoiceWebService:
             db.commit()
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            db.rollback()
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def reject_invoice_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse:
+        """Render AP invoice rejection confirmation form."""
+        context = base_context(request, auth, "Reject AP Invoice", "ap")
+        context.update(
+            self.invoice_detail_context(
+                db,
+                str(auth.organization_id),
+                invoice_id,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_reject.html", context
+        )
+
+    async def reject_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Reject a submitted invoice."""
+        form = await request.form()
+        reason = str(form.get("rejection_reason") or "").strip()
+        try:
+            supplier_invoice_service.reject_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                rejected_by_user_id=auth.user_id,
+                reason=reason,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+rejected",
                 status_code=303,
             )
         except Exception as e:

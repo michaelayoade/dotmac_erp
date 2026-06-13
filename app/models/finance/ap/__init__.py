@@ -7,11 +7,16 @@ from app.models.finance.ap.ap_aging_snapshot import APAgingSnapshot
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
+from app.models.finance.ap.invoice_inventory_receipt_approval import (
+    InvoiceInventoryReceiptApproval,
+    InvoiceInventoryReceiptApprovalStatus,
+)
 from app.models.finance.ap.payment_batch import APBatchStatus, APPaymentBatch
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
+    InventoryReceiptMode,
     PostingStatus,
     SupplierInvoice,
     SupplierInvoiceStatus,
@@ -35,9 +40,12 @@ __all__ = [
     "GoodsReceipt",
     "ReceiptStatus",
     "GoodsReceiptLine",
+    "InvoiceInventoryReceiptApproval",
+    "InvoiceInventoryReceiptApprovalStatus",
     "SupplierInvoice",
     "SupplierInvoiceType",
     "SupplierInvoiceStatus",
+    "InventoryReceiptMode",
     "PostingStatus",
     "ThreeWayMatchStatus",
     "SupplierInvoiceLine",

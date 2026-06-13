@@ -1,0 +1,212 @@
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Receipt Approval{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Inventory</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/inventory/receipt-approvals" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Receipt Approvals</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ approval.invoice_number }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/inventory/receipt-approvals" class="btn btn-secondary">Back to Queue</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px] page-enter">
+    <section class="space-y-6">
+        <div class="card p-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">AP Invoice</p>
+                    <span class="mt-1 block font-mono text-lg font-semibold text-slate-900 dark:text-white">{{ approval.invoice_number }}</span>
+                    <p class="mt-1 text-sm text-slate-700 dark:text-slate-200">{{ approval.supplier_name }}</p>
+                </div>
+                {% set status_classes = {
+                    "PENDING": "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:ring-amber-800",
+                    "PARTIALLY_RECEIVED": "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:ring-blue-800",
+                    "POSTED_TO_INVENTORY": "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:ring-emerald-800",
+                    "REJECTED": "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:ring-rose-800"
+                } %}
+                <span class="inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ring-1 {{ status_classes.get(approval.status, 'bg-slate-50 text-slate-700 ring-slate-200') }}">{{ approval.status | replace("_", " ") | title }}</span>
+            </div>
+
+            <dl class="mt-6 grid gap-4 sm:grid-cols-2">
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Item</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ approval.item_code }} - {{ approval.item_name }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Invoice Line</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">Line {{ approval.line_number }} · {{ approval.line_description }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Requested Quantity</dt>
+                    <dd class="mt-1 font-mono text-sm text-slate-900 dark:text-white">{{ approval.requested_quantity }}</dd>
+                </div>
+                {% if approval.approved_quantity %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Received Quantity</dt>
+                    <dd class="mt-1 font-mono text-sm text-slate-900 dark:text-white">{{ approval.approved_quantity }}</dd>
+                </div>
+                {% endif %}
+                {% if approval.remaining_quantity is not none %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Remaining Quantity</dt>
+                    <dd class="mt-1 font-mono text-sm text-slate-900 dark:text-white">{{ approval.remaining_quantity }}</dd>
+                </div>
+                {% endif %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Warehouse</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ approval.warehouse_name if approval.warehouse_name else "Unassigned" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Receipt Reference</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ approval.receipt_reference if approval.receipt_reference else "None" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Inventory Transaction</dt>
+                    <dd class="mt-1 font-mono text-sm text-slate-900 dark:text-white">
+                        {% if approval.inventory_transaction_id %}
+                        <a href="/inventory/transactions/{{ approval.inventory_transaction_id }}" class="text-emerald-700 hover:underline dark:text-emerald-300">{{ approval.inventory_transaction_id }}</a>
+                        {% else %}
+                        Not posted
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Serials</dt>
+                    <dd class="mt-1 font-mono text-sm text-slate-900 dark:text-white">{{ approval.serial_count }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="card p-6">
+            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Audit Trail</h2>
+            <dl class="mt-4 grid gap-4 sm:grid-cols-3">
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Submitted By</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ approval.submitted_by_name if approval.submitted_by_name else "Unknown" }}</dd>
+                    <dd class="text-xs text-slate-500">{{ approval.created_at }}</dd>
+                </div>
+                {% if approval.approved_by_name or approval.approved_at %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Approved By</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ approval.approved_by_name if approval.approved_by_name else "Unknown" }}</dd>
+                    <dd class="text-xs text-slate-500">{{ approval.approved_at }}</dd>
+                </div>
+                {% endif %}
+                {% if approval.rejected_by_name or approval.rejected_at %}
+                <div>
+                    <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">Rejected By</dt>
+                    <dd class="mt-1 text-sm text-slate-900 dark:text-white">{{ approval.rejected_by_name if approval.rejected_by_name else "Unknown" }}</dd>
+                    <dd class="text-xs text-slate-500">{{ approval.rejected_at }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <div class="card">
+            <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-800">
+                <h2 class="text-base font-semibold text-slate-900 dark:text-white">Line Receipt History</h2>
+            </div>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Status</th>
+                            <th scope="col" class="text-right">Requested</th>
+                            <th scope="col" class="text-right">Received</th>
+                            <th scope="col">Decision</th>
+                            <th scope="col">Transaction</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in history %}
+                        <tr>
+                            <td class="text-sm text-slate-900 dark:text-white">{{ entry.status | replace("_", " ") | title }}</td>
+                            <td class="text-right font-mono text-sm">{{ entry.requested_quantity }}</td>
+                            <td class="text-right font-mono text-sm">{{ entry.approved_quantity if entry.approved_quantity else "-" }}</td>
+                            <td>
+                                {% if entry.approved_at %}
+                                <div class="text-sm text-slate-700 dark:text-slate-200">{{ entry.approved_by_name if entry.approved_by_name else "Unknown" }}</div>
+                                <div class="text-xs text-slate-500">{{ entry.approved_at }}</div>
+                                {% elif entry.rejected_at %}
+                                <div class="text-sm text-slate-700 dark:text-slate-200">{{ entry.rejected_by_name if entry.rejected_by_name else "Unknown" }}</div>
+                                <div class="text-xs text-slate-500">{{ entry.rejected_at }}</div>
+                                {% else %}
+                                <div class="text-sm text-slate-700 dark:text-slate-200">{{ entry.submitted_by_name if entry.submitted_by_name else "Unknown" }}</div>
+                                <div class="text-xs text-slate-500">{{ entry.created_at }}</div>
+                                {% endif %}
+                            </td>
+                            <td class="font-mono text-xs">
+                                {% if entry.inventory_transaction_id %}
+                                <a href="/inventory/transactions/{{ entry.inventory_transaction_id }}" class="text-emerald-700 hover:underline dark:text-emerald-300">{{ entry.inventory_transaction_id }}</a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% if approval.rejection_reason %}
+        <div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-900/20 dark:text-rose-200">
+            {{ approval.rejection_reason }}
+        </div>
+        {% endif %}
+    </section>
+
+    <aside class="space-y-6">
+        {% if approval.status == "PENDING" %}
+        <form method="post" action="/inventory/receipt-approvals/{{ approval.approval_id }}/approve" class="card p-6 space-y-4">
+            {{ request.state.csrf_form | safe }}
+            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Approve Receipt</h2>
+            <div>
+                <label class="form-label" for="approved_quantity">Approved Quantity</label>
+                <input id="approved_quantity" name="approved_quantity" type="number" step="0.000001" min="0" value="{{ approval.requested_quantity }}" class="form-input">
+            </div>
+            <div>
+                <label class="form-label" for="warehouse_id">Warehouse</label>
+                <select id="warehouse_id" name="warehouse_id" class="form-input">
+                    {% for warehouse in warehouses %}
+                    <option value="{{ warehouse.warehouse_id }}" {% if warehouse.warehouse_id == approval.warehouse_id %}selected{% endif %}>{{ warehouse.warehouse_code }} - {{ warehouse.warehouse_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if approval.track_serial_numbers %}
+            <div>
+                <label class="form-label" for="receipt_serial_numbers">Serial Numbers</label>
+                <textarea id="receipt_serial_numbers" name="receipt_serial_numbers" rows="6" class="form-input font-mono text-sm">{{ approval.serial_text }}</textarea>
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn-success w-full">Approve and Receive</button>
+        </form>
+
+        <form method="post" action="/inventory/receipt-approvals/{{ approval.approval_id }}/reject" class="card p-6 space-y-4">
+            {{ request.state.csrf_form | safe }}
+            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Reject Receipt</h2>
+            <div>
+                <label class="form-label" for="rejection_reason">Reason</label>
+                <textarea id="rejection_reason" name="rejection_reason" rows="4" required class="form-input"></textarea>
+            </div>
+            <button type="submit" class="btn btn-danger w-full">Reject</button>
+        </form>
+        {% else %}
+        <div class="card p-6">
+            <h2 class="text-base font-semibold text-slate-900 dark:text-white">Decision Recorded</h2>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">This receipt approval is no longer pending.</p>
+        </div>
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}

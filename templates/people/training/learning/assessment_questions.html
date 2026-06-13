@@ -1,0 +1,126 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, icon_svg, status_badge %}
+
+{% block page_title %}Assessment Questions{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/courses/{{ course.id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ course.title }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ assessment.title }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/people/training/assessments/{{ assessment.id }}/edit" class="btn btn-secondary">{{ icon_svg("edit", "h-4 w-4 mr-1.5") }} Edit</a>
+    {% if assessment.status.value != 'published' %}
+    <form method="post" action="/people/training/assessments/{{ assessment.id }}/publish">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-primary">{{ icon_svg("check", "h-4 w-4 mr-1.5") }} Publish</button></form>
+    {% endif %}
+    {% if assessment.status.value != 'archived' %}
+    <form method="post" action="/people/training/assessments/{{ assessment.id }}/archive">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-secondary">{{ icon_svg("archive", "h-4 w-4 mr-1.5") }} Archive</button></form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">{{ assessment.title }}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Pass mark {{ assessment.pass_mark }}% · Max attempts {{ assessment.max_attempts }}</p>
+            </div>
+            {{ status_badge(assessment.status.value, "sm") }}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="card">
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Attached Questions</h3></div>
+            <div class="card-body">
+                {% if assessment.assessment_questions %}
+                <div class="space-y-3">
+                    {% for link in assessment.assessment_questions %}
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ link.question.question_text }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">{{ link.question.question_type.value|replace('_', ' ')|title }} · Sequence {{ link.sequence }} · {{ link.points_override or link.question.points }} points</p>
+                            </div>
+                            <form method="post" action="/people/training/assessments/{{ assessment.id }}/questions/{{ link.question_id }}/detach">{{ request.state.csrf_form | safe }}<button type="submit" class="text-slate-400 hover:text-rose-600" title="Detach">{{ icon_svg("x", "h-4 w-4") }}</button></form>
+                        </div>
+                        <form method="post" action="/people/training/assessments/{{ assessment.id }}/questions/{{ link.question_id }}/edit" class="mt-3 grid grid-cols-1 md:grid-cols-[96px_128px_auto] gap-2 items-end">
+                            {{ request.state.csrf_form | safe }}
+                            <div><label class="form-label">Sequence</label><input name="sequence" type="number" min="1" class="form-input w-full" value="{{ link.sequence }}"></div>
+                            <div><label class="form-label">Points</label><input name="points_override" type="number" min="0" step="0.01" class="form-input w-full" value="{{ link.points_override if link.points_override is not none else '' }}"></div>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 pb-2"><input type="checkbox" name="is_required" class="form-checkbox" {{ 'checked' if link.is_required }}> Required</label>
+                            <button type="submit" class="btn btn-secondary md:col-span-3 justify-self-start">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Update</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                <form method="post" action="/people/training/assessments/{{ assessment.id }}/questions/reorder" class="mt-3">
+                    {{ request.state.csrf_form | safe }}
+                    {% for link in assessment.assessment_questions %}
+                    <input type="hidden" name="question_ids" value="{{ link.question_id }}">
+                    {% endfor %}
+                    <button type="submit" class="btn btn-secondary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Current Order</button>
+                </form>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400">No questions attached yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            {% call(filter_attrs) compact_filters(
+                base_url="/people/training/assessments/" ~ assessment.id ~ "/questions",
+                active_filters=[],
+                show_search=true,
+                search=search,
+                search_placeholder="Search reusable questions..."
+            ) %}
+                <select aria-label="Question bank" name="bank_id" class="form-select" {{ filter_attrs }}>
+                    <option value="">All Banks</option>
+                    {% for bank in banks %}
+                    <option value="{{ bank.id }}" {{ 'selected' if bank_id == bank.id|string }}>{{ bank.name }}</option>
+                    {% endfor %}
+                </select>
+            {% endcall %}
+            <div id="results-container">
+            <div class="card">
+                <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Reusable Questions</h3></div>
+                <div class="card-body space-y-3">
+                    {% for question in questions %}
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                        <p class="text-sm font-medium text-slate-900 dark:text-white">{{ question.question_text }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ question.question_bank.name }} · {{ question.question_type.value|replace('_', ' ')|title }} · {{ question.points }} points</p>
+                        {% if question.id in attached_ids %}
+                        <span class="mt-2 inline-flex text-xs text-slate-500 dark:text-slate-400">Already attached</span>
+                        {% else %}
+                        <form method="post" action="/people/training/assessments/{{ assessment.id }}/questions" class="mt-3 grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-2 items-end">
+                            {{ request.state.csrf_form | safe }}
+                            <input type="hidden" name="question_id" value="{{ question.id }}">
+                            <div><label class="form-label">Sequence</label><input name="sequence" type="number" min="1" class="form-input w-full"></div>
+                            <div><label class="form-label">Points</label><input name="points_override" type="number" min="0" step="0.01" class="form-input w-full"></div>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 pb-2"><input type="checkbox" name="is_required" class="form-checkbox" checked> Required</label>
+                            <button type="submit" class="btn btn-secondary md:col-span-3 justify-self-start">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} Attach</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No reusable questions found.</p>
+                    {% endfor %}
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

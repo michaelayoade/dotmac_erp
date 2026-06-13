@@ -1,0 +1,57 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, icon_svg %}
+
+{% block page_title %}Learning Dashboard{% endblock %}
+
+{% block header_actions %}
+<a href="/people/training/grading" class="btn btn-secondary">{{ icon_svg("clipboard-check", "h-4 w-4 mr-1.5") }} Reviews</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% call(filter_attrs) compact_filters(base_url="/people/training/learning-dashboard", active_filters=[], date_range=true, start_date=start_date, end_date=end_date, auto_submit=false, show_apply_button=true) %}{% endcall %}
+
+    <div id="results-container" class="space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {% for label, value, icon in [
+            ("Active Courses", report.active_courses, "book"),
+            ("Assigned Courses", report.assigned_courses, "send"),
+            ("Completed Courses", report.completed_courses, "check-circle"),
+            ("Overdue Courses", report.overdue_courses, "clock"),
+            ("Pending Essay Reviews", report.pending_reviews, "clipboard-check")
+        ] %}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <div><p class="text-sm text-slate-500 dark:text-slate-400">{{ label }}</p><p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ value }}</p></div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">{{ icon_svg(icon, "h-5 w-5") }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card overflow-hidden">
+        <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Department Completion Overview</h3></div>
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead><tr class="bg-slate-50 dark:bg-slate-800/50"><th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">Department</th><th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">Assigned</th><th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">Completed</th><th class="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">Rate</th></tr></thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for row in report.department_completion %}
+                    <tr><td class="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{{ row.department }}</td><td class="px-4 py-3 text-right text-sm">{{ row.assigned }}</td><td class="px-4 py-3 text-right text-sm">{{ row.completed }}</td><td class="px-4 py-3 text-right text-sm font-mono">{{ row.completion_rate }}%</td></tr>
+                    {% else %}
+                    <tr><td colspan="4" class="px-4 py-6 text-center text-sm text-slate-500">No department data.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+        <a class="btn btn-secondary" href="/people/training/reports/learning/employee-progress">Employee Progress</a>
+        <a class="btn btn-secondary" href="/people/training/reports/learning/department-completion">Department Completion</a>
+        <a class="btn btn-secondary" href="/people/training/reports/learning/assessment-results">Assessment Results</a>
+        <a class="btn btn-secondary" href="/people/training/reports/learning/outstanding-mandatory">Outstanding Mandatory</a>
+        <a class="btn btn-secondary" href="/people/training/reports/learning/question-analysis">Question Analysis</a>
+    </div>
+    </div>
+</div>
+{% endblock %}
