@@ -13,7 +13,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    ARRAY,
     Date,
     DateTime,
     Enum,
@@ -50,7 +49,6 @@ class MaterialRequestStatus(str, enum.Enum):
 
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
-    PENDING_STOCK = "PENDING_STOCK"
     PARTIALLY_ORDERED = "PARTIALLY_ORDERED"
     ORDERED = "ORDERED"
     ISSUED = "ISSUED"
@@ -252,7 +250,6 @@ class MaterialRequestItem(Base):
         Numeric(20, 6), nullable=False, default=Decimal("0")
     )
     uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    serial_numbers: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
 
     # Line-item specific schedule date (can override header)
     schedule_date: Mapped[date | None] = mapped_column(Date, nullable=True)

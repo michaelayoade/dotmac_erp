@@ -713,7 +713,6 @@ class MaterialRequestWebService:
             in [
                 MaterialRequestStatus.DRAFT,
                 MaterialRequestStatus.SUBMITTED,
-                MaterialRequestStatus.PENDING_STOCK,
                 MaterialRequestStatus.PARTIALLY_ORDERED,
             ]
         )
@@ -1362,10 +1361,7 @@ class MaterialRequestWebService:
         draft_count = counts.get("DRAFT", 0)
         submitted_count = counts.get("SUBMITTED", 0)
         pending_count = (
-            draft_count
-            + submitted_count
-            + counts.get("PENDING_STOCK", 0)
-            + counts.get("PARTIALLY_ORDERED", 0)
+            draft_count + submitted_count + counts.get("PARTIALLY_ORDERED", 0)
         )
         completed_count = (
             counts.get("ORDERED", 0)
@@ -1382,7 +1378,6 @@ class MaterialRequestWebService:
                     [
                         MaterialRequestStatus.DRAFT,
                         MaterialRequestStatus.SUBMITTED,
-                        MaterialRequestStatus.PENDING_STOCK,
                         MaterialRequestStatus.PARTIALLY_ORDERED,
                     ]
                 ),

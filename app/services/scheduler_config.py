@@ -269,11 +269,6 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.banking.auto_match_unreconciled_statements",
             "schedule": crontab(hour="*/6", minute=15),  # Every 6 hours at :15
         },
-        "inventory-auto-issue-pending-stock-material-requests": {
-            "task": "app.tasks.inventory.auto_issue_pending_stock_material_requests",
-            "schedule": crontab(minute="*/5"),  # Every 5 minutes
-            "kwargs": {"limit_per_org": 100},
-        },
         "splynx-incremental-sync": {
             "task": "app.tasks.splynx.run_splynx_incremental_sync",
             "schedule": crontab(minute="*/30"),  # Every 30 minutes
