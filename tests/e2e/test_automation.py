@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -326,6 +327,7 @@ class TestCustomFieldCreate:
         """Test creating a number custom field."""
         authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         type_field = authenticated_page.locator(
             "select[name='field_type'], select[name='type'], #field_type"
@@ -342,6 +344,7 @@ class TestCustomFieldCreate:
         """Test creating a dropdown custom field."""
         authenticated_page.goto(f"{base_url}/automation/custom-fields/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         type_field = authenticated_page.locator(
             "select[name='field_type'], select[name='type'], #field_type"

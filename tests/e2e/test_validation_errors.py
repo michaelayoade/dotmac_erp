@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -84,6 +85,7 @@ class TestEmailFormatValidation:
         """Test invalid email format shows error."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         email_field = authenticated_page.locator(
             "input[type='email'], input[name='email']"
@@ -109,6 +111,7 @@ class TestNumberFormatValidation:
         """Test invalid number format shows error."""
         authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         amount_field = authenticated_page.locator(
             "input[name='amount'], input[name='total'], input[type='number']"
@@ -123,6 +126,7 @@ class TestNumberFormatValidation:
         """Test negative amount validation where not allowed."""
         authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         amount_field = authenticated_page.locator(
             "input[name='amount'], input[name='payment_amount']"
@@ -147,6 +151,7 @@ class TestDateFormatValidation:
         """Test invalid date range validation."""
         authenticated_page.goto(f"{base_url}/finance/gl/periods/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         start_date = authenticated_page.locator(
             "input[name='start_date'], input[name='period_start']"
@@ -178,6 +183,7 @@ class TestUniqueConstraintValidation:
         # First, get an existing account code
         authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Try to create account with same code
         authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
@@ -208,6 +214,7 @@ class TestUniqueConstraintValidation:
         """Test duplicate supplier code shows error."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         code_field = authenticated_page.locator(
             "input[name='supplier_code'], input[name='code']"
@@ -243,6 +250,7 @@ class TestBusinessRuleValidation:
         """Test unbalanced journal entry shows error."""
         authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Look for debit/credit fields that might be unbalanced
         debit_field = authenticated_page.locator(
@@ -275,6 +283,7 @@ class TestBusinessRuleValidation:
         # Navigate to journals and try to post to a closed period
         authenticated_page.goto(f"{base_url}/finance/gl/journals/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select period (if closed periods are listed)
         period_select = authenticated_page.locator(
@@ -294,6 +303,7 @@ class TestBusinessRuleValidation:
         """Test credit limit exceeded shows warning."""
         authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select customer and enter large amount
         customer_select = authenticated_page.locator(
@@ -317,6 +327,7 @@ class TestBusinessRuleValidation:
         """Test overpayment shows warning."""
         authenticated_page.goto(f"{base_url}/finance/ap/payments/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         amount_field = authenticated_page.locator(
             "input[name='amount'], input[name='payment_amount']"

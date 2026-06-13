@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -36,6 +37,7 @@ class TestProcureToPay:
         # Step 1: Create a new supplier
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         supplier_code = authenticated_page.locator(
             "input[name='supplier_code'], input[name='code']"
@@ -131,6 +133,7 @@ class TestOrderToCash:
         # Step 1: Create a new customer
         authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         customer_code = authenticated_page.locator(
             "input[name='customer_code'], input[name='code']"
@@ -356,6 +359,7 @@ class TestCrossModuleIntegration:
         # Navigate to journals to check for invoice-related entries
         authenticated_page.goto(f"{base_url}/finance/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Search for invoice-related entries
         search = authenticated_page.locator(

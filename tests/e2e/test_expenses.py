@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -36,6 +37,7 @@ class TestExpensesList:
         """Test expenses list search functionality."""
         authenticated_page.goto(f"{base_url}/expense")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"

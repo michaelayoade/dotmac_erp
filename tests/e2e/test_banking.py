@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -59,6 +60,7 @@ class TestBankAccountsList:
         """Test accounts list search functionality."""
         authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.get_by_test_id("bank-accounts-search")
         if search.count() > 0:
@@ -142,6 +144,7 @@ class TestBankAccountCreate:
         """Test complete account creation workflow."""
         authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -197,6 +200,7 @@ class TestBankAccountEdit:
         """Test successful account update."""
         authenticated_page.goto(f"{base_url}/finance/banking/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         account_link = authenticated_page.locator(
             "table tbody tr a, a[href*='/banking/accounts/']"

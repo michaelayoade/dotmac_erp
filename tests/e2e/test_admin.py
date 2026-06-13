@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 # Admin-specific fixtures
@@ -182,6 +183,7 @@ class TestAdminUserWorkflow:
         """Test full create user workflow with unique data."""
         admin_authenticated_page.goto(f"{base_url}/admin/users/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         # Generate unique test data
         unique_id = str(uuid4())[:8]
@@ -289,6 +291,7 @@ class TestAdminRoleWorkflow:
         """Test full create role workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/roles/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         unique_id = str(uuid4())[:8]
         role_name = f"TestRole_{unique_id}"
@@ -369,6 +372,7 @@ class TestAdminPermissions:
         """Test full create permission workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/permissions/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         unique_id = str(uuid4())[:8]
         permission_key = f"test.permission.{unique_id}"
@@ -484,6 +488,7 @@ class TestAdminSettings:
         """Test full create setting workflow."""
         admin_authenticated_page.goto(f"{base_url}/admin/settings/new")
         admin_authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(admin_authenticated_page)
 
         unique_id = str(uuid4())[:8]
 
