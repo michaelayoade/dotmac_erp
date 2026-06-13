@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 class TestBankAccountListWorkflow:
@@ -117,6 +118,7 @@ class TestBankAccountCreateWorkflow:
         """Test full create bank account workflow."""
         authenticated_page.goto(f"{base_url}/finance/banking/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         unique_id = str(uuid4())[:8]
 

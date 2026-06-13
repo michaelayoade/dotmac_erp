@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -40,6 +41,7 @@ class TestAssetList:
         """Test assets list search functionality."""
         authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -167,6 +169,7 @@ class TestAssetCreate:
         """Test complete asset creation workflow."""
         authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -310,6 +313,7 @@ class TestAssetEdit:
         """Test successful asset update."""
         authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         asset_link = authenticated_page.locator(
             "table tbody tr a, a[href*='/fa/assets/']"

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -29,6 +30,7 @@ class TestAccountList:
         """Test account list search functionality."""
         authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -44,6 +46,7 @@ class TestAccountList:
         """Test account list category filter."""
         authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         category_filter = authenticated_page.locator(
             "select[name='category'], #category"
@@ -133,6 +136,7 @@ class TestAccountCreate:
         """Test complete account creation workflow."""
         authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 

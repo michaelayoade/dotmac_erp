@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 class TestGLAccountCreateWorkflow:
@@ -57,6 +58,7 @@ class TestGLAccountCreateWorkflow:
         """Test full create account workflow."""
         authenticated_page.goto(f"{base_url}/finance/gl/accounts/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         unique_id = str(uuid4())[:6].upper()
         account_code = f"TEST{unique_id}"
@@ -390,6 +392,7 @@ class TestGLAccountDetailWorkflow:
         """Test accounts list search functionality."""
         authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator("input[name='search']").first
         expect(search).to_be_visible()

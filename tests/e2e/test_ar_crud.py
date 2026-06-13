@@ -137,6 +137,7 @@ class TestCustomerCreate:
         """Test creating customer with minimal data."""
         authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -164,6 +165,7 @@ class TestCustomerCreate:
         """Test creating customer with full details."""
         authenticated_page.goto(f"{base_url}/finance/ar/customers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 

@@ -6,6 +6,7 @@ Tests for pagination controls and behavior across list pages.
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 # =============================================================================
 # Pagination Controls Tests
@@ -191,6 +192,7 @@ class TestPaginationPageSize:
         """Test changing page size works."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Look for page size selector
         page_size = authenticated_page.locator(
@@ -212,6 +214,7 @@ class TestPaginationPageSize:
         """Test pagination preserves filters."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply a filter first
         status_filter = authenticated_page.locator("select[name='status'], #status")

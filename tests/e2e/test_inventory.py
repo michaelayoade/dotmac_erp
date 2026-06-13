@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 def unique_id() -> str:
@@ -51,6 +52,7 @@ class TestItemsList:
         """Test items list search functionality."""
         authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -151,6 +153,7 @@ class TestItemCreate:
         """Test complete item creation workflow."""
         authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uid = unique_id()
 
@@ -186,6 +189,7 @@ class TestItemCreate:
         """Test item creation with unit of measure."""
         authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         uom_field = authenticated_page.locator(
             "select[name='unit_of_measure'], select[name='uom']"
@@ -267,6 +271,7 @@ class TestItemEdit:
         """Test successful item update."""
         authenticated_page.goto(f"{base_url}/inventory/items")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         item_link = authenticated_page.locator(
             "table tbody tr a, a[href*='/inv/items/']"
@@ -337,6 +342,7 @@ class TestInventoryTransactions:
         """Test creating a receipt transaction."""
         authenticated_page.goto(f"{base_url}/inventory/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select receipt type
         type_field = authenticated_page.locator(
@@ -355,6 +361,7 @@ class TestInventoryTransactions:
         """Test creating an issue transaction."""
         authenticated_page.goto(f"{base_url}/inventory/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select issue type
         type_field = authenticated_page.locator(
@@ -375,6 +382,7 @@ class TestInventoryTransactions:
         """Test creating an adjustment transaction."""
         authenticated_page.goto(f"{base_url}/inventory/transactions/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Select adjustment type
         type_field = authenticated_page.locator(

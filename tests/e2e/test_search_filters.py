@@ -6,6 +6,7 @@ Tests for search inputs and filter controls across list pages.
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 # =============================================================================
 # Search Functionality Tests
@@ -20,6 +21,7 @@ class TestSearchFunctionality:
         """Test search returns matching results."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Get initial row count
         initial_rows = authenticated_page.locator("table tbody tr").count()
@@ -49,6 +51,7 @@ class TestSearchFunctionality:
         """Test search shows no results message for non-matching query."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -77,6 +80,7 @@ class TestSearchFunctionality:
         """Test clearing search shows all results."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search'], input[placeholder*='Search']"
@@ -100,6 +104,7 @@ class TestSearchFunctionality:
         """Test search preserves active filters."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply a filter first
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -128,6 +133,7 @@ class TestSearchFunctionality:
         """Test search triggers on enter or instantly."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator(
             "input[type='search'], input[name='search']"
@@ -161,6 +167,7 @@ class TestFilterFunctionality:
         """Test status filter works."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
 
@@ -180,6 +187,7 @@ class TestFilterFunctionality:
         """Test date range filter works."""
         authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         start_date = authenticated_page.locator(
             "input[name='start_date'], input[name='from_date'], input[name='date_from']"
@@ -207,6 +215,7 @@ class TestFilterFunctionality:
         """Test category filter works."""
         authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         category_filter = authenticated_page.locator(
             "select[name='category'], select[name='account_category'], #category"
@@ -224,6 +233,7 @@ class TestFilterFunctionality:
         """Test multiple filters work together."""
         authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply status filter
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -250,6 +260,7 @@ class TestFilterFunctionality:
         """Test filter reset/clear works."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply a filter
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -285,6 +296,7 @@ class TestSearchFilterIntegration:
         """Test search works with active filter."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply filter first
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -310,6 +322,7 @@ class TestSearchFilterIntegration:
         """Test filters update URL parameters."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
@@ -326,6 +339,7 @@ class TestSearchFilterIntegration:
         """Test filters are preserved when navigating back."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         # Apply filter
         status_filter = authenticated_page.locator("select[name='status'], #status")

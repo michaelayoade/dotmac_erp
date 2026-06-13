@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from playwright.sync_api import Page, expect
+from tests.e2e._helpers import reveal_filters
 
 
 class TestAPSupplierCreateWorkflow:
@@ -70,6 +71,7 @@ class TestAPSupplierCreateWorkflow:
         """Test full create supplier workflow."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers/new")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         unique_id = str(uuid4())[:6].upper()
         supplier_code = f"SUP-{unique_id}"
@@ -142,6 +144,7 @@ class TestAPSupplierListWorkflow:
         """Test suppliers list search."""
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
+        reveal_filters(authenticated_page)
 
         search = authenticated_page.locator("input[name='search']").first
         expect(search).to_be_visible()

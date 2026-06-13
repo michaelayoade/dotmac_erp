@@ -8,6 +8,7 @@ import re
 
 import pytest
 from playwright.sync_api import expect
+from tests.e2e._helpers import reveal_filters
 
 ALPINE_JS_MARKER = "cdn.jsdelivr.net/npm/alpinejs@"
 
@@ -115,6 +116,7 @@ class TestLoginWithCredentials:
         # Submit form
         page.locator("button[type='submit'], input[type='submit']").first.click()
         page.wait_for_load_state("networkidle")
+        reveal_filters(page)
 
         # Should redirect to dashboard or home
         expect(page).to_have_url(re.compile(r".*(dashboard|home|/).*"))
@@ -136,6 +138,7 @@ class TestLoginWithCredentials:
         # Submit form
         page.locator("button[type='submit'], input[type='submit']").first.click()
         page.wait_for_load_state("networkidle")
+        reveal_filters(page)
 
         # Should show error message or stay on login page
         # Either an error is shown or we're still on login
