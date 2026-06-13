@@ -47,7 +47,7 @@ class TestMobileViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Page should be visible and not broken
@@ -83,7 +83,7 @@ class TestMobileViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Sidebar should be hidden or collapsed
@@ -193,7 +193,7 @@ class TestMobileViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Look for modal trigger button
@@ -240,7 +240,7 @@ class TestTabletViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Page should be visible
@@ -272,7 +272,7 @@ class TestTabletViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Sidebar may be collapsed or visible
@@ -352,7 +352,7 @@ class TestDesktopViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Page should be visible
@@ -387,7 +387,7 @@ class TestDesktopViewport:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Sidebar should be visible on desktop
@@ -461,7 +461,7 @@ class TestCrossViewportNavigation:
             ]
         )
 
-        page.goto(f"{base_url}/dashboard")
+        page.goto(f"{base_url}/finance/dashboard")
         page.wait_for_load_state("networkidle")
 
         # Look for hamburger/menu button
@@ -499,7 +499,7 @@ class TestCrossViewportNavigation:
                 ]
             )
 
-            page.goto(f"{base_url}/dashboard")
+            page.goto(f"{base_url}/finance/dashboard")
             page.wait_for_load_state("networkidle")
 
             # Look for dropdown

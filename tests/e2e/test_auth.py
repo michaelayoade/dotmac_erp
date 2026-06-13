@@ -176,7 +176,7 @@ class TestLogout:
     def test_logout_redirects_to_login(self, authenticated_page, base_url):
         """Test that logout redirects to login page."""
         # First go to dashboard to ensure we're logged in
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Navigate to logout
@@ -195,7 +195,7 @@ class TestLogout:
         page.context.clear_cookies()
 
         # Try to access protected route
-        goto_auth_page(page, f"{base_url}/dashboard")
+        goto_auth_page(page, f"{base_url}/finance/dashboard")
 
         # Should redirect to login
         expect(page).to_have_url(re.compile(r".*login.*"))
@@ -210,7 +210,7 @@ class TestProtectedRoutes:
         # Clear any existing cookies
         page.context.clear_cookies()
 
-        goto_auth_page(page, f"{base_url}/dashboard")
+        goto_auth_page(page, f"{base_url}/finance/dashboard")
 
         # Should redirect to login
         expect(page).to_have_url(re.compile(r".*login.*"))

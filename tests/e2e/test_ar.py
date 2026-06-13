@@ -30,7 +30,7 @@ class TestARCustomersNavigation:
     @pytest.mark.e2e
     def test_new_customer_button_navigation(self, ar_customers_page: Page):
         """Test clicking new customer button navigates to form."""
-        new_btn = ar_customers_page.locator("a[href='/ar/customers/new']").first
+        new_btn = ar_customers_page.locator("a[href='/finance/ar/customers/new']").first
         expect(new_btn).to_be_visible()
         new_btn.click()
         ar_customers_page.wait_for_load_state("networkidle")
@@ -194,7 +194,7 @@ class TestARInvoiceWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ar/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href='/ar/invoices/new']").first
+        new_btn = authenticated_page.locator("a[href='/finance/ar/invoices/new']").first
         expect(new_btn).to_be_visible()
 
 

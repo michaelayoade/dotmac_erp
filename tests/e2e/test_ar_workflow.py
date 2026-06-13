@@ -154,7 +154,9 @@ class TestARCustomerListWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ar/customers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href='/ar/customers/new']").first
+        new_btn = authenticated_page.locator(
+            "a[href='/finance/ar/customers/new']"
+        ).first
         expect(new_btn).to_be_visible()
 
     @pytest.mark.e2e

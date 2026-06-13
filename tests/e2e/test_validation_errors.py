@@ -433,7 +433,7 @@ class TestPermissionErrors:
     def test_unauthorized_access_redirect(self, unauthenticated_page, base_url):
         """Test unauthorized access redirects to login."""
         # Try to access protected page without auth
-        unauthenticated_page.goto(f"{base_url}/dashboard")
+        unauthenticated_page.goto(f"{base_url}/finance/dashboard")
 
         unauthenticated_page.wait_for_load_state("networkidle")
 
