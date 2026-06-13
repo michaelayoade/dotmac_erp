@@ -14,7 +14,7 @@ class TestFixedAssets:
     @pytest.mark.e2e
     def test_assets_page_has_cta(self, authenticated_page: Page, base_url: str):
         """Ensure assets page loads and shows the new asset CTA."""
-        authenticated_page.goto(f"{base_url}/fa/assets")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(
@@ -31,7 +31,7 @@ class TestDepreciationSchedule:
         self, authenticated_page: Page, base_url: str
     ):
         """Ensure depreciation page loads and shows the run button."""
-        authenticated_page.goto(f"{base_url}/fa/depreciation")
+        authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(

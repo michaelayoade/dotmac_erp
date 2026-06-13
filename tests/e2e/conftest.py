@@ -588,7 +588,7 @@ def admin_audit_logs_page(admin_authenticated_page, base_url):
 @pytest.fixture
 def fixed_assets_page(authenticated_page, base_url):
     """Navigate to fixed assets list and return the page."""
-    authenticated_page.goto(f"{base_url}/fa/assets")
+    authenticated_page.goto(f"{base_url}/fixed-assets/assets")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -596,7 +596,7 @@ def fixed_assets_page(authenticated_page, base_url):
 @pytest.fixture
 def fixed_asset_categories_page(authenticated_page, base_url):
     """Navigate to asset categories list and return the page."""
-    authenticated_page.goto(f"{base_url}/fa/categories")
+    authenticated_page.goto(f"{base_url}/fixed-assets/categories")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -604,7 +604,7 @@ def fixed_asset_categories_page(authenticated_page, base_url):
 @pytest.fixture
 def depreciation_page(authenticated_page, base_url):
     """Navigate to depreciation schedule and return the page."""
-    authenticated_page.goto(f"{base_url}/fa/depreciation")
+    authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 

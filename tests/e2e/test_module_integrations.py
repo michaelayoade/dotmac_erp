@@ -173,7 +173,7 @@ class TestFixedAssetSupplierLink:
     @pytest.mark.e2e
     def test_asset_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that fixed asset form loads."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -184,7 +184,7 @@ class TestFixedAssetSupplierLink:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that asset form has category selector."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Category selector
