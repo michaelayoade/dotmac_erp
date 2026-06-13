@@ -1,0 +1,48 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import status_badge %}
+
+{% block page_title %}Assessment Result{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl space-y-6">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3 class="font-medium text-slate-900 dark:text-white">{{ attempt.assessment.title }}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ attempt.assessment.module.course.title }} · Attempt {{ attempt_number }}</p>
+            </div>
+            {% if attempt.passed is none %}{{ status_badge("pending review", "sm") }}{% elif attempt.passed %}{{ status_badge("passed", "sm") }}{% else %}{{ status_badge("failed", "sm") }}{% endif %}
+        </div>
+        <div class="card-body grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div><span class="text-slate-500 dark:text-slate-400">Score</span><p class="font-mono text-slate-900 dark:text-white">{{ attempt.score if attempt.score is not none else "-" }}%</p></div>
+            <div><span class="text-slate-500 dark:text-slate-400">Submitted</span><p class="text-slate-900 dark:text-white">{{ attempt.submitted_at.strftime('%Y-%m-%d %H:%M') if attempt.submitted_at else "-" }}</p></div>
+            <div><span class="text-slate-500 dark:text-slate-400">Feedback</span><p class="text-slate-900 dark:text-white">{{ "Awaiting facilitator review" if attempt.passed is none else "-" }}</p></div>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        {% for answer in attempt.answers %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Question {{ loop.index }}</h3>
+                {% if answer.is_correct is none %}{{ status_badge("pending review", "sm") }}{% elif answer.is_correct %}{{ status_badge("correct", "sm") }}{% else %}{{ status_badge("incorrect", "sm") }}{% endif %}
+            </div>
+            <div class="card-body space-y-3 text-sm">
+                <p class="font-medium text-slate-900 dark:text-white">{{ answer.question_text_snapshot }}</p>
+                <div>
+                    <span class="text-slate-500 dark:text-slate-400">Your answer</span>
+                    <p class="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-300">{{ answer.answer or "-" }}</p>
+                </div>
+                {% if answer.correct_answer_snapshot %}
+                <div>
+                    <span class="text-slate-500 dark:text-slate-400">Correct answer snapshot</span>
+                    <p class="mt-1 text-slate-700 dark:text-slate-300">{{ answer.correct_answer_snapshot }}</p>
+                </div>
+                {% endif %}
+                <p class="text-slate-500 dark:text-slate-400">Score awarded: {{ answer.score_awarded if answer.score_awarded is not none else "Pending" }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, icon_svg, status_badge %}
+
+{% block page_title %}Learning Courses{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Training</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Courses</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/people/training/question-banks" class="btn btn-secondary">
+        {{ icon_svg("help-circle", "h-4 w-4 mr-1.5") }}
+        Question Banks
+    </a>
+    <a href="/people/training/assignments" class="btn btn-secondary">
+        {{ icon_svg("send", "h-4 w-4 mr-1.5") }}
+        Assignments
+    </a>
+    <a href="/people/training/courses/new" class="btn btn-primary">
+        {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
+        New Course
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if request.query_params.get('error') %}
+    <div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ request.query_params.get('error') }}</div>
+    {% endif %}
+
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/training/courses",
+        active_filters=active_filters if active_filters else [],
+        show_search=true,
+        search=search,
+        search_placeholder="Search courses..."
+    ) %}
+        <select aria-label="Department" name="department_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Departments</option>
+            {% for dept in departments %}
+            <option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string }}>{{ dept.department_name }}</option>
+            {% endfor %}
+        </select>
+        <select aria-label="Status" name="status" class="form-select" {{ filter_attrs }}>
+            <option value="">All Status</option>
+            {% for item in statuses %}
+            <option value="{{ item }}" {{ 'selected' if status == item }}>{{ item|replace('_', ' ')|title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
+
+    <div id="results-container">
+    {% if courses %}
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Course</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Department</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Version</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Modules</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Assignments</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Created</th>
+                        <th class="px-4 py-3 w-32"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for course in courses %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3">
+                            <a href="/people/training/courses/{{ course.id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">{{ course.title }}</a>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">{{ "Mandatory" if course.is_mandatory else "Optional" }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ course.department.department_name if course.department else "All departments" }}</td>
+                        <td class="px-4 py-3">{{ status_badge(course.status.value, "sm") }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ course.version_number }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ module_counts.get(course.id, 0) }}</td>
+                        <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ assignment_counts.get(course.id, 0) }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ course.created_at.strftime('%Y-%m-%d') if course.created_at else '-' }}</td>
+                        <td class="px-4 py-3 text-right">
+                            <div class="inline-flex items-center gap-2">
+                                <a href="/people/training/courses/{{ course.id }}" class="text-slate-500 hover:text-teal-600 dark:hover:text-teal-400" title="View">{{ icon_svg("eye", "h-4 w-4") }}</a>
+                                <a href="/people/training/courses/{{ course.id }}/edit" class="text-slate-500 hover:text-teal-600 dark:hover:text-teal-400" title="Edit">{{ icon_svg("edit", "h-4 w-4") }}</a>
+                                {% if course.status.value != 'published' %}
+                                <form method="post" action="/people/training/courses/{{ course.id }}/publish" class="inline">{{ request.state.csrf_form | safe }}<button type="submit" class="text-slate-500 hover:text-emerald-600" title="Publish">{{ icon_svg("check", "h-4 w-4") }}</button></form>
+                                {% endif %}
+                                {% if course.status.value != 'archived' %}
+                                <form method="post" action="/people/training/courses/{{ course.id }}/archive" class="inline">{{ request.state.csrf_form | safe }}<button type="submit" class="text-slate-500 hover:text-rose-600" title="Archive">{{ icon_svg("archive", "h-4 w-4") }}</button></form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    {{ empty_state("No learning courses found", "Create a course to start building training content.", "book", "New Course", "/people/training/courses/new") }}
+    {% endif %}
+
+    {{ pagination(page=page, total_pages=total_pages, total_count=total_count, limit=limit, search=search) }}
+    </div>
+</div>
+{% endblock %}

@@ -54,8 +54,8 @@
     <link rel="preload" href="/static/fonts/fraunces/fraunces-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Compiled Tailwind CSS -->
-    <link href="/static/css/app.css?v=20260319c" rel="stylesheet">
-    <link href="/static/css/font-overrides.css?v=20260319c" rel="stylesheet">
+    <link href="/static/css/app.css?v=20260609a" rel="stylesheet">
+    <link href="/static/css/font-overrides.css?v=20260609a" rel="stylesheet">
 
     <!-- HTMX (local) -->
     <script defer src="/static/js/vendor/htmx.js"></script>
@@ -200,6 +200,12 @@
                                 <a href="/people/self" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">
                                     {{ icon_svg("clipboard", "h-4 w-4") }}
                                     Self Service
+                                </a>
+                                {% endif %}
+                                {% if "training" in accessible_modules | default([], true) %}
+                                <a href="/people/training" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">
+                                    {{ icon_svg("academic-cap", "h-4 w-4") }}
+                                    Training
                                 </a>
                                 {% endif %}
                                 <div class="my-1 border-t border-slate-100 dark:border-slate-700"></div>

@@ -8,8 +8,14 @@ import logging
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.invoice_inventory_receipt_approval import (
+    InvoiceInventoryReceiptApproval,
+    InvoiceInventoryReceiptApprovalStatus,
+)
+from app.services.finance.ap.web import ap_web_service
 from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.services.inventory.import_web import inventory_import_web_service
 from app.services.inventory.return_web import InventoryReturnWebService
@@ -22,6 +28,7 @@ from app.web.deps import (
     base_context,
     require_any_web_permission,
     require_inventory_access,
+    require_web_permission,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +45,20 @@ def inventory_index(
 ):
     """Inventory landing page."""
     context = base_context(request, auth, "Inventory", "inventory", db=db)
+    if auth.has_permission("inventory:receipt_approvals:read"):
+        context["pending_receipt_approval_count"] = (
+            db.scalar(
+                select(func.count())
+                .select_from(InvoiceInventoryReceiptApproval)
+                .where(
+                    InvoiceInventoryReceiptApproval.organization_id
+                    == auth.organization_id,
+                    InvoiceInventoryReceiptApproval.status
+                    == InvoiceInventoryReceiptApprovalStatus.PENDING,
+                )
+            )
+            or 0
+        )
     return templates.TemplateResponse(request, "inventory/index.html", context)
 
 
@@ -60,6 +81,64 @@ def inventory_import_dashboard(
 ):
     """Inventory import dashboard page."""
     return inventory_import_web_service.dashboard_response(request, auth)
+
+
+@router.get("/receipt-approvals", response_class=HTMLResponse)
+def list_receipt_approvals(
+    request: Request,
+    status: str | None = "PENDING",
+    auth: WebAuthContext = Depends(
+        require_web_permission("inventory:receipt_approvals:read")
+    ),
+    db: Session = Depends(get_db_for_org),
+):
+    """Store receipt approval queue."""
+    return ap_web_service.receipt_approvals_response(request, auth, db, status)
+
+
+@router.get("/receipt-approvals/{approval_id}", response_class=HTMLResponse)
+def view_receipt_approval(
+    request: Request,
+    approval_id: str,
+    auth: WebAuthContext = Depends(
+        require_web_permission("inventory:receipt_approvals:read")
+    ),
+    db: Session = Depends(get_db_for_org),
+):
+    """Store receipt approval detail."""
+    return ap_web_service.receipt_approval_detail_response(
+        request, auth, db, approval_id
+    )
+
+
+@router.post("/receipt-approvals/{approval_id}/approve")
+async def approve_receipt_approval(
+    request: Request,
+    approval_id: str,
+    auth: WebAuthContext = Depends(
+        require_web_permission("inventory:receipt_approvals:approve")
+    ),
+    db: Session = Depends(get_db_for_org),
+):
+    """Approve a pending AP invoice stock receipt."""
+    return await ap_web_service.approve_receipt_approval_response(
+        request, auth, db, approval_id
+    )
+
+
+@router.post("/receipt-approvals/{approval_id}/reject")
+async def reject_receipt_approval(
+    request: Request,
+    approval_id: str,
+    auth: WebAuthContext = Depends(
+        require_web_permission("inventory:receipt_approvals:reject")
+    ),
+    db: Session = Depends(get_db_for_org),
+):
+    """Reject a pending AP invoice stock receipt."""
+    return await ap_web_service.reject_receipt_approval_response(
+        request, auth, db, approval_id
+    )
 
 
 @router.get("/import/{entity_type}", response_class=HTMLResponse)

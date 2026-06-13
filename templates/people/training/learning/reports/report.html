@@ -1,0 +1,58 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, empty_state, icon_svg %}
+
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ request.url.include_query_params(export='csv') }}" class="btn btn-secondary">{{ icon_svg("download", "h-4 w-4 mr-1.5") }} Export CSV</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% call(filter_attrs) compact_filters(base_url="/people/training/reports/learning/" ~ report_name, active_filters=[], date_range=true, start_date=start_date, end_date=end_date, auto_submit=false, show_apply_button=true) %}
+        <select name="employee_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Employees</option>
+            {% for employee in employees %}<option value="{{ employee.employee_id }}" {{ 'selected' if employee_id == employee.employee_id|string }}>{{ employee.person.name }}</option>{% endfor %}
+        </select>
+        <select name="department_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Departments</option>
+            {% for dept in departments %}<option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string }}>{{ dept.department_name }}</option>{% endfor %}
+        </select>
+        <select name="course_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Courses</option>
+            {% for course in courses %}<option value="{{ course.id }}" {{ 'selected' if course_id == course.id|string }}>{{ course.title }}</option>{% endfor %}
+        </select>
+        <select name="assessment_id" class="form-select" {{ filter_attrs }}>
+            <option value="">All Assessments</option>
+            {% for assessment in assessments %}<option value="{{ assessment.id }}" {{ 'selected' if assessment_id == assessment.id|string }}>{{ assessment.title }}</option>{% endfor %}
+        </select>
+    {% endcall %}
+
+    {% if report.rows %}
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        {% for key in report.rows[0].keys() %}
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">{{ key|replace('_', ' ')|title }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for row in report.rows %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        {% for value in row.values() %}
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ value if value is not none else "-" }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    {{ empty_state("No report data", "No records match the selected filters.", "chart") }}
+    {% endif %}
+</div>
+{% endblock %}

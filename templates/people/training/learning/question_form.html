@@ -1,0 +1,80 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{% if question %}Edit Question{% else %}New Question{% endif %}{% endblock %}
+
+{% block content %}
+{% set fd = form_data if form_data else {} %}
+{% set selected_type = fd.get('question_type', '') if fd else (question.question_type.value if question else 'multiple_choice') %}
+{% set current_tags %}{% if question %}{% for link in question.tag_links %}{{ link.tag.name }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% endset %}
+<div class="max-w-4xl" x-data="{ questionType: '{{ selected_type }}' }">
+    {% if error %}<div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+    <form method="post" action="{% if question %}/people/training/questions/{{ question.id }}/edit{% else %}/people/training/question-banks/{{ bank.id }}/questions/new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Question</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ bank.name }}</p>
+            </div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="question_text" class="form-label required">Question Text</label>
+                    <textarea id="question_text" name="question_text" rows="4" required class="form-input w-full">{{ fd.get('question_text', '') if fd else (question.question_text if question else '') }}</textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="question_type" class="form-label required">Type</label>
+                        <select id="question_type" name="question_type" required class="form-input w-full" x-model="questionType">
+                            {% for item in question_types %}
+                            <option value="{{ item }}">{{ item|replace('_', ' ')|title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="difficulty_level" class="form-label required">Difficulty</label>
+                        {% set selected_difficulty = fd.get('difficulty_level', '') if fd else (question.difficulty_level.value if question else 'medium') %}
+                        <select id="difficulty_level" name="difficulty_level" required class="form-input w-full">
+                            {% for item in difficulty_levels %}
+                            <option value="{{ item }}" {{ 'selected' if selected_difficulty == item }}>{{ item|title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="points" class="form-label">Points</label>
+                        <input id="points" name="points" type="number" min="0" step="0.01" class="form-input w-full" value="{{ fd.get('points', '') if fd else (question.points if question else '1.00') }}">
+                    </div>
+                </div>
+                <div>
+                    <label for="tags" class="form-label">Tags</label>
+                    <input id="tags" name="tags" class="form-input w-full" value="{{ fd.get('tags', '') if fd else current_tags|trim }}" placeholder="onboarding, support, escalation">
+                </div>
+            </div>
+        </div>
+
+        <div class="card" x-show="['multiple_choice','multiple_select','true_false','fill_gap'].includes(questionType)" x-cloak>
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Options and Correct Answers</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Use accepted answers for fill gap questions.</p>
+            </div>
+            <div class="card-body space-y-3">
+                {% set option_rows = question.options if question else [] %}
+                {% for i in range(1, 7) %}
+                {% set current_option = option_rows[i-1] if option_rows|length >= i else none %}
+                <div class="grid grid-cols-[1fr_auto] gap-3 items-center">
+                    <input type="text" name="option_text" class="form-input w-full" value="{{ current_option.option_text if current_option else '' }}" placeholder="Option {{ i }}">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                        <input type="checkbox" name="correct_options" value="{{ i }}" class="form-checkbox" {{ 'checked' if current_option and current_option.is_correct }}>
+                        Correct
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/training/question-banks/{{ bank.id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Question</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

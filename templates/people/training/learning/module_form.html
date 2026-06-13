@@ -1,0 +1,47 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{% if module %}Edit Module{% else %}New Module{% endif %}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex">
+        <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/training/courses/{{ course.id }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ course.title }}</a></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white">{{ module.title if module else "New Module" }}</span></li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% set fd = form_data if form_data else {} %}
+<div class="max-w-2xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="{% if module %}/people/training/modules/{{ module.id }}/edit{% else %}/people/training/courses/{{ course.id }}/modules/new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div class="card">
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Module Details</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="title" class="form-label required">Title</label>
+                    <input id="title" name="title" required class="form-input w-full" value="{{ fd.get('title', '') if fd else (module.title if module else '') }}">
+                </div>
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" rows="4" class="form-input w-full">{{ fd.get('description', '') if fd else (module.description if module and module.description else '') }}</textarea>
+                </div>
+                <div>
+                    <label for="sequence" class="form-label">Sequence</label>
+                    <input id="sequence" name="sequence" type="number" min="1" class="form-input w-40" value="{{ fd.get('sequence', '') if fd else (module.sequence if module else '') }}">
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/training/courses/{{ course.id }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Module</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

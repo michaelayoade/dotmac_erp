@@ -30,6 +30,7 @@ from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
+    InventoryReceiptMode,
     PostingStatus,
     SupplierInvoice,
     SupplierInvoiceStatus,
@@ -112,6 +113,14 @@ class SupplierInvoiceInput:
     correlation_id: str | None = None
     wht_code_id: UUID | None = None
     auto_create_inventory_receipt: bool = False
+    inventory_receipt_mode: InventoryReceiptMode = InventoryReceiptMode.NONE
+
+    def __post_init__(self) -> None:
+        if (
+            self.auto_create_inventory_receipt
+            and self.inventory_receipt_mode == InventoryReceiptMode.NONE
+        ):
+            self.inventory_receipt_mode = InventoryReceiptMode.AUTO_RECEIVE
 
 
 class SupplierInvoiceService(ListResponseMixin):
@@ -242,6 +251,19 @@ class SupplierInvoiceService(ListResponseMixin):
             invoice_type = SupplierInvoiceType(raw_invoice_type)
         except ValueError:
             invoice_type = SupplierInvoiceType.STANDARD
+        auto_create_inventory_receipt = _parse_bool(
+            payload.get("auto_create_inventory_receipt")
+        )
+        receipt_mode_value = payload.get("inventory_receipt_mode")
+        if receipt_mode_value:
+            try:
+                inventory_receipt_mode = InventoryReceiptMode(str(receipt_mode_value))
+            except ValueError as exc:
+                raise ValidationError("Invalid inventory receipt mode") from exc
+        elif auto_create_inventory_receipt:
+            inventory_receipt_mode = InventoryReceiptMode.AUTO_RECEIVE
+        else:
+            inventory_receipt_mode = InventoryReceiptMode.NONE
 
         return SupplierInvoiceInput(
             supplier_id=require_uuid(payload.get("supplier_id"), "Supplier"),
@@ -258,9 +280,8 @@ class SupplierInvoiceService(ListResponseMixin):
             supplier_invoice_number=payload.get("invoice_number") or None,
             lines=lines,
             wht_code_id=wht_code_id,
-            auto_create_inventory_receipt=_parse_bool(
-                payload.get("auto_create_inventory_receipt")
-            ),
+            auto_create_inventory_receipt=auto_create_inventory_receipt,
+            inventory_receipt_mode=inventory_receipt_mode,
         )
 
     @staticmethod
@@ -506,6 +527,7 @@ class SupplierInvoiceService(ListResponseMixin):
             ap_control_account_id=supplier.ap_control_account_id,
             is_prepayment=input.is_prepayment,
             auto_create_inventory_receipt=input.auto_create_inventory_receipt,
+            inventory_receipt_mode=input.inventory_receipt_mode,
             is_intercompany=input.is_intercompany,
             intercompany_org_id=input.intercompany_org_id,
             withholding_tax_amount=wht_amount,
@@ -610,6 +632,18 @@ class SupplierInvoiceService(ListResponseMixin):
             },
             user_id=user_id,
         )
+
+        if input.inventory_receipt_mode == InventoryReceiptMode.STORE_APPROVAL:
+            from app.services.finance.ap.inventory_receipt_approval import (
+                ap_inventory_receipt_approval_service,
+            )
+
+            ap_inventory_receipt_approval_service.notify_store_approvers_of_draft_invoice(
+                db,
+                org_id,
+                invoice.invoice_id,
+                actor_id=user_id,
+            )
 
         SupplierInvoiceService._flush_with_legacy_mock_commit(db)
 
@@ -738,6 +772,7 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.functional_currency_amount = functional_amount
         invoice.is_prepayment = input.is_prepayment
         invoice.auto_create_inventory_receipt = input.auto_create_inventory_receipt
+        invoice.inventory_receipt_mode = input.inventory_receipt_mode
         invoice.is_intercompany = input.is_intercompany
         invoice.intercompany_org_id = input.intercompany_org_id
 
@@ -895,7 +930,27 @@ class SupplierInvoiceService(ListResponseMixin):
         invoice.submitted_by_user_id = user_id
         invoice.submitted_at = datetime.now(UTC)
 
-        if getattr(invoice, "auto_create_inventory_receipt", False):
+        inventory_receipt_mode = getattr(
+            invoice, "inventory_receipt_mode", InventoryReceiptMode.NONE
+        )
+        if inventory_receipt_mode == InventoryReceiptMode.NONE and getattr(
+            invoice, "auto_create_inventory_receipt", False
+        ):
+            inventory_receipt_mode = InventoryReceiptMode.AUTO_RECEIVE
+        if inventory_receipt_mode == InventoryReceiptMode.STORE_APPROVAL:
+            from app.services.finance.ap.inventory_receipt_approval import (
+                ap_inventory_receipt_approval_service,
+            )
+
+            ap_inventory_receipt_approval_service.create_pending_from_invoice(
+                db=db,
+                organization_id=org_id,
+                invoice_id=inv_id,
+                submitted_by_user_id=user_id,
+            )
+        elif inventory_receipt_mode == InventoryReceiptMode.AUTO_RECEIVE and getattr(
+            invoice, "auto_create_inventory_receipt", False
+        ):
             from app.services.finance.ap.auto_inventory_receipt import (
                 ap_invoice_auto_receipt_service,
             )
@@ -1028,6 +1083,72 @@ class SupplierInvoiceService(ListResponseMixin):
             old_values={"status": "SUBMITTED"},
             new_values={"status": "APPROVED"},
             user_id=user_id,
+        )
+
+        SupplierInvoiceService._flush_with_legacy_mock_commit(db)
+
+        return invoice
+
+    @staticmethod
+    def reject_invoice(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+        rejected_by_user_id: UUID,
+        reason: str,
+    ) -> SupplierInvoice:
+        """Reject a submitted invoice before approval/posting."""
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+        user_id = coerce_uuid(rejected_by_user_id)
+        rejection_reason = reason.strip()
+        if not rejection_reason:
+            raise ValidationError("Rejection reason is required")
+
+        invoice = db.get(SupplierInvoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            raise NotFoundError("Invoice not found")
+
+        rejectable_statuses = {
+            SupplierInvoiceStatus.SUBMITTED,
+            SupplierInvoiceStatus.PENDING_APPROVAL,
+        }
+        if invoice.status not in rejectable_statuses:
+            raise ValidationError(
+                f"Cannot reject invoice with status '{invoice.status.value}'"
+            )
+
+        old_status = invoice.status.value
+        invoice.status = SupplierInvoiceStatus.REJECTED
+
+        from app.services.finance.ap.inventory_receipt_approval import (
+            ap_inventory_receipt_approval_service,
+        )
+
+        rejected_receipt_approvals = (
+            ap_inventory_receipt_approval_service.reject_pending_for_invoice(
+                db,
+                org_id,
+                inv_id,
+                user_id,
+                rejection_reason=f"AP invoice rejected: {rejection_reason}",
+            )
+        )
+
+        fire_audit_event(
+            db=db,
+            organization_id=org_id,
+            table_schema="ap",
+            table_name="supplier_invoice",
+            record_id=str(inv_id),
+            action=AuditAction.UPDATE,
+            old_values={"status": old_status},
+            new_values={
+                "status": SupplierInvoiceStatus.REJECTED.value,
+                "rejected_receipt_approvals": rejected_receipt_approvals,
+            },
+            user_id=user_id,
+            reason=rejection_reason,
         )
 
         SupplierInvoiceService._flush_with_legacy_mock_commit(db)

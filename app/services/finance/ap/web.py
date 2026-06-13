@@ -1570,7 +1570,13 @@ class APWebService:
         if selected_invoice_id:
             query = query.where(SupplierInvoice.invoice_id == selected_invoice_id)
 
-        rows = db.execute(query.order_by(SupplierInvoice.due_date)).all()
+        rows = db.execute(
+            query.order_by(
+                SupplierInvoice.invoice_date.desc(),
+                SupplierInvoice.due_date.desc(),
+                SupplierInvoice.invoice_number.desc(),
+            )
+        ).all()
 
         open_invoices = []
         selected_invoice = None
@@ -3078,6 +3084,7 @@ class APWebService:
                 for line in lines
             ],
             "auto_create_inventory_receipt": invoice.auto_create_inventory_receipt,
+            "inventory_receipt_mode": invoice.inventory_receipt_mode,
         }
 
         return templates.TemplateResponse(

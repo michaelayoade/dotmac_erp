@@ -889,24 +889,25 @@
             </div>
 
             <div class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40">
-                <label class="flex items-start gap-3">
-                    <input type="checkbox"
-                           class="mt-1 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                           x-model="form.auto_create_inventory_receipt">
-                    <span>
-                        <span class="block text-sm font-semibold text-slate-900 dark:text-white">Create inventory receipt automatically on submission</span>
-                        <span class="block text-xs text-slate-500 dark:text-slate-400">Applies only to stock-tracked items in the invoice lines.</span>
-                    </span>
-                </label>
+                <label class="form-label">Inventory Receipt Mode</label>
+                <select aria-label="Inventory receipt mode"
+                        x-model="form.inventory_receipt_mode"
+                        @change="syncInventoryReceiptMode()"
+                        class="form-input">
+                    <option value="NONE">No inventory receipt</option>
+                    <option value="AUTO_RECEIVE">Auto receive on submission</option>
+                    <option value="STORE_APPROVAL">Require store manager approval</option>
+                </select>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Applies only to stock-tracked items in the invoice lines.</p>
             </div>
 
             <div class="mt-6 rounded-xl border border-teal-200 bg-teal-50/60 p-5 dark:border-teal-900/60 dark:bg-teal-900/20"
-                 x-show="form.auto_create_inventory_receipt"
+                 x-show="receiptIntegrationEnabled"
                  x-cloak>
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Inventory Receipt Details</h3>
-                        <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">These fields are used when the invoice is submitted for approval.</p>
+                        <p class="mt-1 text-xs text-slate-600 dark:text-slate-300" x-text="form.inventory_receipt_mode === 'STORE_APPROVAL' ? 'These fields are sent to the store manager for confirmation.' : 'These fields are used when the invoice is submitted for approval.'"></p>
                     </div>
                     <span class="rounded-full bg-white px-3 py-1 text-xs font-medium text-teal-700 dark:bg-slate-900/60 dark:text-teal-300"
                                             x-text="stockReceiptLineCount + ' stock line' + (stockReceiptLineCount === 1 ? '' : 's')"></span>
@@ -1141,6 +1142,7 @@ function invoiceForm() {
             receipt_warehouse_id: '',
             receipt_reference: '',
             auto_create_inventory_receipt: {{ 'true' if invoice and invoice.auto_create_inventory_receipt else 'false' }},
+            inventory_receipt_mode: '{{ invoice.inventory_receipt_mode.value if invoice and invoice.inventory_receipt_mode else ("AUTO_RECEIVE" if invoice and invoice.auto_create_inventory_receipt else "NONE") }}',
             wht_code_id: '',
         },
         whtAmount: 0,
@@ -1270,6 +1272,19 @@ function invoiceForm() {
 
         get stockReceiptLineCount() {
             return this.form.lines.filter((line) => this.isStockLine(line)).length;
+        },
+
+        get receiptIntegrationEnabled() {
+            return ['AUTO_RECEIVE', 'STORE_APPROVAL'].includes(this.form.inventory_receipt_mode);
+        },
+
+        syncInventoryReceiptMode() {
+            this.form.auto_create_inventory_receipt = this.form.inventory_receipt_mode === 'AUTO_RECEIVE';
+            if (!this.receiptIntegrationEnabled) {
+                this.form.receipt_warehouse_id = '';
+                this.form.receipt_reference = '';
+                this.applySharedReceiptDetailsToStockLines();
+            }
         },
 
         calculateWht() {
@@ -1539,6 +1554,7 @@ function invoiceForm() {
                 return;
             }
 
+            this.syncInventoryReceiptMode();
             this.applySharedReceiptDetailsToStockLines();
 
             // True by default so error/non-2xx/exception paths re-enable the button via finally;

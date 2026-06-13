@@ -134,3 +134,7 @@ backups/
 .worktrees/
 .agent-run.sh
 .codex
+
+# Secrets
+firebase-service-account.json
+*service-account*.json

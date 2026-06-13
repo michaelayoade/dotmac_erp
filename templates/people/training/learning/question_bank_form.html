@@ -1,0 +1,53 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}{% if bank %}Edit Question Bank{% else %}New Question Bank{% endif %}{% endblock %}
+
+{% block content %}
+{% set fd = form_data if form_data else {} %}
+<div class="max-w-2xl">
+    {% if error %}<div class="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800 text-rose-700 dark:text-rose-300">{{ error }}</div>{% endif %}
+    <form method="post" action="{% if bank %}/people/training/question-banks/{{ bank.id }}/edit{% else %}/people/training/question-banks/new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div class="card">
+            <div class="card-header"><h3 class="font-medium text-slate-900 dark:text-white">Bank Details</h3></div>
+            <div class="card-body space-y-4">
+                <div>
+                    <label for="name" class="form-label required">Title</label>
+                    <input id="name" name="name" required class="form-input w-full" value="{{ fd.get('name', '') if fd else (bank.name if bank else '') }}">
+                </div>
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea id="description" name="description" rows="3" class="form-input w-full">{{ fd.get('description', '') if fd else (bank.description if bank and bank.description else '') }}</textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="category" class="form-label">Category</label>
+                        <input id="category" name="category" class="form-input w-full" value="{{ fd.get('category', '') if fd else (bank.category if bank and bank.category else '') }}" placeholder="HR, Finance, Support">
+                    </div>
+                    <div>
+                        <label for="department_id" class="form-label">Department</label>
+                        {% set selected_department = fd.get('department_id', '') if fd else (bank.department_id|string if bank and bank.department_id else '') %}
+                        <select id="department_id" name="department_id" class="form-input w-full">
+                            <option value="">All Departments</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.department_id }}" {{ 'selected' if selected_department == dept.department_id|string }}>{{ dept.department_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% if bank %}
+                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input type="checkbox" name="is_active" class="form-checkbox" {{ 'checked' if bank.is_active }}>
+                    Active
+                </label>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/people/training/question-banks{% if bank %}/{{ bank.id }}{% endif %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ icon_svg("save", "h-4 w-4 mr-1.5") }} Save Bank</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
