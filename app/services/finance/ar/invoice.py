@@ -858,7 +858,12 @@ class ARInvoiceService(ListResponseMixin):
 
         lines: list[ARInvoiceLineInput] = []
         for line in lines_data:
-            if not line.get("description") or not line.get("revenue_account_id"):
+            # Skip blank rows (no account). A line with an account + amount is
+            # valid; description is optional metadata and the credit-note form
+            # presents it as optional. (Previously this also dropped lines with
+            # an empty description, which silently discarded valid lines and
+            # surfaced the misleading "Invoice must have at least one line".)
+            if not line.get("revenue_account_id"):
                 continue
 
             tax_code_ids: list[UUID] = []
