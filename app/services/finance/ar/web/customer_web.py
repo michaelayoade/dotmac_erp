@@ -162,6 +162,48 @@ class CustomerWebService:
         balances = balances.all()
         balance_map = {row.customer_id: row.balance for row in balances}
 
+        # Stat-card counts — org-wide totals, independent of the current
+        # pagination/search/collapse view (the template reads these three and
+        # silently defaults them to 0 when missing).
+        active_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(Customer)
+                .where(
+                    Customer.organization_id == org_id,
+                    Customer.is_active.is_(True),
+                )
+            )
+            or 0
+        )
+        inactive_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(Customer)
+                .where(
+                    Customer.organization_id == org_id,
+                    Customer.is_active.is_(False),
+                )
+            )
+            or 0
+        )
+        with_balance_subq = (
+            select(Invoice.customer_id)
+            .where(
+                Invoice.organization_id == org_id,
+                Invoice.status.in_(open_statuses),
+            )
+            .group_by(Invoice.customer_id)
+            .having(
+                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+                > 0
+            )
+            .subquery()
+        )
+        with_balance_count = (
+            db.scalar(select(func.count()).select_from(with_balance_subq)) or 0
+        )
+
         # Use shared audit service for user names
         audit_service = get_audit_service(db)
         creator_ids = [
@@ -268,6 +310,9 @@ class CustomerWebService:
             "limit": limit,
             "offset": offset,
             "total_count": total_count,
+            "active_count": active_count,
+            "inactive_count": inactive_count,
+            "with_balance_count": with_balance_count,
             "total_pages": total_pages,
             "active_filters": active_filters,
             "sort": sort or "",
