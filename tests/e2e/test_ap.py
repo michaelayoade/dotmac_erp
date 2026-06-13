@@ -30,7 +30,7 @@ class TestAPSuppliersNavigation:
     @pytest.mark.e2e
     def test_new_supplier_button_navigation(self, ap_suppliers_page: Page):
         """Test clicking new supplier button navigates to form."""
-        new_btn = ap_suppliers_page.locator("a[href='/ap/suppliers/new']").first
+        new_btn = ap_suppliers_page.locator("a[href='/finance/ap/suppliers/new']").first
         expect(new_btn).to_be_visible()
         new_btn.click()
         ap_suppliers_page.wait_for_load_state("networkidle")
@@ -194,7 +194,7 @@ class TestAPInvoiceWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href='/ap/invoices/new']").first
+        new_btn = authenticated_page.locator("a[href='/finance/ap/invoices/new']").first
         expect(new_btn).to_be_visible()
 
 
@@ -253,7 +253,9 @@ class TestAPPaymentBatchWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ap/payment-batches")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href='/ap/payment-batches/new']").first
+        new_btn = authenticated_page.locator(
+            "a[href='/finance/ap/payment-batches/new']"
+        ).first
         expect(new_btn).to_be_visible()
 
 

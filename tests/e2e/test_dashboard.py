@@ -49,7 +49,7 @@ class TestDashboardInteractions:
         """Test dashboard is responsive."""
         # Test mobile viewport
         authenticated_page.set_viewport_size({"width": 375, "height": 667})
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
         expect(authenticated_page.get_by_test_id("page-title")).to_be_visible()
 
@@ -74,7 +74,7 @@ class TestDashboardMetrics:
         self, authenticated_page: Page, base_url: str
     ):
         """Test dashboard displays financial metrics."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(
@@ -90,7 +90,7 @@ class TestDashboardMetrics:
     @pytest.mark.e2e
     def test_dashboard_cash_flow_summary(self, authenticated_page: Page, base_url: str):
         """Test dashboard shows cash flow summary."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         cash_flow = authenticated_page.get_by_test_id("dashboard-cash-flow")
@@ -100,7 +100,7 @@ class TestDashboardMetrics:
     @pytest.mark.e2e
     def test_dashboard_aging_overview(self, authenticated_page: Page, base_url: str):
         """Test dashboard shows aging overview."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         aging_overview = authenticated_page.get_by_test_id("dashboard-aging-overview")
@@ -112,7 +112,7 @@ class TestDashboardMetrics:
         self, authenticated_page: Page, base_url: str
     ):
         """Test dashboard shows open invoices."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(
@@ -126,7 +126,7 @@ class TestDashboardDrillDown:
     @pytest.mark.e2e
     def test_metric_click_navigates(self, authenticated_page: Page, base_url: str):
         """Test clicking a metric navigates to detail view."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         link = authenticated_page.get_by_test_id("dashboard-link-journals")
@@ -138,7 +138,7 @@ class TestDashboardDrillDown:
     @pytest.mark.e2e
     def test_ar_aging_drilldown(self, authenticated_page: Page, base_url: str):
         """Test AR aging drill-down from dashboard."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         ar_link = authenticated_page.get_by_test_id("dashboard-link-ar-aging")
@@ -150,7 +150,7 @@ class TestDashboardDrillDown:
     @pytest.mark.e2e
     def test_ap_aging_drilldown(self, authenticated_page: Page, base_url: str):
         """Test AP aging drill-down from dashboard."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         ap_link = authenticated_page.get_by_test_id("dashboard-link-ap-aging")
@@ -166,7 +166,7 @@ class TestDashboardCharts:
     @pytest.mark.e2e
     def test_dashboard_has_charts(self, authenticated_page: Page, base_url: str):
         """Test dashboard displays charts."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         charts = authenticated_page.get_by_test_id("dashboard-cash-flow").locator("svg")
@@ -177,7 +177,7 @@ class TestDashboardCharts:
         self, authenticated_page: Page, base_url: str
     ):
         """Test cash flow period label displays."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         cash_flow = authenticated_page.get_by_test_id("dashboard-cash-flow")
@@ -190,7 +190,7 @@ class TestDashboardQuickActions:
     @pytest.mark.e2e
     def test_quick_actions_exist(self, authenticated_page: Page, base_url: str):
         """Test quick action buttons exist."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(
@@ -200,9 +200,9 @@ class TestDashboardQuickActions:
     @pytest.mark.e2e
     def test_new_invoice_quick_action(self, authenticated_page: Page, base_url: str):
         """Test new invoice quick action."""
-        authenticated_page.goto(f"{base_url}/dashboard")
+        authenticated_page.goto(f"{base_url}/finance/dashboard")
         authenticated_page.wait_for_load_state("networkidle")
 
         quick_actions = authenticated_page.get_by_test_id("dashboard-quick-actions")
-        new_invoice = quick_actions.locator("a[href='/ar/invoices/new']").first
+        new_invoice = quick_actions.locator("a[href='/finance/ar/invoices/new']").first
         expect(new_invoice).to_be_visible()

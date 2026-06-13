@@ -31,7 +31,7 @@ class TestGLAccountsNavigation:
     def test_new_account_button_navigation(self, gl_accounts_page: Page, base_url: str):
         """Test clicking new account button navigates to form."""
         # Look for a "new" or "add" button
-        new_btn = gl_accounts_page.locator("a[href='/gl/accounts/new']").first
+        new_btn = gl_accounts_page.locator("a[href='/finance/gl/accounts/new']").first
         expect(new_btn).to_be_visible()
         new_btn.click()
         gl_accounts_page.wait_for_load_state("networkidle")

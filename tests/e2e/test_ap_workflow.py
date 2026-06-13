@@ -136,7 +136,9 @@ class TestAPSupplierListWorkflow:
         authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        new_btn = authenticated_page.locator("a[href='/ap/suppliers/new']").first
+        new_btn = authenticated_page.locator(
+            "a[href='/finance/ap/suppliers/new']"
+        ).first
         expect(new_btn).to_be_visible()
 
     @pytest.mark.e2e

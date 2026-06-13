@@ -46,7 +46,9 @@ class TestItemsList:
             f"{base_url}/inventory/items", wait_until="domcontentloaded"
         )
 
-        expect(authenticated_page.locator("a[href='/inv/items/new']")).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/inventory/items/new']")
+        ).to_be_visible()
 
     def test_items_list_with_search(self, authenticated_page: Page, base_url: str):
         """Test items list search functionality."""

@@ -331,7 +331,7 @@ def admin_authenticated_page(page, base_url, admin_auth_tokens):
 @pytest.fixture
 def dashboard_page(authenticated_page, base_url):
     """Navigate to the dashboard and return the page."""
-    authenticated_page.goto(f"{base_url}/dashboard")
+    authenticated_page.goto(f"{base_url}/finance/dashboard")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 

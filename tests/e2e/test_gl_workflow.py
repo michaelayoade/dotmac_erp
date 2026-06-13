@@ -249,7 +249,7 @@ class TestGLJournalDetailWorkflow:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for new journal button
-        new_btn = authenticated_page.locator("a[href='/gl/journals/new']").first
+        new_btn = authenticated_page.locator("a[href='/finance/gl/journals/new']").first
         expect(new_btn).to_be_visible()
 
 

@@ -20,7 +20,9 @@ class TestFixedAssets:
         expect(
             authenticated_page.locator("h1", has_text="Fixed Assets").first
         ).to_be_visible()
-        expect(authenticated_page.locator("a[href='/fa/assets/new']")).to_be_visible()
+        expect(
+            authenticated_page.locator("a[href='/fixed-assets/assets/new']")
+        ).to_be_visible()
 
 
 class TestDepreciationSchedule:
