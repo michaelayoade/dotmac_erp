@@ -87,7 +87,9 @@ def enable_rls() -> None:
 
 def disable_rls() -> None:
     for table in reversed(TABLES):
-        op.execute(f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {SCHEMA}.{table}")
+        op.execute(
+            f"DROP POLICY IF EXISTS {table}_tenant_isolation ON {SCHEMA}.{table}"
+        )
         op.execute(f"ALTER TABLE {SCHEMA}.{table} DISABLE ROW LEVEL SECURITY")
 
 
@@ -224,7 +226,9 @@ def upgrade() -> None:
         uuid_pk(),
         org_id_col(),
         sa.Column("course_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("prerequisite_course_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "prerequisite_course_id", postgresql.UUID(as_uuid=True), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -279,7 +283,9 @@ def upgrade() -> None:
             ["training.training_course.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("course_id", "sequence", name="uq_training_module_sequence"),
+        sa.UniqueConstraint(
+            "course_id", "sequence", name="uq_training_module_sequence"
+        ),
         schema=SCHEMA,
     )
     op.create_index(
@@ -309,7 +315,9 @@ def upgrade() -> None:
             ["training.training_course_module.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("module_id", "sequence", name="uq_training_lesson_sequence"),
+        sa.UniqueConstraint(
+            "module_id", "sequence", name="uq_training_lesson_sequence"
+        ),
         schema=SCHEMA,
     )
     op.create_index(
@@ -586,7 +594,9 @@ def upgrade() -> None:
             ["training.training_question_tag.id"],
             ondelete="CASCADE",
         ),
-        sa.UniqueConstraint("question_id", "tag_id", name="uq_training_question_tag_map"),
+        sa.UniqueConstraint(
+            "question_id", "tag_id", name="uq_training_question_tag_map"
+        ),
         schema=SCHEMA,
     )
     op.create_index(
@@ -628,7 +638,9 @@ def upgrade() -> None:
             nullable=False,
             server_default="employee",
         ),
-        sa.Column("assignment_source_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column(
+            "assignment_source_id", postgresql.UUID(as_uuid=True), nullable=False
+        ),
         sa.Column(
             "is_mandatory",
             sa.Boolean(),
