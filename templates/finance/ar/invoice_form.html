@@ -128,9 +128,13 @@
                     </div>
                     <input type="hidden" name="customer_id" x-model="form.customer_id">
                     {% else %}
-                    {# Hidden select preserves data attributes for onCustomerChange #}
+                    {# Hidden select preserves data attributes for onCustomerChange.
+                       NOT `required`: it is display:none (class="hidden"), so native
+                       constraint validation cannot focus it and would block submit
+                       with "not focusable" and no visible message. submitForm()
+                       validates customer_id and shows a toast instead. #}
                     <select id="customer_id" name="customer_id" x-model="form.customer_id"
-                            @change="onCustomerChange" required class="hidden">
+                            @change="onCustomerChange" class="hidden">
                         <option value="">Select customer</option>
                         {% for customer in customers_list %}
                         <option value="{{ customer.customer_id }}"
