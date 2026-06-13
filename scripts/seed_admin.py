@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+from uuid import UUID
 
 from dotenv import load_dotenv
 
@@ -40,6 +41,11 @@ def parse_args():
     parser.add_argument("--last-name", required=True, help="Last name")
     parser.add_argument("--username", required=True, help="Login username")
     parser.add_argument("--password", required=True, help="Login password")
+    parser.add_argument(
+        "--org-id",
+        default="00000000-0000-0000-0000-000000000001",
+        help="Organization the admin Person belongs to (default: Default Organization)",
+    )
     parser.add_argument(
         "--force-reset",
         action="store_true",
@@ -148,6 +154,7 @@ def main():
         person = db.query(Person).filter(Person.email == args.email).first()
         if not person:
             person = Person(
+                organization_id=UUID(args.org_id),
                 first_name=args.first_name,
                 last_name=args.last_name,
                 email=args.email,
