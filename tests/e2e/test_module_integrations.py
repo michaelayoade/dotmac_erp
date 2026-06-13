@@ -27,7 +27,7 @@ class TestInventoryTransactionForms:
     @pytest.mark.e2e
     def test_receipt_form_accessible(self, authenticated_page: Page, base_url: str):
         """Test that receipt form is accessible from transactions page."""
-        authenticated_page.goto(f"{base_url}/inv/transactions")
+        authenticated_page.goto(f"{base_url}/inventory/transactions")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for receipt action button/link
@@ -42,7 +42,7 @@ class TestInventoryTransactionForms:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that receipt form has all required fields."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/receipt/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/receipt/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for required form fields
@@ -69,7 +69,7 @@ class TestInventoryTransactionForms:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that issue form has all required fields."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/issue/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/issue/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -86,7 +86,7 @@ class TestInventoryTransactionForms:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that transfer form has source and destination warehouse selectors."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/transfer/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/transfer/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -101,7 +101,7 @@ class TestInventoryTransactionForms:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that adjustment form has adjustment type selector."""
-        authenticated_page.goto(f"{base_url}/inv/transactions/adjustment/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/adjustment/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -120,7 +120,7 @@ class TestAPInvoiceCapitalizationUI:
     @pytest.mark.e2e
     def test_invoice_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that AP invoice form loads."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         expect(authenticated_page).to_have_url(re.compile(r".*/ap/invoices/new.*"))
@@ -132,7 +132,7 @@ class TestAPInvoiceCapitalizationUI:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that invoice form has line items section."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for line items section
@@ -150,7 +150,7 @@ class TestGoodsReceiptWarehouseRequired:
     @pytest.mark.e2e
     def test_goods_receipt_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that goods receipt form loads."""
-        authenticated_page.goto(f"{base_url}/ap/goods-receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -159,7 +159,7 @@ class TestGoodsReceiptWarehouseRequired:
     @pytest.mark.e2e
     def test_warehouse_field_visible(self, authenticated_page: Page, base_url: str):
         """Test that warehouse field is visible on goods receipt form."""
-        authenticated_page.goto(f"{base_url}/ap/goods-receipts/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Warehouse should be a required field
@@ -173,7 +173,7 @@ class TestFixedAssetSupplierLink:
     @pytest.mark.e2e
     def test_asset_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that fixed asset form loads."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -184,7 +184,7 @@ class TestFixedAssetSupplierLink:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that asset form has category selector."""
-        authenticated_page.goto(f"{base_url}/fa/assets/new")
+        authenticated_page.goto(f"{base_url}/fixed-assets/assets/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Category selector
@@ -198,7 +198,7 @@ class TestARInvoiceInventoryUI:
     @pytest.mark.e2e
     def test_ar_invoice_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that AR invoice form loads."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -209,7 +209,7 @@ class TestARInvoiceInventoryUI:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that AR invoice form has customer selector."""
-        authenticated_page.goto(f"{base_url}/ar/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ar/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         customer_select = authenticated_page.locator("select[name='customer_id']")
@@ -222,7 +222,7 @@ class TestInventoryItemForm:
     @pytest.mark.e2e
     def test_item_form_loads(self, authenticated_page: Page, base_url: str):
         """Test that inventory item form loads."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         form = authenticated_page.locator("form").first
@@ -233,7 +233,7 @@ class TestInventoryItemForm:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that item form has costing method selector."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         costing_select = authenticated_page.locator("select[name='costing_method']")
@@ -244,7 +244,7 @@ class TestInventoryItemForm:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that item form has inventory and COGS account selectors."""
-        authenticated_page.goto(f"{base_url}/inv/items/new")
+        authenticated_page.goto(f"{base_url}/inventory/items/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Inventory account
@@ -304,7 +304,7 @@ class TestModuleIntegrationWorkflows:
     ):
         """Test that creating a receipt navigates back to transaction list."""
         # Navigate to receipt form
-        authenticated_page.goto(f"{base_url}/inv/transactions/receipt/new")
+        authenticated_page.goto(f"{base_url}/inventory/transactions/receipt/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Click cancel to go back to list
@@ -320,7 +320,7 @@ class TestModuleIntegrationWorkflows:
         self, authenticated_page: Page, base_url: str
     ):
         """Test that AP invoice form allows item selection in line items."""
-        authenticated_page.goto(f"{base_url}/ap/invoices/new")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check if there's an item selector in the line items area

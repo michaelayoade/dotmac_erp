@@ -18,7 +18,7 @@ class TestSearchFunctionality:
 
     def test_search_returns_results(self, authenticated_page, base_url):
         """Test search returns matching results."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Get initial row count
@@ -47,7 +47,7 @@ class TestSearchFunctionality:
 
     def test_search_no_results_message(self, authenticated_page, base_url):
         """Test search shows no results message for non-matching query."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -62,7 +62,7 @@ class TestSearchFunctionality:
 
             # Should show no results message or empty table
             no_results = authenticated_page.locator(
-                "text=No suppliers, text=No results, text=No data, text=Nothing found, .empty-state"
+                ":text('No suppliers'), :text('No results'), :text('No data'), :text('Nothing found'), .empty-state"
             )
             authenticated_page.locator("table tbody tr")
 
@@ -75,7 +75,7 @@ class TestSearchFunctionality:
 
     def test_search_clears_on_empty(self, authenticated_page, base_url):
         """Test clearing search shows all results."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -98,7 +98,7 @@ class TestSearchFunctionality:
 
     def test_search_preserves_filters(self, authenticated_page, base_url):
         """Test search preserves active filters."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply a filter first
@@ -126,7 +126,7 @@ class TestSearchFunctionality:
 
     def test_search_instant_or_on_enter(self, authenticated_page, base_url):
         """Test search triggers on enter or instantly."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -159,7 +159,7 @@ class TestFilterFunctionality:
 
     def test_status_filter(self, authenticated_page, base_url):
         """Test status filter works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -178,7 +178,7 @@ class TestFilterFunctionality:
 
     def test_date_range_filter(self, authenticated_page, base_url):
         """Test date range filter works."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         start_date = authenticated_page.locator(
@@ -205,7 +205,7 @@ class TestFilterFunctionality:
 
     def test_category_filter(self, authenticated_page, base_url):
         """Test category filter works."""
-        authenticated_page.goto(f"{base_url}/gl/accounts")
+        authenticated_page.goto(f"{base_url}/finance/gl/accounts")
         authenticated_page.wait_for_load_state("networkidle")
 
         category_filter = authenticated_page.locator(
@@ -222,7 +222,7 @@ class TestFilterFunctionality:
 
     def test_combined_filters(self, authenticated_page, base_url):
         """Test multiple filters work together."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply status filter
@@ -248,7 +248,7 @@ class TestFilterFunctionality:
 
     def test_filter_reset(self, authenticated_page, base_url):
         """Test filter reset/clear works."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply a filter
@@ -283,7 +283,7 @@ class TestSearchFilterIntegration:
 
     def test_search_with_active_filter(self, authenticated_page, base_url):
         """Test search works with active filter."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply filter first
@@ -308,7 +308,7 @@ class TestSearchFilterIntegration:
 
     def test_filter_updates_url(self, authenticated_page, base_url):
         """Test filters update URL parameters."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -324,7 +324,7 @@ class TestSearchFilterIntegration:
 
     def test_filters_preserved_on_navigation(self, authenticated_page, base_url):
         """Test filters are preserved when navigating back."""
-        authenticated_page.goto(f"{base_url}/ap/suppliers")
+        authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply filter
@@ -363,7 +363,7 @@ class TestQuickFilters:
 
     def test_quick_filter_tabs(self, authenticated_page, base_url):
         """Test quick filter tabs work."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for quick filter tabs (All, Draft, Pending, Paid, etc.)
@@ -381,7 +381,7 @@ class TestQuickFilters:
 
     def test_quick_filter_all(self, authenticated_page, base_url):
         """Test 'All' quick filter shows all results."""
-        authenticated_page.goto(f"{base_url}/ap/invoices")
+        authenticated_page.goto(f"{base_url}/finance/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
         # Apply a filter first

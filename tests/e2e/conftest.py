@@ -339,7 +339,7 @@ def dashboard_page(authenticated_page, base_url):
 @pytest.fixture
 def gl_accounts_page(authenticated_page, base_url):
     """Navigate to GL accounts page and return the page."""
-    authenticated_page.goto(f"{base_url}/gl/accounts")
+    authenticated_page.goto(f"{base_url}/finance/gl/accounts")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -347,7 +347,7 @@ def gl_accounts_page(authenticated_page, base_url):
 @pytest.fixture
 def ap_suppliers_page(authenticated_page, base_url):
     """Navigate to AP suppliers page and return the page."""
-    authenticated_page.goto(f"{base_url}/ap/suppliers")
+    authenticated_page.goto(f"{base_url}/finance/ap/suppliers")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -355,7 +355,7 @@ def ap_suppliers_page(authenticated_page, base_url):
 @pytest.fixture
 def ar_customers_page(authenticated_page, base_url):
     """Navigate to AR customers page and return the page."""
-    authenticated_page.goto(f"{base_url}/ar/customers")
+    authenticated_page.goto(f"{base_url}/finance/ar/customers")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -440,7 +440,7 @@ def numbering_page(authenticated_page, base_url):
 @pytest.fixture
 def ap_invoices_page(authenticated_page, base_url):
     """Navigate to AP invoices list and return the page."""
-    authenticated_page.goto(f"{base_url}/ap/invoices")
+    authenticated_page.goto(f"{base_url}/finance/ap/invoices")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -448,7 +448,7 @@ def ap_invoices_page(authenticated_page, base_url):
 @pytest.fixture
 def ap_payments_page(authenticated_page, base_url):
     """Navigate to AP payments list and return the page."""
-    authenticated_page.goto(f"{base_url}/ap/payments")
+    authenticated_page.goto(f"{base_url}/finance/ap/payments")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -456,7 +456,7 @@ def ap_payments_page(authenticated_page, base_url):
 @pytest.fixture
 def ap_purchase_orders_page(authenticated_page, base_url):
     """Navigate to purchase orders list and return the page."""
-    authenticated_page.goto(f"{base_url}/ap/purchase-orders")
+    authenticated_page.goto(f"{base_url}/finance/ap/purchase-orders")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -464,7 +464,7 @@ def ap_purchase_orders_page(authenticated_page, base_url):
 @pytest.fixture
 def ap_goods_receipts_page(authenticated_page, base_url):
     """Navigate to goods receipts list and return the page."""
-    authenticated_page.goto(f"{base_url}/ap/goods-receipts")
+    authenticated_page.goto(f"{base_url}/finance/ap/goods-receipts")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -477,7 +477,7 @@ def ap_goods_receipts_page(authenticated_page, base_url):
 @pytest.fixture
 def ar_invoices_page(authenticated_page, base_url):
     """Navigate to AR invoices list and return the page."""
-    authenticated_page.goto(f"{base_url}/ar/invoices")
+    authenticated_page.goto(f"{base_url}/finance/ar/invoices")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -485,7 +485,7 @@ def ar_invoices_page(authenticated_page, base_url):
 @pytest.fixture
 def ar_receipts_page(authenticated_page, base_url):
     """Navigate to AR receipts list and return the page."""
-    authenticated_page.goto(f"{base_url}/ar/receipts")
+    authenticated_page.goto(f"{base_url}/finance/ar/receipts")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -493,7 +493,7 @@ def ar_receipts_page(authenticated_page, base_url):
 @pytest.fixture
 def ar_credit_notes_page(authenticated_page, base_url):
     """Navigate to credit notes list and return the page."""
-    authenticated_page.goto(f"{base_url}/ar/credit-notes")
+    authenticated_page.goto(f"{base_url}/finance/ar/credit-notes")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -506,7 +506,7 @@ def ar_credit_notes_page(authenticated_page, base_url):
 @pytest.fixture
 def gl_journals_page(authenticated_page, base_url):
     """Navigate to GL journals list and return the page."""
-    authenticated_page.goto(f"{base_url}/gl/journals")
+    authenticated_page.goto(f"{base_url}/finance/gl/journals")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -514,7 +514,7 @@ def gl_journals_page(authenticated_page, base_url):
 @pytest.fixture
 def gl_periods_page(authenticated_page, base_url):
     """Navigate to fiscal periods list and return the page."""
-    authenticated_page.goto(f"{base_url}/gl/periods")
+    authenticated_page.goto(f"{base_url}/finance/gl/periods")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -522,7 +522,7 @@ def gl_periods_page(authenticated_page, base_url):
 @pytest.fixture
 def gl_trial_balance_page(authenticated_page, base_url):
     """Navigate to trial balance and return the page."""
-    authenticated_page.goto(f"{base_url}/gl/trial-balance")
+    authenticated_page.goto(f"{base_url}/finance/gl/trial-balance")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -530,7 +530,7 @@ def gl_trial_balance_page(authenticated_page, base_url):
 @pytest.fixture
 def gl_period_close_page(authenticated_page, base_url):
     """Navigate to period close and return the page."""
-    authenticated_page.goto(f"{base_url}/gl/period-close")
+    authenticated_page.goto(f"{base_url}/finance/gl/period-close")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -588,7 +588,7 @@ def admin_audit_logs_page(admin_authenticated_page, base_url):
 @pytest.fixture
 def fixed_assets_page(authenticated_page, base_url):
     """Navigate to fixed assets list and return the page."""
-    authenticated_page.goto(f"{base_url}/fa/assets")
+    authenticated_page.goto(f"{base_url}/fixed-assets/assets")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -596,7 +596,7 @@ def fixed_assets_page(authenticated_page, base_url):
 @pytest.fixture
 def fixed_asset_categories_page(authenticated_page, base_url):
     """Navigate to asset categories list and return the page."""
-    authenticated_page.goto(f"{base_url}/fa/categories")
+    authenticated_page.goto(f"{base_url}/fixed-assets/categories")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -604,7 +604,7 @@ def fixed_asset_categories_page(authenticated_page, base_url):
 @pytest.fixture
 def depreciation_page(authenticated_page, base_url):
     """Navigate to depreciation schedule and return the page."""
-    authenticated_page.goto(f"{base_url}/fa/depreciation")
+    authenticated_page.goto(f"{base_url}/fixed-assets/depreciation")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -617,7 +617,7 @@ def depreciation_page(authenticated_page, base_url):
 @pytest.fixture
 def inventory_items_page(authenticated_page, base_url):
     """Navigate to inventory items list and return the page."""
-    authenticated_page.goto(f"{base_url}/inv/items")
+    authenticated_page.goto(f"{base_url}/inventory/items")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -625,7 +625,7 @@ def inventory_items_page(authenticated_page, base_url):
 @pytest.fixture
 def inventory_transactions_page(authenticated_page, base_url):
     """Navigate to inventory transactions list and return the page."""
-    authenticated_page.goto(f"{base_url}/inv/transactions")
+    authenticated_page.goto(f"{base_url}/inventory/transactions")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -633,7 +633,7 @@ def inventory_transactions_page(authenticated_page, base_url):
 @pytest.fixture
 def stock_levels_page(authenticated_page, base_url):
     """Navigate to stock levels page and return the page."""
-    authenticated_page.goto(f"{base_url}/inv/stock-levels")
+    authenticated_page.goto(f"{base_url}/inventory/stock-levels")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -646,7 +646,7 @@ def stock_levels_page(authenticated_page, base_url):
 @pytest.fixture
 def bank_accounts_page(authenticated_page, base_url):
     """Navigate to bank accounts list and return the page."""
-    authenticated_page.goto(f"{base_url}/banking/accounts")
+    authenticated_page.goto(f"{base_url}/finance/banking/accounts")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -654,7 +654,7 @@ def bank_accounts_page(authenticated_page, base_url):
 @pytest.fixture
 def bank_statements_page(authenticated_page, base_url):
     """Navigate to bank statements list and return the page."""
-    authenticated_page.goto(f"{base_url}/banking/statements")
+    authenticated_page.goto(f"{base_url}/finance/banking/statements")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -662,7 +662,7 @@ def bank_statements_page(authenticated_page, base_url):
 @pytest.fixture
 def bank_reconciliations_page(authenticated_page, base_url):
     """Navigate to bank reconciliations list and return the page."""
-    authenticated_page.goto(f"{base_url}/banking/reconciliations")
+    authenticated_page.goto(f"{base_url}/finance/banking/reconciliations")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -670,7 +670,7 @@ def bank_reconciliations_page(authenticated_page, base_url):
 @pytest.fixture
 def statement_import_page(authenticated_page, base_url):
     """Navigate to statement import page and return the page."""
-    authenticated_page.goto(f"{base_url}/banking/statements/import")
+    authenticated_page.goto(f"{base_url}/finance/banking/statements/import")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -683,7 +683,7 @@ def statement_import_page(authenticated_page, base_url):
 @pytest.fixture
 def quotes_page(authenticated_page, base_url):
     """Navigate to quotes list and return the page."""
-    authenticated_page.goto(f"{base_url}/quotes")
+    authenticated_page.goto(f"{base_url}/finance/quotes")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -691,7 +691,7 @@ def quotes_page(authenticated_page, base_url):
 @pytest.fixture
 def quote_create_page(authenticated_page, base_url):
     """Navigate to quote create page and return the page."""
-    authenticated_page.goto(f"{base_url}/quotes/new")
+    authenticated_page.goto(f"{base_url}/finance/quotes/new")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -704,7 +704,7 @@ def quote_create_page(authenticated_page, base_url):
 @pytest.fixture
 def sales_orders_page(authenticated_page, base_url):
     """Navigate to sales orders list and return the page."""
-    authenticated_page.goto(f"{base_url}/sales-orders")
+    authenticated_page.goto(f"{base_url}/finance/sales-orders")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -712,7 +712,7 @@ def sales_orders_page(authenticated_page, base_url):
 @pytest.fixture
 def sales_order_create_page(authenticated_page, base_url):
     """Navigate to sales order create page and return the page."""
-    authenticated_page.goto(f"{base_url}/sales-orders/new")
+    authenticated_page.goto(f"{base_url}/finance/sales-orders/new")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -725,7 +725,7 @@ def sales_order_create_page(authenticated_page, base_url):
 @pytest.fixture
 def expenses_page(authenticated_page, base_url):
     """Navigate to expenses list and return the page."""
-    authenticated_page.goto(f"{base_url}/expenses")
+    authenticated_page.goto(f"{base_url}/expense")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -733,7 +733,7 @@ def expenses_page(authenticated_page, base_url):
 @pytest.fixture
 def expense_create_page(authenticated_page, base_url):
     """Navigate to expense create page and return the page."""
-    authenticated_page.goto(f"{base_url}/expenses/new")
+    authenticated_page.goto(f"{base_url}/expense/new")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -741,7 +741,7 @@ def expense_create_page(authenticated_page, base_url):
 @pytest.fixture
 def expense_reports_page(authenticated_page, base_url):
     """Navigate to expense reports list and return the page."""
-    authenticated_page.goto(f"{base_url}/expenses/reports")
+    authenticated_page.goto(f"{base_url}/expense/reports")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -791,7 +791,7 @@ def document_templates_page(authenticated_page, base_url):
 @pytest.fixture
 def period_close_page(authenticated_page, base_url):
     """Navigate to period close page and return the page."""
-    authenticated_page.goto(f"{base_url}/gl/period-close")
+    authenticated_page.goto(f"{base_url}/finance/gl/period-close")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -799,7 +799,7 @@ def period_close_page(authenticated_page, base_url):
 @pytest.fixture
 def ap_aging_page(authenticated_page, base_url):
     """Navigate to AP aging report and return the page."""
-    authenticated_page.goto(f"{base_url}/ap/aging")
+    authenticated_page.goto(f"{base_url}/finance/ap/aging")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -807,7 +807,7 @@ def ap_aging_page(authenticated_page, base_url):
 @pytest.fixture
 def ar_aging_page(authenticated_page, base_url):
     """Navigate to AR aging report and return the page."""
-    authenticated_page.goto(f"{base_url}/ar/aging")
+    authenticated_page.goto(f"{base_url}/finance/ar/aging")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -912,7 +912,7 @@ def nonexistent_page_url(base_url):
 @pytest.fixture
 def paginated_suppliers_page(authenticated_page, base_url):
     """Navigate to suppliers list with pagination params."""
-    authenticated_page.goto(f"{base_url}/ap/suppliers?page=1&limit=10")
+    authenticated_page.goto(f"{base_url}/finance/ap/suppliers?page=1&limit=10")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -920,7 +920,7 @@ def paginated_suppliers_page(authenticated_page, base_url):
 @pytest.fixture
 def paginated_invoices_page(authenticated_page, base_url):
     """Navigate to invoices list with pagination params."""
-    authenticated_page.goto(f"{base_url}/ap/invoices?page=1&limit=10")
+    authenticated_page.goto(f"{base_url}/finance/ap/invoices?page=1&limit=10")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -928,7 +928,7 @@ def paginated_invoices_page(authenticated_page, base_url):
 @pytest.fixture
 def paginated_journals_page(authenticated_page, base_url):
     """Navigate to journals list with pagination params."""
-    authenticated_page.goto(f"{base_url}/gl/journals?page=1&limit=10")
+    authenticated_page.goto(f"{base_url}/finance/gl/journals?page=1&limit=10")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -941,7 +941,7 @@ def paginated_journals_page(authenticated_page, base_url):
 @pytest.fixture
 def filtered_suppliers_page(authenticated_page, base_url):
     """Navigate to suppliers list with active status filter."""
-    authenticated_page.goto(f"{base_url}/ap/suppliers?status=active")
+    authenticated_page.goto(f"{base_url}/finance/ap/suppliers?status=active")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -949,7 +949,7 @@ def filtered_suppliers_page(authenticated_page, base_url):
 @pytest.fixture
 def searched_suppliers_page(authenticated_page, base_url):
     """Navigate to suppliers list with search term."""
-    authenticated_page.goto(f"{base_url}/ap/suppliers?search=test")
+    authenticated_page.goto(f"{base_url}/finance/ap/suppliers?search=test")
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page
 
@@ -957,6 +957,8 @@ def searched_suppliers_page(authenticated_page, base_url):
 @pytest.fixture
 def empty_search_results_page(authenticated_page, base_url):
     """Navigate to suppliers list with search that returns no results."""
-    authenticated_page.goto(f"{base_url}/ap/suppliers?search=xyznonexistent123456")
+    authenticated_page.goto(
+        f"{base_url}/finance/ap/suppliers?search=xyznonexistent123456"
+    )
     authenticated_page.wait_for_load_state("networkidle")
     return authenticated_page

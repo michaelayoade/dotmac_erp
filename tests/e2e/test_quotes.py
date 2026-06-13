@@ -27,14 +27,14 @@ class TestQuotesList:
 
     def test_quotes_page_loads(self, authenticated_page, base_url):
         """Test that quotes list page loads successfully."""
-        response = authenticated_page.goto(f"{base_url}/quotes")
+        response = authenticated_page.goto(f"{base_url}/finance/quotes")
         assert response.ok, f"Quotes list failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_quotes_list_with_search(self, authenticated_page, base_url):
         """Test quotes list search functionality."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         search = authenticated_page.locator(
@@ -49,7 +49,7 @@ class TestQuotesList:
 
     def test_quotes_list_by_status(self, authenticated_page, base_url):
         """Test quotes list status filter."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         status_filter = authenticated_page.locator("select[name='status'], #status")
@@ -58,7 +58,7 @@ class TestQuotesList:
 
     def test_quotes_list_has_new_button(self, authenticated_page, base_url):
         """Test that quotes list has new button."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         new_btn = authenticated_page.locator(
@@ -79,14 +79,14 @@ class TestQuoteCreate:
 
     def test_quote_create_page_loads(self, authenticated_page, base_url):
         """Test that quote create page loads."""
-        response = authenticated_page.goto(f"{base_url}/quotes/new")
+        response = authenticated_page.goto(f"{base_url}/finance/quotes/new")
         assert response.ok, f"Quote create failed: {response.status}"
 
         authenticated_page.wait_for_load_state("networkidle")
 
     def test_quote_create_has_customer_field(self, authenticated_page, base_url):
         """Test that quote form has customer selection."""
-        authenticated_page.goto(f"{base_url}/quotes/new")
+        authenticated_page.goto(f"{base_url}/finance/quotes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -97,7 +97,7 @@ class TestQuoteCreate:
 
     def test_quote_create_has_date_field(self, authenticated_page, base_url):
         """Test that quote form has date field."""
-        authenticated_page.goto(f"{base_url}/quotes/new")
+        authenticated_page.goto(f"{base_url}/finance/quotes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -108,7 +108,7 @@ class TestQuoteCreate:
 
     def test_quote_create_has_valid_until_field(self, authenticated_page, base_url):
         """Test that quote form has valid until/expiry date."""
-        authenticated_page.goto(f"{base_url}/quotes/new")
+        authenticated_page.goto(f"{base_url}/finance/quotes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         field = authenticated_page.locator(
@@ -119,7 +119,7 @@ class TestQuoteCreate:
 
     def test_quote_create_with_lines(self, authenticated_page, base_url):
         """Test quote creation with line items."""
-        authenticated_page.goto(f"{base_url}/quotes/new")
+        authenticated_page.goto(f"{base_url}/finance/quotes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
         unique_id()
@@ -145,7 +145,7 @@ class TestQuoteDetail:
 
     def test_quote_detail_page_accessible(self, authenticated_page, base_url):
         """Test that quote detail is accessible."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -159,7 +159,7 @@ class TestQuoteDetail:
 
     def test_quote_detail_shows_lines(self, authenticated_page, base_url):
         """Test that quote detail shows line items."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -175,7 +175,7 @@ class TestQuoteDetail:
 
     def test_quote_detail_shows_totals(self, authenticated_page, base_url):
         """Test that quote detail shows totals."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -185,7 +185,9 @@ class TestQuoteDetail:
             quote_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            totals = authenticated_page.locator("text=Total, text=Subtotal, .totals")
+            totals = authenticated_page.locator(
+                ":text('Total'), :text('Subtotal'), .totals"
+            )
             if totals.count() > 0:
                 expect(totals.first).to_be_visible()
 
@@ -196,7 +198,7 @@ class TestQuoteEdit:
 
     def test_quote_edit_page_loads(self, authenticated_page, base_url):
         """Test that quote edit page loads."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -227,7 +229,7 @@ class TestQuoteWorkflows:
 
     def test_quote_send_to_customer(self, authenticated_page, base_url):
         """Test sending quote to customer."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -245,7 +247,7 @@ class TestQuoteWorkflows:
 
     def test_quote_accept_workflow(self, authenticated_page, base_url):
         """Test quote acceptance workflow."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -263,7 +265,7 @@ class TestQuoteWorkflows:
 
     def test_quote_reject_workflow(self, authenticated_page, base_url):
         """Test quote rejection workflow."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -281,7 +283,7 @@ class TestQuoteWorkflows:
 
     def test_quote_convert_to_order(self, authenticated_page, base_url):
         """Test converting quote to sales order."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
@@ -299,7 +301,7 @@ class TestQuoteWorkflows:
 
     def test_quote_duplicate(self, authenticated_page, base_url):
         """Test duplicating a quote."""
-        authenticated_page.goto(f"{base_url}/quotes")
+        authenticated_page.goto(f"{base_url}/finance/quotes")
         authenticated_page.wait_for_load_state("networkidle")
 
         quote_link = authenticated_page.locator(
