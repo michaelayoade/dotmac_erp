@@ -151,6 +151,68 @@ def test_create_standard_invoice_rejects_negative_total():
         )
 
 
+def test_create_invoice_rejects_nonpositive_exchange_rate():
+    """IAS 21: an exchange rate must be positive — reject zero/negative."""
+    db = MagicMock()
+    org_id = uuid4()
+    supplier = _make_supplier(org_id)
+    db.get.return_value = supplier
+
+    for bad_rate in (Decimal("0"), Decimal("-1.5")):
+        with pytest.raises(ValidationError, match="Exchange rate"):
+            SupplierInvoiceService.create_invoice(
+                db,
+                org_id,
+                SupplierInvoiceInput(
+                    supplier_id=supplier.supplier_id,
+                    invoice_type=SupplierInvoiceType.STANDARD,
+                    invoice_date=date.today(),
+                    received_date=date.today(),
+                    due_date=date.today(),
+                    currency_code="USD",
+                    exchange_rate=bad_rate,
+                    lines=[
+                        InvoiceLineInput(
+                            description="A",
+                            quantity=Decimal("1"),
+                            unit_price=Decimal("10"),
+                        )
+                    ],
+                ),
+                created_by_user_id=uuid4(),
+            )
+
+
+def test_create_invoice_rejects_due_date_before_invoice_date():
+    """Payment terms cannot be negative — due date must not precede invoice date."""
+    db = MagicMock()
+    org_id = uuid4()
+    supplier = _make_supplier(org_id)
+    db.get.return_value = supplier
+
+    with pytest.raises(ValidationError, match="Due date"):
+        SupplierInvoiceService.create_invoice(
+            db,
+            org_id,
+            SupplierInvoiceInput(
+                supplier_id=supplier.supplier_id,
+                invoice_type=SupplierInvoiceType.STANDARD,
+                invoice_date=date.today(),
+                received_date=date.today(),
+                due_date=date.today() - timedelta(days=1),
+                currency_code="NGN",
+                lines=[
+                    InvoiceLineInput(
+                        description="A",
+                        quantity=Decimal("1"),
+                        unit_price=Decimal("10"),
+                    )
+                ],
+            ),
+            created_by_user_id=uuid4(),
+        )
+
+
 def test_create_credit_note_negative_amounts_and_tax_lines():
     db = MagicMock()
     org_id = uuid4()

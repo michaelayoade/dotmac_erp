@@ -214,6 +214,17 @@ class ARInvoiceService(ListResponseMixin):
         if not customer.is_active:
             raise ValidationError("Customer is not active")
 
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated invoice may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
+
         # Auto-detect fiscal position and remap taxes/accounts
         from app.services.finance.tax.fiscal_position_service import (
             FiscalPositionService,
@@ -578,6 +589,17 @@ class ARInvoiceService(ListResponseMixin):
 
         if not customer.is_active:
             raise ValidationError("Customer is not active")
+
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated invoice may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
 
         # Validate lines
         if not input.lines:

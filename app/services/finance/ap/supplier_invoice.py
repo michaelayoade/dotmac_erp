@@ -364,6 +364,17 @@ class SupplierInvoiceService(ListResponseMixin):
         if not supplier.is_active:
             raise ValidationError("Supplier is not active")
 
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated bill may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
+
         if input.vehicle_id is not None:
             from app.models.fleet.enums import VehicleStatus
             from app.models.fleet.vehicle import Vehicle
@@ -689,6 +700,17 @@ class SupplierInvoiceService(ListResponseMixin):
             raise ValidationError(
                 f"Cannot update invoice with status '{invoice.status.value}'"
             )
+
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated bill may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
 
         if input.vehicle_id is not None:
             from app.models.fleet.enums import VehicleStatus
