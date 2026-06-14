@@ -473,6 +473,12 @@ class SupplierInvoiceService(ListResponseMixin):
 
         total_amount = subtotal + tax_total
 
+        if input.invoice_type == SupplierInvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to record "
+                "a supplier credit."
+            )
+
         # Calculate WHT if applicable
         wht_amount = Decimal("0")
         wht_code_id = input.wht_code_id
@@ -747,6 +753,12 @@ class SupplierInvoiceService(ListResponseMixin):
                 subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
+
+        if input.invoice_type == SupplierInvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to record "
+                "a supplier credit."
+            )
 
         if input.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
             total_amount = -abs(total_amount)
