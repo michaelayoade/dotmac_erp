@@ -332,6 +332,16 @@ class ARInvoiceService(ListResponseMixin):
 
         total_amount = subtotal + tax_total
 
+        # A STANDARD invoice must not have a negative net total — that inverts
+        # the receivable and is semantically a credit note. Negative discount
+        # lines are fine as long as the net stays >= 0; zero is allowed; and
+        # CREDIT_NOTE type is legitimately negative (it skips this guard).
+        if input.invoice_type == InvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to reduce "
+                "a customer's balance."
+            )
+
         # ── Deductions (WHT, VAT withheld, stamp duty) ──────────────
         wht_amount = Decimal("0")
         wht_code_id = input.wht_code_id
@@ -619,6 +629,16 @@ class ARInvoiceService(ListResponseMixin):
                 subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
+
+        # A STANDARD invoice must not have a negative net total — that inverts
+        # the receivable and is semantically a credit note. Negative discount
+        # lines are fine as long as the net stays >= 0; zero is allowed; and
+        # CREDIT_NOTE type is legitimately negative (it skips this guard).
+        if input.invoice_type == InvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to reduce "
+                "a customer's balance."
+            )
 
         # ── Deductions (WHT, VAT withheld, stamp duty) ──────────────
         wht_amount = Decimal("0")
