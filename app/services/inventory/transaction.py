@@ -26,7 +26,7 @@ from app.models.inventory.inventory_transaction import (
 )
 from app.models.inventory.item import CostingMethod, Item
 from app.models.inventory.warehouse import Warehouse
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
 from app.services.inventory.serial import InventorySerialService
 from app.services.response import ListResponseMixin
 from app.services.settings_cache import settings_cache
@@ -364,6 +364,11 @@ class InventoryTransactionService(ListResponseMixin):
         itm_id = coerce_uuid(input.item_id)
         wh_id = coerce_uuid(input.warehouse_id)
 
+        # Reject non-positive receipts outright. The WAC guard inside the try
+        # block below is otherwise bypassed by the `except Exception` fallback.
+        if input.quantity <= 0:
+            raise ValidationError("Receipt quantity must be positive.")
+
         # Validate item
         item = db.get(Item, itm_id)
         if not item or item.organization_id != org_id:
@@ -677,6 +682,11 @@ class InventoryTransactionService(ListResponseMixin):
         itm_id = coerce_uuid(input.item_id)
         wh_id = coerce_uuid(input.warehouse_id)
 
+        # Reject non-positive issues. A negative issue would otherwise pass the
+        # `qty_before < input.quantity` check below and increase stock.
+        if input.quantity <= 0:
+            raise ValidationError("Issue quantity must be positive.")
+
         # Validate item
         item = db.get(Item, itm_id)
         if not item or item.organization_id != org_id:
@@ -693,6 +703,18 @@ class InventoryTransactionService(ListResponseMixin):
         warehouse = db.get(Warehouse, wh_id)
         if not warehouse or warehouse.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Warehouse not found")
+
+        if not warehouse.is_active:
+            raise HTTPException(
+                status_code=400,
+                detail="Warehouse is not active",
+            )
+
+        if not warehouse.is_shipping:
+            raise HTTPException(
+                status_code=400,
+                detail="Warehouse is not configured for shipping",
+            )
 
         # Get current balance
         qty_before = InventoryTransactionService.get_current_balance(
@@ -1273,6 +1295,14 @@ class InventoryTransactionService(ListResponseMixin):
         itm_id = coerce_uuid(input.item_id)
         from_wh_id = coerce_uuid(input.warehouse_id)
         to_wh_id = coerce_uuid(input.to_warehouse_id)
+
+        if input.quantity <= 0:
+            raise ValidationError("Transfer quantity must be positive.")
+
+        if from_wh_id == to_wh_id:
+            raise ValidationError(
+                "Source and destination warehouses must be different."
+            )
 
         # Validate item
         item = db.get(Item, itm_id)

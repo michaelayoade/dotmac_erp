@@ -23,6 +23,7 @@ from app.models.inventory.stock_reservation import (
     ReservationStatus,
     StockReservation,
 )
+from app.services.common import coerce_uuid
 from app.services.feature_flags import FEATURE_STOCK_RESERVATION, is_feature_enabled
 from app.services.hooks import emit_hook_event
 from app.services.hooks.events import INVENTORY_STOCK_RELEASED, INVENTORY_STOCK_RESERVED
@@ -145,7 +146,9 @@ class StockReservationService:
                 message="Stock reservation is not enabled in inventory settings.",
             )
 
-        existing = self.get_reservation_for_line(source_type, source_line_id)
+        existing = self.get_reservation_for_line(
+            source_type, source_line_id, organization_id
+        )
         if existing:
             return ReservationResult(
                 success=True,
@@ -439,6 +442,7 @@ class StockReservationService:
         self,
         source_type: ReservationSourceType,
         source_id: UUID,
+        organization_id: UUID | None = None,
     ) -> list[StockReservation]:
         """Return active reservations for a source document."""
         stmt = select(StockReservation).where(
@@ -446,12 +450,17 @@ class StockReservationService:
             StockReservation.source_id == source_id,
             StockReservation.status.in_(_ACTIVE_STATUSES),
         )
+        if organization_id is not None:
+            stmt = stmt.where(
+                StockReservation.organization_id == coerce_uuid(organization_id)
+            )
         return list(self.db.scalars(stmt).all())
 
     def get_reservation_for_line(
         self,
         source_type: ReservationSourceType,
         source_line_id: UUID,
+        organization_id: UUID | None = None,
     ) -> StockReservation | None:
         """Return active reservation for a source line."""
         stmt = select(StockReservation).where(
@@ -459,6 +468,10 @@ class StockReservationService:
             StockReservation.source_line_id == source_line_id,
             StockReservation.status.in_(_ACTIVE_STATUSES),
         )
+        if organization_id is not None:
+            stmt = stmt.where(
+                StockReservation.organization_id == coerce_uuid(organization_id)
+            )
         return self.db.scalar(stmt)
 
     def get_reserved_quantity(

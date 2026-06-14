@@ -69,12 +69,14 @@ class MockWarehouse:
         warehouse_code: str = "WH-001",
         is_receiving: bool = True,
         is_shipping: bool = True,
+        is_active: bool = True,
     ):
         self.warehouse_id = warehouse_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
         self.warehouse_code = warehouse_code
         self.is_receiving = is_receiving
         self.is_shipping = is_shipping
+        self.is_active = is_active
 
 
 class MockInventoryLot:
