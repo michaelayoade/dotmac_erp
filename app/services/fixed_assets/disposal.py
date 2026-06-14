@@ -26,7 +26,7 @@ from app.models.finance.audit.audit_log import AuditAction
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_disposal import AssetDisposal, DisposalType
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
 from app.services.people.assets.lifecycle_event_service import (
     record_asset_lifecycle_event,
 )
@@ -90,6 +90,12 @@ class AssetDisposalService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         user_id = coerce_uuid(created_by_user_id)
         ast_id = coerce_uuid(input.asset_id)
+
+        # Validate financial inputs before any persistence work.
+        if input.disposal_proceeds < 0:
+            raise ValidationError("Disposal proceeds cannot be negative.")
+        if input.costs_of_disposal < 0:
+            raise ValidationError("Costs of disposal cannot be negative.")
 
         # Load asset
         asset = db.get(Asset, ast_id)
