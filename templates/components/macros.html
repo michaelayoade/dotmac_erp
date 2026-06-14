@@ -2203,3 +2203,38 @@ if (typeof window.searchAutosuggest === 'undefined') {
     </select>
 </div>
 {% endmacro %}
+
+{#
+  export_menu — a single "Export" button that opens a dropdown of download
+  formats, replacing per-report inline "Export CSV/Excel/PDF" links.
+  Args:
+    base_url : report base path, e.g. "/finance/reports/income-statement"
+    query    : pre-built query string WITHOUT leading "?" (filters/dates), or ""
+    formats  : ordered list of supported formats, e.g. ["csv", "xlsx", "pdf"]
+  Each item links to {base_url}/export?format={fmt}&{query}.
+#}
+{% macro export_menu(base_url, query="", formats=["csv", "pdf"]) %}
+{% set _fmt_label = {"csv": "CSV", "xlsx": "Excel", "pdf": "PDF"} %}
+<div class="relative inline-block" x-data="{ open: false }" @click.away="open = false" @keydown.escape.window="open = false">
+    <button type="button" @click="open = !open" :aria-expanded="open" aria-haspopup="true"
+            class="btn btn-secondary h-9 px-3 inline-flex items-center gap-1.5">
+        {{ icon_svg("download", "h-4 w-4") }}
+        <span>Export</span>
+        {{ icon_svg("chevron-down", "h-3.5 w-3.5 transition-transform") }}
+    </button>
+    <div x-show="open" x-cloak
+         x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 scale-95"
+         x-transition:leave="transition ease-in duration-100" x-transition:leave-end="opacity-0 scale-95"
+         class="absolute right-0 mt-1 w-44 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50 py-1"
+         role="menu">
+        {% for fmt in formats %}
+        <a href="{{ base_url }}/export?format={{ fmt }}{% if query %}&{{ query }}{% endif %}"
+           class="flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+           role="menuitem">
+            {{ icon_svg("download", "h-4 w-4 text-slate-400") }}
+            <span>Export as {{ _fmt_label.get(fmt, fmt | upper) }}</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}

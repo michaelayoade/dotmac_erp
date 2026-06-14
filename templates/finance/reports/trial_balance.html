@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, filter_date_field, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import compact_filters, filter_date_field, icon_svg, period_shortcuts, export_menu %}
 
 {% block page_title %}Trial balance{% if is_cash_basis %} (Cash Basis){% endif %}{% endblock %}
 
@@ -14,14 +14,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/trial-balance/export?as_of_date={{ as_of_date_iso }}&basis={{ basis if basis else 'accrual' }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export CSV
-</a>
-<a href="/finance/reports/trial-balance/export?format=pdf&as_of_date={{ as_of_date_iso }}&basis={{ basis if basis else 'accrual' }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
+{{ export_menu("/finance/reports/trial-balance", "as_of_date=" ~ as_of_date_iso ~ "&basis=" ~ (basis if basis else 'accrual'), ["csv", "pdf"]) }}
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
