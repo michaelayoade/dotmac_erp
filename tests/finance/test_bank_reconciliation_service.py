@@ -986,8 +986,8 @@ def test_calculate_match_score_no_payee_match() -> None:
         stmt, gl, db=MagicMock(), gl_metadata=gl_metadata
     )
 
-    # Amount 35 + date 25 + reference 25 + payee 0 = 85
-    assert score == 85.0
+    # Amount 40 + date 40 + reference 25 + payee 0 = 105
+    assert score == 105.0
 
 
 # =============================================================================
