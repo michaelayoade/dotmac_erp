@@ -85,6 +85,8 @@ class AppropriationService:
         user_id: UUID,
     ) -> Appropriation:
         """Create a new appropriation."""
+        if data.approved_amount is None or data.approved_amount <= 0:
+            raise ValidationError("Approved amount must be greater than zero.")
         approp = Appropriation(
             organization_id=organization_id,
             fiscal_year_id=data.fiscal_year_id,
@@ -181,6 +183,9 @@ class AppropriationService:
         approp = self.get_or_404(data.appropriation_id)
         if approp.organization_id != organization_id:
             raise ForbiddenError("Appropriation does not belong to this organization")
+
+        if data.allotted_amount is None or data.allotted_amount <= 0:
+            raise ValidationError("Allotted amount must be greater than zero.")
 
         allotment = Allotment(
             appropriation_id=data.appropriation_id,
