@@ -26,7 +26,7 @@ from app.services.nextcloud.client import (
 from app.services.remita.client import REMITA_DEMO_URL, REMITA_LIVE_URL, RemitaClient
 from app.services.secrets import _openbao_allow_insecure, _openbao_config
 from app.services.settings_spec import coerce_value, get_spec
-from app.services.splynx.client import SplynxClient, SplynxConfig
+from app.services.dotmac_sub import DotmacSubClient, DotmacSubConfig
 from app.services.storage import _get_client as _get_storage_client
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ def collect_dependency_health() -> dict[str, dict[str, object]]:
             "crm": _check_crm(),
             "paystack": _check_paystack(db),
             "nextcloud": _check_nextcloud(db),
-            "splynx": _check_splynx(),
+            "dotmac_sub": _check_dotmac_sub(),
             "remita": _check_remita(),
         }
     finally:
@@ -334,20 +334,19 @@ def _check_nextcloud(db: Session) -> dict[str, object]:
     )
 
 
-def _check_splynx() -> dict[str, object]:
-    config = SplynxConfig.from_settings()
-    configured = bool(config.api_url and config.api_key and config.api_secret)
-    if not configured:
+def _check_dotmac_sub() -> dict[str, object]:
+    config = DotmacSubConfig.from_settings()
+    if not config.is_configured():
         return _result(
             configured=False,
             healthy=False,
-            message="Splynx is not configured",
+            message="dotmac_sub is not configured",
         )
 
     try:
         config.timeout = min(config.timeout, 5.0)
         config.max_retries = 1
-        with SplynxClient(config) as client:
+        with DotmacSubClient(config) as client:
             healthy = client.test_connection()
     except Exception as exc:
         return _result(configured=True, healthy=False, message=str(exc)[:160])
@@ -355,7 +354,9 @@ def _check_splynx() -> dict[str, object]:
     return _result(
         configured=True,
         healthy=healthy,
-        message="Splynx API reachable" if healthy else "Splynx API health check failed",
+        message="dotmac_sub API reachable"
+        if healthy
+        else "dotmac_sub API health check failed",
     )
 
 

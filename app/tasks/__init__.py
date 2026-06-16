@@ -107,20 +107,8 @@ from app.tasks.performance import (
 from app.tasks.project_sla import (
     process_project_sla_breaches,
 )
-from app.tasks.splynx import (
-    cleanup_stale_splynx_sync_history,
-    run_scheduled_splynx_sync,
-    run_splynx_daily_reconciliation,
-    run_splynx_full_reconciliation,
-    run_splynx_incremental_sync,
-)
 
 __all__ = [
-    "run_scheduled_splynx_sync",
-    "run_splynx_incremental_sync",
-    "run_splynx_daily_reconciliation",
-    "run_splynx_full_reconciliation",
-    "cleanup_stale_splynx_sync_history",
     # Expense module tasks
     "refresh_period_usage_cache",
     "process_expense_approval_reminders",

@@ -555,8 +555,8 @@ def seed_scheduled_tasks(db: Session) -> None:
             "enabled": False,  # Disabled - use master task instead
         },
         {
-            "name": "Splynx: Incremental Sync",
-            "task_name": "app.tasks.splynx.run_scheduled_splynx_sync",
+            "name": "dotmac_sub: Incremental Sync",
+            "task_name": "app.tasks.dotmac_sub.run_dotmac_sub_incremental_sync",
             "schedule_type": ScheduleType.interval,
             "interval_seconds": 1800,  # Every 30 minutes
             "enabled": True,
