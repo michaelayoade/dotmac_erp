@@ -13,9 +13,19 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ipsas.appropriation import Appropriation
 from app.models.finance.ipsas.commitment import Commitment
-from app.models.finance.ipsas.enums import CommitmentStatus, CommitmentType
+from app.models.finance.ipsas.enums import (
+    AppropriationStatus,
+    CommitmentStatus,
+    CommitmentType,
+    FundStatus,
+)
+from app.models.finance.ipsas.fund import Fund
 from app.services.common import NotFoundError, ValidationError
+from app.services.finance.ipsas.available_balance_service import (
+    AvailableBalanceService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +78,48 @@ class CommitmentService:
             raise NotFoundError(f"Commitment {commitment_id} not found")
         return commitment
 
+    def _validate_new_commitment(
+        self,
+        *,
+        organization_id: UUID,
+        fund_id: UUID,
+        appropriation_id: UUID | None,
+        amount: Decimal,
+    ) -> None:
+        """Guard a new commitment: positive amount, active fund, and (when an
+        appropriation is linked) an approved appropriation with enough available
+        budget. IPSAS encumbrance control is a hard ceiling — a commitment may
+        not exceed the appropriation's available balance.
+        """
+        if amount is None or amount <= 0:
+            raise ValidationError("Committed amount must be greater than zero.")
+
+        fund = self.db.get(Fund, fund_id)
+        if not fund or fund.organization_id != organization_id:
+            raise NotFoundError(f"Fund {fund_id} not found")
+        if fund.status != FundStatus.ACTIVE:
+            raise ValidationError(f"Cannot commit against a {fund.status.value} fund.")
+
+        if appropriation_id is not None:
+            approp = self.db.get(Appropriation, appropriation_id)
+            if not approp or approp.organization_id != organization_id:
+                raise NotFoundError(f"Appropriation {appropriation_id} not found")
+            if approp.status not in (
+                AppropriationStatus.APPROVED,
+                AppropriationStatus.ACTIVE,
+            ):
+                raise ValidationError(
+                    f"Cannot commit against a {approp.status.value} appropriation."
+                )
+            balance = AvailableBalanceService(self.db).calculate(
+                organization_id, appropriation_id=appropriation_id
+            )
+            if amount > balance.available_balance:
+                raise ValidationError(
+                    f"Commitment {amount} exceeds the appropriation's available "
+                    f"balance {balance.available_balance}."
+                )
+
     def create(
         self,
         *,
@@ -84,6 +136,12 @@ class CommitmentService:
         appropriation_id: UUID | None = None,
     ) -> Commitment:
         """Create a generic commitment (not tied to a specific source document)."""
+        self._validate_new_commitment(
+            organization_id=organization_id,
+            fund_id=fund_id,
+            appropriation_id=appropriation_id,
+            amount=committed_amount,
+        )
         commitment = Commitment(
             organization_id=organization_id,
             commitment_number=commitment_number,
@@ -129,6 +187,12 @@ class CommitmentService:
         appropriation_id: UUID | None = None,
     ) -> Commitment:
         """Create a commitment from a purchase order."""
+        self._validate_new_commitment(
+            organization_id=organization_id,
+            fund_id=fund_id,
+            appropriation_id=appropriation_id,
+            amount=amount,
+        )
         commitment = Commitment(
             organization_id=organization_id,
             commitment_number=commitment_number,
@@ -175,6 +239,12 @@ class CommitmentService:
         appropriation_id: UUID | None = None,
     ) -> Commitment:
         """Create a commitment from a procurement contract."""
+        self._validate_new_commitment(
+            organization_id=organization_id,
+            fund_id=fund_id,
+            appropriation_id=appropriation_id,
+            amount=amount,
+        )
         commitment = Commitment(
             organization_id=organization_id,
             commitment_number=commitment_number,
@@ -221,7 +291,11 @@ class CommitmentService:
                 f"Cannot obligate commitment in {commitment.status.value} status"
             )
 
-        remaining = commitment.committed_amount - commitment.obligated_amount
+        remaining = (
+            commitment.committed_amount
+            - commitment.obligated_amount
+            - commitment.cancelled_amount
+        )
         if amount > remaining:
             raise ValidationError(
                 f"Obligation amount {amount} exceeds remaining "

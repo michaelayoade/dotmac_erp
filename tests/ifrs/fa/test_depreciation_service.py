@@ -608,3 +608,73 @@ class TestAssetDepreciationCalculation:
             DepreciationService.calculate_asset_depreciation(mock_db, mock_asset)
 
         assert "Category not found" in str(exc_info.value)
+
+    def test_declining_balance_final_period_trues_up_to_residual(
+        self, mock_db, mock_asset, mock_category
+    ):
+        """F19: on the final period DB/DDB writes NBV down exactly to residual."""
+        from app.services.fixed_assets.depreciation import DepreciationService
+
+        mock_asset.depreciation_method = MockDepreciationMethod.DECLINING_BALANCE
+        mock_asset.acquisition_cost = Decimal("10000")
+        mock_asset.residual_value = Decimal("1000")
+        mock_asset.useful_life_months = 60
+        mock_asset.accumulated_depreciation = Decimal("8500")
+        mock_asset.net_book_value = Decimal("1500")
+        mock_asset.remaining_life_months = 1  # final period -> remaining_closing == 0
+        mock_asset.revalued_amount = None
+
+        mock_db.get.return_value = mock_category
+
+        result = DepreciationService.calculate_asset_depreciation(mock_db, mock_asset)
+
+        # True-up writes off the full remaining NBV above residual (1500 - 1000).
+        assert result.depreciation_amount == Decimal("500")
+        assert result.closing_nbv == Decimal("1000")
+        assert result.remaining_life_closing == 0
+
+
+class TestPostRunDisposedAssetGuard:
+    """F16: post_run must not depreciate a disposed/retired asset."""
+
+    def test_post_run_rejects_retired_asset(self, mock_db, org_id, user_id):
+        """A run referencing a now-retired asset must be rejected, not posted."""
+        from fastapi import HTTPException
+
+        from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
+        from app.services.fixed_assets.depreciation import DepreciationService
+
+        run_id = uuid.uuid4()
+        creator_id = uuid.uuid4()
+        asset_id = uuid.uuid4()
+        run = SimpleNamespace(
+            run_id=run_id,
+            organization_id=org_id,
+            status=DepreciationRunStatus.CALCULATED,
+            created_by_user_id=creator_id,
+        )
+        schedule = SimpleNamespace(
+            asset_id=asset_id,
+            accumulated_depreciation_opening=Decimal("100.00"),
+            net_book_value_opening=Decimal("900.00"),
+            remaining_life_months_opening=9,
+        )
+        asset = SimpleNamespace(
+            asset_id=asset_id,
+            organization_id=org_id,
+            asset_number="FA-RETIRED",
+            status=MockAssetStatus.RETIRED,
+            accumulated_depreciation=Decimal("100.00"),
+            net_book_value=Decimal("900.00"),
+            remaining_life_months=9,
+        )
+
+        mock_db.get.side_effect = [run, asset]
+        mock_db.scalars.return_value = [schedule]
+
+        with pytest.raises(HTTPException) as exc:
+            DepreciationService.post_run(mock_db, org_id, run_id, user_id)
+
+        assert exc.value.status_code == 400
+        assert "disposed/retired" in exc.value.detail
+        mock_db.flush.assert_not_called()

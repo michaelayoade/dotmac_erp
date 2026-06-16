@@ -511,6 +511,7 @@ class SalesOrderService:
                 reservation = reservation_service.get_reservation_for_line(
                     ReservationSourceType.SALES_ORDER,
                     so_line.line_id,
+                    so.organization_id,
                 )
                 if reservation:
                     try:
@@ -758,6 +759,7 @@ class SalesOrderService:
             reservations = reservation_service.get_reservations_for_source(
                 ReservationSourceType.SALES_ORDER,
                 so.so_id,
+                so.organization_id,
             )
             for reservation in reservations:
                 try:

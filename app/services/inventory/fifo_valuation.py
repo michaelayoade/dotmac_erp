@@ -23,7 +23,7 @@ from app.models.inventory.inventory_lot import InventoryLot
 from app.models.inventory.inventory_lot_balance import InventoryLotBalance
 from app.models.inventory.inventory_valuation import InventoryValuation
 from app.models.inventory.item import Item
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -119,6 +119,12 @@ class FIFOValuationService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         item_id = coerce_uuid(item_id)
 
+        # Reject non-positive inputs (mirrors WAC calculate_receipt_cost guards)
+        if quantity <= 0:
+            raise ValidationError("Receipt quantity must be positive.")
+        if unit_cost <= 0:
+            raise ValidationError("Receipt unit cost must be positive.")
+
         # Validate item
         item = db.scalars(
             select(Item).where(
@@ -209,23 +215,26 @@ class FIFOValuationService(ListResponseMixin):
         organization_id: UUID,
         item_id: UUID,
         quantity: Decimal,
+        warehouse_id: UUID,
     ) -> ConsumptionResult:
         """
         Consume inventory using FIFO method.
 
-        Consumes from oldest layers first.
+        Consumes from oldest layers first, scoped to the given warehouse.
 
         Args:
             db: Database session
             organization_id: Organization scope
             item_id: Item ID
             quantity: Quantity to consume
+            warehouse_id: Warehouse to consume from
 
         Returns:
             ConsumptionResult with cost details
         """
         org_id = coerce_uuid(organization_id)
         item_id = coerce_uuid(item_id)
+        wh_id = coerce_uuid(warehouse_id)
 
         # Get layers ordered by received date (oldest first)
         if FIFOValuationService._is_mock_like(db):
@@ -244,8 +253,10 @@ class FIFOValuationService(ListResponseMixin):
             for layer in mock_layers:
                 balances = getattr(layer, "_mock_balances", {}) or {}
                 for balance in balances.values():
-                    if (balance.quantity_on_hand or Decimal("0")) > 0 and getattr(
-                        balance, "is_active", True
+                    if (
+                        (balance.quantity_on_hand or Decimal("0")) > 0
+                        and getattr(balance, "is_active", True)
+                        and balance.warehouse_id == wh_id
                     ):
                         mock_layer_rows.append((balance, layer))
             total_available = sum(
@@ -302,6 +313,7 @@ class FIFOValuationService(ListResponseMixin):
                     .where(
                         InventoryLot.organization_id == org_id,
                         InventoryLot.item_id == item_id,
+                        InventoryLotBalance.warehouse_id == wh_id,
                         InventoryLotBalance.quantity_on_hand > 0,
                         InventoryLotBalance.is_active == True,
                     )

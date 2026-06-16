@@ -83,6 +83,12 @@ class TaxCode(Base):
     # Tax calculation
     is_compound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_inclusive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # When True, ``tax_rate`` is an absolute monetary amount (a flat levy such
+    # as a per-transaction stamp duty), NOT a ratio. The calc engine adds it
+    # flat instead of multiplying the base.
+    is_fixed_amount: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     is_recoverable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     recovery_rate: Mapped[Decimal] = mapped_column(
         Numeric(5, 4), nullable=False, default=1

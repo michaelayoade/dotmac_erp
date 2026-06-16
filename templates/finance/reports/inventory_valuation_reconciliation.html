@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import icon_svg %}
+{% from "components/macros.html" import icon_svg, export_menu %}
 
 {% block page_title %}Inventory Valuation Reconciliation{% endblock %}
 
@@ -13,11 +13,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/inventory-valuation-reconciliation/export?format=pdf" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
-{% endblock %}
+{{ export_menu("/finance/reports/inventory-valuation-reconciliation", "", ["pdf"]) }}{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto space-y-6">

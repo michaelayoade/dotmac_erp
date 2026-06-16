@@ -7,7 +7,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
+from app.api.deps import (
+    get_db_with_org,
+    require_organization_id,
+    require_tenant_auth,
+    require_tenant_permission,
+)
 from app.schemas.procurement.requisition import (
     RequisitionCreate,
     RequisitionResponse,
@@ -137,10 +142,17 @@ def verify_budget(
 def approve_requisition(
     requisition_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    auth: dict = Depends(require_tenant_auth),
+    auth: dict = Depends(require_tenant_permission("procurement:access")),
     db: Session = Depends(get_db_with_org),
 ):
-    """Approve a requisition."""
+    """Approve a requisition.
+
+    Gated on procurement module access (previously any authenticated tenant
+    user could approve). A dedicated ``procurement:requisitions:approve``
+    permission would be finer-grained, but that requires seeding the
+    permission catalog + role grants; module access plus the service-layer
+    segregation-of-duties check (creator != approver) closes the actual hole.
+    """
     service = RequisitionService(db)
     person_id = auth.get("person_id")
     if not person_id:
@@ -168,3 +180,5 @@ def reject_requisition(
         return RequisitionResponse.model_validate(req)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))

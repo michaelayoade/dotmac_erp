@@ -332,3 +332,62 @@ class TestAssetDisposalService:
             isinstance(call.args[0], AssetDisposal)
             for call in mock_db.add.call_args_list
         )
+
+    def test_create_disposal_rejects_negative_proceeds(
+        self, mock_db, org_id, mock_asset, user_id
+    ):
+        """F17: disposal proceeds cannot be negative."""
+        from fastapi import HTTPException
+
+        from app.models.fixed_assets.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import (
+            AssetDisposalService,
+            DisposalInput,
+        )
+
+        mock_asset.status = MockAssetStatus.IN_USE
+        mock_db.get.return_value = mock_asset
+
+        input_data = DisposalInput(
+            asset_id=mock_asset.asset_id,
+            fiscal_period_id=uuid.uuid4(),
+            disposal_date=date.today(),
+            disposal_type=DisposalType.SALE,
+            disposal_proceeds=Decimal("-100"),
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetDisposalService.create_disposal(mock_db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "Disposal proceeds" in exc_info.value.detail
+
+    def test_create_disposal_rejects_negative_costs(
+        self, mock_db, org_id, mock_asset, user_id
+    ):
+        """F17: costs of disposal cannot be negative."""
+        from fastapi import HTTPException
+
+        from app.models.fixed_assets.asset_disposal import DisposalType
+        from app.services.fixed_assets.disposal import (
+            AssetDisposalService,
+            DisposalInput,
+        )
+
+        mock_asset.status = MockAssetStatus.IN_USE
+        mock_db.get.return_value = mock_asset
+
+        input_data = DisposalInput(
+            asset_id=mock_asset.asset_id,
+            fiscal_period_id=uuid.uuid4(),
+            disposal_date=date.today(),
+            disposal_type=DisposalType.SALE,
+            disposal_proceeds=Decimal("100"),
+            costs_of_disposal=Decimal("-50"),
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetDisposalService.create_disposal(mock_db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "Costs of disposal" in exc_info.value.detail

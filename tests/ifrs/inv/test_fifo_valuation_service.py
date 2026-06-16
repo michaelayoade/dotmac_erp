@@ -35,11 +35,18 @@ def org_id():
 
 
 @pytest.fixture
-def sample_fifo_layers():
-    """Create sample FIFO layers for testing."""
+def warehouse_id():
+    """Create test warehouse ID shared by sample FIFO layers."""
+    return uuid4()
+
+
+@pytest.fixture
+def sample_fifo_layers(warehouse_id):
+    """Create sample FIFO layers for testing (all in one warehouse)."""
     return [
         MockInventoryLot(
             lot_number="LOT-001",
+            warehouse_id=warehouse_id,
             received_date=date(2024, 1, 1),
             quantity_on_hand=Decimal("50"),
             quantity_allocated=Decimal("0"),
@@ -49,6 +56,7 @@ def sample_fifo_layers():
         ),
         MockInventoryLot(
             lot_number="LOT-002",
+            warehouse_id=warehouse_id,
             received_date=date(2024, 2, 1),
             quantity_on_hand=Decimal("30"),
             quantity_allocated=Decimal("0"),
@@ -58,6 +66,7 @@ def sample_fifo_layers():
         ),
         MockInventoryLot(
             lot_number="LOT-003",
+            warehouse_id=warehouse_id,
             received_date=date(2024, 3, 1),
             quantity_on_hand=Decimal("20"),
             quantity_allocated=Decimal("0"),
@@ -109,15 +118,55 @@ class TestAddInventoryLayer:
 
         assert exc.value.status_code == 404
 
+    def test_add_layer_rejects_zero_quantity(self, service, mock_db, org_id):
+        """F21: zero/negative quantity must be rejected."""
+        from app.services.common import ValidationError
+
+        item = MockItem(organization_id=org_id)
+        mock_db.scalars.return_value.first.return_value = item
+
+        with pytest.raises(ValidationError):
+            service.add_inventory_layer(
+                mock_db,
+                org_id,
+                item.item_id,
+                uuid4(),
+                quantity=Decimal("0"),
+                unit_cost=Decimal("10.00"),
+                layer_date=date.today(),
+            )
+
+    def test_add_layer_rejects_non_positive_unit_cost(self, service, mock_db, org_id):
+        """F21: zero/negative unit cost must be rejected."""
+        from app.services.common import ValidationError
+
+        item = MockItem(organization_id=org_id)
+        mock_db.scalars.return_value.first.return_value = item
+
+        with pytest.raises(ValidationError):
+            service.add_inventory_layer(
+                mock_db,
+                org_id,
+                item.item_id,
+                uuid4(),
+                quantity=Decimal("100"),
+                unit_cost=Decimal("0"),
+                layer_date=date.today(),
+            )
+
 
 class TestConsumeInventoryFifo:
     """Tests for consume_inventory_fifo method."""
 
-    def test_consume_success(self, service, mock_db, org_id, sample_fifo_layers):
+    def test_consume_success(
+        self, service, mock_db, org_id, sample_fifo_layers, warehouse_id
+    ):
         """Test successful FIFO consumption."""
         mock_db.scalars.return_value.all.return_value = sample_fifo_layers
 
-        result = service.consume_inventory_fifo(mock_db, org_id, uuid4(), Decimal("60"))
+        result = service.consume_inventory_fifo(
+            mock_db, org_id, uuid4(), Decimal("60"), warehouse_id
+        )
 
         mock_db.flush.assert_called()
         assert result.quantity_consumed == Decimal("60")
@@ -126,7 +175,7 @@ class TestConsumeInventoryFifo:
         assert len(result.cost_layers_used) == 2
 
     def test_consume_insufficient_inventory(
-        self, service, mock_db, org_id, sample_fifo_layers
+        self, service, mock_db, org_id, sample_fifo_layers, warehouse_id
     ):
         """Test consumption with insufficient inventory."""
         from fastapi import HTTPException
@@ -139,23 +188,58 @@ class TestConsumeInventoryFifo:
                 org_id,
                 uuid4(),
                 Decimal("200"),  # More than available
+                warehouse_id,
             )
 
         assert exc.value.status_code == 400
         assert "Insufficient inventory" in exc.value.detail
 
     def test_consume_from_single_layer(
-        self, service, mock_db, org_id, sample_fifo_layers
+        self, service, mock_db, org_id, sample_fifo_layers, warehouse_id
     ):
         """Test consumption from single layer."""
         mock_db.scalars.return_value.all.return_value = sample_fifo_layers
 
-        result = service.consume_inventory_fifo(mock_db, org_id, uuid4(), Decimal("30"))
+        result = service.consume_inventory_fifo(
+            mock_db, org_id, uuid4(), Decimal("30"), warehouse_id
+        )
 
         assert result.quantity_consumed == Decimal("30")
         # 30 units at $10 = 300
         assert result.total_cost == Decimal("300")
         assert len(result.cost_layers_used) == 1
+
+    def test_consume_only_from_specified_warehouse(
+        self, service, mock_db, org_id, sample_fifo_layers, warehouse_id
+    ):
+        """FIFO consumption must ignore layers in other warehouses (F20)."""
+        from fastapi import HTTPException
+
+        other_warehouse_id = uuid4()
+        other_layer = MockInventoryLot(
+            lot_number="LOT-OTHER",
+            warehouse_id=other_warehouse_id,
+            received_date=date(2024, 1, 1),
+            quantity_on_hand=Decimal("500"),
+            quantity_allocated=Decimal("0"),
+            quantity_available=Decimal("500"),
+            unit_cost=Decimal("10.00"),
+            is_active=True,
+        )
+        mock_db.scalars.return_value.all.return_value = [
+            *sample_fifo_layers,
+            other_layer,
+        ]
+
+        # Only 100 units live in warehouse_id; requesting 150 must fail even
+        # though the other warehouse has 500 on hand.
+        with pytest.raises(HTTPException) as exc:
+            service.consume_inventory_fifo(
+                mock_db, org_id, uuid4(), Decimal("150"), warehouse_id
+            )
+
+        assert exc.value.status_code == 400
+        assert "Insufficient inventory" in exc.value.detail
 
 
 class TestGetFifoInventory:

@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import compact_filters, icon_svg, period_shortcuts, export_menu %}
 
 
 {% block page_title %}Account Ledger Report{% endblock %}
@@ -58,19 +58,7 @@
         {% set can_export = not (all_accounts_selected and all_accounts_requires_date_range) %}
         <div class="mb-5 flex flex-wrap items-center justify-end gap-2 print:hidden">
             {% if can_export %}
-            <a href="/finance/reports/general-ledger/export?account_id={{ account_id }}&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}"
-               class="btn btn-secondary h-9 px-3"
-               data-general-ledger-export>
-                {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-                Export CSV
-            </a>
-            <a href="/finance/reports/general-ledger/export?format=pdf&account_id={{ account_id }}&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}"
-               class="btn btn-secondary h-9 px-3"
-               data-general-ledger-export>
-                {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-                Export PDF
-            </a>
-            {% endif %}
+            {{ export_menu("/finance/reports/general-ledger", "account_id=" ~ account_id ~ "&start_date=" ~ start_date_iso ~ "&end_date=" ~ end_date_iso ~ "", ["csv", "pdf"]) }}{% endif %}
         </div>
         {% set doc_title = "General ledger detail" %}
         {% set doc_number = selected_account.account_code if not selected_account.is_all_accounts else "All accounts" %}

@@ -453,6 +453,77 @@ class TestCreateReceipt:
         assert exc_info.value.status_code == 400
         assert "exceeds remaining" in str(exc_info.value.detail).lower()
 
+    @patch(
+        "app.services.finance.ap.goods_receipt.GoodsReceiptService._update_po_status"
+    )
+    @patch("app.services.finance.ap.goods_receipt.SequenceService")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceiptLine")
+    @patch("app.services.finance.ap.goods_receipt.GoodsReceipt")
+    @patch("app.services.finance.ap.goods_receipt.POStatus")
+    def test_create_receipt_non_positive_quantity(
+        self,
+        mock_po_status,
+        mock_receipt_class,
+        mock_line_class,
+        mock_seq_service,
+        mock_update_status,
+    ):
+        """F40: receipt line with quantity_received <= 0 is rejected.
+
+        A negative quantity must not pass the over-receipt check and
+        silently DECREMENT the PO line's received quantity.
+        """
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+        user_id = uuid4()
+        po_line_id = uuid4()
+
+        mock_approved = MagicMock()
+        mock_partial = MagicMock()
+        mock_po_status.APPROVED = mock_approved
+        mock_po_status.PARTIALLY_RECEIVED = mock_partial
+
+        mock_po_line = MockPurchaseOrderLine(
+            line_id=po_line_id,
+            quantity_ordered=Decimal("10"),
+            quantity_received=Decimal("0"),
+        )
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            lines=[mock_po_line],
+        )
+        mock_po.status = mock_approved
+
+        sr1 = MagicMock()
+        sr1.first.return_value = mock_po
+        sr2 = MagicMock()
+        sr2.first.return_value = mock_po_line
+        db.scalars.side_effect = [sr1, sr2]
+
+        mock_seq_service.get_next_number.return_value = "GR-000001"
+
+        mock_receipt = MockGoodsReceipt(organization_id=org_id, po_id=po_id)
+        mock_receipt_class.return_value = mock_receipt
+
+        input_data = GoodsReceiptInput(
+            po_id=po_id,
+            receipt_date=date.today(),
+            lines=[
+                GRLineInput(
+                    po_line_id=po_line_id,
+                    quantity_received=Decimal("-5"),
+                )
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            GoodsReceiptService.create_receipt(db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "greater than zero" in str(exc_info.value.detail).lower()
+
 
 # ===================== START INSPECTION TESTS =====================
 

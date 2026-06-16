@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts, export_menu %}
 {% block page_title %}Sales Day Book{% endblock %}
 
 {% block breadcrumbs %}
@@ -14,14 +14,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/sales-day-book/export?format=xlsx&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}&status={{ status }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export Excel
-</a>
-<a href="/finance/reports/sales-day-book/export?format=pdf&start_date={{ start_date_iso }}&end_date={{ end_date_iso }}&status={{ status }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
+{{ export_menu("/finance/reports/sales-day-book", "start_date=" ~ start_date_iso ~ "&end_date=" ~ end_date_iso ~ "&status=" ~ status ~ "", ["csv", "xlsx", "pdf"]) }}
 <button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print

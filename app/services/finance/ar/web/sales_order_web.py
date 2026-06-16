@@ -329,6 +329,7 @@ class SalesOrderWebService:
                 reservations = reservation_service.get_reservations_for_source(
                     ReservationSourceType.SALES_ORDER,
                     so.so_id,
+                    so.organization_id,
                 )
                 for reservation in reservations:
                     reservation_by_line[str(reservation.source_line_id)] = {

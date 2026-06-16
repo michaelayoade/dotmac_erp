@@ -553,3 +553,124 @@ class TestAssetService:
 
         assert mock_asset.status == MockAssetStatus.FULLY_DEPRECIATED
         mock_db.flush.assert_called_once()
+
+    @pytest.mark.parametrize("cost", [Decimal("0"), Decimal("-100")])
+    def test_create_asset_rejects_non_positive_cost(
+        self, mock_db, org_id, mock_category, user_id, cost
+    ):
+        """F15: acquisition cost must be greater than zero."""
+        from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
+
+        mock_db.get.return_value = mock_category
+
+        input_data = AssetInput(
+            asset_name="Office Computer",
+            category_id=mock_category.category_id,
+            acquisition_date=date.today(),
+            acquisition_cost=cost,
+            currency_code="USD",
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetService.create_asset(mock_db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "Acquisition cost" in exc_info.value.detail
+
+    def test_create_asset_rejects_non_positive_useful_life(
+        self, mock_db, org_id, mock_category, user_id
+    ):
+        """F15: useful life (when provided) must be greater than zero."""
+        from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
+
+        mock_db.get.return_value = mock_category
+
+        input_data = AssetInput(
+            asset_name="Office Computer",
+            category_id=mock_category.category_id,
+            acquisition_date=date.today(),
+            acquisition_cost=Decimal("5000.00"),
+            currency_code="USD",
+            useful_life_months=0,
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetService.create_asset(mock_db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "Useful life" in exc_info.value.detail
+
+    def test_create_asset_rejects_residual_above_cost(
+        self, mock_db, org_id, mock_category, user_id
+    ):
+        """F15: residual value cannot exceed acquisition cost."""
+        from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
+
+        mock_db.get.return_value = mock_category
+
+        input_data = AssetInput(
+            asset_name="Office Computer",
+            category_id=mock_category.category_id,
+            acquisition_date=date.today(),
+            acquisition_cost=Decimal("5000.00"),
+            currency_code="USD",
+            residual_value=Decimal("6000.00"),
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetService.create_asset(mock_db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "Residual value" in exc_info.value.detail
+
+    def test_create_asset_rejects_future_acquisition_date(
+        self, mock_db, org_id, mock_category, user_id
+    ):
+        """F15: acquisition date cannot be in the future."""
+        from datetime import timedelta
+
+        from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
+
+        mock_db.get.return_value = mock_category
+
+        input_data = AssetInput(
+            asset_name="Office Computer",
+            category_id=mock_category.category_id,
+            acquisition_date=date.today() + timedelta(days=1),
+            acquisition_cost=Decimal("5000.00"),
+            currency_code="USD",
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetService.create_asset(mock_db, org_id, input_data, user_id)
+
+        assert exc_info.value.status_code == 400
+        assert "future" in exc_info.value.detail.lower()
+
+    def test_update_asset_rejects_non_positive_cost(self, mock_db, org_id, mock_asset):
+        """F15: update must reject a non-positive acquisition cost."""
+        from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetService
+
+        mock_asset.status = MockAssetStatus.NOT_IN_USE
+        mock_db.get.return_value = mock_asset
+
+        with pytest.raises(HTTPException) as exc_info:
+            AssetService.update_asset(
+                mock_db,
+                org_id,
+                mock_asset.asset_id,
+                {"acquisition_cost": Decimal("0")},
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "Acquisition cost" in exc_info.value.detail

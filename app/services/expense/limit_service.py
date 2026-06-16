@@ -29,6 +29,7 @@ from app.models.expense import (
     ExpenseApproverLimit,
     ExpenseApproverLimitReset,
     ExpenseClaim,
+    ExpenseClaimItem,
     ExpenseClaimStatus,
     ExpenseLimitEvaluation,
     ExpenseLimitRule,
@@ -585,20 +586,51 @@ class ExpenseLimitService(ExpenseServiceBase):
             ExpenseClaimStatus.PAID,
         ]
 
-        # Base query
-        query = select(
-            func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), Decimal("0")),
-            func.count(ExpenseClaim.claim_id),
-        ).where(
-            ExpenseClaim.organization_id == org_id,
-            ExpenseClaim.employee_id == employee_id,
-            ExpenseClaim.status.in_(counting_statuses),
-            ExpenseClaim.claim_date >= period_start,
-            ExpenseClaim.claim_date <= period_end,
-        )
-
-        # TODO: Add category/cost_center filtering via claim items if needed
-        # This would require a join with expense_claim_item
+        if category_ids or cost_center_ids:
+            # Dimension-scoped usage: sum only the line items that fall in the
+            # requested categories/cost-centers, and count the distinct claims
+            # that contribute. Counting against the claim's TOTAL here would
+            # over-count an employee's spend against a category-scoped limit.
+            query = (
+                select(
+                    func.coalesce(
+                        func.sum(ExpenseClaimItem.claimed_amount), Decimal("0")
+                    ),
+                    func.count(func.distinct(ExpenseClaim.claim_id)),
+                )
+                .select_from(ExpenseClaim)
+                .join(
+                    ExpenseClaimItem,
+                    ExpenseClaimItem.claim_id == ExpenseClaim.claim_id,
+                )
+                .where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.employee_id == employee_id,
+                    ExpenseClaim.status.in_(counting_statuses),
+                    ExpenseClaim.claim_date >= period_start,
+                    ExpenseClaim.claim_date <= period_end,
+                )
+            )
+            if category_ids:
+                query = query.where(ExpenseClaimItem.category_id.in_(category_ids))
+            if cost_center_ids:
+                query = query.where(
+                    ExpenseClaimItem.cost_center_id.in_(cost_center_ids)
+                )
+        else:
+            # Unscoped usage: sum the claim totals.
+            query = select(
+                func.coalesce(
+                    func.sum(ExpenseClaim.total_claimed_amount), Decimal("0")
+                ),
+                func.count(ExpenseClaim.claim_id),
+            ).where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.employee_id == employee_id,
+                ExpenseClaim.status.in_(counting_statuses),
+                ExpenseClaim.claim_date >= period_start,
+                ExpenseClaim.claim_date <= period_end,
+            )
 
         result = self.db.execute(query).one()
         return result[0], result[1]

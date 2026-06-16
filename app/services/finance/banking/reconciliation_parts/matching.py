@@ -1012,35 +1012,43 @@ class ReconciliationMatchingService:
     ) -> float:
         """Calculate match confidence score.
 
-        Base score: 0-100 (amount 35 + date 25 + reference 25 + payee 15).
-        Bonus: up to +10 from categorization alignment.
+        Base score (amount 40-exact + date 40-exact + reference 25 + payee 15):
+        an exact amount + exact date match scores 80, comfortably above the
+        default suggest floor (70), so it is suggested on its own. Bonus: up to
+        +10 from categorization.
         """
         score = 0.0
 
-        # --- Amount match (35 points) ---
+        # --- Amount match (40 points for an exact match) ---
         stmt_amount = stmt_line.signed_amount
         gl_amount = (gl_line.debit_amount or Decimal("0")) - (
             gl_line.credit_amount or Decimal("0")
         )
         if stmt_amount == gl_amount:
-            score += 35
+            score += 40
         elif abs(stmt_amount - gl_amount) <= Decimal("0.01"):
-            score += 30
+            score += 34
 
-        # --- Date proximity (25 points) ---
+        # --- Date proximity (40 points for an exact-date match) ---
+        # An exact amount + exact date match (40 + 40 = 80) scores comfortably
+        # above the default suggest_threshold (70) on its own, so the strongest
+        # possible match is SUGGESTED for review with confidence, without
+        # needing reference/payee text to align. This is suggestion-only — it
+        # never auto-confirms; the user still confirms via add_match (which
+        # enforces the exact kobo tie).
         entry = getattr(gl_line, "journal_entry", None) or getattr(
             gl_line, "entry", None
         )
         if entry:
             date_diff = abs((stmt_line.transaction_date - entry.entry_date).days)
             if date_diff == 0:
-                score += 25
+                score += 40
             elif date_diff <= 1:
-                score += 20
+                score += 28
             elif date_diff <= 3:
-                score += 15
+                score += 18
             elif date_diff <= 7:
-                score += 8
+                score += 10
 
         # --- Reference match (25 points) ---
         if stmt_line.reference and gl_line.description:

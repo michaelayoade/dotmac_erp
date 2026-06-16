@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import empty_state, icon_svg, period_shortcuts, export_menu %}
 {% block page_title %}AR aging report{% endblock %}
 
 {% block breadcrumbs %}
@@ -14,11 +14,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/ar-aging/export?format=pdf&as_of_date={{ as_of_date_iso }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
-<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+{{ export_menu("/finance/reports/ar-aging", "as_of_date=" ~ as_of_date_iso ~ "", ["pdf"]) }}<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>

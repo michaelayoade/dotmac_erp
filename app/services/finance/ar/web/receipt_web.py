@@ -940,6 +940,41 @@ class ReceiptWebService:
             status_code=303,
         )
 
+    def post_receipt_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        receipt_id: str,
+    ) -> RedirectResponse:
+        """Post a PENDING receipt to the GL and apply its allocations.
+
+        Without this, a manually entered receipt stays in draft and never
+        reduces the invoice balance. Delegates to the same CustomerPayment
+        posting used by the gateway/AP flows.
+        """
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        try:
+            customer_payment_service.post_payment(
+                db=db,
+                organization_id=org_id,
+                payment_id=coerce_uuid(receipt_id),
+                posted_by_user_id=user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/receipts/{receipt_id}?success=Receipt+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to post receipt %s", receipt_id)
+            return RedirectResponse(
+                url=f"/finance/ar/receipts/{receipt_id}?error={str(e)}",
+                status_code=303,
+            )
+
     def receipt_edit_form_response(
         self,
         request: Request,

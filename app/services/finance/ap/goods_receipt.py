@@ -259,6 +259,15 @@ class GoodsReceiptService(ListResponseMixin):
                     detail=f"Purchase order line {po_line_id} not found",
                 )
 
+            # Reject non-positive received quantities. A negative quantity
+            # would otherwise pass the over-receipt check below and silently
+            # DECREMENT the PO line's received quantity.
+            if line_input.quantity_received <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Quantity received must be greater than zero for line {po_line.line_number}",
+                )
+
             # Validate quantity doesn't exceed remaining
             remaining_qty = po_line.quantity_ordered - po_line.quantity_received
             if line_input.quantity_received > remaining_qty:

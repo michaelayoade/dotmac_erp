@@ -153,6 +153,24 @@ class TaxCalculationService:
         Returns:
             Tuple of (net_base, tax_amount)
         """
+        if getattr(tax_code, "is_fixed_amount", False):
+            # Flat levy: ``tax_rate`` holds an absolute amount, not a ratio.
+            # It applies per line at the engine's granularity; the base amount
+            # and compound ordering never scale it.
+            if tax_code.is_inclusive:
+                # Amount already embedded in the price — never extract more
+                # than the line itself.
+                tax_amount = min(tax_code.tax_rate, base_amount).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                net_base = base_amount - tax_amount
+            else:
+                tax_amount = tax_code.tax_rate.quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                net_base = base_amount
+            return net_base, tax_amount
+
         if tax_code.is_inclusive:
             # Tax is included in the price - extract it
             # formula: tax = base * rate / (1 + rate)
