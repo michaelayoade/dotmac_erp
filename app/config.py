@@ -188,18 +188,20 @@ class Settings:
     remita_is_live: bool = os.getenv("REMITA_IS_LIVE", "false").lower() == "true"
 
     # ==========================================================================
-    # Splynx Integration (ISP billing - selfcare.dotmac.ng)
+    # dotmac_sub Integration (subscriber management - selfcare.dotmac.io)
     # ==========================================================================
-    # Splynx API base URL
-    splynx_api_url: str = os.getenv("SPLYNX_API_URL", "")
-    # Splynx API key (first part of Basic auth)
-    splynx_api_key: str = os.getenv("SPLYNX_API_KEY", "")
-    # Splynx API secret (second part of Basic auth)
-    splynx_api_secret: str = os.getenv("SPLYNX_API_SECRET", "")
-    # Request timeout in seconds
-    splynx_request_timeout: float = float(os.getenv("SPLYNX_REQUEST_TIMEOUT", "60.0"))
-    # Max retries for failed requests
-    splynx_max_retries: int = int(os.getenv("SPLYNX_MAX_RETRIES", "3"))
+    # Replaces the legacy Splynx ISP-billing feed. Env values are the
+    # bootstrap/fallback; per-org credentials managed from the admin UI live in
+    # the integration_config table and take precedence (DotmacSubConfig.for_org).
+    dotmac_sub_api_url: str = os.getenv("DOTMAC_SUB_API_URL", "")
+    dotmac_sub_api_token: str = os.getenv("DOTMAC_SUB_API_TOKEN", "")
+    dotmac_sub_webhook_secret: str | None = (
+        os.getenv("DOTMAC_SUB_WEBHOOK_SECRET") or None
+    )
+    dotmac_sub_request_timeout: float = float(
+        os.getenv("DOTMAC_SUB_REQUEST_TIMEOUT", "60.0")
+    )
+    dotmac_sub_max_retries: int = int(os.getenv("DOTMAC_SUB_MAX_RETRIES", "3"))
 
     # ==========================================================================
     # Analytics (pre-computed metric snapshots)

@@ -212,6 +212,12 @@ class Customer(Base):
         index=True,
         comment="DotMac CRM customer/company ID (for sync lookup)",
     )
+    dotmac_sub_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="dotmac_sub subscriber/reseller ID (for sync lookup)",
+    )
 
     # Parent-child hierarchy (ISP reseller → sub-accounts)
     parent_customer_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -226,6 +232,12 @@ class Customer(Base):
         nullable=True,
         index=True,
         comment="Splynx partner ID — reseller customers have this set",
+    )
+    dotmac_sub_reseller_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="dotmac_sub reseller ID — reseller/child customers have this set",
     )
 
     # Audit fields

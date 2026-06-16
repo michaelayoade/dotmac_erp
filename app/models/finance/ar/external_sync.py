@@ -21,6 +21,7 @@ class ExternalSource(str, enum.Enum):
     SPLYNX = "SPLYNX"
     ERPNEXT = "ERPNEXT"
     CRM = "CRM"
+    DOTMAC_SUB = "DOTMAC_SUB"
 
 
 class EntityType(str, enum.Enum):
@@ -30,6 +31,8 @@ class EntityType(str, enum.Enum):
     INVOICE = "INVOICE"
     PAYMENT = "PAYMENT"
     CREDIT_NOTE = "CREDIT_NOTE"
+    RESELLER = "RESELLER"
+    BILLING_ACCOUNT = "BILLING_ACCOUNT"
 
 
 class ExternalSync(Base):
