@@ -38,6 +38,10 @@ class BaseSyncMixin:
 
     SOURCE_PREFIX = "DSUB"
 
+    # Provided by sibling mixins at runtime (combined in DotmacSubSyncService).
+    _cache_reseller: Any
+    _sync_single_subscriber: Any
+
     def __init__(
         self,
         db: Session,
@@ -295,21 +299,48 @@ class BaseSyncMixin:
         return customer_id
 
     def _resolve_account_owner(self, account_id: str) -> UUID | None:
-        """Resolve a billing ``account_id`` to its owning ERP customer.
+        """Resolve an invoice/payment ``account_id`` to its owning ERP customer.
 
-        Verified against the live dotmac_sub API (2026-06-16): billing accounts
-        are **reseller-scoped** (named after the reseller, e.g. "Main") and carry
-        only a ``reseller_id`` — neither billing accounts nor subscriptions expose
-        a subscriber link. So an account maps to the reseller's ERP *parent*
-        customer; invoices/payments on it are the reseller's consolidated
-        (wholesale) activity, which is what posts to the GL.
+        Verified against the live dotmac_sub API (2026-06-16): for invoices,
+        payments and credit notes ``account_id`` is the **subscriber id** (it
+        resolves via ``GET /subscribers/{id}``, not ``/billing-accounts``). So we
+        resolve subscriber-first to that subscriber's ERP customer — a *child* of
+        its reseller, correctly suppressed from GL by the wholesale rule.
+
+        Fallback: the 34 reseller-named "billing accounts" are a separate
+        consolidation concept; if an ``account_id`` is one of those instead, map
+        it to the reseller's ERP *parent* customer (which posts to GL).
         """
         from app.services.dotmac_sub.client import DotmacSubError
 
+        # 1) Already-synced subscriber → child customer.
+        cust = self._get_customer_by_dotmac_sub_id(account_id)
+        if cust:
+            return cust.customer_id
+
+        # 2) Subscriber not yet synced this run → fetch + upsert on demand so the
+        #    invoice/payment can attach (subscribers are normally synced first,
+        #    but batch limits or webhooks can arrive out of order).
+        try:
+            sub = self.client.get_subscriber(account_id)
+        except DotmacSubError:
+            sub = None
+        if sub is not None:
+            if sub.reseller_id:
+                self._cache_reseller(sub.reseller_id)
+            from ._types import SyncResult
+
+            self._sync_single_subscriber(
+                sub, None, SyncResult(success=True, entity_type="subscribers"), False
+            )
+            resolved = self._get_customer_by_dotmac_sub_id(account_id)
+            if resolved:
+                return resolved.customer_id
+
+        # 3) Fallback: a reseller-level billing account → reseller parent customer.
         try:
             account = self.client.get_billing_account(account_id)
         except DotmacSubError:
-            logger.warning("Could not fetch billing account %s", account_id)
             account = None
         if account and account.reseller_id:
             return self._reseller_customer_id(account.reseller_id)
