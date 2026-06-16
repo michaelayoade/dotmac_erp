@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.models.finance.banking.bank_account import BankAccount
+from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 
 logger = logging.getLogger(__name__)
 
