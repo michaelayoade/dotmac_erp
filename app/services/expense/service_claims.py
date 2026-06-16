@@ -22,7 +22,7 @@ from app.models.expense import (
 )
 from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import PaginatedResult, PaginationParams
+from app.services.common import PaginatedResult, PaginationParams, ValidationError
 from app.services.expense.service_common import (
     ApproverAuthorityError,
     ExpenseCategoryNotFoundError,
@@ -207,6 +207,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 if not category:
                     raise ExpenseCategoryNotFoundError(item_data["category_id"])
                 if (
+                    item_data["claimed_amount"] is None
+                    or item_data["claimed_amount"] <= 0
+                ):
+                    raise ValidationError("Line amount must be greater than zero.")
+                if (
                     category.max_amount_per_claim is not None
                     and item_data["claimed_amount"] > category.max_amount_per_claim
                 ):
@@ -261,6 +266,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             raise ExpenseClaimStatusError(claim.status.value, "add item")
 
         category = self.get_category(org_id, item_data["category_id"])
+        if item_data["claimed_amount"] is None or item_data["claimed_amount"] <= 0:
+            raise ValidationError("Line amount must be greater than zero.")
         if (
             category.max_amount_per_claim is not None
             and item_data["claimed_amount"] > category.max_amount_per_claim
@@ -392,6 +399,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             raise ExpenseServiceError(f"Claim item {item_id} not found")
 
         category = self.get_category(org_id, category_id)
+        if claimed_amount is None or claimed_amount <= 0:
+            raise ValidationError("Line amount must be greater than zero.")
         if (
             category.max_amount_per_claim is not None
             and claimed_amount > category.max_amount_per_claim

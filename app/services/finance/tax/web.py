@@ -100,6 +100,7 @@ def _tax_code_form_view(tax_code: TaxCode) -> dict:
         "effective_to": tax_code.effective_to,
         "is_compound": tax_code.is_compound,
         "is_inclusive": tax_code.is_inclusive,
+        "is_fixed_amount": tax_code.is_fixed_amount,
         "is_recoverable": tax_code.is_recoverable,
         "recovery_rate": tax_code.recovery_rate,
         "applies_to_purchases": tax_code.applies_to_purchases,
@@ -115,11 +116,11 @@ def _tax_code_form_view(tax_code: TaxCode) -> dict:
 
 def _tax_code_list_view(tax_code: TaxCode) -> dict:
     """Format tax code for list display."""
-    # Format rate display
-    if tax_code.tax_rate < 1:
-        rate_display = f"{tax_code.tax_rate * 100:.2f}%"
-    else:
+    # Format rate display by the explicit rate type, not a magnitude guess.
+    if tax_code.is_fixed_amount:
         rate_display = f"₦{tax_code.tax_rate:,.2f}"
+    else:
+        rate_display = f"{tax_code.tax_rate * 100:.2f}%"
 
     return {
         "tax_code_id": tax_code.tax_code_id,
@@ -1509,6 +1510,7 @@ class TaxWebService:
 
             # Parse rate based on rate type
             rate_type = _safe_form_text(form.get("rate_type", "percentage"))
+            is_fixed_amount = rate_type == "fixed"
             if rate_type == "percentage":
                 rate_percentage = _safe_form_text(form.get("tax_rate_percentage", "0"))
                 tax_rate = Decimal(rate_percentage) / Decimal("100")
@@ -1585,6 +1587,7 @@ class TaxWebService:
                 effective_to=effective_to,
                 is_compound=is_compound,
                 is_inclusive=is_inclusive,
+                is_fixed_amount=is_fixed_amount,
                 is_recoverable=is_recoverable,
                 recovery_rate=recovery_rate,
                 applies_to_purchases=applies_to_purchases,
@@ -1669,6 +1672,7 @@ class TaxWebService:
 
             # Parse rate based on rate type
             rate_type = _safe_form_text(form.get("rate_type", "percentage"))
+            is_fixed_amount = rate_type == "fixed"
             if rate_type == "percentage":
                 rate_percentage = _safe_form_text(form.get("tax_rate_percentage", "0"))
                 new_tax_rate = Decimal(rate_percentage) / Decimal("100")
@@ -1781,6 +1785,7 @@ class TaxWebService:
             tax_code.effective_to = effective_to
             tax_code.is_compound = is_compound
             tax_code.is_inclusive = is_inclusive
+            tax_code.is_fixed_amount = is_fixed_amount
             tax_code.is_recoverable = is_recoverable
             tax_code.recovery_rate = recovery_rate
             tax_code.applies_to_purchases = applies_to_purchases

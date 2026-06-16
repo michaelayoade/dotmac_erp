@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import compact_filters, empty_state, filter_date_field, icon_svg, period_shortcuts %}
+{% from "components/macros.html" import compact_filters, empty_state, filter_date_field, icon_svg, period_shortcuts, export_menu %}
 {% block page_title %}Statement of financial position{% endblock %}
 
 {% block breadcrumbs %}
@@ -14,15 +14,7 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/reports/balance-sheet/export?as_of_date={{ as_of_date_iso }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export CSV
-</a>
-<a href="/finance/reports/balance-sheet/export?format=pdf&as_of_date={{ as_of_date_iso }}" class="btn btn-secondary h-9 px-3">
-    {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
-    Export PDF
-</a>
-<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
+{{ export_menu("/finance/reports/balance-sheet", "as_of_date=" ~ as_of_date_iso ~ "", ["csv", "pdf"]) }}<button onclick="window.print()" class="btn btn-secondary h-9 px-3">
     {{ icon_svg("printer", "h-4 w-4 mr-1.5") }}
     Print
 </button>

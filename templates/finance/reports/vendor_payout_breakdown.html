@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import compact_filters, empty_state, filter_date_field, filter_select_field, icon_svg, list_header_actions, status_badge %}
+{% from "components/macros.html" import compact_filters, empty_state, filter_date_field, filter_select_field, icon_svg, list_header_actions, status_badge, export_menu %}
 
 {% block page_title %}Supplier Payout Breakdown{% endblock %}
 
@@ -15,10 +15,9 @@
 {% endblock %}
 
 {% block header_actions %}
-{{ list_header_actions(
-    export_url="/finance/reports/vendor-payout-breakdown/export?start_date=" ~ start_date_iso ~ "&end_date=" ~ end_date_iso ~ "&supplier_id=" ~ (supplier_id or '') ~ "&status=" ~ (status or ''),
-    export_label="Export CSV"
-) }}
+{{ export_menu("/finance/reports/vendor-payout-breakdown",
+   "start_date=" ~ start_date_iso ~ "&end_date=" ~ end_date_iso ~ "&supplier_id=" ~ (supplier_id or '') ~ "&status=" ~ (status or ''),
+   ["csv"]) }}
 {% endblock %}
 
 {% block content %}

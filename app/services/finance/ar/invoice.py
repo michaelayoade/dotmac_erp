@@ -214,6 +214,17 @@ class ARInvoiceService(ListResponseMixin):
         if not customer.is_active:
             raise ValidationError("Customer is not active")
 
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated invoice may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
+
         # Auto-detect fiscal position and remap taxes/accounts
         from app.services.finance.tax.fiscal_position_service import (
             FiscalPositionService,
@@ -331,6 +342,16 @@ class ARInvoiceService(ListResponseMixin):
                 subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
+
+        # A STANDARD invoice must not have a negative net total — that inverts
+        # the receivable and is semantically a credit note. Negative discount
+        # lines are fine as long as the net stays >= 0; zero is allowed; and
+        # CREDIT_NOTE type is legitimately negative (it skips this guard).
+        if input.invoice_type == InvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to reduce "
+                "a customer's balance."
+            )
 
         # ── Deductions (WHT, VAT withheld, stamp duty) ──────────────
         wht_amount = Decimal("0")
@@ -569,6 +590,17 @@ class ARInvoiceService(ListResponseMixin):
         if not customer.is_active:
             raise ValidationError("Customer is not active")
 
+        # IAS 21: an exchange rate is the ratio of exchange for two currencies,
+        # so it must be positive. Reject zero/negative rates outright.
+        if input.exchange_rate is not None and input.exchange_rate <= 0:
+            raise ValidationError("Exchange rate must be greater than zero.")
+
+        # Payment terms cannot be negative. A back-dated invoice may have both
+        # dates in the past, but the due date must never precede its own
+        # invoice date.
+        if input.due_date < input.invoice_date:
+            raise ValidationError("Due date cannot be before the invoice date.")
+
         # Validate lines
         if not input.lines:
             raise ValidationError("Invoice must have at least one line")
@@ -619,6 +651,16 @@ class ARInvoiceService(ListResponseMixin):
                 subtotal += gross_line_amount
 
         total_amount = subtotal + tax_total
+
+        # A STANDARD invoice must not have a negative net total — that inverts
+        # the receivable and is semantically a credit note. Negative discount
+        # lines are fine as long as the net stays >= 0; zero is allowed; and
+        # CREDIT_NOTE type is legitimately negative (it skips this guard).
+        if input.invoice_type == InvoiceType.STANDARD and total_amount < 0:
+            raise ValidationError(
+                "Invoice total cannot be negative. Use a credit note to reduce "
+                "a customer's balance."
+            )
 
         # ── Deductions (WHT, VAT withheld, stamp duty) ──────────────
         wht_amount = Decimal("0")
@@ -858,7 +900,12 @@ class ARInvoiceService(ListResponseMixin):
 
         lines: list[ARInvoiceLineInput] = []
         for line in lines_data:
-            if not line.get("description") or not line.get("revenue_account_id"):
+            # Skip blank rows (no account). A line with an account + amount is
+            # valid; description is optional metadata and the credit-note form
+            # presents it as optional. (Previously this also dropped lines with
+            # an empty description, which silently discarded valid lines and
+            # surfaced the misleading "Invoice must have at least one line".)
+            if not line.get("revenue_account_id"):
                 continue
 
             tax_code_ids: list[UUID] = []

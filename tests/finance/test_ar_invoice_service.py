@@ -10,6 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
+from app.services.common import ValidationError
 from app.services.finance.ar.invoice import (
     ARInvoiceInput,
     ARInvoiceLineInput,
@@ -87,6 +88,66 @@ def test_create_invoice_inactive_customer():
         )
 
     assert excinfo.value.status_code == 400
+
+
+def test_create_invoice_rejects_nonpositive_exchange_rate():
+    """IAS 21: an exchange rate must be positive — reject zero/negative."""
+    db = MagicMock()
+    svc = ARInvoiceService()
+    org_id = uuid4()
+    db.get.return_value = _make_customer(org_id)
+
+    for bad_rate in (Decimal("0"), Decimal("-1.5")):
+        with pytest.raises(ValidationError, match="Exchange rate"):
+            svc.create_invoice(
+                db,
+                org_id,
+                ARInvoiceInput(
+                    customer_id=uuid4(),
+                    invoice_type=InvoiceType.STANDARD,
+                    invoice_date=date.today(),
+                    due_date=date.today(),
+                    currency_code="USD",
+                    exchange_rate=bad_rate,
+                    lines=[
+                        ARInvoiceLineInput(
+                            description="A",
+                            quantity=Decimal("1"),
+                            unit_price=Decimal("10"),
+                        )
+                    ],
+                ),
+                created_by_user_id=uuid4(),
+            )
+
+
+def test_create_invoice_rejects_due_date_before_invoice_date():
+    """Payment terms cannot be negative — due date must not precede invoice date."""
+    db = MagicMock()
+    svc = ARInvoiceService()
+    org_id = uuid4()
+    db.get.return_value = _make_customer(org_id)
+
+    with pytest.raises(ValidationError, match="Due date"):
+        svc.create_invoice(
+            db,
+            org_id,
+            ARInvoiceInput(
+                customer_id=uuid4(),
+                invoice_type=InvoiceType.STANDARD,
+                invoice_date=date.today(),
+                due_date=date.today() - timedelta(days=1),
+                currency_code="NGN",
+                lines=[
+                    ARInvoiceLineInput(
+                        description="A",
+                        quantity=Decimal("1"),
+                        unit_price=Decimal("10"),
+                    )
+                ],
+            ),
+            created_by_user_id=uuid4(),
+        )
 
 
 def test_create_invoice_requires_lines():

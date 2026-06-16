@@ -218,6 +218,92 @@ def test_create_slip_journal_includes_employer_pension_expense():
     )
 
 
+def test_create_run_journal_deduction_without_liability_falls_back_to_payable():
+    """F34: a non-statutory deduction with no liability account must fall back to
+    the salary-payable account so it is still credited and the run journal stays
+    balanced (it was already subtracted from net_pay)."""
+    db = MagicMock()
+    org_id = "00000000-0000-0000-0000-000000000001"
+    user_id = "00000000-0000-0000-0000-000000000002"
+    payable = "00000000-0000-0000-0000-000000000099"
+
+    organization = SimpleNamespace(
+        salaries_expense_account_id="exp-salary",
+        salary_payable_account_id=payable,
+    )
+    entry = SimpleNamespace(
+        entry_id="entry",
+        payroll_month=1,
+        payroll_year=2026,
+        start_date=date(2026, 1, 1),
+        posting_date=date(2026, 1, 31),
+        journal_entry_id=None,
+        status=PayrollEntryStatus.APPROVED,
+        entry_number="PAY-2026-0001",
+    )
+    # Gross 1000, a 100 deduction with NO liability account, net 900.
+    slips = [
+        SimpleNamespace(
+            gross_pay=Decimal("1000"),
+            net_pay=Decimal("900"),
+            currency_code="NGN",
+            exchange_rate=Decimal("1.0"),
+            deductions=[
+                _make_deduction("UNION_DUES", "100", None),
+            ],
+        )
+    ]
+
+    def _get(model, obj_id):
+        if model.__name__ == "Organization":
+            return organization
+        return None
+
+    db.get.side_effect = _get
+
+    with (
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.BasePostingAdapter.create_and_approve_journal"
+        ) as create_and_approve,
+        patch(
+            "app.services.people.payroll.payroll_gl_adapter.BasePostingAdapter.post_to_ledger"
+        ) as post_entry,
+    ):
+        post_entry.return_value = SimpleNamespace(
+            success=True, posting_batch_id="batch", message="Posted successfully"
+        )
+        create_and_approve.return_value = (
+            SimpleNamespace(journal_entry_id="journal"),
+            None,
+        )
+
+        result = PayrollGLAdapter.create_run_journal(
+            db=db,
+            organization_id=org_id,
+            entry=entry,
+            slips=slips,
+            posting_date=date(2026, 1, 31),
+            posted_by_user_id=user_id,
+        )
+
+    assert result.success is True
+    journal_input = create_and_approve.call_args[0][2]
+    lines = journal_input.lines
+
+    # Journal must balance: total debits == total credits.
+    total_debit = sum((line.debit_amount for line in lines), Decimal("0"))
+    total_credit = sum((line.credit_amount for line in lines), Decimal("0"))
+    assert total_debit == total_credit == Decimal("1000")
+
+    # The 100 deduction is credited to the payable fallback (in addition to the
+    # 900 net-pay credit, both to `payable`).
+    payable_credits = sum(
+        (line.credit_amount for line in lines if line.account_id == payable),
+        Decimal("0"),
+    )
+    assert payable_credits == Decimal("1000")  # 900 net + 100 fallback deduction
+
+
 def test_create_run_journal_includes_employer_pension_expense():
     db = MagicMock()
     org_id = "00000000-0000-0000-0000-000000000001"

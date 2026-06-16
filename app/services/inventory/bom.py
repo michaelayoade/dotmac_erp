@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.models.inventory.bom import BillOfMaterials, BOMComponent, BOMType
 from app.models.inventory.inventory_transaction import TransactionType
 from app.models.inventory.item import Item
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -104,6 +104,11 @@ class BOMService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         itm_id = coerce_uuid(input.item_id)
 
+        # Output quantity is the divisor for per-unit costing in assembly /
+        # disassembly; a non-positive value causes a DivisionByZero there.
+        if input.output_quantity <= 0:
+            raise ValidationError("BOM output quantity must be positive.")
+
         # Check for duplicate code
         existing = db.scalars(
             select(BillOfMaterials).where(
@@ -181,6 +186,11 @@ class BOMService(ListResponseMixin):
         b_id = coerce_uuid(bom_id)
         comp_id = coerce_uuid(input.component_item_id)
 
+        if input.quantity <= 0:
+            raise ValidationError("Component quantity must be positive.")
+        if input.scrap_percent < 0:
+            raise ValidationError("Component scrap percent cannot be negative.")
+
         # Validate BOM
         bom = db.get(BillOfMaterials, b_id)
         if not bom or bom.organization_id != org_id:
@@ -246,6 +256,9 @@ class BOMService(ListResponseMixin):
         b_id = coerce_uuid(input.bom_id)
         wh_id = coerce_uuid(input.warehouse_id)
         user_id = coerce_uuid(created_by_user_id)
+
+        if input.quantity <= 0:
+            raise ValidationError("Assembly quantity must be positive.")
 
         # Get BOM with components
         bom = db.get(BillOfMaterials, b_id)

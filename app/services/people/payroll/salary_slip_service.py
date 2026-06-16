@@ -310,6 +310,89 @@ class SalarySlipService:
         return total_deduction
 
     @staticmethod
+    def _clamp_deductions_to_gross(
+        db: Session,
+        slip: SalarySlip,
+        gross_pay: Decimal,
+        total_deduction: Decimal,
+    ) -> tuple[Decimal, Decimal]:
+        """Ensure deductions never exceed gross pay.
+
+        When total deductions exceed gross pay, simply flooring net pay to zero
+        leaves the full deduction lines intact, so the run/slip GL journal
+        becomes unbalanced (credits > debits) and the employee is silently
+        under-paid. Instead we scale the deduction *lines* down so their sum
+        equals gross pay (net pay == 0) and the journal stays balanced.
+
+        Non-statutory deductions are reduced first (proportionally); statutory
+        deductions (PAYE, pension, NHF, NHIS) are only scaled as a last resort
+        when statutory withholding alone already exceeds gross.
+
+        Returns the clamped ``(total_deduction, net_pay)``.
+        """
+        net_pay = gross_pay - total_deduction
+        if net_pay >= 0:
+            return total_deduction, net_pay
+
+        # Flush so all db.add()'d deduction lines are associated with the slip,
+        # then load the lines that actually contribute to the deduction total.
+        db.flush()
+        rows = list(
+            db.execute(
+                select(SalarySlipDeduction, SalaryComponent.component_code)
+                .join(
+                    SalaryComponent,
+                    SalaryComponent.component_id == SalarySlipDeduction.component_id,
+                )
+                .where(
+                    SalarySlipDeduction.slip_id == slip.slip_id,
+                    SalarySlipDeduction.statistical_component.is_(False),
+                    SalarySlipDeduction.do_not_include_in_total.is_(False),
+                )
+            ).all()
+        )
+
+        non_statutory = [
+            line for line, code in rows if code not in STATUTORY_COMPONENT_CODES
+        ]
+        statutory = [line for line, code in rows if code in STATUTORY_COMPONENT_CODES]
+
+        excess = total_deduction - gross_pay
+        logger.warning(
+            "Slip %s: deductions (%s) exceed gross pay (%s) by %s; "
+            "clamping deduction lines so net pay is zero",
+            getattr(slip, "slip_number", slip.slip_id),
+            total_deduction,
+            gross_pay,
+            excess,
+        )
+
+        # Reduce non-statutory deductions first, then statutory if still needed.
+        for group in (non_statutory, statutory):
+            if excess <= 0:
+                break
+            group_total = sum((line.amount for line in group), Decimal("0"))
+            if group_total <= 0:
+                continue
+            reduce_by = min(excess, group_total)
+            remaining = reduce_by
+            for idx, line in enumerate(group):
+                if idx == len(group) - 1:
+                    # Last line absorbs the rounding remainder exactly.
+                    cut = remaining
+                else:
+                    cut = (line.amount / group_total * reduce_by).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                    cut = min(cut, line.amount, remaining)
+                line.amount = line.amount - cut
+                remaining -= cut
+            excess -= reduce_by
+
+        clamped_total = min(total_deduction, gross_pay)
+        return clamped_total, Decimal("0")
+
+    @staticmethod
     def generate_slip_number(db: Session, organization_id: UUID) -> str:
         """Generate a unique slip number.
 
@@ -784,7 +867,12 @@ class SalarySlipService:
             total_deduction=total_deduction,
         )
 
-        net_pay = max(gross_pay - total_deduction, Decimal("0"))
+        # Clamp deductions so they never exceed gross (keeps GL journal balanced
+        # and avoids silent under-payment); never floor net while leaving full
+        # deduction lines intact.
+        total_deduction, net_pay = SalarySlipService._clamp_deductions_to_gross(
+            db, slip, gross_pay, total_deduction
+        )
         exchange_rate = slip.exchange_rate or Decimal("1.0")
 
         slip.gross_pay = gross_pay
@@ -1168,7 +1256,12 @@ class SalarySlipService:
             total_deduction=total_deduction,
         )
 
-        net_pay = max(gross_pay - total_deduction, Decimal("0"))
+        # Clamp deductions so they never exceed gross (keeps GL journal balanced
+        # and avoids silent under-payment); never floor net while leaving full
+        # deduction lines intact.
+        total_deduction, net_pay = SalarySlipService._clamp_deductions_to_gross(
+            db, slip, gross_pay, total_deduction
+        )
         exchange_rate = slip.exchange_rate or Decimal("1.0")
 
         slip.gross_pay = gross_pay
@@ -1247,10 +1340,23 @@ class SalarySlipService:
                 multiplier = safe_formula.replace("gross *", "").strip()
                 return gross * Decimal(multiplier)
             else:
-                # For complex formulas, default to 0 (safe fallback)
+                # For complex/unrecognized formulas, default to 0 (safe
+                # fallback) but make it observable so a mistyped formula
+                # does not silently evaluate to zero.
+                logger.warning(
+                    "Unrecognized salary component formula %r; "
+                    "defaulting to 0. Supported patterns: base, gross, "
+                    "variable, base +/- variable, base/variable/gross * N",
+                    formula,
+                )
                 return Decimal("0")
 
         except Exception:
+            logger.warning(
+                "Failed to evaluate salary component formula %r; defaulting to 0",
+                formula,
+                exc_info=True,
+            )
             return Decimal("0")
 
     @staticmethod

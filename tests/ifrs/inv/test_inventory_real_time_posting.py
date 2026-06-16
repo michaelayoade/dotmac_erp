@@ -62,6 +62,8 @@ def test_create_receipt_real_time_posts_and_updates_wac():
         warehouse_id=wh_id,
         organization_id=org_id,
         is_receiving=True,
+        is_shipping=True,
+        is_active=True,
     )
     db.get.side_effect = [item, warehouse]
 
@@ -121,6 +123,8 @@ def test_create_issue_manual_mode_skips_gl_posting():
         warehouse_id=wh_id,
         organization_id=org_id,
         is_receiving=True,
+        is_shipping=True,
+        is_active=True,
     )
     db.get.side_effect = [item, warehouse]
 
@@ -177,6 +181,8 @@ def test_create_adjustment_real_time_posts():
         warehouse_id=wh_id,
         organization_id=org_id,
         is_receiving=True,
+        is_shipping=True,
+        is_active=True,
     )
     db.get.side_effect = [item, warehouse]
 

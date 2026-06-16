@@ -520,13 +520,14 @@ def add_fifo_layer(
 def consume_fifo(
     item_id: UUID = Query(...),
     quantity: Decimal = Query(...),
+    warehouse_id: UUID = Query(...),
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:valuation:update")),
     db: Session = Depends(get_db_with_org),
 ):
-    """Consume inventory using FIFO method."""
+    """Consume inventory using FIFO method from a specific warehouse."""
     return fifo_valuation_service.consume_inventory_fifo(
-        db, organization_id, item_id, quantity
+        db, organization_id, item_id, quantity, warehouse_id
     )
 
 

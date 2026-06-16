@@ -77,13 +77,21 @@ class CoASegmentService:
         self._flush_and_refresh(segment_def)
         return segment_def
 
-    def list_values(self, segment_def_id: UUID) -> list[CoASegmentValue]:
-        """List all values for a segment definition."""
-        stmt = (
-            select(CoASegmentValue)
-            .where(CoASegmentValue.segment_def_id == segment_def_id)
-            .order_by(CoASegmentValue.segment_code)
+    def list_values(
+        self, segment_def_id: UUID, organization_id: UUID | None = None
+    ) -> list[CoASegmentValue]:
+        """List all values for a segment definition.
+
+        When organization_id is provided, scope explicitly to that tenant
+        (defence-in-depth beyond DB-RLS, consistent with the other IPSAS
+        queries).
+        """
+        stmt = select(CoASegmentValue).where(
+            CoASegmentValue.segment_def_id == segment_def_id
         )
+        if organization_id is not None:
+            stmt = stmt.where(CoASegmentValue.organization_id == organization_id)
+        stmt = stmt.order_by(CoASegmentValue.segment_code)
         return list(self.db.scalars(stmt).all())
 
     def create_value(

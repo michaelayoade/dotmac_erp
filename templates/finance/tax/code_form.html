@@ -635,10 +635,10 @@
                     <label class="form-label">Rate Type <span class="required">*</span></label>
                     <div class="rate-type-toggle mt-2">
                         <input type="radio" id="rate_type_percentage" name="rate_type" value="percentage"
-                               {{ 'checked' if not tax_code or (tax_code and tax_code.tax_rate < 1) else '' }}>
+                               {{ 'checked' if not tax_code or not tax_code.is_fixed_amount else '' }}>
                         <label for="rate_type_percentage">Percentage (%)</label>
                         <input type="radio" id="rate_type_fixed" name="rate_type" value="fixed"
-                               {{ 'checked' if tax_code and tax_code.tax_rate >= 1 else '' }}>
+                               {{ 'checked' if tax_code and tax_code.is_fixed_amount else '' }}>
                         <label for="rate_type_fixed">Fixed Amount</label>
                     </div>
                     <p class="form-help">Choose percentage for rates like 7.5%, or fixed amount for flat fees like ₦50</p>
@@ -653,7 +653,7 @@
                         <input type="number"
                                id="tax_rate_percentage"
                                name="tax_rate_percentage"
-                               value="{{ (tax_code.tax_rate * 100)|round(4) if tax_code and tax_code.tax_rate < 1 else '' }}"
+                               value="{{ (tax_code.tax_rate * 100)|round(4) if tax_code and not tax_code.is_fixed_amount else '' }}"
                                min="0"
                                max="100"
                                step="0.0001"
@@ -674,7 +674,7 @@
                         <input type="number"
                                id="tax_rate_fixed"
                                name="tax_rate_fixed"
-                               value="{{ tax_code.tax_rate if tax_code and tax_code.tax_rate >= 1 else '' }}"
+                               value="{{ tax_code.tax_rate if tax_code and tax_code.is_fixed_amount else '' }}"
                                min="0"
                                step="0.01"
                                placeholder="50.00"

@@ -266,6 +266,7 @@ class TestFIFOValuationAPI:
             result = inv_api.consume_fifo(
                 item_id=uuid.uuid4(),
                 quantity=Decimal("50"),
+                warehouse_id=uuid.uuid4(),
                 organization_id=org_id,
                 auth=mock_auth_dict,
                 db=mock_db,

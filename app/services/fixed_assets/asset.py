@@ -23,7 +23,7 @@ from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMethod
 from app.models.fixed_assets.depreciation_run import DepreciationRun
 from app.models.fixed_assets.depreciation_schedule import DepreciationSchedule
-from app.services.common import coerce_uuid
+from app.services.common import ValidationError, coerce_uuid
 from app.services.finance.platform.sequence import SequenceService
 from app.services.people.assets.lifecycle_event_service import (
     record_asset_lifecycle_event,
@@ -350,6 +350,20 @@ class AssetService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
         user_id = coerce_uuid(created_by_user_id)
+
+        # Validate financial inputs before any persistence work.
+        if input.acquisition_cost is None or input.acquisition_cost <= 0:
+            raise ValidationError("Acquisition cost must be greater than zero.")
+        if input.useful_life_months is not None and input.useful_life_months <= 0:
+            raise ValidationError("Useful life (months) must be greater than zero.")
+        if (
+            input.residual_value is not None
+            and input.residual_value > input.acquisition_cost
+        ):
+            raise ValidationError("Residual value cannot exceed the acquisition cost.")
+        if input.acquisition_date > date.today():
+            raise ValidationError("Acquisition date cannot be in the future.")
+
         category = _resolve_primary_category(db, org_id, input.category_id)
         cat_id = category.category_id
 
@@ -702,6 +716,29 @@ class AssetService(ListResponseMixin):
                         status_code=400,
                         detail=ASSET_STATUS_UPDATE_ERROR.format(key=key),
                     )
+                if key == "acquisition_cost":
+                    if value is None or value <= 0:
+                        raise ValidationError(
+                            "Acquisition cost must be greater than zero."
+                        )
+                if key == "useful_life_months":
+                    if value is not None and value <= 0:
+                        raise ValidationError(
+                            "Useful life (months) must be greater than zero."
+                        )
+                if key == "residual_value" and value is not None:
+                    effective_cost = updates.get(
+                        "acquisition_cost", asset.acquisition_cost
+                    )
+                    if effective_cost is not None and value > effective_cost:
+                        raise ValidationError(
+                            "Residual value cannot exceed the acquisition cost."
+                        )
+                if key == "acquisition_date" and value is not None:
+                    if value > date.today():
+                        raise ValidationError(
+                            "Acquisition date cannot be in the future."
+                        )
                 if key == "asset_number":
                     asset_number = (str(value) if value is not None else "").strip()
                     if not asset_number:

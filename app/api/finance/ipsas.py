@@ -660,13 +660,14 @@ def create_coa_segment(
 )
 def list_coa_segment_values(
     segment_def_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:coa:read")),
     db: Session = Depends(get_db_with_org),
 ):
     """List values for a CoA segment."""
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService
 
-    return CoASegmentService(db).list_values(segment_def_id)
+    return CoASegmentService(db).list_values(segment_def_id, organization_id)
 
 
 @router.post(

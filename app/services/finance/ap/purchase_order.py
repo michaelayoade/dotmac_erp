@@ -315,11 +315,27 @@ class PurchaseOrderService(ListResponseMixin):
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
 
+        if not supplier.is_active:
+            raise HTTPException(status_code=400, detail="Supplier is not active")
+
         # Validate lines
         if not input.lines:
             raise HTTPException(
                 status_code=400, detail="Purchase order must have at least one line"
             )
+
+        # Validate line amounts before burning a sequence number on bad input.
+        for line_input in input.lines:
+            if line_input.quantity_ordered <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Line quantity ordered must be greater than zero",
+                )
+            if line_input.unit_price < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Line unit price cannot be negative",
+                )
 
         # Generate PO number
         po_number = SequenceService.get_next_number(
@@ -449,6 +465,16 @@ class PurchaseOrderService(ListResponseMixin):
         subtotal = Decimal("0")
         tax_total = Decimal("0")
         for line_input in input.lines:
+            if line_input.quantity_ordered <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Line quantity ordered must be greater than zero",
+                )
+            if line_input.unit_price < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Line unit price cannot be negative",
+                )
             line_amount = line_input.quantity_ordered * line_input.unit_price
             subtotal += line_amount
             tax_total += line_input.tax_amount
@@ -784,8 +810,15 @@ class PurchaseOrderService(ListResponseMixin):
         if not po:
             raise HTTPException(status_code=404, detail="Purchase order not found")
 
-        if po.status == POStatus.CANCELLED:
-            raise HTTPException(status_code=400, detail="Cannot close cancelled PO")
+        if po.status not in (
+            POStatus.APPROVED,
+            POStatus.PARTIALLY_RECEIVED,
+            POStatus.RECEIVED,
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot close PO in {po.status.value} status",
+            )
 
         po.status = POStatus.CLOSED
         db.flush()

@@ -78,6 +78,8 @@ class VirementService:
             raise ValidationError(
                 "Source and destination appropriations must be different"
             )
+        if data.amount is None or data.amount <= 0:
+            raise ValidationError("Virement amount must be greater than zero.")
 
         virement = Virement(
             organization_id=organization_id,
@@ -164,12 +166,30 @@ class VirementService:
         ):
             raise ValidationError("Appropriation currency must match virement currency")
 
-        # Check source has sufficient balance
-        if from_approp.revised_amount < virement.amount:
+        # Fund integrity: budget may not be vired between different funds
+        # (restricted/donor funds must not be mixed).
+        if from_approp.fund_id != to_approp.fund_id:
             raise ValidationError(
-                f"Insufficient balance in source appropriation "
+                "Virement cannot move budget between different funds."
+            )
+
+        # Check source has sufficient AVAILABLE balance (revised less what is
+        # already committed) — not the gross revised amount, which would let a
+        # virement strip budget that is already encumbered.
+        from app.services.finance.ipsas.available_balance_service import (
+            AvailableBalanceService,
+        )
+
+        src_balance = AvailableBalanceService(self.db).calculate(
+            virement.organization_id,
+            appropriation_id=from_approp.appropriation_id,
+        )
+        if src_balance.available_balance < virement.amount:
+            raise ValidationError(
+                f"Insufficient available balance in source appropriation "
                 f"{from_approp.appropriation_code}: "
-                f"available {from_approp.revised_amount}, requested {virement.amount}"
+                f"available {src_balance.available_balance}, "
+                f"requested {virement.amount}"
             )
 
         # Transfer amounts
