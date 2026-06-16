@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 
 def _entity_id(payload: dict[str, Any]) -> str | None:
     """Pull the referenced entity id out of a webhook payload."""
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    raw = payload.get("data")
+    data = raw if isinstance(raw, dict) else payload
     for key in ("id", "entity_id", "object_id"):
         val = data.get(key) or payload.get(key)
         if val:

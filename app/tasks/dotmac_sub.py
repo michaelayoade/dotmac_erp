@@ -257,9 +257,7 @@ def bootstrap_dotmac_sub_webhooks(
         return {"success": False, "error": "No valid organization ID configured"}
 
     url = callback_url or (
-        f"{settings.app_base_url.rstrip('/')}/dotmac-sub/webhook"
-        if getattr(settings, "app_base_url", "")
-        else ""
+        f"{settings.app_url.rstrip('/')}/dotmac-sub/webhook" if settings.app_url else ""
     )
     if not url:
         return {"success": False, "error": "callback_url is required"}
