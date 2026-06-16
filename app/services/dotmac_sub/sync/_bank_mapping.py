@@ -53,7 +53,7 @@ class BankMappingMixin:
             select(BankAccount.bank_account_id)
             .where(
                 BankAccount.organization_id == self.organization_id,
-                BankAccount.is_active.is_(True),
+                BankAccount.status == BankAccountStatus.active,
                 BankAccount.currency_code == currency_code,
             )
             .limit(1)
@@ -86,7 +86,7 @@ class BankMappingMixin:
         frag = _norm(erp_fragment)
         stmt = select(BankAccount).where(
             BankAccount.organization_id == self.organization_id,
-            BankAccount.is_active.is_(True),
+            BankAccount.status == BankAccountStatus.active,
         )
         for acct in self.db.scalars(stmt).all():
             haystack = _norm(f"{acct.account_name} {acct.bank_name}")
