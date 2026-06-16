@@ -571,6 +571,7 @@ def list_inventory(
     warehouse_id: UUID | None = None,
     include_zero_stock: bool = False,
     only_below_reorder: bool = False,
+    only_with_available_serials: bool = False,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> InventoryListResponse:
@@ -590,6 +591,7 @@ def list_inventory(
         warehouse_id=warehouse_id,
         include_zero_stock=include_zero_stock,
         only_below_reorder=only_below_reorder,
+        only_with_available_serials=only_with_available_serials,
         limit=limit,
         offset=offset,
     )

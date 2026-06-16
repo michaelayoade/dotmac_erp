@@ -332,6 +332,7 @@ class WarehouseStock(BaseModel):
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
+    serial_numbers: list[str] = Field(default_factory=list)
 
 
 class InventoryItemDetail(BaseModel):
@@ -351,6 +352,7 @@ class InventoryItemDetail(BaseModel):
     list_price: Decimal | None = None
     currency_code: str = settings.default_functional_currency_code
     barcode: str | None = None
+    track_serial_numbers: bool = False
     warehouses: list[WarehouseStock] = Field(default_factory=list)
 
 
