@@ -894,6 +894,7 @@ class TestInventorySync:
         """Should return detailed item info with warehouse breakdown."""
         item_id = uuid.uuid4()
         category_id = uuid.uuid4()
+        warehouse_id = uuid.uuid4()
 
         # Mock item
         mock_item = MagicMock()
@@ -907,6 +908,7 @@ class TestInventorySync:
         mock_item.list_price = Decimal("25000.00")
         mock_item.currency_code = "NGN"
         mock_item.barcode = "RTR-001"
+        mock_item.track_serial_numbers = True
         mock_item.organization_id = org_id
 
         # Mock category
@@ -916,7 +918,7 @@ class TestInventorySync:
 
         # Mock stock summary
         mock_wh_balance = MagicMock()
-        mock_wh_balance.warehouse_id = uuid.uuid4()
+        mock_wh_balance.warehouse_id = warehouse_id
         mock_wh_balance.warehouse_code = "WH-MAIN"
         mock_wh_balance.warehouse_name = "Main Warehouse"
         mock_wh_balance.quantity_on_hand = Decimal("20")
@@ -939,18 +941,69 @@ class TestInventorySync:
 
         service.db.get.side_effect = mock_get
         mock_balance_class.get_item_stock_summary.return_value = mock_summary
+        service.db.execute.return_value.all.return_value = [
+            (warehouse_id, "SN-001"),
+            (warehouse_id, "SN-002"),
+        ]
 
         result = service.get_inventory_item_detail(org_id, item_id)
 
         assert result is not None
         assert result.item_code == "ROUTER001"
         assert result.item_name == "Wireless Router"
+        assert result.track_serial_numbers is True
         assert result.total_on_hand == Decimal("20")
         assert result.total_reserved == Decimal("3")
         assert result.total_available == Decimal("17")
         assert len(result.warehouses) == 1
         assert result.warehouses[0].warehouse_code == "WH-MAIN"
         assert result.warehouses[0].warehouse_name == "Main Warehouse"
+        assert result.warehouses[0].serial_numbers == ["SN-001", "SN-002"]
+
+    @patch("app.services.inventory.balance.InventoryBalanceService")
+    def test_get_inventory_item_detail_omits_serial_query_for_non_serial_item(
+        self, mock_balance_class, service, org_id
+    ):
+        """Non-serial items should not query or expose serial lists."""
+        item_id = uuid.uuid4()
+
+        mock_item = MagicMock()
+        mock_item.item_id = item_id
+        mock_item.item_code = "SWITCH001"
+        mock_item.item_name = "Network Switch"
+        mock_item.description = None
+        mock_item.category_id = None
+        mock_item.base_uom = "UNIT"
+        mock_item.reorder_point = None
+        mock_item.list_price = None
+        mock_item.currency_code = "NGN"
+        mock_item.barcode = None
+        mock_item.track_serial_numbers = False
+        mock_item.organization_id = org_id
+
+        mock_wh_balance = MagicMock()
+        mock_wh_balance.warehouse_id = uuid.uuid4()
+        mock_wh_balance.warehouse_code = "WH-01"
+        mock_wh_balance.warehouse_name = "Primary"
+        mock_wh_balance.quantity_on_hand = Decimal("8")
+        mock_wh_balance.quantity_reserved = Decimal("1")
+        mock_wh_balance.quantity_available = Decimal("7")
+
+        mock_summary = MagicMock()
+        mock_summary.total_on_hand = Decimal("8")
+        mock_summary.total_reserved = Decimal("1")
+        mock_summary.total_available = Decimal("7")
+        mock_summary.warehouses = [mock_wh_balance]
+
+        service.db.get.return_value = mock_item
+        mock_balance_class.get_item_stock_summary.return_value = mock_summary
+
+        result = service.get_inventory_item_detail(org_id, item_id)
+
+        assert result is not None
+        assert result.track_serial_numbers is False
+        assert result.warehouses[0].serial_numbers == []
+        service.db.execute.assert_not_called()
 
     @patch("app.services.inventory.balance.InventoryBalanceService")
     def test_list_inventory_items_filtered_pagination(

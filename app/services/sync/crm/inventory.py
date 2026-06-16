@@ -353,6 +353,7 @@ class _InventoryMixin(_CRMSyncBase):
         Returns:
             InventoryItemDetail with warehouse-level stock, or None if not found
         """
+        from app.models.inventory.inventory_serial import InventorySerial
         from app.models.inventory.item import Item
         from app.models.inventory.item_category import ItemCategory
         from app.services.inventory.balance import InventoryBalanceService
@@ -372,6 +373,27 @@ class _InventoryMixin(_CRMSyncBase):
             self.db, org_id, item_id
         )
 
+        serials_by_warehouse: dict[UUID, list[str]] = {}
+        if item.track_serial_numbers:
+            serial_rows = self.db.execute(
+                select(InventorySerial.warehouse_id, InventorySerial.serial_number)
+                .where(
+                    InventorySerial.organization_id == org_id,
+                    InventorySerial.item_id == item_id,
+                    InventorySerial.is_active.is_(True),
+                    InventorySerial.status == "AVAILABLE",
+                    InventorySerial.warehouse_id.is_not(None),
+                )
+                .order_by(
+                    InventorySerial.warehouse_id.asc(),
+                    InventorySerial.serial_number.asc(),
+                )
+            ).all()
+            for warehouse_id, serial_number in serial_rows:
+                if warehouse_id is None:
+                    continue
+                serials_by_warehouse.setdefault(warehouse_id, []).append(serial_number)
+
         warehouse_stocks: list[WarehouseStock] = []
         if summary:
             for wh_balance in summary.warehouses:
@@ -388,6 +410,9 @@ class _InventoryMixin(_CRMSyncBase):
                             quantity_on_hand=wh_balance.quantity_on_hand,
                             quantity_reserved=wh_balance.quantity_reserved,
                             quantity_available=wh_balance.quantity_available,
+                            serial_numbers=serials_by_warehouse.get(
+                                wh_balance.warehouse_id, []
+                            ),
                         )
                     )
 
@@ -410,6 +435,7 @@ class _InventoryMixin(_CRMSyncBase):
             list_price=item.list_price,
             currency_code=item.currency_code,
             barcode=item.barcode,
+            track_serial_numbers=item.track_serial_numbers,
             warehouses=warehouse_stocks,
         )
 
